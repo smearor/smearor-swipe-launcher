@@ -1,0 +1,1 @@
+# smearor-swipe-launcher
