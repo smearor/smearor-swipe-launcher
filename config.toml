@@ -2,7 +2,7 @@
 
 [launcher]
 # Initial rotation in degrees (0, 90, 180, 270)
-rotation = 0
+rotation = 90
 
 # Plugins in the left static area
 [left_area]

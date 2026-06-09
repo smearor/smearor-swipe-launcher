@@ -13,7 +13,7 @@ pub struct LauncherConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct LauncherSettings {
-    pub rotation: u32,
+    pub rotation: f32,
 }
 
 #[derive(Debug, Deserialize)]

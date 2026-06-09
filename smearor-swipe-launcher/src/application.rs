@@ -73,7 +73,13 @@ impl LauncherApplication {
                 .default_height(100)
                 .build();
 
+            let rotation_widget = RotationWidget::new(SmearorRotation::Deg(rotation));
+            rotation_widget.set_animation_speed(500);
+            rotation_widget.set_animations_enabled(!true);
+            // rotation_widget.set_animation_overshoot(20);
+
             let main_container = GtkBox::builder().orientation(Orientation::Horizontal).spacing(0).build();
+            rotation_widget.set_child(Some(&main_container));
 
             let left_area = GtkBox::builder()
                 .orientation(Orientation::Horizontal)
@@ -86,32 +92,7 @@ impl LauncherApplication {
                     unsafe {
                         if let Some(ffi_widget) = plugin.build_widget() {
                             let widget = Widget::from_glib_full(ffi_widget.raw_widget);
-
-                            let plugin_instance = plugin.instance;
-                            let plugin_vtable = plugin.vtable;
-
-                            let click_gesture = GestureClick::builder().button(1).build();
-                            click_gesture.connect_pressed(move |gesture, _n_press, _x, _y| {
-                                gesture.set_state(EventSequenceState::Claimed);
-                                let result = (plugin_vtable.get().on_primary_action)(plugin_instance, rotation);
-                                info!("Primary action result: {}", result);
-                            });
-                            widget.add_controller(click_gesture);
-
-                            let longpress_gesture = gtk4::GestureLongPress::builder().build();
-                            longpress_gesture.connect_pressed(move |gesture, _x, _y| {
-                                gesture.set_state(EventSequenceState::Claimed);
-                                let result = (plugin_vtable.get().on_secondary_action)(plugin_instance, rotation);
-                                info!("Secondary action result: {}", result);
-                            });
-                            widget.add_controller(longpress_gesture);
-
-                            let rotation_str = rotation.to_string();
-                            let rotation_widget = RotationWidget::new(SmearorRotation::from(rotation_str.as_str()));
-                            rotation_widget.set_width_request(200);
-                            rotation_widget.set_child(Some(&widget));
-
-                            left_area.append(&rotation_widget);
+                            left_area.append(&widget);
                             info!("Left area plugin-Widget successfully added to UI");
                         } else {
                             error!("Left area plugin failed to build widget");
@@ -133,32 +114,7 @@ impl LauncherApplication {
                     unsafe {
                         if let Some(ffi_widget) = plugin.build_widget() {
                             let widget = Widget::from_glib_full(ffi_widget.raw_widget);
-
-                            let plugin_instance = plugin.instance;
-                            let plugin_vtable = plugin.vtable;
-
-                            let click_gesture = GestureClick::builder().button(1).build();
-                            click_gesture.connect_pressed(move |gesture, _n_press, _x, _y| {
-                                gesture.set_state(EventSequenceState::Claimed);
-                                let result = (plugin_vtable.get().on_primary_action)(plugin_instance, rotation);
-                                info!("Primary action result: {}", result);
-                            });
-                            widget.add_controller(click_gesture);
-
-                            let longpress_gesture = gtk4::GestureLongPress::builder().build();
-                            longpress_gesture.connect_pressed(move |gesture, _x, _y| {
-                                gesture.set_state(gtk4::EventSequenceState::Claimed);
-                                let result = (plugin_vtable.get().on_secondary_action)(plugin_instance, rotation);
-                                info!("Secondary action result: {}", result);
-                            });
-                            widget.add_controller(longpress_gesture);
-
-                            let rotation_str = rotation.to_string();
-                            let rotation_widget = RotationWidget::new(SmearorRotation::from(rotation_str.as_str()));
-                            rotation_widget.set_width_request(200);
-                            rotation_widget.set_child(Some(&widget));
-
-                            plugin_container.append(&rotation_widget);
+                            plugin_container.append(&widget);
                             info!("Scroll band plugin-Widget successfully added to UI");
                         } else {
                             error!("Scroll band plugin failed to build widget");
@@ -180,32 +136,8 @@ impl LauncherApplication {
                     unsafe {
                         if let Some(ffi_widget) = plugin.build_widget() {
                             let widget = Widget::from_glib_full(ffi_widget.raw_widget);
-
-                            let plugin_instance = plugin.instance;
-                            let plugin_vtable = plugin.vtable;
-
-                            let click_gesture = gtk4::GestureClick::builder().button(1).build();
-                            click_gesture.connect_pressed(move |gesture, _n_press, _x, _y| {
-                                gesture.set_state(gtk4::EventSequenceState::Claimed);
-                                let result = (plugin_vtable.get().on_primary_action)(plugin_instance, rotation);
-                                info!("Primary action result: {}", result);
-                            });
-                            widget.add_controller(click_gesture);
-
-                            let longpress_gesture = gtk4::GestureLongPress::builder().build();
-                            longpress_gesture.connect_pressed(move |gesture, _x, _y| {
-                                gesture.set_state(gtk4::EventSequenceState::Claimed);
-                                let result = (plugin_vtable.get().on_secondary_action)(plugin_instance, rotation);
-                                info!("Secondary action result: {}", result);
-                            });
-                            widget.add_controller(longpress_gesture);
-
-                            let rotation_str = rotation.to_string();
-                            let rotation_widget = RotationWidget::new(SmearorRotation::from(rotation_str.as_str()));
-                            rotation_widget.set_width_request(200);
-                            rotation_widget.set_child(Some(&widget));
-
-                            right_area.append(&rotation_widget);
+                            widget.set_width_request(200);
+                            right_area.append(&widget);
                             info!("Right area plugin-Widget successfully added to UI");
                         } else {
                             error!("Right area plugin failed to build widget");
@@ -218,7 +150,7 @@ impl LauncherApplication {
             main_container.append(&center_area);
             main_container.append(&right_area);
 
-            window.set_child(Some(&main_container));
+            window.set_child(Some(&rotation_widget));
             window.present();
         });
     }
