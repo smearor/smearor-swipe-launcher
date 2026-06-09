@@ -1,152 +1,127 @@
-# Entwicklungsplan: `smearor-swipe-launcher`
+# Development Plan: `smearor-swipe-launcher`
 
-## Phase 1: Das Fundament & Die Schnittstelle (Minimum Viable Product)
+## Phase 1: The Foundation & The Interface (Minimum Viable Product)
 
-*Fokus: Architektur aufsetzen, ein Fenster anzeigen und das erste Plugin zur Laufzeit laden.*
+*Focus: Setting up the architecture, displaying a window, and loading the first plugin at runtime.*
 
-### 🏁 Milestone 1.1: Die API & Das Test-Plugin
+### 🏁 Milestone 1.1: The API & The Test Plugin
 
-* [x] **Projekt-Workspace einrichten:** Erstellung der Rust-Workspace-Struktur mit dem Core-Launcher, der API-Library
-  und einem Verzeichnis für Plugins.
-* [x] **Definition der Plugin-API (State-Separation):** Entwurf des Kern-Traits mit einer strikten Trennung zwischen
-  Daten-Modell (State) und der UI-Generierung (Vorbereitung für Virtualisierung), inklusive Übergabe eines
-  `CoreContext` / `EventChannel` an den Konstruktor.
-* [x] **C-ABI Speicherabsicherung an der FFI-Grenze:** Integration eines sicheren Allokations- und Destruktionsmusters (
-  z. B. FFI-Export von `_smearor_plugin_destroy`) in die API-Definition, damit Plugins ihren eigenen Speicher sauber
-  freigeben können.
-* [x] **Das erste funktionale Plugin:** Entwicklung eines minimalen Uhrzeit- oder Text-Widgets als dynamische
-  Bibliothek (`.so`), das die Schnittstelle implementiert.
+* [x] **Set up Project Workspace:** Creation of the Rust workspace structure with the core launcher, the API library, and a directory for plugins.
+* [x] **Define the Plugin API (State Separation):** Design of the core trait with a strict separation between the data model (state) and UI generation (
+  preparing for virtualization), including passing a `CoreContext` / `EventChannel` to the constructor.
+* [x] **C-ABI Memory Protection at the FFI Boundary:** Integration of a safe allocation and destruction pattern (e.g., FFI export of `_smearor_plugin_destroy`)
+  into the API definition, so plugins can clean up their own memory cleanly.
+* [x] **The First Functional Plugin:** Development of a minimal time or text widget as a dynamic library (`.so`) implementing the interface.
 
-### 🏁 Milestone 1.2: Der Plugin-Loader im Core
+### 🏁 Milestone 1.2: The Plugin Loader in the Core
 
-* [x] **Dynamisches Laden (`libloading`):** Implementierung der Logik im Core-Launcher, die eine `.so`-Datei zur
-  Laufzeit öffnet, den Konstruktor anspringt, dem Plugin den `CoreContext` übergibt und das Plugin sicher im Speicher
-  hält.
-* [x] **Speicher-Absicherung & Allokator-Sicherheit:** Implementierung eines Registrierungs- und Cleanup-Systems im
-  Core, das beim Schließen eines Plugins den Zeiger an die plugin-interne FFI-Destruktor-Funktion übergibt, um
-  Allokator-Konflikte zu vermeiden.
-* [x] **Erstes visuelles Lebenszeichen:** Ein einfaches GTK 4-Fenster öffnet sich erfolgreich und zeigt Plugin-Widgets
-  an. Plugins liefern Daten (State) über FFI, Core erstellt UI basierend auf diesen Daten (State-Separation
-  implementiert).
+* [x] **Dynamic Loading (`libloading`):** Implementation of the logic in the core launcher that opens a `.so` file at runtime, calls the constructor, passes the
+  `CoreContext` to the plugin, and holds the plugin safely in memory.
+* [x] **Memory Safety & Allocator Safety:** Implementation of a registration and cleanup system in the Core that passes the pointer back to the plugin-internal
+  FFI destructor function when a plugin is closed to avoid allocator mismatches.
+* [x] **First Visual Life Sign:** A simple GTK 4 window successfully opens and displays plugin widgets. Plugins supply data (state) over FFI, Core creates UI
+  based on this data (state separation implemented).
 
 ---
 
-## Phase 2: Wayland-Integration & Das "Band"-Layout
+## Phase 2: Wayland Integration & The "Ribbon" Layout
 
-*Fokus: Das Fenster an das System anpassen und die touch-optimierte Navigation aufbauen.*
+*Focus: Adapting the window to the system and building the touch-optimized navigation.*
 
-### 🏁 Milestone 2.1: Das Scrollbare Band & Gesten-Erkennung
+### 🏁 Milestone 2.1: The Scrollable Ribbon & Gesture Recognition
 
-* [x] **Layout-Dreiteilung:** Aufbau der UI-Struktur im Hauptfenster (Linker statischer Bereich, zentraler
-  Scroll-Container, rechter statischer Bereich).
-* [x] **Zentralisiertes Gesten-Handling:** Der Core fängt Klicks (Taps) und langes Drücken (Longpress) auf den
-  dynamischen Widgets ab und leitet sie korrekt an die primären und sekundären Funktionen des jeweiligen Plugins weiter.
-
----
-
-## Phase 3: Dynamische Konfiguration & Rotation
-
-*Fokus: Den Launcher über eine Datei steuerbar machen und auf Hardware-Änderungen reagieren.*
-
-### 🏁 Milestone 3.1: TOML-Parser & JSON-Brücke
-
-* [x] **Konfigurations-Engine:** Implementierung eines Parsers (via Serde), der die zentrale `config.toml` einliest.
-* [x] **Dynamischer UI-Aufbau:** Der Core durchläuft die Listen für links, rechts und das Scroll-Band, lädt die
-  definierten Plugins und fügt sie an den richtigen Stellen im Layout ein.
-* [x] **Parameter-Übergabe:** Der Core extrahiert die spezifischen Einstellungsblöcke aus der TOML-Datei und übergibt
-  sie beim Laden als JSON-Schnittstelle an das jeweilige Plugin.
-
-### 🏁 Milestone 3.2: Rotations- & Positionssynchronisation
-
-* [x] **Integration von `smearor-wrot-rotation`:** Einbindung des `RotationWidget` aus der externen Bibliothek, um die
-  Widgets an den jeweiligen Tischkanten (90°, 180°, 270°) visuell und interaktiv (Input/Output-Koordinaten-Mapping)
-  sauber zu rotieren.
-* [x] **Rotations-Parameter-Weitergabe:** Erweiterung der Primäraktion, sodass die aktuelle Display-Orientierung
-  ermittelt und beim Ausführen an das Plugin übergeben wird (Vorbereitung für den `--rotation` Parameter beim
-  App-Start).
+* [x] **Three-Part Layout:** Building the UI structure in the main window (Left static area, central scroll container, right static area).
+* [x] **Centralized Gesture Handling:** The Core intercepts clicks (taps) and long presses on the dynamic widgets and routes them correctly to the primary and
+  secondary functions of the respective plugin.
 
 ---
 
-## Phase 4: Core-Widgets (Die App-Ökosystem-Basis)
+## Phase 3: Dynamic Configuration & Rotation
 
-*Fokus: Entwicklung der primären Plugins, die den Launcher nützlich machen.*
+*Focus: Making the launcher controllable via a file and reacting to hardware changes.*
 
-### 🏁 Milestone 4.1: Das App-Launcher-Plugin
+### 🏁 Milestone 3.1: TOML Parser & JSON Bridge
 
-* [ ] **Blockierungsfreier Desktop-Entry-Parser:** Entwicklung eines asynchronen Plugins, das System-`.desktop`-Dateien
-  im Hintergrund (Tokio / Glib-Channel) einliest. Währenddessen zeigt die UI ein Shimmer/Placeholder-Skelett an, das
-  nach dem Laden blockierungsfrei aktualisiert wird.
-* [ ] **Zwei-Wege App-Ausführung:** Implementierung der Start-Logik. Bei Klick wird die App gestartet – unter
-  Berücksichtigung des Rotations-Parameters. Nach erfolgreichem Start sendet das Plugin ein `RequestClose` Signal über
-  den Event-Kanal an den Core, um den Launcher zu schließen.
+* [x] **Configuration Engine:** Implementation of a parser (via Serde) that reads the central `config.toml`.
+* [x] **Dynamic UI Building:** The Core iterates through the lists for left, right, and the scroll ribbon, loads the defined plugins, and inserts them into the
+  correct positions in the layout.
+* [x] **Parameter Passing:** The Core extracts the specific settings blocks from the TOML file and passes them as a JSON interface to the respective plugin
+  during loading.
 
-### 🏁 Milestone 4.2: Das MPRIS-Medien-Plugin
+### 🏁 Milestone 3.2: Rotation & Position Synchronization
 
-* [ ] **Asynchrones MPRIS-Plugin:** Entwicklung eines Medien-Widgets, das sich asynchron via DBus an aktive Player
-  hängt. Die DBus-Kommunikation läuft in einem Hintergrund-Task und blockiert niemals den GTK-UI-Thread (keine Ruckler
-  beim Wischen).
-* [ ] **Touch-Mediensteuerung:** Klares Widget-Layout mit Album-Art-Anzeige und großflächigen Touch-Schaltflächen für
-  Wiedergabe/Pause/Überspringen, optimiert für Tischkanten-Interaktion.
-
-### 🏁 Milestone 4.3: Das Uhrzeit- & Kalender-Widget
-
-* [ ] **Präzises Uhrzeit-Widget:** Einbindung eines hochperformanten, blockierungsfreien Zeitanzeige-Widgets mit
-  konfigurierbaren Layouts (analog/digital) und Zeitzonen.
-* [ ] **Skelettierte Kalender-Übersicht:** Touch-Interaktion auf der Uhr öffnet eine kleine, flüssig rotierte
-  Kalender-Übersicht mit anstehenden Kalenderereignissen, asynchron geladen im Hintergrund.
-* [ ] **Tisch-Skalierung:** Optimierung der Schriftgröße und des Kontrasts, um die Zeit auf dem 65" Tisch aus jeder
-  Richtung lesbar zu machen.
-
-### 🏁 Milestone 4.4: Das Benachrichtigungs-Widget (Notification Widget)
-
-* [ ] **DBus Notification Daemon Listener:** Integration eines asynchronen Empfängers für den Standard
-  `org.freedesktop.Notifications`-DBus-Dienst im Plugin.
-* [ ] **Notification-Banner & Badge:** Darstellung eines Benachrichtigungs-Zählers im permanenten Bereich und flüssige
-  Einblendung von neuen Bannern am Menuband.
-* [ ] **Touch-Gesten-Interaktion:** Wischgesten (Swipe-to-dismiss) zum Schließen von Benachrichtigungen, die speziell
-  für den großen Touchscreen entwickelt wurden.
-
-### 🏁 Milestone 4.5: Layer-Shell & Positionierung
-
-* [ ] **Layer-Shell-Integration:** Einbindung des Wayland-Protokolls, um die Fensterdekorationen komplett zu entfernen
-  und den Launcher als System-Panel zu definieren.
-* [ ] **Exklusive Zonen:** Konfiguration des Fensters, sodass es standardmäßig am unteren Bildschirmrand fixiert ist und
-  andere geöffnete Anwendungsfenster bei Bedarf beiseite schiebt.
-* [ ] **Dynamische Layer-Anpassung:** Implementierung einer Logik, die das Fenster bei einer Rotationsänderung zur
-  Laufzeit an den korrekten Bildschirmrand verschiebt (0° unten, 90° links, etc.) und das Layout von horizontal auf
-  vertikal spiegelt.
-
-### 🏁 Milestone 4.6: Virtualisierung des Scroll-Bands (Performance)
-
-* [ ] **GtkListView/GridView Integration:** Verwendung von modernen GTK 4-Listen-Widgets (`GtkListView`/`GtkGridView`)
-  in Kombination mit `GskTransform` im zentralen Scroll-Bereich, um ein hocheffizientes Widget-Recycling bei großen
-  Datenmengen (z. B. 200+ Apps) zu realisieren.
-
-### 🏁 Milestone 4.7: Touch-Optimierung für 65" 4K Smart-Desks
-
-* [ ] **Touch-Optimierung für 65" 4K Smart-Desks:** Anpassung aller Widget-Abmessungen, Icons und Abstände an das
-  65-Zoll-Touch-Erlebnis (Fitts's Law) und Sicherstellung gestochen scharfer Skalierbarkeit.
+* [x] **Integration of `smearor-wrot-rotation`:** Integration of the `RotationWidget` from the external library to cleanly rotate the widgets on the respective
+  table edges (90°, 180°, 270°) both visually and interactively (input/output coordinate mapping).
+* [x] **Rotation Parameter Propagation:** Extension of the primary action so that the current display orientation is determined and passed to the plugin upon
+  execution (preparing for the `--rotation` parameter on app launch).
 
 ---
 
-## Phase 5: Polishing, Performance & Feinschliff
+## Phase 4: Core Widgets (The App Ecosystem Basis)
 
-*Fokus: Gesten verfeinern, Performance optimieren und das System alltagstauglich machen.*
+*Focus: Developing the primary plugins that make the launcher useful.*
 
-### 🏁 Milestone 5.1: Erweiterte Gesten & Shortcuts
+### 🏁 Milestone 4.1: The App Launcher Plugin
 
-* [ ] **Vertikale Swipes:** Implementierung der Erkennung für Wischgesten nach oben (Parent Menu aufrufen) und nach
-  unten (Launcher minimieren).
-* [ ] **Tastatur-Navigation:** Registrierung globaler Shortcuts (`SUPER + PFEILTASTEN`), um das Band auch ohne
-  Touchscreen präzise steuern zu können.
+* [ ] **Non-blocking Desktop Entry Parser:** Development of an asynchronous plugin that reads system `.desktop` files in the background (Tokio / GLib channel).
+  Meanwhile, the UI displays a shimmer/placeholder skeleton that is updated in a non-blocking manner after loading.
+* [ ] **Two-Way App Execution:** Implementation of the launch logic. On click, the app is launched – taking the rotation parameter into account. Upon successful
+  launch, the plugin sends a `RequestClose` signal to the Core via the event channel to close the launcher.
 
-### 🏁 Milestone 5.2: CSS-Styling & Robustheit
+### 🏁 Milestone 4.2: The MPRIS Media Plugin
 
-* [ ] **Hot-Reloading CSS:** Integration einer GTK-CSS-Struktur, die es erlaubt, das Aussehen des Launchers (Farben,
-  Abstände, Rundungen) über eine externe Stylesheet-Datei anzupassen, idealerweise mit Live-Aktualisierung bei
-  Änderungen.
-* [ ] **Leistungs-Feinschliff der Virtualisierung:** Profiling und Optimierung der Swipe-Animationen bei 120 Hz unter
-  maximaler Last mit Hunderten von virtualisierten Listeneinträgen.
-* [ ] **Fehler-Kapselung (Panic-Handling):** Absicherung des Core-Launchers gegen fehlerhafte Drittanbieter-Plugins.
-  Wenn ein Widget im laufenden Betrieb abstürzt, fängt der Core dies ab, blendet das Widget aus und verhindert den
-  Absturz des gesamten Launchers.
+* [ ] **Asynchronous MPRIS Plugin:** Development of a media widget that attaches asynchronously to active players via DBus. DBus communication runs in a
+  background task and never blocks the GTK UI thread (ensuring no stuttering while swiping).
+* [ ] **Touch Media Controls:** Clear widget layout showing album art and large touch buttons for play/pause/skip, optimized for table edge interaction.
+
+### 🏁 Milestone 4.3: The Time & Calendar Widget
+
+* [ ] **Precise Time Widget:** Integration of a high-performance, non-blocking time display widget with configurable layouts (analog/digital) and time zones.
+* [ ] **Skeleton Calendar Overview:** Touch interaction on the clock opens a small, smoothly rotated calendar overview with upcoming calendar events, loaded
+  asynchronously in the background.
+* [ ] **Table Scaling:** Optimization of font size and contrast to make the time readable on the 65" table from any direction.
+
+### 🏁 Milestone 4.4: The Notification Widget
+
+* [ ] **DBus Notification Daemon Listener:** Integration of an asynchronous receiver for the standard `org.freedesktop.Notifications` DBus service inside the
+  plugin.
+* [ ] **Notification Banner & Badge:** Display of a notification counter in the permanent area and smooth slide-in of new banners on the menu ribbon.
+* [ ] **Touch Gesture Interaction:** Swipe-to-dismiss gestures to close notifications, specifically designed for the large touchscreen.
+
+### 🏁 Milestone 4.5: Layer-Shell & Positioning
+
+* [ ] **Layer-Shell-Integration:** Integration of the Wayland protocol to completely remove window decorations and define the launcher as a system panel.
+* [ ] **Exclusive Zones:** Configuration of the window so that it is fixed to the bottom of the screen by default and pushes other open application windows
+  aside when necessary.
+* [ ] **Dynamic Layer Adjustment:** Implementation of logic that shifts the window to the correct screen edge at runtime when a rotation change occurs (0°
+  bottom, 90° left, etc.) and mirrors the layout from horizontal to vertical.
+
+### 🏁 Milestone 4.6: Virtualization of the Scroll Ribbon (Performance)
+
+* [ ] **GtkListView/GridView Integration:** Use of modern GTK 4 list widgets (`GtkListView`/`GtkGridView`) in combination with `GskTransform` in the central
+  scroll area to achieve highly efficient widget recycling with large amounts of data (e.g., 200+ apps).
+
+### 🏁 Milestone 4.7: Touch Optimization for 65" 4K Smart-Desks
+
+* [ ] **Touch Optimization for 65" 4K Smart-Desks:** Sizing all widget dimensions, icons, and spacing for the 65-inch touch experience (Fitts's Law) and
+  ensuring razor-sharp scalability.
+
+---
+
+## Phase 5: Polishing, Performance & Fine-Tuning
+
+*Focus: Refining gestures, optimizing performance, and making the system ready for daily use.*
+
+### 🏁 Milestone 5.1: Advanced Gestures & Shortcuts
+
+* [ ] **Vertical Swipes:** Implementation of detection for swipe gestures upwards (to invoke the Parent Menu) and downwards (to minimize the launcher).
+* [ ] **Keyboard Navigation:** Registration of global shortcuts (`SUPER + ARROW KEYS`) to control the ribbon precisely even without a touchscreen.
+
+### 🏁 Milestone 5.2: CSS Styling & Robustness
+
+* [ ] **Hot-Reloading CSS:** Integration of a GTK CSS structure that allows custom styling of the launcher's appearance (colors, spacing, rounded corners) via
+  an external stylesheet file, ideally with live reloading upon changes.
+* [ ] **Performance Fine-Tuning of Virtualization:** Profiling and optimizing swipe animations at 120 Hz under maximum load with hundreds of virtualized list
+  entries.
+* [ ] **Error Encapsulation (Panic Handling):** Protecting the core launcher against faulty third-party plugins. If a widget crashes during operation, the Core
+  intercepts it, hides the widget, and prevents the entire launcher from crashing.

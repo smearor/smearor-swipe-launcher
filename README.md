@@ -1,84 +1,83 @@
-# `smearor-swipe-launcher`: Swipe-gesteuerter Scrolling-App-Launcher
+# `smearor-swipe-launcher`: Swipe-Driven Scrolling App Launcher
 
 ## Vision
 
-Ein kleines Band am unteren Rand des Bildschirms, das man mit den Fingern nach links und rechts swipen kann um eine
+A small ribbon at the bottom of the screen that you can swipe left and right with your fingers to navigate a
 
-längere Liste von Apps zu durchlaufen. Mit einem Klick auf eine App wird diese gestartet. Unterstützt Rotation.
+longer list of apps. Clicking on an app launches it. Supports rotation.
 
-## Fenster
+## Window
 
 - Rust
 
-- GTK-4 Fenster
+- GTK-4 Window
 
     - Layer-Shell-Layer
 
-    - Keine Decorations
+    - No Decorations
 
-    - Rotation bestimmt auch die Position des Layers:
+    - Rotation also determines the position of the layer:
 
-        - 0 Degrees: unten
+        - 0 Degrees: bottom
 
-        - 90 Degrees: links
+        - 90 Degrees: left
 
-        - 180 Degrees: oben
+        - 180 Degrees: top
 
-        - 270 Degrees: rechts
+        - 270 Degrees: right
 
-    - Child: RotationWidget
+        - Child: RotationWidget
 
-        - Child: SwipeWidget
+            - Child: SwipeWidget
 
-            - Swipe Left (Touch or Mouse or SUPER+ARROW-KEY): Scroll left
+                - Swipe Left (Touch or Mouse or SUPER+ARROW-KEY): Scroll left
 
-            - Swipe Right (Touch or Mouse or SUPER+ARROW-KEY): Scroll right
+                - Swipe Right (Touch or Mouse or SUPER+ARROW-KEY): Scroll right
 
-            - Swipe Up (Touch or Mouse or SUPER+ARROW-KEY): Parent Menu
+                - Swipe Up (Touch or Mouse or SUPER+ARROW-KEY): Parent Menu
 
-            - Swipe Down (Touch or Mouse or SUPER+ARROW-KEY): Scroll
+                - Swipe Down (Touch or Mouse or SUPER+ARROW-KEY): Scroll
 
-            - Child: MenuEntryWidget (Persistent, links von scrollable)
+                - Child: MenuEntryWidget (Persistent, left of scrollable)
 
-            - Child: MenuEntryWidget (Dynamic)
+                    - Child: MenuEntryWidget (Dynamic)
 
-                - Shows the desktop entry icon
+                        - Shows the desktop entry icon
 
-                - Shows the desktop entry name
+                        - Shows the desktop entry name
 
-                - Shows the desktop entry description
+                        - Shows the desktop entry description
 
-                - Click or Touch: Execute Primary Action
+                        - Click or Touch: Execute Primary Action
 
-                    - Launch menu entry (if smearor-wrot: with --rotation parameter)
+                            - Launch menu entry (if smearor-wrot: with --rotation parameter)
 
-                - Longpress or Longtouch: Execute Secondary Action
+                        - Longpress or Longtouch: Execute Secondary Action
 
-            - Child: MenuEntryWidget (Persistent, links von scrollable)
+                - Child: MenuEntryWidget (Persistent, left of scrollable)
 
 ## MenuEntryWidget
 
-Prinzipiell rendert das MenuEntryWidget ein einzelnes GTK Widget.
+In principle, the MenuEntryWidget renders a single GTK widget.
 
-Herausforderung:
+Challenge:
 
 - Widget: Launch-Desktop-Entry
 
-- Widget: Date- / Time
+- Widget: Date / Time
 
 - Widget: Notification
 
 - Widget: MPRIS
 
-Diese Widgets sollen nicht fest einprogrammiert werden, sondern anhand von einem Konfigurationsfile eingelesen werden.
+These widgets should not be hard-coded, but loaded from a configuration file.
 
-Das ist ein fantastisches und extrem gut durchdachtes Konzept! Ein touch-optimierter, rotierbarer Launcher mit flüssigem
-Scrolling schließt eine echte Lücke im Wayland-Ökosystem (besonders für Linux-Tablets oder Convertibles).
+This is a fantastic and extremely well thought-out concept! A touch-optimized, rotatable launcher with smooth scrolling fills a real gap in the Wayland
+ecosystem (especially for Linux tablets or convertibles).
 
-Da du die Widgets vollständig dynamisch per Konfigurationsdatei laden möchtest, reicht ein einfacher match auf
-vordefinierte Enums nicht aus. Du brauchst ein Plugin- oder Komponenten-System, bei dem jede Widget-Art eine eigene
-Logik kapselt.
+Since you want to load the widgets completely dynamically via a configuration file, a simple match on predefined enums is not enough. You need a plugin or
+component system where each type of widget encapsulates its own logic.
 
-Hier ist der Architektur-Plan und die konkrete Umsetzung, wie du dieses System in Rust und GTK 4 aufbaust.
+Here is the architectural plan and the concrete implementation of how to build this system in Rust and GTK 4.
 
 

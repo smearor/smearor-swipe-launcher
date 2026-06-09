@@ -1,177 +1,147 @@
-# Konzept: `smearor-swipe-launcher`
+# Concept: `smearor-swipe-launcher`
 
-**Touch-optimierter, rotierbarer und modularer Scrolling-App-Launcher für Wayland**
-
----
-
-## 1. System-Architektur & Schichtenmodell
-
-Das System basiert auf einer strikt entkoppelten, dreistufigen Architektur. Dies stellt sicher, dass der Kern des
-Launchers stabil bleibt, während visuelle Komponenten und Logiken flexibel ausgetauscht oder erweitert werden können,
-ohne die gesamte Anwendung neu kompilieren zu müssen.
-
-* **Der Core (`smearor-swipe-launcher`):** Das Hauptprogramm verwaltet das Anwendungsfenster unter Wayland, steuert die
-  Ausrichtung im Raum (Rotation), fängt globale Gesten ab und stellt das Layout-Gerüst bereit.
-* **Die Schnittstelle (`smearor-plugin-api`):** Ein minimales, stabiles Verbindungselement, das den Vertrag zwischen dem
-  Core und den Plugins definiert. Es regelt, wie Widgets an das Hauptfenster übergeben und wie Interaktionen (Klicks,
-  Halten) an die Plugins zurückgemeldet werden.
-* **Die Erweiterungen (Widget-Plugins):** Unabhängige, eigenständige Code-Pakete, die zu nativen Systembibliotheken (
-  `.so`-Dateien) kompiliert werden. Jedes Plugin kapselt seine eigene Logik (z. B. Uhrzeit-Aktualisierung,
-  DBus-Kommunikation für Musik oder Benachrichtigungen) und erzeugt ein spezifisches visuelles Element.
+**Touch-optimized, rotatable, and modular scrolling app launcher for Wayland**
 
 ---
 
-## 2. Das Kern-Fenster & UI-Layout
+## 1. System Architecture & Layer Model
 
-Das Hauptprogramm ist für die nahtlose Integration in die Wayland-Desktop-Umgebung verantwortlich und speziell für
-physisch immersive Arbeitsumgebungen optimiert.
+The system is based on a strictly decoupled, three-tier architecture. This ensures that the core of the launcher remains stable, while visual components and
+logic can be flexibly replaced or extended without having to recompile the entire application.
 
-### Haupteinsatzzweck: Table-Top Smart-Desk (65" 4K-Touch)
-
-Der primäre Einsatzzweck des Launchers ist die Bereitstellung von interaktiven Menubändern an allen vier Kanten eines
-horizontalen Table-Top Smart-Desks mit einem **65" großen 4K-Touchscreen**. In dieser Umgebung sitzen Benutzer an
-verschiedenen Seiten des Tisches zusammen und interagieren gemeinschaftlich mit dem System. Dies stellt besondere
-Anforderungen an die Benutzeroberfläche:
-
-* **Ausrichtungs-Präzision:** Die Menubänder müssen an jeder Kante (0°, 90°, 180°, 270°) perfekt gerendert und zur
-  jeweiligen Tischseite hin ausgerichtet sein, sodass Benutzer die Elemente aus ihrer jeweiligen Sitzposition heraus
-  aufrecht lesen können.
-* **Großflächige Touch-Optimierung:** Aufgrund der enormen Bildschirmfläche von 65" sind alle Touch-Ziele besonders
-  großzügig gestaltet (Fitts's Law). Icons, Schaltflächen und Abstände sind so dimensioniert, dass sie auch bei
-  schnellen Gesten im Stehen oder Sitzen fehlerfrei getroffen werden.
-* **4K-Skalierbarkeit:** Schriften und Vektorgrafiken sind vollkommen frei skalierbar und hochauflösend ausgelegt, um
-  sowohl aus der Nähe als auch aus größerer Distanz gestochen scharf zu bleiben.
-
-### Integration von `smearor-wrot-rotation`
-
-Um Widgets an den Kanten des Smart-Desks flexibel rotieren zu können, integriert der Core das GTK 4-Widget
-`RotationWidget` aus der externen Bibliothek **`smearor-wrot-rotation`**:
-
-* **Visuelle Transformation:** Das `RotationWidget` nutzt performante GSK-Transforms (`GskTransform`), um das gesamte
-  Rendering-Widget-Layout ohne Qualitätsverlust im Raum zu drehen (z. B. um 90° an der linken Kante oder 180° an der
-  oberen Kante).
-* **Eingabe-Transformation (Input/Output-Mapping):** Ein herkömmlicher Rotations-Transform in CSS oder GTK führt oft
-  dazu, dass Touch- und Mauskoordinaten nicht mehr mit den visuellen Elementen übereinstimmen. `RotationWidget`
-  transformiert alle Touch-, Maus- und Tastaturereignisse bidirektional. Dadurch verhalten sich Swipe- und Drag-Gesten
-  auf gedrehten Widgets an jeder Kante exakt so, als ob sie in der Standardausrichtung bedient würden.
-
-### Fenstermanagement & Positionierung
-
-Der Launcher nutzt das Wayland Layer Shell Protokoll. Er besitzt keine Fensterdekorationen (Rahmen, Titelleisten) und
-verhält sich wie ein systemeigenes Panel. Die Position auf dem Bildschirm ist direkt an den Rotationszustand des
-Displays gekoppelt:
-
-* **0° (Tischkante Unten):** Das Fenster verankert sich am unteren Rand und dehnt sich horizontal aus.
-* **90° (Tischkante Links):** Das Fenster wandert an den linken Rand und dehnt sich vertikal aus.
-* **180° (Tischkante Oben):** Das Fenster heftet sich an den oberen Rand und dehnt sich horizontal aus.
-* **270° (Tischkante Rechts):** Das Fenster wandert an den rechten Rand und dehnt sich vertikal aus.
-
-### Die UI-Hierarchie (Das "Band"-Prinzip)
-
-Das Fenster ist intern in drei Bereiche unterteilt:
-
-1. **Linker statischer Bereich:** Nimmt permanente Widgets auf, die beim Scrollen nicht herbeigeführt oder weggeschoben
-   werden sollen (z. B. eine permanente Uhr oder Menü-Buttons).
-2. **Zentrales Scroll-Band:** Ein hochperformanter, virtualisierter Container. Um auch bei Hunderten installierten Apps
-   ein flüssiges Durchwischen (Swipen) mit konstanten 120 Hz zu garantieren, nutzt das Scroll-Band moderne,
-   virtualisierte GTK 4-Listen-Widgets (`GtkListView` oder `GtkGridView`) in Kombination mit `GskTransform`. Anstatt für
-   jeden Eintrag ein permanentes Widget im Speicher zu halten, werden nur die aktuell sichtbaren Widgets erzeugt und
-   beim Scrollen dynamisch wiederverwendet (Widget-Recycling).
-3. **Rechter statischer Bereich:** Analog zur linken Seite für permanente Elemente am anderen Ende des Launchers (z. B.
-   ein Benachrichtigungs-Indikator).
+* **The Core (`smearor-swipe-launcher`):** The main program manages the application window under Wayland, controls spatial orientation (rotation), intercepts
+  global gestures, and provides the layout framework.
+* **The Interface (`smearor-plugin-api`):** A minimal, stable connection element that defines the contract between the Core and the plugins. It governs how
+  widgets are handed over to the main window and how interactions (clicks, holding) are reported back to the plugins.
+* **The Extensions (Widget Plugins):** Independent, self-contained code packages compiled into native system libraries (`.so` files). Each plugin encapsulates
+  its own logic (e.g., time updates, DBus communication for music or notifications) and generates a specific visual element.
 
 ---
 
-## 3. Navigations- & Gesten-Logik
+## 2. Core Window & UI Layout
 
-Die Interaktion mit dem Launcher folgt einem intuitiven, auf Touchscreens und Tastatur-Shortcuts optimierten Muster:
+The main program is responsible for seamless integration into the Wayland desktop environment and is specifically optimized for physically immersive workspaces.
 
-* **Horizontales Wischen (Links / Rechts):** Verschiebt den Inhalt des zentralen Scroll-Bands flüssig mit dem Finger
-  oder der Maus.
-* **Tastatur-Steuerung:** Eine globale Tastenkombination (z. B. `SUPER + PFEILTASTEN`) erlaubt es, das Band schrittweise
-  per Code zu bewegen, falls kein Touchscreen genutzt wird.
-* **Vertikales Wischen (Oben / Unten):** Ein Swipe nach oben öffnet ein übergeordnetes Menü (Parent Menu), während ein
-  Swipe nach unten den Launcher minimiert oder schließt.
+### Primary Use Case: Table-Top Smart-Desk (65" 4K-Touch)
+
+The primary purpose of the launcher is to provide interactive menu ribbons on all four edges of a horizontal Table-Top Smart-Desk with a **65" 4K touchscreen**.
+In this environment, users sit together on different sides of the table and interact collaboratively with the system. This imposes special requirements on the
+user interface:
+
+* **Orientation Precision:** The menu ribbons must be perfectly rendered on each edge (0°, 90°, 180°, 270°) and oriented toward the respective side of the
+  table, allowing users to read the elements upright from their respective seating positions.
+* **Large-scale Touch Optimization:** Due to the massive 65" screen real estate, all touch targets are designed with generous dimensions (Fitts's Law). Icons,
+  buttons, and spacing are sized to ensure error-free targeting, even with fast gestures while standing or sitting.
+* **4K Scalability:** Fonts and vector graphics are completely scalable and high-resolution, remaining razor-sharp up close as well as from a distance.
+
+### Integration of `smearor-wrot-rotation`
+
+In order to flexibly rotate widgets along the edges of the Smart-Desk, the Core integrates the GTK 4 widget `RotationWidget` from the external library *
+*`smearor-wrot-rotation`**:
+
+* **Visual Transformation:** The `RotationWidget` uses high-performance GSK transforms (`GskTransform`) to rotate the entire rendering widget layout in space
+  without loss of quality (e.g., by 90° on the left edge or 180° on the top edge).
+* **Input Transformation (Input/Output Mapping):** A conventional rotation transform in CSS or GTK often causes touch and mouse coordinates to mismatch with the
+  visual elements. `RotationWidget` transforms all touch, mouse, and keyboard events bidirectionally. As a result, swipe and drag gestures on rotated widgets
+  behave exactly as they would in the default orientation on every edge.
+
+### Window Management & Positioning
+
+The launcher uses the Wayland Layer Shell protocol. It has no window decorations (borders, title bars) and behaves like a native system panel. The position on
+the screen is directly coupled to the display's rotation state:
+
+* **0° (Bottom Table Edge):** The window anchors to the bottom edge and expands horizontally.
+* **90° (Left Table Edge):** The window moves to the left edge and expands vertically.
+* **180° (Top Table Edge):** The window attaches to the top edge and expands horizontally.
+* **270° (Right Table Edge):** The window moves to the right edge and expands vertically.
+
+### The UI Hierarchy (The "Ribbon" Principle)
+
+The window is internally divided into three areas:
+
+1. **Left Static Area:** Accommodates permanent widgets that should not scroll into view or be pushed away (e.g., a permanent clock or menu buttons).
+2. **Central Scroll Ribbon:** A high-performance, virtualized container. To guarantee fluid swiping at a constant 120 Hz, even with hundreds of installed apps,
+   the scroll ribbon utilizes modern virtualized GTK 4 list widgets (`GtkListView` or `GtkGridView`) in combination with `GskTransform`. Instead of keeping a
+   permanent widget in memory for every entry, only the currently visible widgets are created and dynamically recycled during scrolling (widget recycling).
+3. **Right Static Area:** Similar to the left side, for permanent elements at the other end of the launcher (e.g., a notification indicator).
 
 ---
 
-## 4. Das Plugin-System & Widget-Lebenszyklus
+## 3. Navigation & Gesture Logic
 
-Die Erstellung der UI-Elemente erfolgt vollkommen dynamisch zur Laufzeit der Anwendung auf Basis einer hochperformanten,
-robusten und sicheren Architektur.
+Interaction with the launcher follows an intuitive pattern optimized for touchscreens and keyboard shortcuts:
 
-### 4.1 Laden, Instanziieren & Zwei-Wege-Kommunikation
+* **Horizontal Swiping (Left / Right):** Smoothly moves the content of the central scroll ribbon with a finger or mouse.
+* **Keyboard Control:** A global keyboard shortcut (e.g., `SUPER + ARROW KEYS`) allows the ribbon to be scrolled incrementally via code if no touchscreen is
+  used.
+* **Vertical Swiping (Up / Down):** Swiping up opens a parent menu, while swiping down minimizes or closes the launcher.
 
-Beim Start liest der Core die Konfiguration ein. Für jeden Eintrag lädt der Launcher die entsprechende `.so`-Datei und
-ruft eine standardisierte Konstruktor-Funktion des Plugins auf.
+---
 
-* **Zwei-Wege-Kommunikation (Event-Bus):** Um eine bidirektionale Interaktion zu ermöglichen, übergibt der Core beim
-  Instanziieren ein sicheres Handle auf den Core-Kontext (`CoreContext` bzw. einen `EventChannel`). Über diesen
-  Rückkanal kann das Plugin asynchron standardisierte Nachrichten an den Core senden, wie z. B.:
-    * `RequestClose`: Den Launcher nach dem erfolgreichen Starten einer App schließen.
-    * `TriggerParentMenu`: Ein übergeordnetes Menü öffnen oder das Band bewegen.
-    * `EmitNotification`: Eine Systembenachrichtigung auslösen.
-* **State-Separation (Virtualisierungs-Schnittstelle):** Um die UI-Virtualisierung des Scroll-Bands zu unterstützen,
-  trennt die API strikt zwischen der reinen Daten-Struktur (State) des Plugins und der tatsächlichen UI-Generierung. Das
-  Plugin liefert dem Core ein leichtgewichtiges Datenobjekt (Model), während das Binden an das reale, recycelte
-  GTK-Widget erst bei Sichtbarkeit auf dem Bildschirm erfolgt.
+## 4. The Plugin System & Widget Lifecycle
 
-### 4.2 Blockierungsfreies Threading-Modell
+The UI elements are created completely dynamically at runtime based on a high-performance, robust, and secure architecture.
 
-GTK 4 arbeitet strikt single-threaded im Haupt-Thread (UI-Thread). Jede blockierende Operation eines Plugins (z. B. das
-Einlesen einer `.desktop`-Datei von einer langsamen Festplatte, das Warten auf eine DBus-Antwort via MPRIS oder
-Netzwerk-Requests) würde die gesamte Benutzeroberfläche inklusive aller Animationen einfrieren.
+### 4.1 Loading, Instantiation & Two-Way Communication
 
-* **Asynchrones Laden & Shimmer-Widgets:** Das Plugin-Trait verbietet zeitintensive Berechnungen im Initialisierungs-
-  und Widget-Erstellungs-Schritt. Plugins bauen stattdessen sofort ein leeres Skelett-Widget (
-  Shimmer/Placeholder/Skeleton) auf.
-* **Background Tasks:** Schwere I/O- oder Rechenaufgaben werden in asynchrone Tasks ausgelagert (z. B. via Tokio-Runtime
-  oder über einen `glib::MainContext::channel`).
-* **UI-Updates im GTK-Haupt-Thread:** Sobald die Daten bereitstehen, sendet der asynchrone Task eine Nachricht an den
-  GTK-Haupt-Thread zurück, der das Skelett-Widget sicher und ohne Blockaden mit den echten Daten befüllt.
+At startup, the Core reads the configuration. For each entry, the launcher loads the corresponding `.so` file and calls a standardized constructor function of
+the plugin.
 
-### 4.3 Interaktions-Pipeline
+* **Two-Way Communication (Event Bus):** To enable bidirectional interaction, the Core passes a secure handle to the Core context (`CoreContext` or an
+  `EventChannel`) during instantiation. Through this return channel, the plugin can asynchronously send standardized messages to the Core, such as:
+    * `RequestClose`: Close the launcher after successfully starting an app.
+    * `TriggerParentMenu`: Open a parent menu or move the ribbon.
+    * `EmitNotification`: Trigger a system notification.
+* **State Separation (Virtualization Interface):** To support the UI virtualization of the scroll ribbon, the API strictly separates the plugin's pure data
+  structure (state) from the actual UI generation. The plugin provides the Core with a lightweight data object (model), whereas binding to the real, recycled
+  GTK widget only occurs when it becomes visible on the screen.
 
-Die Erkennung von Berührungen übernimmt zentral der Core-Launcher, um ein einheitliches Systemverhalten zu garantieren:
+### 4.2 Non-Blocking Threading Model
 
-* **Primäre Aktion (Kurzer Tipp / Klick):** Der Core erkennt das Loslassen des Fingers und signalisiert dem Plugin, die
-  Hauptfunktion auszuführen (z. B. App starten oder Musik pausieren). Hierbei wird dem Plugin die aktuelle Rotation
-  mitgeteilt, sodass gestartete Apps mit dem entsprechenden Parameter aufgerufen werden können.
-* **Sekundäre Aktion (Langer Druck / Longpress):** Der Core registriert das Halten eines Elements und weist das Plugin
-  an, die Sekundäroperation auszuführen (z. B. Kontextmenü oder Einstellungsdialog öffnen).
+GTK 4 operates strictly single-threaded on the main thread (UI thread). Any blocking operation of a plugin (e.g., reading a `.desktop` file from a slow disk,
+waiting for a DBus response via MPRIS, or network requests) would freeze the entire user interface, including all animations.
 
-### 4.4 Speicherintegrität an der FFI-Grenze
+* **Asynchronous Loading & Shimmer Widgets:** The plugin trait prohibits time-consuming calculations in the initialization and widget creation steps. Instead,
+  plugins immediately build an empty skeleton widget (shimmer/placeholder/skeleton).
+* **Background Tasks:** Heavy I/O or computational tasks are offloaded to asynchronous tasks (e.g., via the Tokio runtime or using a
+  `glib::MainContext::channel`).
+* **UI Updates in the GTK Main Thread:** Once the data is ready, the async task sends a message back to the GTK main thread, which fills the skeleton widget
+  with the real data safely and without blocking.
 
-Die Übergabe von Rust-Trait-Objekten über dynamische Bibliotheksgrenzen (`libloading`) birgt erhebliche Risiken für
-Speicherfehler (Undefined Behavior), wenn herkömmliche `Box::into_raw` und `Box::from_raw` Muster verwendet werden:
+### 4.3 Interaction Pipeline
 
-1. **Der Allokator-Konflikt:** Wenn der Core-Launcher und das Plugin mit unterschiedlichen Compilerversionen,
-   Optimierungsstufen oder Allokatoren (z. B. `jemalloc` im einen, System-Allokator im anderen) kompiliert wurden, führt
-   das Freigeben des Speichers im Hauptprogramm zu einem sofortigen Crash.
-2. **Fehlende Destruktor-Kontrolle:** Der Core darf den Speicher eines Plugins nicht willkürlich in seinem eigenen
-   Kontext freigeben.
+Touch detection is handled centrally by the Core launcher to guarantee consistent system behavior:
 
-* **Lösung (Plugin-gesteuertes Freigeben):** Jedes Plugin exportiert zusätzlich zu seinem Konstruktor eine dedizierte
-  FFI-Funktion:
+* **Primary Action (Short Tap / Click):** The Core detects the release of the finger and signals the plugin to execute its primary function (e.g., launching an
+  app or pausing music). The current rotation is communicated to the plugin, allowing launched apps to be invoked with the appropriate rotation parameter.
+* **Secondary Action (Long Press / Long touch):** The Core registers the holding of an element and instructs the plugin to execute the secondary operation (
+  e.g., opening a context menu or settings dialog).
+
+### 4.4 Memory Integrity at the FFI Boundary
+
+Passing Rust trait objects across dynamic library boundaries (`libloading`) carries significant risks of memory errors (undefined behavior) if conventional
+`Box::into_raw` and `Box::from_raw` patterns are used:
+
+1. **Allocator Mismatch:** If the Core launcher and the plugin are compiled with different compiler versions, optimization levels, or allocators (e.g.,
+   `jemalloc` in one and the system allocator in the other), deallocating the memory in the main program will cause an immediate crash.
+2. **Lack of Destructor Control:** The Core must not arbitrarily free a plugin's memory within its own context.
+
+* **Solution (Plugin-Controlled Deallocation):** In addition to its constructor, each plugin exports a dedicated FFI function:
   ```rust
   unsafe extern "C" fn _smearor_plugin_destroy(ptr: *mut dyn MenuEntry)
   ```
-  Wenn der Launcher ein Plugin entlädt oder schließt, übergibt er den Zeiger zurück an diese Funktion des Plugins.
-  Dadurch wird sichergestellt, dass das Plugin seine eigenen Ressourcen mit exakt demselben Compiler und Allokator
-  freigibt, mit dem sie erzeugt wurden. Alternativ wird das Speicher-Handling in ein C-kompatibles `ffi::CustomDeleter`
-  -Muster ausgelagert.
+  When the launcher unloads or closes a plugin, it passes the pointer back to this plugin function. This ensures that the plugin frees its own resources using
+  the exact same compiler and allocator that created them. Alternatively, memory handling is delegated to a C-compatible `ffi::CustomDeleter` pattern.
 
 ---
 
-## 5. Konfigurations-Design
+## 5. Configuration Design
 
-Die gesamte Oberfläche wird über eine einzige, zentrale Textdatei (z. B. im TOML-Format) konfiguriert. Diese Datei ist
-dreigeteilt und spiegelt das UI-Layout wider:
+The entire interface is configured via a single, central text file (e.g., in TOML format). This file is divided into three sections, reflecting the UI layout:
 
-* Globale Einstellungen (Animationsgeschwindigkeiten, Standardrotation).
-* Listen für die jeweiligen Positionen (Links persistent, Mitte scrollbar, Rechts persistent).
+* Global settings (animation speeds, default rotation).
+* Lists for the respective positions (left persistent, middle scrollable, right persistent).
 
-Jeder Eintrag definiert lediglich den Systempfad zur gewünschten Plugin-Bibliothek sowie einen freien Variablen-Block.
-Der Core-Launcher muss die Logik der Widgets nicht verstehen; er reicht die spezifischen Parameter einfach blind an das
-jeweilige Plugin weiter. Dadurch kann ein Benutzer neue Widgets hinzufügen oder Parameter ändern, ohne dass der
-Launcher-Quellcode modifiziert werden muss.
+Each entry defines only the system path to the desired plugin library and an arbitrary block of variables. The Core launcher does not need to understand the
+widgets' logic; it simply passes the specific parameters blindly to the respective plugin. This allows users to add new widgets or change parameters without
+modifying the launcher's source code.
