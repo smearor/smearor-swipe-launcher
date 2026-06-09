@@ -1,0 +1,42 @@
+# smearor-swipe-launcher Configuration
+
+[launcher]
+# Initial rotation in degrees (0, 90, 180, 270)
+rotation = 0
+
+# Plugins in the left static area
+[left_area]
+plugins = [
+    { id = "clock_widget_left", path = "target/debug/libclock_widget.so" }
+]
+
+# Plugins in the center scroll band
+[scroll_band]
+plugins = [
+    { id = "clock_widget_date", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_time", path = "target/debug/libclock_widget.so" }
+]
+
+# Plugins in the right static area
+[right_area]
+plugins = [
+    { id = "clock_widget_right", path = "target/debug/libclock_widget.so" }
+]
+
+# Plugin-specific configurations
+
+[clock_widget_left]
+format = "[hour]:[minute]:[second]"
+timezone = "UTC"
+
+[clock_widget_date]
+format = "[year]-[month]-[day]"
+timezone = "UTC"
+
+[clock_widget_time]
+format = "[hour]:[minute]:[second]"
+timezone = "UTC"
+
+[clock_widget_right]
+format = "[hour]:[minute]:[second]"
+timezone = "UTC"
