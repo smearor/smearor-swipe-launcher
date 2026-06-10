@@ -3,6 +3,8 @@ members = [
     "smearor-swipe-launcher",
     "smearor-plugin-api",
     "plugins/clock-widget",
+    "plugins/app-launcher-widget",
+    "plugins/app-launcher-service",
 ]
 resolver = "2"
 

@@ -1,5 +1,5 @@
 [package]
-name = "clock-widget"
+name = "app-launcher-service"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
@@ -11,15 +11,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 smearor-plugin-api = { path = "../../smearor-plugin-api" }
-gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
+gtk4 = { workspace = true }
 glib = { workspace = true }
-adw = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 miette = { workspace = true }
 abi_stable = { workspace = true }
 tokio = { workspace = true }
-typed-builder = { workspace = true }
 tracing = { workspace = true }
-time = { version = "0.3", features = ["local-offset", "formatting"] }
+nix = { version = "0.29", features = ["signal"] }
+dashmap = { workspace = true }

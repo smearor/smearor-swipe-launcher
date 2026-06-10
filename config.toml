@@ -4,6 +4,11 @@
 # Initial rotation in degrees (0, 90, 180, 270)
 rotation = 23
 
+# Services to load
+services = [
+    { id = "app_launcher_service", path = "target/debug/libapp_launcher_service.so" }
+]
+
 # Plugins in the left static area
 [left_area]
 plugins = [
@@ -15,6 +20,7 @@ plugins = [
 plugins = [
     { id = "clock_widget_date", path = "target/debug/libclock_widget.so" },
     { id = "clock_widget_time", path = "target/debug/libclock_widget.so" },
+    { id = "firefox_nightly", path = "target/debug/libapp_launcher_widget.so" },
     { id = "clock_widget_1", path = "target/debug/libclock_widget.so" },
     { id = "clock_widget_2", path = "target/debug/libclock_widget.so" },
     { id = "clock_widget_3", path = "target/debug/libclock_widget.so" },
@@ -37,6 +43,9 @@ plugins = [
 ]
 
 # Plugin-specific configurations
+
+[firefox_nightly]
+desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
 
 [clock_widget_left]
 format = "[hour]:[minute]:[second]"

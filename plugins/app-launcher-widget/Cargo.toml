@@ -1,5 +1,5 @@
 [package]
-name = "clock-widget"
+name = "app-launcher-widget"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
@@ -19,7 +19,4 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 miette = { workspace = true }
 abi_stable = { workspace = true }
-tokio = { workspace = true }
-typed-builder = { workspace = true }
 tracing = { workspace = true }
-time = { version = "0.3", features = ["local-offset", "formatting"] }
