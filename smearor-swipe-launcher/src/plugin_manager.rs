@@ -1,0 +1,56 @@
+use crate::plugin::LoadedPlugin;
+use dashmap::DashMap;
+use dashmap::DashSet;
+use smearor_plugin_api::CoreMessage;
+use smearor_plugin_api::PluginConfig;
+use std::path::PathBuf;
+use std::sync::mpsc::Sender;
+use tracing::debug;
+use tracing::info;
+
+pub struct PluginManager {
+    pub(crate) plugins: DashMap<String, LoadedPlugin>,
+    pub(crate) message_sender: Sender<CoreMessage>,
+}
+
+impl PluginManager {
+    pub fn new(message_sender: Sender<CoreMessage>) -> Self {
+        PluginManager {
+            plugins: DashMap::new(),
+            message_sender,
+        }
+    }
+
+    pub fn get_plugin_ids(&self) -> DashSet<String> {
+        self.plugins.iter().map(|id| id.key().to_string()).collect()
+    }
+
+    pub fn load_plugin(&self, plugin_id: String, plugin_path: PathBuf, config: PluginConfig) -> crate::error::Result<()> {
+        info!("Loading plugin {} from: {:?}", plugin_id, plugin_path);
+
+        let (_, plugin) = LoadedPlugin::load(&plugin_path, &config, self.message_sender.clone())?;
+
+        self.plugins.insert(plugin_id.clone(), plugin);
+        info!("Successfully loaded plugin: {}", plugin_id);
+
+        Ok(())
+    }
+
+    pub fn unload_plugin(&self, plugin_id: &str) {
+        if let Some((id, plugin)) = self.plugins.remove(plugin_id) {
+            unsafe {
+                plugin.destroy();
+            }
+            info!("Successfully unloaded plugin {id}")
+        }
+    }
+
+    pub fn unload_plugins(&self) {
+        info!("Cleaning up plugins");
+
+        for id in self.get_plugin_ids().iter() {
+            debug!("Destroying plugin: {}", id.as_str());
+            self.unload_plugin(id.as_str());
+        }
+    }
+}

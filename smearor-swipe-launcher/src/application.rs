@@ -1,79 +1,92 @@
 use crate::config::LauncherConfig;
 use crate::error::Result;
 use crate::plugin::LoadedPlugin;
+use crate::plugin_manager::PluginManager;
+use crate::window::create_window;
+use dashmap::DashMap;
 use gtk4::Application;
-use gtk4::ApplicationWindow;
 use gtk4::Box as GtkBox;
-use gtk4::EventSequenceState;
-use gtk4::GestureClick;
+use gtk4::GestureDrag;
 use gtk4::Orientation;
+use gtk4::PolicyType;
+use gtk4::ScrolledWindow;
 use gtk4::Widget;
 use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
 use smearor_plugin_api::CoreMessage;
 use smearor_plugin_api::PluginConfig;
 use smearor_wrot_rotation::RotationWidget;
-use smearor_wrot_rotation::SmearorRotation;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 
 /// Main application state
 pub struct LauncherApplication {
-    pub(crate) rotation: SmearorRotation,
-    pub(crate) plugins: HashMap<String, LoadedPlugin>,
-    pub(crate) message_sender: mpsc::Sender<CoreMessage>,
-    pub(crate) message_receiver: mpsc::Receiver<CoreMessage>,
+    pub(crate) config: LauncherConfig,
+    pub(crate) plugin_manager: PluginManager,
+    pub(crate) message_receiver: Receiver<CoreMessage>,
     pub(crate) gtk_app: Application,
 }
 
-impl LauncherApplication {
-    pub fn new(rotation: SmearorRotation, gtk_app: Application) -> Self {
-        let (sender, receiver) = mpsc::channel::<CoreMessage>();
+impl LauncherApplication {}
 
+impl LauncherApplication {
+    pub fn new(config: LauncherConfig, gtk_app: Application) -> Self {
+        let (sender, receiver) = mpsc::channel::<CoreMessage>();
         LauncherApplication {
-            rotation,
-            plugins: HashMap::new(),
-            message_sender: sender,
+            config,
+            plugin_manager: PluginManager::new(sender),
             message_receiver: receiver,
             gtk_app,
         }
     }
 
-    pub fn load_plugin(&mut self, plugin_id: String, plugin_path: PathBuf, config: PluginConfig) -> Result<()> {
-        info!("Loading plugin {} from: {:?}", plugin_id, plugin_path);
+    pub fn load_plugins(&self) {
+        for plugin_entry in &self.config.left_area.plugins {
+            let plugin_config = self.config.plugin_config(&plugin_entry.id);
+            let plugin_path = PathBuf::from(&plugin_entry.path);
+            if let Err(e) = self.plugin_manager.load_plugin(plugin_entry.id.clone(), plugin_path, plugin_config) {
+                error!("Failed to load plugin {}: {}", plugin_entry.id, e);
+            }
+        }
 
-        let (_, plugin) = LoadedPlugin::load(&plugin_path, &config, self.message_sender.clone())?;
+        for plugin_entry in &self.config.scroll_band.plugins {
+            let plugin_config = self.config.plugin_config(&plugin_entry.id);
+            let plugin_path = PathBuf::from(&plugin_entry.path);
+            if let Err(e) = self.plugin_manager.load_plugin(plugin_entry.id.clone(), plugin_path, plugin_config) {
+                error!("Failed to load plugin {}: {}", plugin_entry.id, e);
+            }
+        }
 
-        self.plugins.insert(plugin_id.clone(), plugin);
-        info!("Successfully loaded plugin: {}", plugin_id);
-
-        Ok(())
+        for plugin_entry in &self.config.right_area.plugins {
+            let plugin_config = self.config.plugin_config(&plugin_entry.id);
+            let plugin_path = PathBuf::from(&plugin_entry.path);
+            if let Err(e) = self.plugin_manager.load_plugin(plugin_entry.id.clone(), plugin_path, plugin_config) {
+                error!("Failed to load plugin {}: {}", plugin_entry.id, e);
+            }
+        }
     }
 
     pub fn build_ui(&self, config: &LauncherConfig) {
-        let plugins = Arc::new(self.plugins.clone());
+        let plugins = Arc::new(self.plugin_manager.plugins.clone());
         let rotation = config.launcher.rotation;
 
-        let left_plugin_ids: Vec<String> = config.left_area.plugins.iter().map(|p| p.id.clone()).collect();
-        let scroll_plugin_ids: Vec<String> = config.scroll_band.plugins.iter().map(|p| p.id.clone()).collect();
-        let right_plugin_ids: Vec<String> = config.right_area.plugins.iter().map(|p| p.id.clone()).collect();
+        let left_plugin_ids: Vec<String> = config.left_area.plugin_ids();
+        let scroll_plugin_ids: Vec<String> = config.scroll_band.plugin_ids();
+        let right_plugin_ids: Vec<String> = config.right_area.plugin_ids();
 
+        let config_inner = config.clone();
         self.gtk_app.connect_activate(move |app| {
             info!("GTK application activated");
 
-            let window = ApplicationWindow::builder()
-                .application(app)
-                .title("Smearor Swipe Launcher")
-                .default_width(800)
-                .default_height(100)
-                .build();
+            let window = create_window(app, &config_inner);
 
-            let rotation_widget = RotationWidget::new(SmearorRotation::Deg(rotation));
+            let rotation_widget = RotationWidget::new(rotation);
             rotation_widget.set_animation_speed(500);
             rotation_widget.set_animations_enabled(!true);
             // rotation_widget.set_animation_overshoot(20);
@@ -107,6 +120,13 @@ impl LauncherApplication {
                 .css_classes(["scroll-area"])
                 .build();
 
+            let scrolled_window = ScrolledWindow::builder()
+                .hscrollbar_policy(PolicyType::External)
+                .vscrollbar_policy(PolicyType::Never)
+                .hexpand(true)
+                .vexpand(true)
+                .build();
+
             let plugin_container = GtkBox::builder().orientation(Orientation::Horizontal).spacing(10).build();
 
             for id in &scroll_plugin_ids {
@@ -123,7 +143,29 @@ impl LauncherApplication {
                 }
             }
 
-            center_area.append(&plugin_container);
+            scrolled_window.set_child(Some(&plugin_container));
+
+            // Custom drag to scroll support with mouse on desktop
+            let hadjustment = scrolled_window.hadjustment();
+            let drag_gesture = GestureDrag::new();
+            let start_value = Arc::new(std::cell::Cell::new(0.0));
+
+            let start_value_clone1 = start_value.clone();
+            let hadjustment_clone1 = hadjustment.clone();
+            drag_gesture.connect_drag_begin(move |_, _, _| {
+                start_value_clone1.set(hadjustment_clone1.value());
+            });
+
+            let start_value_clone2 = start_value.clone();
+            let hadjustment_clone2 = hadjustment.clone();
+            drag_gesture.connect_drag_update(move |_, offset_x, _| {
+                let new_val = start_value_clone2.get() - offset_x;
+                hadjustment_clone2.set_value(new_val);
+            });
+
+            scrolled_window.add_controller(drag_gesture);
+
+            center_area.append(&scrolled_window);
 
             let right_area = GtkBox::builder()
                 .orientation(gtk4::Orientation::Horizontal)
@@ -162,14 +204,6 @@ impl LauncherApplication {
 
 impl Drop for LauncherApplication {
     fn drop(&mut self) {
-        info!("Cleaning up plugins");
-
-        for (id, plugin) in self.plugins.drain() {
-            debug!("Destroying plugin: {}", id);
-
-            unsafe {
-                plugin.destroy();
-            }
-        }
+        self.plugin_manager.unload_plugins();
     }
 }

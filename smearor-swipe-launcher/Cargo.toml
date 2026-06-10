@@ -7,8 +7,10 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-smearor-plugin-api = { path = "../smearor-plugin-api" }
+abi_stable = { workspace = true }
+dashmap = { workspace = true }
 gtk4 = { workspace = true }
+gtk4-layer-shell = { workspace = true }
 glib = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -17,11 +19,8 @@ clap = { workspace = true }
 libloading = { workspace = true }
 thiserror = { workspace = true }
 miette = { workspace = true }
+smearor-plugin-api = { path = "../smearor-plugin-api" }
+smearor-wrot-rotation = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-gtk4-layer-shell = { workspace = true }
-toml = "0.8"
-abi_stable = { workspace = true }
-
-[dependencies.smearor-wrot-rotation]
-git = "https://github.com/smearor/smearor-wrot-rotation"
+toml = { workspace = true }

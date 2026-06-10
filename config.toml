@@ -2,7 +2,7 @@
 
 [launcher]
 # Initial rotation in degrees (0, 90, 180, 270)
-rotation = 90
+rotation = 23
 
 # Plugins in the left static area
 [left_area]
@@ -14,7 +14,20 @@ plugins = [
 [scroll_band]
 plugins = [
     { id = "clock_widget_date", path = "target/debug/libclock_widget.so" },
-    { id = "clock_widget_time", path = "target/debug/libclock_widget.so" }
+    { id = "clock_widget_time", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_1", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_2", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_3", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_4", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_5", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_6", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_7", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_8", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_9", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_10", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_11", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_12", path = "target/debug/libclock_widget.so" },
+    { id = "clock_widget_13", path = "target/debug/libclock_widget.so" }
 ]
 
 # Plugins in the right static area
@@ -36,6 +49,26 @@ timezone = "UTC"
 [clock_widget_time]
 format = "[hour]:[minute]:[second]"
 timezone = "UTC"
+
+[clock_widget_1]
+format = "[hour]:[minute]:[second]"
+color = "#ff0000"
+
+[clock_widget_4]
+format = "[hour]:[minute]:[second]"
+color = "#ff0000"
+
+[clock_widget_7]
+format = "[hour]:[minute]:[second]"
+color = "#ff0000"
+
+[clock_widget_10]
+format = "[hour]:[minute]:[second]"
+color = "#ff0000"
+
+[clock_widget_13]
+format = "[hour]:[minute]:[second]"
+color = "#ff0000"
 
 [clock_widget_right]
 format = "[hour]:[minute]:[second]"
