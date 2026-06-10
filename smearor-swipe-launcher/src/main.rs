@@ -8,6 +8,8 @@ mod error;
 mod messages;
 mod plugin;
 mod plugin_manager;
+mod service;
+mod service_manager;
 mod window;
 
 use crate::args::SmearorWipeLauncherArgs;
@@ -57,6 +59,7 @@ async fn main() -> Result<()> {
     let gtk_app = Application::builder().application_id("com.smearor.swipe-launcher").build();
 
     let app = Arc::new(LauncherApplication::new(config.clone(), gtk_app.clone()));
+    app.load_services();
     app.load_plugins();
 
     info!("Application initialized successfully");

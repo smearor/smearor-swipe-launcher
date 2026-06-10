@@ -1,5 +1,6 @@
 use crate::config::LauncherConfig;
 use crate::plugin_manager::PluginManager;
+use crate::service_manager::ServiceManager;
 use crate::window::create_window;
 use gtk4::Application;
 use gtk4::Box as GtkBox;
@@ -28,6 +29,7 @@ use tracing::info;
 pub struct LauncherApplication {
     pub(crate) config: LauncherConfig,
     pub(crate) plugin_manager: Arc<PluginManager>,
+    pub(crate) service_manager: Arc<ServiceManager>,
     pub(crate) message_receiver: std::sync::Mutex<Option<Receiver<FfiEnvelope>>>,
     pub(crate) gtk_app: Application,
 }
@@ -39,7 +41,8 @@ impl LauncherApplication {
         let (sender, receiver) = channel::<FfiEnvelope>(100);
         LauncherApplication {
             config,
-            plugin_manager: Arc::new(PluginManager::new(sender)),
+            plugin_manager: Arc::new(PluginManager::new(sender.clone())),
+            service_manager: Arc::new(ServiceManager::new(sender)),
             message_receiver: std::sync::Mutex::new(Some(receiver)),
             gtk_app,
         }
@@ -67,6 +70,16 @@ impl LauncherApplication {
             let plugin_path = PathBuf::from(&plugin_entry.path);
             if let Err(e) = self.plugin_manager.load_plugin(plugin_entry.id.clone(), plugin_path, plugin_config) {
                 error!("Failed to load plugin {}: {}", plugin_entry.id, e);
+            }
+        }
+    }
+
+    pub fn load_services(&self) {
+        for service_entry in &self.config.services {
+            let service_config = self.config.plugin_config(&service_entry.id);
+            let service_path = PathBuf::from(&service_entry.path);
+            if let Err(e) = self.service_manager.load_service(service_entry.id.clone(), service_path, service_config) {
+                error!("Failed to load service {}: {}", service_entry.id, e);
             }
         }
     }
@@ -225,5 +238,6 @@ impl LauncherApplication {
 impl Drop for LauncherApplication {
     fn drop(&mut self) {
         self.plugin_manager.unload_plugins();
+        self.service_manager.unload_services();
     }
 }

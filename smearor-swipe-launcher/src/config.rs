@@ -12,6 +12,8 @@ pub struct LauncherConfig {
     pub left_area: AreaConfig,
     pub scroll_band: AreaConfig,
     pub right_area: AreaConfig,
+    #[serde(default)]
+    pub services: Vec<PluginEntry>,
     #[serde(flatten)]
     pub plugins: HashMap<String, Value>,
 }

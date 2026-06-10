@@ -62,5 +62,30 @@ impl LauncherApplication {
                 }
             }
         }
+
+        // Routing to a specific background service
+        if topic.starts_with("service/") {
+            let parts: Vec<&str> = topic.split('/').collect();
+            if parts.len() >= 2 {
+                let target_service_id = parts[1];
+                if let Some(service) = self.service_manager.services.get(target_service_id) {
+                    tracing::debug!("Event Broker: Routing message to specific service: {}", target_service_id);
+                    unsafe {
+                        service.on_message(envelope.clone());
+                    }
+                }
+            }
+        }
+
+        // Broadcasting to all background services
+        if topic.starts_with("services/broadcast/") {
+            tracing::debug!("Event Broker: Broadcasting message to all background services");
+            for r in self.service_manager.services.iter() {
+                let service = r.value();
+                unsafe {
+                    service.on_message(envelope.clone());
+                }
+            }
+        }
     }
 }
