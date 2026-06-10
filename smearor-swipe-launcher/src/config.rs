@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
-use smearor_plugin_api::PluginConfig;
+use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_wrot_rotation::SmearorRotation;
 use std::collections::HashMap;
 use tracing::warn;

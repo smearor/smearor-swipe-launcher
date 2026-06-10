@@ -1,10 +1,10 @@
 use crate::config::AppLauncherConfig;
 use crate::desktop_entry::DesktopEntry;
-use smearor_plugin_api::FfiCoreContext;
-use smearor_plugin_api::PluginConfig;
-use smearor_plugin_api::PluginConstructionError;
-use smearor_plugin_api::PluginMeta;
-use smearor_plugin_api::PluginMetaRaw;
+use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::PluginConfig;
+use smearor_swipe_launcher_plugin_api::PluginConstructionError;
+use smearor_swipe_launcher_plugin_api::PluginMeta;
+use smearor_swipe_launcher_plugin_api::PluginMetaRaw;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tracing::debug;

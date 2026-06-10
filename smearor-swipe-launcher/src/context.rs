@@ -1,7 +1,7 @@
 use abi_stable::RRef;
-use smearor_plugin_api::CoreContextVTable;
-use smearor_plugin_api::FfiCoreContext;
-use smearor_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::CoreContextVTable;
+use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use tokio::sync::mpsc::Sender;
 use tracing::error;
 

@@ -1,10 +1,10 @@
 [workspace]
 members = [
     "smearor-swipe-launcher",
-    "smearor-plugin-api",
-    "plugins/clock-widget",
-    "plugins/app-launcher-widget",
-    "plugins/app-launcher-service",
+    "smearor-swipe-launcher-plugin-api",
+    "services/app-launcher",
+    "plugins/clock",
+    "plugins/app-launcher",
 ]
 resolver = "2"
 
@@ -12,8 +12,8 @@ resolver = "2"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-license = "MIT OR Apache-2.0"
-authors = ["smearor"]
+license = "MIT"
+authors = ["Andreas Schaeffer"]
 
 [workspace.dependencies]
 abi_stable = "0.11"

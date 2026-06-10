@@ -1,7 +1,7 @@
 use crate::application::LauncherApplication;
 use gtk4::prelude::*;
 use serde_json::Value;
-use smearor_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use tracing::debug;
 
 impl LauncherApplication {

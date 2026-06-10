@@ -1,3 +1,4 @@
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 use tracing::subscriber::SetGlobalDefaultError;
@@ -29,7 +30,7 @@ pub enum LauncherError {
     WidgetBuildError,
 
     #[error("Message channel error: {0}")]
-    ChannelError(#[from] SendError<smearor_plugin_api::FfiEnvelope>),
+    ChannelError(#[from] SendError<FfiEnvelope>),
 
     #[error("Failed to set global tracing subscriber: {0}")]
     TracingError(#[from] SetGlobalDefaultError),

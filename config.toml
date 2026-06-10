@@ -3,7 +3,7 @@
 # Services to load
 [[services]]
 id = "app_launcher"
-path = "target/debug/libapp_launcher_service.so"
+path = "target/debug/libsmearor_app_launcher_service.so"
 
 [launcher]
 # Initial rotation in degrees (0, 90, 180, 270)
@@ -12,21 +12,21 @@ rotation = 0
 # Plugins in the left static area
 [left_area]
 plugins = [
-    { id = "clock_widget_left", path = "target/debug/libclock_widget.so" }
+    { id = "clock_widget_left", path = "target/debug/libsmearor_clock_widget.so" }
 ]
 
 # Plugins in the center scroll band
 [scroll_band]
 plugins = [
-    { id = "clock_widget_date", path = "target/debug/libclock_widget.so" },
-    { id = "clock_widget_time", path = "target/debug/libclock_widget.so" },
-    { id = "firefox_nightly", path = "target/debug/libapp_launcher_widget.so" }
+    { id = "clock_widget_date", path = "target/debug/libsmearor_clock_widget.so" },
+    { id = "clock_widget_time", path = "target/debug/libsmearor_clock_widget.so" },
+    { id = "firefox_nightly", path = "target/debug/libsmearor_app_launcher_widget.so" }
 ]
 
 # Plugins in the right static area
 [right_area]
 plugins = [
-    { id = "clock_widget_right", path = "target/debug/libclock_widget.so" }
+    { id = "clock_widget_right", path = "target/debug/libsmearor_clock_widget.so" }
 ]
 
 # Plugin-specific configurations

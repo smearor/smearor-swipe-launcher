@@ -1,5 +1,5 @@
 [package]
-name = "smearor-plugin-api"
+name = "smearor-swipe-launcher-plugin-api"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

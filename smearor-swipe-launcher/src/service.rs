@@ -7,9 +7,10 @@ use abi_stable::std_types::RResult;
 use libloading::Library;
 use libloading::Symbol;
 use serde_json::Value;
-use smearor_plugin_api::FfiEnvelope;
-use smearor_plugin_api::PluginConfig;
-use smearor_plugin_api::ServiceVTable;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::PluginConfig;
+use smearor_swipe_launcher_plugin_api::ServiceConstructor;
+use smearor_swipe_launcher_plugin_api::ServiceVTable;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -32,7 +33,7 @@ impl LoadedService {
             let library = Arc::new(Library::new(&path)?);
 
             debug!("Loading service: {:?}", config);
-            let constructor: Symbol<smearor_plugin_api::ServiceConstructor> = library.get(b"smearor_service_create")?;
+            let constructor: Symbol<ServiceConstructor> = library.get(b"smearor_service_create")?;
 
             let mut config_ext = config.config.clone();
             config_ext["id"] = Value::String(service_entry.id.clone());

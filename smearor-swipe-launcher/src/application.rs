@@ -13,7 +13,7 @@ use gtk4::glib::MainContext;
 use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
 use miette::miette;
-use smearor_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_wrot_rotation::RotationWidget;
 use std::cell::Cell;
 use std::cell::RefCell;

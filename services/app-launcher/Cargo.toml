@@ -1,10 +1,10 @@
 [package]
-name = "app-launcher-service"
-version = "0.1.0"
-edition = "2024"
-rust-version = "1.85"
-license = "MIT OR Apache-2.0"
-authors = ["smearor"]
+name = "smearor-app-launcher-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [lib]
 crate-type = ["cdylib"]
@@ -18,7 +18,7 @@ dashmap = { workspace = true }
 nix = { version = "0.29", features = ["signal"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-smearor-plugin-api = { path = "../../smearor-plugin-api" }
+smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

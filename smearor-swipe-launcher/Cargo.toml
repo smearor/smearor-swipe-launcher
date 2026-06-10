@@ -19,7 +19,7 @@ clap = { workspace = true }
 libloading = { workspace = true }
 thiserror = { workspace = true }
 miette = { workspace = true }
-smearor-plugin-api = { path = "../smearor-plugin-api" }
+smearor-swipe-launcher-plugin-api = { path = "../smearor-swipe-launcher-plugin-api" }
 smearor-wrot-rotation = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

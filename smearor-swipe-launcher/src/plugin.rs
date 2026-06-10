@@ -7,12 +7,13 @@ use abi_stable::std_types::RResult;
 use libloading::Library;
 use libloading::Symbol;
 use serde_json::Value;
-use smearor_plugin_api::FfiEnvelope;
-use smearor_plugin_api::FfiWidget;
-use smearor_plugin_api::PluginConfig;
-use smearor_plugin_api::PluginMeta;
-use smearor_plugin_api::PluginMetaRaw;
-use smearor_plugin_api::PluginVTable;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiWidget;
+use smearor_swipe_launcher_plugin_api::PluginConfig;
+use smearor_swipe_launcher_plugin_api::PluginConstructor;
+use smearor_swipe_launcher_plugin_api::PluginMeta;
+use smearor_swipe_launcher_plugin_api::PluginMetaRaw;
+use smearor_swipe_launcher_plugin_api::PluginVTable;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -35,7 +36,7 @@ impl LoadedPlugin {
             let library = Arc::new(Library::new(&path)?);
 
             debug!("load plugin: {:?}", config);
-            let constructor: Symbol<smearor_plugin_api::PluginConstructor> = library.get(b"smearor_plugin_create")?;
+            let constructor: Symbol<PluginConstructor> = library.get(b"smearor_plugin_create")?;
 
             let mut config_ext = config.config.clone();
             config_ext["id"] = Value::String(plugin_entry.id.clone());
@@ -56,11 +57,7 @@ impl LoadedPlugin {
                 }
             };
 
-            let plugin_id = {
-                let id_rstring = (api_loaded_plugin.vtable.get().get_id)(api_loaded_plugin.plugin_instance);
-                // let id_rstring = ((*api_loaded_plugin.vtable).get_id)(api_loaded_plugin.plugin_instance);
-                id_rstring.to_string()
-            };
+            let plugin_id = (api_loaded_plugin.vtable.get().get_id)(api_loaded_plugin.plugin_instance).to_string();
 
             let plugin = LoadedPlugin {
                 _library: library,

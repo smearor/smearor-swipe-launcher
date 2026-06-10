@@ -1,10 +1,10 @@
 [package]
-name = "clock-widget"
+name = "smearor-app-launcher-widget"
 version = "0.1.0"
-edition = "2024"
-rust-version = "1.85"
-license = "MIT OR Apache-2.0"
-authors = ["smearor"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [lib]
 crate-type = ["cdylib"]
@@ -12,15 +12,12 @@ crate-type = ["cdylib"]
 [dependencies]
 abi_stable = { workspace = true }
 adw = { workspace = true }
-glib = { workspace = true }
 gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
+glib = { workspace = true }
 miette = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-smearor-plugin-api = { path = "../../smearor-plugin-api" }
+smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }
 thiserror = { workspace = true }
-time = { version = "0.3", features = ["local-offset", "formatting"] }
-tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-typed-builder = { workspace = true }
