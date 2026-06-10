@@ -10,13 +10,14 @@ authors = ["smearor"]
 crate-type = ["cdylib"]
 
 [dependencies]
-smearor-plugin-api = { path = "../../smearor-plugin-api" }
+abi_stable = { workspace = true }
+adw = { workspace = true }
 gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
 glib = { workspace = true }
-adw = { workspace = true }
+miette = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+smearor-plugin-api = { path = "../../smearor-plugin-api" }
 thiserror = { workspace = true }
-miette = { workspace = true }
-abi_stable = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

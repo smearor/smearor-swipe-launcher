@@ -1,3 +1,4 @@
+use crate::config::PluginEntry;
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
 use crate::error::Result;
@@ -5,13 +6,18 @@ use abi_stable::RRef;
 use abi_stable::std_types::RResult;
 use libloading::Library;
 use libloading::Symbol;
+use serde_json::Value;
 use smearor_plugin_api::FfiEnvelope;
 use smearor_plugin_api::FfiWidget;
 use smearor_plugin_api::PluginConfig;
+use smearor_plugin_api::PluginMeta;
+use smearor_plugin_api::PluginMetaRaw;
 use smearor_plugin_api::PluginVTable;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
+use tracing::debug;
 
 /// Represents a loaded plugin with its library handle
 #[derive(Clone)]
@@ -23,13 +29,17 @@ pub struct LoadedPlugin {
 }
 
 impl LoadedPlugin {
-    pub fn load(plugin_path: &Path, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self)> {
+    pub fn load(plugin_entry: &PluginEntry, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self)> {
         unsafe {
-            let library = Arc::new(Library::new(plugin_path)?);
+            let path = PathBuf::from(&plugin_entry.path);
+            let library = Arc::new(Library::new(&path)?);
 
+            debug!("load plugin: {:?}", config);
             let constructor: Symbol<smearor_plugin_api::PluginConstructor> = library.get(b"smearor_plugin_create")?;
 
-            let config_json = serde_json::to_string(&config.config)?;
+            let mut config_ext = config.config.clone();
+            config_ext["id"] = Value::String(plugin_entry.id.clone());
+            let config_json = serde_json::to_string(&config_ext)?;
             let config_bytes = config_json.as_bytes();
             let config_ptr = config_bytes.as_ptr() as *const i8;
             let config_len = config_bytes.len();

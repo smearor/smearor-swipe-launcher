@@ -1,8 +1,15 @@
+use crate::desktop_entry::DesktopEntry;
+use crate::widget::AppLauncherWidget;
 use abi_stable::RRef;
 use abi_stable::std_types::ROption;
 use abi_stable::std_types::RResult;
 use abi_stable::std_types::RString;
+use gtk4::GestureClick;
+use gtk4::GestureLongPress;
+use gtk4::Label;
+use gtk4::Orientation;
 use gtk4::Widget;
+use gtk4::ffi::GtkWidget;
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::*;
 use smearor_plugin_api::FfiCoreContext;
@@ -16,94 +23,16 @@ use smearor_plugin_api::PluginMetaRaw;
 use smearor_plugin_api::PluginVTable;
 use std::sync::Arc;
 use std::sync::RwLock;
+use tracing::Level;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::FmtSubscriber;
 
-struct DesktopEntry {
-    name: String,
-    icon: String,
-}
-
-impl DesktopEntry {
-    fn parse(path: &str) -> Option<Self> {
-        let content = std::fs::read_to_string(path).ok()?;
-        let mut name = None;
-        let mut icon = None;
-        let mut in_desktop_entry = false;
-
-        for line in content.lines() {
-            let line = line.trim();
-            if line.starts_with('[') && line.ends_with(']') {
-                in_desktop_entry = line == "[Desktop Entry]";
-                continue;
-            }
-            if !in_desktop_entry {
-                continue;
-            }
-            if let Some((key, val)) = line.split_once('=') {
-                match key.trim() {
-                    "Name" => name = Some(val.trim().to_string()),
-                    "Icon" => icon = Some(val.trim().to_string()),
-                    _ => {}
-                }
-            }
-        }
-
-        Some(DesktopEntry {
-            name: name.unwrap_or_else(|| "Unknown App".to_string()),
-            icon: icon.unwrap_or_else(|| "system-run".to_string()),
-        })
-    }
-}
-
-pub struct AppLauncherWidget {
-    pub meta: PluginMeta,
-    pub desktop_file_path: String,
-    pub app_name: String,
-    pub icon_name: String,
-    pub core_context: Option<FfiCoreContext>,
-    pub led_indicator: Arc<RwLock<Option<gtk4::Box>>>,
-}
-
-impl AppLauncherWidget {
-    pub fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionError> {
-        let meta_raw: PluginMetaRaw =
-            serde_json::from_value(config.config.clone()).map_err(|e| PluginConstructionError::FailedToParseMetaData(e.to_string().into()))?;
-
-        // Extract desktop file path from config
-        let desktop_file_path = config
-            .config
-            .get("desktop_file_path")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| PluginConstructionError::FailedToParseWidgetConfig("Missing 'desktop_file_path' in config".into()))?
-            .to_string();
-
-        let mut app_name = meta_raw.display_name.to_string();
-        let mut icon_name = meta_raw.icon_name.unwrap_or_default().to_string();
-
-        // Parse `.desktop` file
-        if let Some(entry) = DesktopEntry::parse(&desktop_file_path) {
-            app_name = entry.name;
-            icon_name = entry.icon;
-        } else {
-            error!("Could not load .desktop file at: {}", desktop_file_path);
-        }
-
-        if icon_name.is_empty() {
-            icon_name = "system-run".to_string(); // fallback
-        }
-
-        Ok(AppLauncherWidget {
-            meta: PluginMeta::new(meta_raw.id, app_name.clone(), Some(icon_name.clone())),
-            desktop_file_path,
-            app_name,
-            icon_name,
-            core_context,
-            led_indicator: Arc::new(RwLock::new(None)),
-        })
-    }
-}
+pub mod config;
+pub mod desktop_entry;
+pub mod widget;
 
 unsafe extern "C" fn destroy_widget(plugin: *mut ()) {
     if !plugin.is_null() {
@@ -149,7 +78,7 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
         let widget = unsafe { &mut *(plugin as *mut AppLauncherWidget) };
 
         let main_box = gtk4::Box::builder()
-            .orientation(gtk4::Orientation::Vertical)
+            .orientation(Orientation::Vertical)
             .spacing(4)
             .width_request(100)
             .height_request(100)
@@ -162,7 +91,7 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
         main_box.append(&image);
 
         // Render Name
-        let label = gtk4::Label::builder()
+        let label = Label::builder()
             .label(&widget.app_name)
             .ellipsize(gtk4::pango::EllipsizeMode::End)
             .max_width_chars(12)
@@ -182,9 +111,9 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
         *widget.led_indicator.write().unwrap() = Some(led_box);
 
         // Gestures - Click to Launch
-        let click_gesture = gtk4::GestureClick::new();
+        let click_gesture = GestureClick::new();
         let core_context_clone1 = widget.core_context.clone();
-        let desktop_file_clone1 = widget.desktop_file_path.clone();
+        let desktop_file_clone1 = widget.config.desktop_file_path.clone();
         let widget_id_clone1 = widget.meta.id.clone();
         click_gesture.connect_pressed(move |_, _, _, _| {
             info!("AppLauncher Widget: Single-click/tap detected for {}", desktop_file_clone1);
@@ -194,6 +123,7 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
                     topic: RString::from("service/app_launcher/command"),
                     payload: RString::from(format!("{{\"action\": \"Launch\", \"desktop_file\": \"{}\"}}", desktop_file_clone1)),
                 };
+                debug!("AppLauncher Widget: Sending message to app_launcher service: {}", envelope);
                 unsafe {
                     (context.vtable.get().send_message)(context.core_obj, envelope);
                 }
@@ -202,9 +132,9 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
         main_box.add_controller(click_gesture);
 
         // Gestures - Longpress to Terminate
-        let longpress_gesture = gtk4::GestureLongPress::new();
+        let longpress_gesture = GestureLongPress::new();
         let core_context_clone2 = widget.core_context.clone();
-        let desktop_file_clone2 = widget.desktop_file_path.clone();
+        let desktop_file_clone2 = widget.config.desktop_file_path.clone();
         let widget_id_clone2 = widget.meta.id.clone();
         longpress_gesture.connect_pressed(move |_, _, _| {
             info!("AppLauncher Widget: Longpress detected for {}", desktop_file_clone2);
@@ -222,7 +152,7 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
         main_box.add_controller(longpress_gesture);
 
         let widget_obj = main_box.upcast::<Widget>();
-        let stable_pointer: *mut gtk4::ffi::GtkWidget = widget_obj.to_glib_full();
+        let stable_pointer: *mut GtkWidget = widget_obj.to_glib_full();
         FfiWidget { raw_widget: stable_pointer }
     });
 
@@ -245,7 +175,7 @@ unsafe extern "C" fn on_message(plugin: *mut (), message: FfiEnvelope) {
     if topic == "service/app_launcher/status" {
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&payload) {
             let desktop_file = parsed.get("desktop_file").and_then(|v| v.as_str()).unwrap_or_default();
-            if desktop_file == widget.desktop_file_path {
+            if desktop_file == widget.config.desktop_file_path {
                 let status = parsed.get("status").and_then(|v| v.as_str()).unwrap_or_default();
                 info!("AppLauncher Widget {} status updated for {}: {}", widget.meta.id, desktop_file, status);
                 if let Ok(guard) = widget.led_indicator.read() {
@@ -293,11 +223,18 @@ pub unsafe extern "C" fn smearor_plugin_create(
         return RResult::RErr(PluginConstructionError::ConfigJsonIsNull);
     }
 
+    let subscriber = FmtSubscriber::builder()
+        .with_env_filter(EnvFilter::from_default_env().add_directive(Level::DEBUG.into()))
+        .finish();
+
+    let _ = tracing::subscriber::set_global_default(subscriber);
+
     let slice = unsafe { std::slice::from_raw_parts(config_json as *const u8, config_len) };
     let config_str = match std::str::from_utf8(slice) {
         Ok(s) => s,
         Err(e) => return RResult::RErr(PluginConstructionError::InvalidUtf8Config(e.to_string().into())),
     };
+    debug!("AppLauncherPlugin plugin_create: {config_str}");
 
     let config_value: serde_json::Value = match serde_json::from_str(config_str) {
         Ok(v) => v,

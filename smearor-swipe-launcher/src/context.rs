@@ -38,8 +38,17 @@ unsafe extern "C" fn send_message_wrapper(context: *mut (), message: FfiEnvelope
 
     unsafe {
         let context = &*(context as *const SimpleCoreContext);
-        if let Err(e) = context.sender.blocking_send(message) {
-            error!("Failed to send message to core: {}", e);
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let sender = context.sender.clone();
+            handle.spawn(async move {
+                if let Err(e) = sender.send(message).await {
+                    error!("Failed to send message to core asynchronously: {}", e);
+                }
+            });
+        } else {
+            if let Err(e) = context.sender.try_send(message) {
+                error!("Failed to send message to core via try_send: {}", e);
+            }
         }
     }
 }

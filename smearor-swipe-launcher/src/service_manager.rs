@@ -1,3 +1,4 @@
+use crate::config::PluginEntry;
 use crate::service::LoadedService;
 use dashmap::DashMap;
 use dashmap::DashSet;
@@ -25,13 +26,13 @@ impl ServiceManager {
         self.services.iter().map(|id| id.key().to_string()).collect()
     }
 
-    pub fn load_service(&self, service_id: String, service_path: PathBuf, config: PluginConfig) -> crate::error::Result<()> {
-        info!("Loading service {} from: {:?}", service_id, service_path);
+    pub fn load_service(&self, service_entry: &PluginEntry, config: PluginConfig) -> crate::error::Result<()> {
+        info!("Loading service {} from: {:?}", service_entry.id, service_entry.path);
 
-        let (_, service) = LoadedService::load(&service_path, &config, self.message_sender.clone())?;
+        let (actual_service_id, service) = LoadedService::load(service_entry, &config, self.message_sender.clone())?;
 
-        self.services.insert(service_id.clone(), service);
-        info!("Successfully loaded service: {}", service_id);
+        self.services.insert(actual_service_id.clone(), service);
+        info!("Successfully loaded service: {}", actual_service_id);
 
         Ok(())
     }

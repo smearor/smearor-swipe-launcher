@@ -14,6 +14,7 @@ use std::sync::RwLock;
 use std::sync::mpsc;
 use tokio::runtime::Runtime;
 use tokio::time::interval;
+use tracing::debug;
 
 pub(crate) struct ClockWidget {
     pub(crate) meta: PluginMeta,
@@ -27,6 +28,7 @@ pub(crate) struct ClockWidget {
 
 impl ClockWidget {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionError> {
+        debug!("ClockWidget config: {config:?}");
         let meta_raw: PluginMetaRaw =
             serde_json::from_value(config.config.clone()).map_err(|e| PluginConstructionError::FailedToParseMetaData(e.to_string().into()))?;
         let clock_config: ClockConfig =

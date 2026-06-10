@@ -18,7 +18,10 @@ use smearor_plugin_api::LoadedPlugin;
 use smearor_plugin_api::PluginConfig;
 use smearor_plugin_api::PluginConstructionError;
 use smearor_plugin_api::PluginVTable;
+use tracing::Level;
 use tracing::debug;
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::FmtSubscriber;
 
 unsafe extern "C" fn destroy_clock_widget(plugin: *mut ()) {
     if !plugin.is_null() {
@@ -138,11 +141,18 @@ pub unsafe extern "C" fn smearor_plugin_create(
         return RResult::RErr(PluginConstructionError::ConfigJsonIsNull);
     }
 
+    let subscriber = FmtSubscriber::builder()
+        .with_env_filter(EnvFilter::from_default_env().add_directive(Level::DEBUG.into()))
+        .finish();
+
+    let _ = tracing::subscriber::set_global_default(subscriber);
+
     let slice = unsafe { std::slice::from_raw_parts(config_json as *const u8, config_len) };
     let config_str = match std::str::from_utf8(slice) {
         Ok(s) => s,
         Err(e) => return RResult::RErr(PluginConstructionError::InvalidUtf8Config(e.to_string().into())),
     };
+    debug!("ClockWidget plugin_create: {config_str}");
 
     let config_value: serde_json::Value = match serde_json::from_str(config_str) {
         Ok(v) => v,

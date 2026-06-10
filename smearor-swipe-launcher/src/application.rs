@@ -51,37 +51,36 @@ impl LauncherApplication {
     pub fn load_plugins(&self) {
         for plugin_entry in &self.config.left_area.plugins {
             let plugin_config = self.config.plugin_config(&plugin_entry.id);
-            let plugin_path = PathBuf::from(&plugin_entry.path);
-            if let Err(e) = self.plugin_manager.load_plugin(plugin_entry.id.clone(), plugin_path, plugin_config) {
+            if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
                 error!("Failed to load plugin {}: {}", plugin_entry.id, e);
             }
         }
 
         for plugin_entry in &self.config.scroll_band.plugins {
             let plugin_config = self.config.plugin_config(&plugin_entry.id);
-            let plugin_path = PathBuf::from(&plugin_entry.path);
-            if let Err(e) = self.plugin_manager.load_plugin(plugin_entry.id.clone(), plugin_path, plugin_config) {
+            if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
                 error!("Failed to load plugin {}: {}", plugin_entry.id, e);
             }
         }
 
         for plugin_entry in &self.config.right_area.plugins {
             let plugin_config = self.config.plugin_config(&plugin_entry.id);
-            let plugin_path = PathBuf::from(&plugin_entry.path);
-            if let Err(e) = self.plugin_manager.load_plugin(plugin_entry.id.clone(), plugin_path, plugin_config) {
+            if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
                 error!("Failed to load plugin {}: {}", plugin_entry.id, e);
             }
         }
+        info!("Successfully loaded {} plugins", self.plugin_manager.plugins.len());
     }
 
     pub fn load_services(&self) {
         for service_entry in &self.config.services {
             let service_config = self.config.plugin_config(&service_entry.id);
-            let service_path = PathBuf::from(&service_entry.path);
-            if let Err(e) = self.service_manager.load_service(service_entry.id.clone(), service_path, service_config) {
+            // let service_path = PathBuf::from(&service_entry.path);
+            if let Err(e) = self.service_manager.load_service(&service_entry, service_config) {
                 error!("Failed to load service {}: {}", service_entry.id, e);
             }
         }
+        info!("Successfully loaded {} services", self.service_manager.services.len());
     }
 
     pub fn build_ui(self: Arc<Self>, config: &LauncherConfig) -> miette::Result<()> {

@@ -1,3 +1,4 @@
+use crate::config::PluginEntry;
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
 use crate::error::Result;
@@ -5,12 +6,15 @@ use abi_stable::RRef;
 use abi_stable::std_types::RResult;
 use libloading::Library;
 use libloading::Symbol;
+use serde_json::Value;
 use smearor_plugin_api::FfiEnvelope;
 use smearor_plugin_api::PluginConfig;
 use smearor_plugin_api::ServiceVTable;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
+use tracing::debug;
 
 /// Represents a loaded background service with its library handle
 #[derive(Clone)]
@@ -22,12 +26,16 @@ pub struct LoadedService {
 }
 
 impl LoadedService {
-    pub fn load(service_path: &Path, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self)> {
+    pub fn load(service_entry: &PluginEntry, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self)> {
         unsafe {
-            let library = Arc::new(Library::new(service_path)?);
+            let path = PathBuf::from(&service_entry.path);
+            let library = Arc::new(Library::new(&path)?);
 
+            debug!("Loading service: {:?}", config);
             let constructor: Symbol<smearor_plugin_api::ServiceConstructor> = library.get(b"smearor_service_create")?;
 
+            let mut config_ext = config.config.clone();
+            config_ext["id"] = Value::String(service_entry.id.clone());
             let config_json = serde_json::to_string(&config.config)?;
             let config_bytes = config_json.as_bytes();
             let config_ptr = config_bytes.as_ptr() as *const i8;

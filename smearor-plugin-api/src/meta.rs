@@ -2,9 +2,13 @@ use abi_stable::StableAbi;
 use abi_stable::derive_macro_reexports::ROption;
 use abi_stable::std_types::RString;
 use serde::Deserialize;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
+
+pub static PLUGIN_ID: AtomicU32 = AtomicU32::new(0);
 
 #[repr(C)]
-#[derive(Debug, Clone, StableAbi)]
+#[derive(Debug, Clone, Deserialize, StableAbi)]
 pub struct PluginMeta {
     pub id: RString,
     pub display_name: RString,
@@ -33,9 +37,9 @@ pub struct PluginMetaRaw {
 }
 
 fn default_plugin_id() -> String {
-    "plugin".to_string()
+    format!("plugin-{}", PLUGIN_ID.fetch_add(1, Ordering::SeqCst))
 }
 
 fn default_plugin_display_name() -> String {
-    "Plugin".to_string()
+    format!("Plugin {}", PLUGIN_ID.load(Ordering::SeqCst))
 }

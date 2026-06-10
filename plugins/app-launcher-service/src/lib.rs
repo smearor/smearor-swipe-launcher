@@ -136,6 +136,7 @@ unsafe extern "C" fn get_display_name(service: *mut ()) -> RString {
 }
 
 unsafe extern "C" fn on_message(service: *mut (), message: FfiEnvelope) {
+    debug!("AppLauncherService: Received message");
     if service.is_null() {
         return;
     }
