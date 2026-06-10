@@ -1,9 +1,6 @@
 use crate::config::LauncherConfig;
-use crate::error::Result;
-use crate::plugin::LoadedPlugin;
 use crate::plugin_manager::PluginManager;
 use crate::window::create_window;
-use dashmap::DashMap;
 use gtk4::Application;
 use gtk4::Box as GtkBox;
 use gtk4::GestureDrag;
@@ -11,25 +8,27 @@ use gtk4::Orientation;
 use gtk4::PolicyType;
 use gtk4::ScrolledWindow;
 use gtk4::Widget;
+use gtk4::glib::MainContext;
 use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
-use smearor_plugin_api::CoreMessage;
-use smearor_plugin_api::PluginConfig;
+use miette::miette;
+use smearor_plugin_api::FfiEnvelope;
 use smearor_wrot_rotation::RotationWidget;
-use std::collections::HashMap;
+use std::cell::Cell;
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use tracing::debug;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::channel;
 use tracing::error;
 use tracing::info;
 
 /// Main application state
 pub struct LauncherApplication {
     pub(crate) config: LauncherConfig,
-    pub(crate) plugin_manager: PluginManager,
-    pub(crate) message_receiver: Receiver<CoreMessage>,
+    pub(crate) plugin_manager: Arc<PluginManager>,
+    pub(crate) message_receiver: std::sync::Mutex<Option<Receiver<FfiEnvelope>>>,
     pub(crate) gtk_app: Application,
 }
 
@@ -37,11 +36,11 @@ impl LauncherApplication {}
 
 impl LauncherApplication {
     pub fn new(config: LauncherConfig, gtk_app: Application) -> Self {
-        let (sender, receiver) = mpsc::channel::<CoreMessage>();
+        let (sender, receiver) = channel::<FfiEnvelope>(100);
         LauncherApplication {
             config,
-            plugin_manager: PluginManager::new(sender),
-            message_receiver: receiver,
+            plugin_manager: Arc::new(PluginManager::new(sender)),
+            message_receiver: std::sync::Mutex::new(Some(receiver)),
             gtk_app,
         }
     }
@@ -72,7 +71,7 @@ impl LauncherApplication {
         }
     }
 
-    pub fn build_ui(&self, config: &LauncherConfig) {
+    pub fn build_ui(self: Arc<Self>, config: &LauncherConfig) -> miette::Result<()> {
         let plugins = Arc::new(self.plugin_manager.plugins.clone());
         let rotation = config.launcher.rotation;
 
@@ -81,6 +80,15 @@ impl LauncherApplication {
         let right_plugin_ids: Vec<String> = config.right_area.plugin_ids();
 
         let config_inner = config.clone();
+        let self_clone = self.clone();
+        let Ok(mut receiver) = self.message_receiver.lock() else {
+            return Err(miette!("Failed to lock message receiver"));
+        };
+        let Some(receiver) = receiver.take() else {
+            return Err(miette!("Receiver already taken"));
+        };
+        let receiver_cell = Rc::new(RefCell::new(Some(receiver)));
+
         self.gtk_app.connect_activate(move |app| {
             info!("GTK application activated");
 
@@ -148,7 +156,7 @@ impl LauncherApplication {
             // Custom drag to scroll support with mouse on desktop
             let hadjustment = scrolled_window.hadjustment();
             let drag_gesture = GestureDrag::new();
-            let start_value = Arc::new(std::cell::Cell::new(0.0));
+            let start_value = Arc::new(Cell::new(0.0));
 
             let start_value_clone1 = start_value.clone();
             let hadjustment_clone1 = hadjustment.clone();
@@ -168,7 +176,7 @@ impl LauncherApplication {
             center_area.append(&scrolled_window);
 
             let right_area = GtkBox::builder()
-                .orientation(gtk4::Orientation::Horizontal)
+                .orientation(Orientation::Horizontal)
                 .width_request(200)
                 .css_classes(["static-area"])
                 .build();
@@ -192,9 +200,21 @@ impl LauncherApplication {
             main_container.append(&center_area);
             main_container.append(&right_area);
 
+            // Set up our FfiEnvelope message receiver on the main context loop
+            let self_clone2 = self_clone.clone();
+            let scrolled_window_clone = scrolled_window.clone();
+            if let Some(mut receiver) = receiver_cell.borrow_mut().take() {
+                MainContext::default().spawn_local(async move {
+                    while let Some(envelope) = receiver.recv().await {
+                        self_clone2.handle_message(envelope, &scrolled_window_clone);
+                    }
+                });
+            }
+
             window.set_child(Some(&rotation_widget));
             window.present();
         });
+        Ok(())
     }
 
     pub fn run(&self) {

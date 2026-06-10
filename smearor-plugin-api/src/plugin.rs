@@ -1,4 +1,5 @@
 use crate::FfiCoreContext;
+use crate::FfiEnvelope;
 use crate::FfiWidget;
 use abi_stable::RRef;
 use abi_stable::StableAbi;
@@ -14,6 +15,7 @@ pub struct PluginVTable {
     pub get_display_name: unsafe extern "C" fn(plugin: *mut ()) -> RString,
     pub get_icon_name: unsafe extern "C" fn(plugin: *mut ()) -> ROption<RString>,
     pub build_widget: unsafe extern "C" fn(plugin: *mut ()) -> FfiWidget,
+    pub on_message: unsafe extern "C" fn(plugin: *mut (), message: FfiEnvelope),
     pub on_primary_action: unsafe extern "C" fn(plugin: *mut (), rotation: u32) -> i32,
     pub on_secondary_action: unsafe extern "C" fn(plugin: *mut (), rotation: u32) -> i32,
 }

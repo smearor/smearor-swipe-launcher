@@ -12,11 +12,13 @@ use gtk4::Widget;
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::*;
 use smearor_plugin_api::FfiCoreContext;
+use smearor_plugin_api::FfiEnvelope;
 use smearor_plugin_api::FfiWidget;
 use smearor_plugin_api::LoadedPlugin;
 use smearor_plugin_api::PluginConfig;
 use smearor_plugin_api::PluginConstructionError;
 use smearor_plugin_api::PluginVTable;
+use tracing::debug;
 
 unsafe extern "C" fn destroy_clock_widget(plugin: *mut ()) {
     if !plugin.is_null() {
@@ -87,6 +89,16 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
     })
 }
 
+unsafe extern "C" fn on_message(plugin: *mut (), message: FfiEnvelope) {
+    if plugin.is_null() {
+        return;
+    }
+    let widget = unsafe { &*(plugin as *const ClockWidget) };
+    let topic = message.topic.to_string();
+    let payload = message.payload.to_string();
+    debug!("Clock widget {} received message on topic '{}' with payload '{}'", widget.meta.id, topic, payload);
+}
+
 unsafe extern "C" fn on_primary_action(plugin: *mut (), _rotation: u32) -> i32 {
     if plugin.is_null() {
         return -1;
@@ -111,6 +123,7 @@ static VTABLE: PluginVTable = PluginVTable {
     get_display_name,
     get_icon_name,
     build_widget,
+    on_message,
     on_primary_action,
     on_secondary_action,
 };

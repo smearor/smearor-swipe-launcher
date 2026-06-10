@@ -1,25 +1,64 @@
 use crate::application::LauncherApplication;
-use smearor_plugin_api::CoreMessage;
-use tracing::debug;
-use tracing::info;
+use gtk4::prelude::*;
+use smearor_plugin_api::FfiEnvelope;
 
 impl LauncherApplication {
-    pub fn handle_messages(&mut self) {
-        while let Ok(message) = self.message_receiver.try_recv() {
-            debug!("Received message from plugin: {:?}", message);
+    pub fn handle_message(&self, envelope: FfiEnvelope, scrolled_window: &gtk4::ScrolledWindow) {
+        let sender_id = envelope.sender_id.to_string();
+        let topic = envelope.topic.to_string();
+        let payload = envelope.payload.to_string();
 
-            match message {
-                CoreMessage::RequestClose => {
-                    info!("Plugin requested close");
+        tracing::debug!("Event Broker: Received message from '{}' on topic '{}': {}", sender_id, topic, payload);
+
+        // Example 1: RequestClose
+        if topic == "core/control" {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&payload) {
+                if parsed.get("action").and_then(|v| v.as_str()) == Some("RequestClose") {
+                    tracing::info!("Plugin requested close");
+                    self.gtk_app.quit();
+                    return;
                 }
-                CoreMessage::TriggerParentMenu => {
-                    info!("Plugin requested parent menu");
+            }
+        }
+
+        // Example 2: ScrollToPosition / FocusWidget
+        if topic == "core/layout" {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&payload) {
+                if parsed.get("action").and_then(|v| v.as_str()) == Some("FocusWidget") {
+                    if let Some(plugin_id) = parsed.get("plugin_id").and_then(|v| v.as_str()) {
+                        tracing::info!("Plugin requested focus: {}", plugin_id);
+                        if let Some(plugin_container) = scrolled_window.child().and_then(|c| c.downcast::<gtk4::Box>().ok()) {
+                            // Find the widget corresponding to the plugin_id and scroll to it
+                            // Here we can log and show how it performs.
+                            tracing::debug!("Found plugin container: {:?}", plugin_container);
+                        }
+                    }
                 }
-                CoreMessage::EmitNotification { title, body } => {
-                    info!("Plugin emitted notification: {} - {}", title.to_string(), body.to_string());
+            }
+        }
+
+        // Example 3: Routing to a specific plugin
+        // Example 5: Plugin-to-Plugin direct signaling
+        if topic.starts_with("plugin/") {
+            let parts: Vec<&str> = topic.split('/').collect();
+            if parts.len() >= 2 {
+                let target_plugin_id = parts[1];
+                if let Some(plugin) = self.plugin_manager.plugins.get(target_plugin_id) {
+                    tracing::debug!("Event Broker: Routing message to specific plugin: {}", target_plugin_id);
+                    unsafe {
+                        plugin.on_message(envelope.clone());
+                    }
                 }
-                CoreMessage::ScrollToPosition { position } => {
-                    info!("Plugin requested scroll to position: {}", position);
+            }
+        }
+
+        // Example 4: Broadcasting to all plugins
+        if topic.starts_with("plugins/broadcast/") {
+            tracing::debug!("Event Broker: Broadcasting message to all loaded plugins");
+            for r in self.plugin_manager.plugins.iter() {
+                let plugin = r.value();
+                unsafe {
+                    plugin.on_message(envelope.clone());
                 }
             }
         }

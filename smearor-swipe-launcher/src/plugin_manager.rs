@@ -1,20 +1,20 @@
 use crate::plugin::LoadedPlugin;
 use dashmap::DashMap;
 use dashmap::DashSet;
-use smearor_plugin_api::CoreMessage;
+use smearor_plugin_api::FfiEnvelope;
 use smearor_plugin_api::PluginConfig;
 use std::path::PathBuf;
-use std::sync::mpsc::Sender;
+use tokio::sync::mpsc::Sender;
 use tracing::debug;
 use tracing::info;
 
 pub struct PluginManager {
     pub(crate) plugins: DashMap<String, LoadedPlugin>,
-    pub(crate) message_sender: Sender<CoreMessage>,
+    pub(crate) message_sender: Sender<FfiEnvelope>,
 }
 
 impl PluginManager {
-    pub fn new(message_sender: Sender<CoreMessage>) -> Self {
+    pub fn new(message_sender: Sender<FfiEnvelope>) -> Self {
         PluginManager {
             plugins: DashMap::new(),
             message_sender,

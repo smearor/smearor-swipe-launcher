@@ -14,7 +14,7 @@ pub use context::FfiCoreContext;
 pub use error::PluginConstructionError;
 // pub use error::PluginError;
 // pub use error::PluginResult;
-pub use messages::CoreMessage;
+pub use messages::FfiEnvelope;
 pub use meta::PluginMeta;
 pub use meta::PluginMetaRaw;
 pub use plugin::LoadedPlugin;

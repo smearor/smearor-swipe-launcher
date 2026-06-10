@@ -1,4 +1,6 @@
 use thiserror::Error;
+use tokio::sync::mpsc::error::SendError;
+use tracing::subscriber::SetGlobalDefaultError;
 
 #[derive(Error, Debug)]
 pub enum LauncherError {
@@ -14,8 +16,8 @@ pub enum LauncherError {
     #[error("Failed to load plugin library: {0}")]
     PluginLoadError(#[from] libloading::Error),
 
-    #[error("Plugin constructor returned null pointer")]
-    PluginConstructorNull,
+    #[error("Plugin constructor returned null pointer: {0}")]
+    PluginConstructorNull(String),
 
     #[error("Plugin get_id returned null pointer")]
     PluginGetIdNull,
@@ -27,10 +29,10 @@ pub enum LauncherError {
     WidgetBuildError,
 
     #[error("Message channel error: {0}")]
-    ChannelError(#[from] std::sync::mpsc::SendError<smearor_plugin_api::CoreMessage>),
+    ChannelError(#[from] SendError<smearor_plugin_api::FfiEnvelope>),
 
     #[error("Failed to set global tracing subscriber: {0}")]
-    TracingError(#[from] tracing::subscriber::SetGlobalDefaultError),
+    TracingError(#[from] SetGlobalDefaultError),
 }
 
 pub type Result<T> = std::result::Result<T, LauncherError>;

@@ -1,4 +1,5 @@
 use gtk4::gdk::Display;
+use gtk4::gdk::Monitor;
 use gtk4::prelude::Cast;
 use gtk4::prelude::DisplayExt;
 use gtk4::prelude::ListModelExt;
@@ -27,10 +28,9 @@ pub fn calculate_area_size(rotation: SmearorRotation, height: i32) -> AreaSize {
         return Default::default();
     };
     let monitors = display.monitors();
-    let monitor = monitors
-        .item(0)
-        .and_then(|m| m.downcast::<gtk4::gdk::Monitor>().ok())
-        .expect("Could not get default monitor");
+    let Some(monitor) = monitors.item(0).and_then(|m| m.downcast::<Monitor>().ok()) else {
+        return AreaSize::default();
+    };
     let geometry = monitor.geometry();
     let screen_width = geometry.width();
     let screen_height = geometry.height();

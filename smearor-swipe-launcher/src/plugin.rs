@@ -5,13 +5,13 @@ use abi_stable::RRef;
 use abi_stable::std_types::RResult;
 use libloading::Library;
 use libloading::Symbol;
-use smearor_plugin_api::CoreMessage;
+use smearor_plugin_api::FfiEnvelope;
 use smearor_plugin_api::FfiWidget;
 use smearor_plugin_api::PluginConfig;
 use smearor_plugin_api::PluginVTable;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 
 /// Represents a loaded plugin with its library handle
 #[derive(Clone)]
@@ -23,7 +23,7 @@ pub struct LoadedPlugin {
 }
 
 impl LoadedPlugin {
-    pub fn load(plugin_path: &Path, config: &PluginConfig, sender: mpsc::Sender<CoreMessage>) -> Result<(String, Self)> {
+    pub fn load(plugin_path: &Path, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self)> {
         unsafe {
             let library = Arc::new(Library::new(plugin_path)?);
 
@@ -42,7 +42,7 @@ impl LoadedPlugin {
             let api_loaded_plugin = match result {
                 RResult::ROk(plugin) => plugin,
                 RResult::RErr(err) => {
-                    return Err(LauncherError::PluginConstructorNull);
+                    return Err(LauncherError::PluginConstructorNull(err.to_string()));
                 }
             };
 
@@ -67,6 +67,12 @@ impl LoadedPlugin {
         unsafe {
             let ffi_widget = (self.vtable.get().build_widget)(self.instance);
             if ffi_widget.raw_widget.is_null() { None } else { Some(ffi_widget) }
+        }
+    }
+
+    pub unsafe fn on_message(&self, message: FfiEnvelope) {
+        unsafe {
+            (self.vtable.get().on_message)(self.instance, message);
         }
     }
 

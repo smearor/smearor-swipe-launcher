@@ -21,4 +21,5 @@ miette = { workspace = true }
 abi_stable = { workspace = true }
 tokio = { workspace = true }
 typed-builder = { workspace = true }
+tracing = { workspace = true }
 time = { version = "0.3", features = ["local-offset", "formatting"] }

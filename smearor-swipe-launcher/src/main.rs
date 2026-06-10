@@ -18,17 +18,15 @@ use gtk4::Application;
 use miette::IntoDiagnostic;
 use miette::Result;
 use miette::miette;
-use serde_json::json;
-use smearor_plugin_api::PluginConfig;
 use smearor_wrot_rotation::SmearorRotation;
-use std::path::PathBuf;
+use std::sync::Arc;
 use tracing::error;
 use tracing::info;
-use tracing::warn;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
 
-fn main() -> Result<()> {
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> Result<()> {
     let args = SmearorWipeLauncherArgs::parse();
 
     let subscriber = FmtSubscriber::builder()
@@ -58,12 +56,12 @@ fn main() -> Result<()> {
 
     let gtk_app = Application::builder().application_id("com.smearor.swipe-launcher").build();
 
-    let mut app = LauncherApplication::new(config.clone(), gtk_app.clone());
+    let app = Arc::new(LauncherApplication::new(config.clone(), gtk_app.clone()));
     app.load_plugins();
 
     info!("Application initialized successfully");
 
-    app.build_ui(&config);
+    app.clone().build_ui(&config)?;
     app.run();
 
     Ok(())
