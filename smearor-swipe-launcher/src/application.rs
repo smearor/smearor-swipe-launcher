@@ -4,9 +4,11 @@ use crate::service_manager::ServiceManager;
 use crate::window::create_window;
 use gtk4::Application;
 use gtk4::Box as GtkBox;
+use gtk4::EventSequenceState;
 use gtk4::GestureDrag;
 use gtk4::Orientation;
 use gtk4::PolicyType;
+use gtk4::PropagationPhase;
 use gtk4::ScrolledWindow;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
@@ -175,19 +177,36 @@ impl LauncherApplication {
             // Custom drag to scroll support with mouse on desktop
             let hadjustment = scrolled_window.hadjustment();
             let drag_gesture = GestureDrag::new();
+            drag_gesture.set_propagation_phase(PropagationPhase::Capture);
             let start_value = Arc::new(Cell::new(0.0));
+            let is_dragging = Arc::new(Cell::new(false));
+            const DRAG_THRESHOLD: f64 = 10.0;
 
             let start_value_clone1 = start_value.clone();
             let hadjustment_clone1 = hadjustment.clone();
-            drag_gesture.connect_drag_begin(move |_, _, _| {
+            let is_dragging_clone1 = is_dragging.clone();
+            drag_gesture.connect_drag_begin(move |gesture, _, _| {
                 start_value_clone1.set(hadjustment_clone1.value());
+                is_dragging_clone1.set(false);
+                gesture.set_state(EventSequenceState::Claimed);
             });
 
             let start_value_clone2 = start_value.clone();
             let hadjustment_clone2 = hadjustment.clone();
+            let is_dragging_clone2 = is_dragging.clone();
             drag_gesture.connect_drag_update(move |_, offset_x, _| {
+                if offset_x.abs() > DRAG_THRESHOLD {
+                    is_dragging_clone2.set(true);
+                }
                 let new_val = start_value_clone2.get() - offset_x;
                 hadjustment_clone2.set_value(new_val);
+            });
+
+            let is_dragging_clone3 = is_dragging.clone();
+            drag_gesture.connect_drag_end(move |gesture, _, _| {
+                if !is_dragging_clone3.get() {
+                    gesture.set_state(EventSequenceState::Denied);
+                }
             });
 
             scrolled_window.add_controller(drag_gesture);
