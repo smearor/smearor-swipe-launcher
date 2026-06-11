@@ -1,0 +1,36 @@
+use crate::SwipeLauncherConfig;
+use crate::args::layer::LayerArguments;
+use crate::args::rotation::RotationArguments;
+use clap::Parser;
+use miette::IntoDiagnostic;
+use miette::Result;
+use miette::miette;
+use std::path::PathBuf;
+use tracing::info;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+pub struct SwipeLauncherArguments {
+    #[arg(short, long, default_value = Some("config.toml"))]
+    pub(crate) config: Option<PathBuf>,
+
+    #[command(flatten)]
+    pub(crate) rotation: RotationArguments,
+
+    #[command(flatten)]
+    pub(crate) layer: LayerArguments,
+}
+
+impl SwipeLauncherArguments {
+    pub fn load_config_from_file(self) -> Result<SwipeLauncherConfig> {
+        match &self.config {
+            Some(config_path) => {
+                let config_content = std::fs::read_to_string(config_path).into_diagnostic()?;
+                let config: SwipeLauncherConfig = toml::from_str(&config_content).into_diagnostic()?;
+                info!("Loaded configuration with {} plugins in scroll band", config.scroll_band.plugins.len());
+                Ok(config)
+            }
+            None => Err(miette!("No config file specified")),
+        }
+    }
+}

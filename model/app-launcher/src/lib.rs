@@ -1,8 +1,5 @@
 use serde::Deserialize;
 use serde::Serialize;
-use smearor_swipe_launcher_plugin_api::FfiEnvelope;
-use std::fmt::Display;
-use std::fmt::Formatter;
 
 pub const TOPIC_COMMAND: &str = "service/app_launcher/command";
 
@@ -31,6 +28,18 @@ impl DesktopFileCommandMessage {
             action,
         }
     }
+
+    pub fn exec(desktop_file: &str) -> Self {
+        Self::new(desktop_file, DesktopFileCommandAction::Exec)
+    }
+
+    pub fn exec_start(desktop_file: &str) -> Self {
+        Self::new(desktop_file, DesktopFileCommandAction::ExecStart)
+    }
+
+    pub fn terminate(desktop_file: &str) -> Self {
+        Self::new(desktop_file, DesktopFileCommandAction::Terminate)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,12 +64,12 @@ impl DesktopFileStatusMessage {
             status,
         }
     }
-}
 
-// impl TryFrom<FfiEnvelope> for DesktopFileStatusMessage {
-//     type Error = serde_json::Error;
-//
-//     fn try_from(message: FfiEnvelope) -> Result<Self, Self::Error> {
-//         serde_json::from_str(&message.payload.to_string())
-//     }
-// }
+    pub fn running(desktop_file: &str) -> Self {
+        Self::new(desktop_file, DesktopFileStatus::Running)
+    }
+
+    pub fn stopped(desktop_file: &str) -> Self {
+        Self::new(desktop_file, DesktopFileStatus::Stopped)
+    }
+}

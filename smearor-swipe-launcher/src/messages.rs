@@ -3,6 +3,7 @@ use gtk4::prelude::*;
 use serde_json::Value;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use tracing::debug;
+use tracing::trace;
 
 impl LauncherApplication {
     pub fn handle_message(&self, envelope: FfiEnvelope, scrolled_window: &gtk4::ScrolledWindow) {
@@ -46,7 +47,7 @@ impl LauncherApplication {
             if parts.len() >= 2 {
                 let target_plugin_id = parts[1];
                 if let Some(plugin) = self.plugin_manager.plugins.get(target_plugin_id) {
-                    debug!("Event Broker: Routing message to specific plugin: {}", target_plugin_id);
+                    trace!("Routing message to plugin {target_plugin_id}");
                     unsafe {
                         plugin.on_message(envelope.clone());
                     }
@@ -56,7 +57,7 @@ impl LauncherApplication {
 
         // Example 4: Broadcasting to all plugins
         if topic.starts_with("plugins/broadcast/") {
-            debug!("Event Broker: Broadcasting message to all loaded plugins");
+            trace!("Broadcasting message to all loaded plugins");
             for r in self.plugin_manager.plugins.iter() {
                 let plugin = r.value();
                 unsafe {
@@ -67,20 +68,18 @@ impl LauncherApplication {
 
         // Routing to a specific service
         if topic.starts_with("service/") {
-            debug!("Routing to a specific service");
             let parts: Vec<&str> = topic.split('/').collect();
             if parts.len() >= 2 {
                 let target_service_id = parts[1];
-                debug!("Try to route to service {target_service_id}");
                 if let Some(service) = self.service_manager.services.get(target_service_id) {
-                    debug!("Event Broker: Routing message to specific service: {}", target_service_id);
+                    trace!("Route message to service {target_service_id}");
                     unsafe {
                         service.on_message(envelope.clone());
                     }
                 }
             }
             if topic.ends_with("/status") {
-                debug!("Event Broker: Broadcasting service status update to all plugins");
+                trace!("Broadcasting service status update to all plugins");
                 for r in self.plugin_manager.plugins.iter() {
                     let plugin = r.value();
                     unsafe {
@@ -92,7 +91,7 @@ impl LauncherApplication {
 
         // Broadcasting to all background services
         if topic.starts_with("services/broadcast/") {
-            debug!("Event Broker: Broadcasting message to all background services");
+            trace!("Broadcasting message to all background services");
             for r in self.service_manager.services.iter() {
                 let service = r.value();
                 unsafe {

@@ -1,4 +1,4 @@
-use crate::config::PluginEntry;
+use crate::PluginEntry;
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
 use crate::error::Result;
@@ -11,7 +11,6 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::ServiceConstructor;
 use smearor_swipe_launcher_plugin_api::ServiceVTable;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;

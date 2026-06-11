@@ -1,4 +1,4 @@
-use crate::config::PluginEntry;
+use crate::config::plugin::PluginEntry;
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
 use crate::error::Result;
@@ -11,10 +11,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiWidget;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructor;
-use smearor_swipe_launcher_plugin_api::PluginMeta;
-use smearor_swipe_launcher_plugin_api::PluginMetaRaw;
 use smearor_swipe_launcher_plugin_api::PluginVTable;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;

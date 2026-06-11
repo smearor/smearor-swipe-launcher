@@ -10,6 +10,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
@@ -72,25 +73,20 @@ pub trait MessageHandler<T: TryFrom<FfiEnvelope>> {
         <T as TryFrom<FfiEnvelope>>::Error: Display,
     {
         if !self.accept_topic(envelope.topic.as_str()) {
-            debug!("Topic {} not accepted by message handler", envelope.topic);
+            trace!("Topic {} not accepted by message handler", envelope.topic);
             return;
         }
         match T::try_from(envelope) {
             Ok(message) => {
-                debug!("Handle message payload");
                 self.handle_message(message);
             }
             Err(e) => {
                 error!("Failed to parse message payload: {}", e);
             }
         }
-        // if let Ok(message) = T::try_from(envelope) {
-        //     debug!("Topic {} not accepted by message handler", envelope.topic);
-        //     self.handle_message(message);
-        // }
     }
 
-    fn accept_topic(&self, topic: &str) -> bool {
+    fn accept_topic(&self, _topic: &str) -> bool {
         true
     }
 }

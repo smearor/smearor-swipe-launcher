@@ -6,7 +6,6 @@ use smearor_app_launcher_model::DesktopFileStatus;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
 use smearor_app_launcher_model::TOPIC_STATUS;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
-use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;

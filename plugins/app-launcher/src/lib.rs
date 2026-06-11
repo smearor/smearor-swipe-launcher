@@ -1,13 +1,15 @@
-use crate::desktop_entry::DesktopEntry;
 use crate::widget::AppLauncherWidget;
 use abi_stable::RRef;
 use abi_stable::std_types::ROption;
 use abi_stable::std_types::RResult;
 use abi_stable::std_types::RString;
+use gtk4::Align;
+use gtk4::EventSequenceState;
 use gtk4::GestureClick;
 use gtk4::GestureLongPress;
 use gtk4::Label;
 use gtk4::Orientation;
+use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::ffi::GtkWidget;
 use gtk4::glib::translate::ToGlibPtr;
@@ -15,7 +17,6 @@ use gtk4::prelude::*;
 use smearor_app_launcher_model::DesktopFileCommandAction;
 use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::TOPIC_COMMAND;
-use smearor_app_launcher_model::TOPIC_STATUS;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiWidget;
@@ -24,14 +25,9 @@ use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
-use smearor_swipe_launcher_plugin_api::PluginMeta;
-use smearor_swipe_launcher_plugin_api::PluginMetaRaw;
 use smearor_swipe_launcher_plugin_api::PluginVTable;
-use std::sync::Arc;
-use std::sync::RwLock;
 use tracing::Level;
 use tracing::debug;
-use tracing::error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
@@ -88,6 +84,8 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
             .spacing(4)
             .width_request(100)
             .height_request(100)
+            .halign(Align::Center)
+            .valign(Align::Center)
             .css_classes(["app-launcher-tile"])
             .build();
 
@@ -109,7 +107,7 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
         let led_box = gtk4::Box::builder()
             .width_request(8)
             .height_request(8)
-            .halign(gtk4::Align::Center)
+            .halign(Align::Center)
             .css_classes(["app-launcher-led", "led-unlit"])
             .build();
         main_box.append(&led_box);
@@ -117,52 +115,55 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
         *widget.led_indicator.write().unwrap() = Some(led_box);
 
         // Gestures - Click to Launch
-        let click_gesture = GestureClick::new();
-        // let core_context_clone1 = widget.core_context.clone();
-        let desktop_file_clone1 = widget.config.desktop_file_path.clone();
-        // let widget_id_clone1 = widget.meta.id.clone();
-        let message_broadcaster = widget.get_broadcaster();
-        click_gesture.connect_pressed(move |gesture_click, _, _, _| {
-            info!("AppLauncher Widget: Single-click/tap detected for {}", desktop_file_clone1);
-            let message = DesktopFileCommandMessage::new(&desktop_file_clone1, DesktopFileCommandAction::Exec);
-            message_broadcaster.broadcast_message(TOPIC_COMMAND, message);
-            // if let Some(ref context) = core_context_clone1 {
-            //     let message = DesktopFileCommandMessage::new(&desktop_file_clone1, DesktopFileCommandAction::Exec);
-            //     message_broadcaster.broadcast_message(TOPIC_COMMAND, message);
-            //     // let envelope = FfiEnvelope {
-            //     //     sender_id: widget_id_clone1.clone(),
-            //     //     topic: RString::from("service/app_launcher/command"),
-            //     //     payload: RString::from(format!("{{\"action\": \"Launch\", \"desktop_file\": \"{}\"}}", desktop_file_clone1)),
-            //     // };
-            //     // debug!("AppLauncher Widget: Sending message to app_launcher service: {}", envelope);
-            //     // unsafe {
-            //     //     (context.vtable.get().send_message)(context.core_obj, envelope);
-            //     // }
-            // }
-        });
-        main_box.add_controller(click_gesture);
+        let longpress_gesture = GestureLongPress::builder()
+            .propagation_phase(PropagationPhase::Capture)
+            // Extra long because of the parent scroll window widget has a drag gesture
+            .delay_factor(2.0)
+            .build();
 
-        // Gestures - Longpress to Terminate
-        let longpress_gesture = GestureLongPress::new();
-        // let core_context_clone2 = widget.core_context.clone();
-        let desktop_file_clone2 = widget.config.desktop_file_path.clone();
-        // let widget_id_clone2 = widget.meta.id.clone();
+        let click_gesture = GestureClick::builder().propagation_phase(PropagationPhase::Capture).build();
+        longpress_gesture.group_with(&click_gesture);
+
+        click_gesture.connect_pressed(move |_, _, _, _| {});
+
+        let desktop_file_inner = widget.config.desktop_file_path.clone();
         let message_broadcaster = widget.get_broadcaster();
-        longpress_gesture.connect_pressed(move |gesture_long_press, _, _| {
-            info!("AppLauncher Widget: Longpress detected for {}", desktop_file_clone2);
-            let message = DesktopFileCommandMessage::new(&desktop_file_clone2, DesktopFileCommandAction::Terminate);
-            message_broadcaster.broadcast_message(TOPIC_COMMAND, message);
-            // if let Some(ref context) = core_context_clone2 {
-            //     let envelope = FfiEnvelope {
-            //         sender_id: widget_id_clone2.clone(),
-            //         topic: RString::from("service/app_launcher/command"),
-            //         payload: RString::from(format!("{{\"action\": \"Terminate\", \"desktop_file\": \"{}\"}}", desktop_file_clone2)),
-            //     };
-            //     unsafe {
-            //         (context.vtable.get().send_message)(context.core_obj, envelope);
-            //     }
-            // }
+        click_gesture.connect_released(move |gesture, n_clicks, _, _| {
+            if let Some(seq) = gesture.current_sequence() {
+                let state = gesture.sequence_state(&seq);
+                if state == EventSequenceState::Claimed || state == EventSequenceState::Denied {
+                    return;
+                }
+            }
+            info!("Click released {n_clicks}");
+            message_broadcaster.broadcast_message(TOPIC_COMMAND, DesktopFileCommandMessage::exec(&desktop_file_inner));
+            gesture.set_state(EventSequenceState::Claimed);
         });
+
+        let main_box_inner = main_box.downgrade();
+        longpress_gesture.connect_begin(move |_, _| {
+            if let Some(main_box) = main_box_inner.upgrade() {
+                main_box.add_css_class("longpress");
+            }
+        });
+        let desktop_file_inner = widget.config.desktop_file_path.clone();
+        let message_broadcaster = widget.get_broadcaster();
+        longpress_gesture.connect_pressed(move |gesture, n_clicks, _| {
+            message_broadcaster.broadcast_message(TOPIC_COMMAND, DesktopFileCommandMessage::terminate(&desktop_file_inner));
+            gesture.set_state(EventSequenceState::Claimed);
+        });
+
+        let main_box_inner = main_box.downgrade();
+        longpress_gesture.connect_end(move |gesture, _| {
+            if let Some(main_box) = main_box_inner.upgrade() {
+                main_box.remove_css_class("longpress");
+            }
+        });
+        longpress_gesture.connect_cancelled(move |gesture| {
+            gesture.set_state(EventSequenceState::None);
+        });
+
+        main_box.add_controller(click_gesture);
         main_box.add_controller(longpress_gesture);
 
         let widget_obj = main_box.upcast::<Widget>();

@@ -20,7 +20,6 @@ plugins = [
 plugins = [
     { id = "clock_widget_date", path = "target/debug/libsmearor_clock_widget.so" },
     { id = "clock_widget_time", path = "target/debug/libsmearor_clock_widget.so" },
-    { id = "firefox_nightly", path = "target/debug/libsmearor_app_launcher_widget.so" }
     { id = "firefox_nightly", path = "target/debug/libsmearor_app_launcher_widget.so" },
     { id = "gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" },
     { id = "gnome_calculator", path = "target/debug/libsmearor_app_launcher_widget.so" },

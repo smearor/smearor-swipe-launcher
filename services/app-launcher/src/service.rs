@@ -1,7 +1,5 @@
-use abi_stable::std_types::RString;
 use dashmap::DashMap;
 use freedesktop_entry_parser::Entry;
-use freedesktop_entry_parser::ParseError;
 use gtk4::glib::ControlFlow;
 use gtk4::glib::timeout_add_seconds_local;
 use nix::sys::signal::Signal;
@@ -28,6 +26,7 @@ use std::sync::Arc;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
+use tracing::trace;
 
 pub struct AppLauncherService {
     pub meta: PluginMeta,
@@ -44,12 +43,14 @@ impl AppLauncherService {
         };
 
         // Start local reaper timer loop on the GLib main context
-        Self::init_reaper(service.tracked_processes.clone(), service.core_context.clone());
+        service.init_reaper();
 
         Ok(service)
     }
 
-    pub fn init_reaper(tracked_processes: Arc<DashMap<String, Vec<u32>>>, core_context: Option<FfiCoreContext>) {
+    pub fn init_reaper(&self) {
+        let broadcaster = self.get_broadcaster();
+        let tracked_processes = self.tracked_processes.clone();
         timeout_add_seconds_local(2, move || {
             let mut completed_apps = Vec::new();
             tracked_processes.retain(|desktop_file, pids| {
@@ -69,8 +70,7 @@ impl AppLauncherService {
 
             for desktop_file in completed_apps {
                 info!("AppLauncher Service: App exited naturally: {}", desktop_file);
-                // self.broadcast_status(DesktopFileStatusMessage::new(desktop_file.to_string(), DesktopFileStatus::Running));
-                // Self::broadcast_status(&core_context, &desktop_file, "Stopped");
+                broadcaster.broadcast_message(TOPIC_STATUS, DesktopFileStatusMessage::stopped(&desktop_file));
             }
 
             ControlFlow::Continue
@@ -86,34 +86,28 @@ impl AppLauncherService {
                 return;
             }
         };
-        // let Ok(entry) = Entry::parse(desktop_file) else {
-        //     error!("AppLauncher Service: Failed to parse desktop file: {}", desktop_file);
-        //     return;
-        // };
         let Some(exec) = entry.get("Desktop Entry", "Exec") else {
             error!("Failed to get exec attr");
             return;
         };
-        debug!("Exec: {:?}", exec);
+        trace!("Exec: {:?}", exec);
         if let Some(exec_first) = exec.first() {
-            debug!("program: {exec_first}");
+            trace!("program: {exec_first}");
             let mut raw_args = exec_first.split(" ").into_iter().map(|arg| arg.to_string()).collect::<Vec<String>>();
-            debug!("args: {:?}", raw_args);
+            trace!("args: {:?}", raw_args);
             let Some(program) = raw_args.first().cloned() else {
                 error!("Failed to get program attr");
                 return;
             };
-            debug!("raw_args: {:?}", raw_args);
+            trace!("raw_args: {:?}", raw_args);
             raw_args.remove(0);
-            // let raw_args = &exec[1..];
-            // debug!("raw_args: {:?}", raw_args);
             // Sanitize placeholders like %u, %F
             let clean_args: Vec<String> = raw_args
                 .iter()
                 .map(|arg| arg.trim().to_string())
                 .filter(|arg| !arg.is_empty() && !arg.starts_with('%'))
                 .collect();
-            debug!("clean_args: {:?}", clean_args);
+            trace!("clean_args: {:?}", clean_args);
 
             let child = Command::new(program.clone())
                 .args(&clean_args)
@@ -127,7 +121,7 @@ impl AppLauncherService {
                     let pid = c.id();
                     info!("AppLauncher Service: Successfully spawned {} with PID {}", program, pid);
                     self.tracked_processes.entry(desktop_file.to_string()).or_default().push(pid);
-                    self.broadcast_message(TOPIC_STATUS, DesktopFileStatusMessage::new(desktop_file, DesktopFileStatus::Running));
+                    self.broadcast_message(TOPIC_STATUS, DesktopFileStatusMessage::running(desktop_file));
                 }
                 Err(e) => {
                     error!("AppLauncher Service: Failed to spawn Command {}: {}", program, e);
@@ -153,7 +147,7 @@ impl AppLauncherService {
             pids.clear();
         }
         self.tracked_processes.remove(desktop_file);
-        self.broadcast_message(TOPIC_STATUS, DesktopFileStatusMessage::new(desktop_file, DesktopFileStatus::Stopped));
+        self.broadcast_message(TOPIC_STATUS, DesktopFileStatusMessage::stopped(desktop_file));
     }
 }
 

@@ -1,0 +1,11 @@
+.transparent-background {
+    background-color: transparent;
+}
+
+window {
+    background-color: transparent;
+}
+
+.longpress {
+    background-color: rgba(255, 255, 255, 0.1);
+}

@@ -1,4 +1,4 @@
-use crate::config::LauncherConfig;
+use crate::config::launcher::SwipeLauncherConfig;
 use crate::plugin_manager::PluginManager;
 use crate::service_manager::ServiceManager;
 use crate::window::create_window;
@@ -11,6 +11,7 @@ use gtk4::PolicyType;
 use gtk4::PropagationPhase;
 use gtk4::ScrolledWindow;
 use gtk4::Widget;
+use gtk4::gdk::Display;
 use gtk4::glib::MainContext;
 use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
@@ -19,7 +20,6 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_wrot_rotation::RotationWidget;
 use std::cell::Cell;
 use std::cell::RefCell;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
@@ -29,7 +29,7 @@ use tracing::info;
 
 /// Main application state
 pub struct LauncherApplication {
-    pub(crate) config: LauncherConfig,
+    pub(crate) config: SwipeLauncherConfig,
     pub(crate) plugin_manager: Arc<PluginManager>,
     pub(crate) service_manager: Arc<ServiceManager>,
     pub(crate) message_receiver: std::sync::Mutex<Option<Receiver<FfiEnvelope>>>,
@@ -39,7 +39,7 @@ pub struct LauncherApplication {
 impl LauncherApplication {}
 
 impl LauncherApplication {
-    pub fn new(config: LauncherConfig, gtk_app: Application) -> Self {
+    pub fn new(config: SwipeLauncherConfig, gtk_app: Application) -> Self {
         let (sender, receiver) = channel::<FfiEnvelope>(100);
         LauncherApplication {
             config,
@@ -92,9 +92,8 @@ impl LauncherApplication {
         info!("Successfully loaded {} services", self.service_manager.services.len());
     }
 
-    pub fn build_ui(self: Arc<Self>, config: &LauncherConfig) -> miette::Result<()> {
+    pub fn build_ui(self: Arc<Self>, config: &SwipeLauncherConfig) -> miette::Result<()> {
         let plugins = Arc::new(self.plugin_manager.plugins.clone());
-        let rotation = config.launcher.rotation;
 
         let left_plugin_ids: Vec<String> = config.left_area.plugin_ids();
         let scroll_plugin_ids: Vec<String> = config.scroll_band.plugin_ids();
@@ -110,15 +109,23 @@ impl LauncherApplication {
         };
         let receiver_cell = Rc::new(RefCell::new(Some(receiver)));
 
+        let rotation = config.launcher.rotation.clone();
         self.gtk_app.connect_activate(move |app| {
             info!("GTK application activated");
 
+            if let Some(display) = Display::default() {
+                let provider = gtk4::CssProvider::new();
+                provider.load_from_string(include_str!("../../resources/style.css"));
+                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
+            }
+
             let window = create_window(app, &config_inner);
 
-            let rotation_widget = RotationWidget::new(rotation);
-            rotation_widget.set_animation_speed(500);
-            rotation_widget.set_animations_enabled(!true);
-            // rotation_widget.set_animation_overshoot(20);
+            let rotation_widget = RotationWidget::new(rotation.rotation());
+            // TODO: enable/disable rotation
+            rotation_widget.set_animation_speed(rotation.animation_speed());
+            rotation_widget.set_animation_overshoot(rotation.animation_overshoot());
+            rotation_widget.set_animations_enabled(rotation.animations_enabled());
 
             let main_container = GtkBox::builder().orientation(Orientation::Horizontal).spacing(0).build();
             rotation_widget.set_child(Some(&main_container));
@@ -177,7 +184,8 @@ impl LauncherApplication {
             // Custom drag to scroll support with mouse on desktop
             let hadjustment = scrolled_window.hadjustment();
             let drag_gesture = GestureDrag::new();
-            drag_gesture.set_propagation_phase(PropagationPhase::Capture);
+            // Bubble because there are long press gestures on the plugins
+            drag_gesture.set_propagation_phase(PropagationPhase::Bubble);
             let start_value = Arc::new(Cell::new(0.0));
             let is_dragging = Arc::new(Cell::new(false));
             const DRAG_THRESHOLD: f64 = 10.0;
@@ -186,16 +194,18 @@ impl LauncherApplication {
             let hadjustment_clone1 = hadjustment.clone();
             let is_dragging_clone1 = is_dragging.clone();
             drag_gesture.connect_drag_begin(move |gesture, _, _| {
+                info!("drag begin");
                 start_value_clone1.set(hadjustment_clone1.value());
                 is_dragging_clone1.set(false);
-                gesture.set_state(EventSequenceState::Claimed);
             });
 
             let start_value_clone2 = start_value.clone();
             let hadjustment_clone2 = hadjustment.clone();
             let is_dragging_clone2 = is_dragging.clone();
-            drag_gesture.connect_drag_update(move |_, offset_x, _| {
+            drag_gesture.connect_drag_update(move |gesture, offset_x, _| {
                 if offset_x.abs() > DRAG_THRESHOLD {
+                    info!("drag threshold -> claimed");
+                    gesture.set_state(EventSequenceState::Claimed);
                     is_dragging_clone2.set(true);
                 }
                 let new_val = start_value_clone2.get() - offset_x;
@@ -204,7 +214,9 @@ impl LauncherApplication {
 
             let is_dragging_clone3 = is_dragging.clone();
             drag_gesture.connect_drag_end(move |gesture, _, _| {
+                info!("drag end");
                 if !is_dragging_clone3.get() {
+                    info!("denied");
                     gesture.set_state(EventSequenceState::Denied);
                 }
             });

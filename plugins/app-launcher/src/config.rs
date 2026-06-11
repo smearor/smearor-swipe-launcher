@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct AppLauncherConfig {
+pub struct AppLauncherConfig {
     /// The path to the `.desktop` file.
     pub(crate) desktop_file_path: String,
 }

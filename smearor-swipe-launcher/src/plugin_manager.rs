@@ -1,10 +1,9 @@
-use crate::config::PluginEntry;
+use crate::PluginEntry;
 use crate::plugin::LoadedPlugin;
 use dashmap::DashMap;
 use dashmap::DashSet;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
-use std::path::PathBuf;
 use tokio::sync::mpsc::Sender;
 use tracing::debug;
 use tracing::info;

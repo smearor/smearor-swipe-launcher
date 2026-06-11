@@ -2,7 +2,6 @@ mod application;
 mod args;
 mod config;
 mod context;
-mod controller;
 mod display;
 mod error;
 mod messages;
@@ -12,24 +11,28 @@ mod service;
 mod service_manager;
 mod window;
 
-use crate::args::SmearorWipeLauncherArgs;
-use application::LauncherApplication;
+pub use application::LauncherApplication;
+pub use args::launcher::SwipeLauncherArguments;
+pub use config::area::AreaConfig;
+pub use config::launcher::SwipeLauncherConfig;
+pub use config::plugin::PluginEntry;
+pub use plugin::LoadedPlugin;
+pub use plugin_manager::PluginManager;
+pub use service::LoadedService;
+pub use service_manager::ServiceManager;
+
 use clap::Parser;
-use config::LauncherConfig;
 use gtk4::Application;
 use miette::IntoDiagnostic;
 use miette::Result;
-use miette::miette;
-use smearor_wrot_rotation::SmearorRotation;
 use std::sync::Arc;
-use tracing::error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-    let args = SmearorWipeLauncherArgs::parse();
+    let args = SwipeLauncherArguments::parse();
 
     let subscriber = FmtSubscriber::builder()
         .with_env_filter(EnvFilter::from_default_env().add_directive(tracing::Level::DEBUG.into()))
@@ -40,21 +43,11 @@ async fn main() -> Result<()> {
     info!("Starting smearor-swipe-launcher");
     info!("Config file: {:?}", args.config);
 
-    let mut config = if let Some(config_path) = args.config {
-        let config_content = std::fs::read_to_string(&config_path).into_diagnostic()?;
-        let config: LauncherConfig = toml::from_str(&config_content).into_diagnostic()?;
-        info!("Loaded configuration with {} plugins in scroll band", config.scroll_band.plugins.len());
-        config
-    } else {
-        error!("No config file specified");
-        return Err(miette!("No config file specified"));
-    };
+    let config = args.load_config_from_file()?;
+    info!("Loaded configuration with {} plugins in scroll band", config.scroll_band.plugins.len());
 
-    if let Some(rotation) = args.rotation {
-        config.launcher.rotation = SmearorRotation::Deg(rotation);
-    }
-
-    info!("Initial rotation: {} degrees", config.launcher.rotation.to_degrees());
+    let initial_rotation = &config.launcher.rotation.rotation.unwrap_or_default();
+    info!("Initial rotation: {} degrees", initial_rotation.to_degrees());
 
     let gtk_app = Application::builder().application_id("com.smearor.swipe-launcher").build();
 

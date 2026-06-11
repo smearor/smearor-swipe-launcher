@@ -8,13 +8,11 @@ use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
-use smearor_swipe_launcher_plugin_api::PluginMetaRaw;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::mpsc;
 use tokio::runtime::Runtime;
 use tokio::time::interval;
-use tracing::debug;
 
 pub(crate) struct ClockWidget {
     pub(crate) meta: PluginMeta,
