@@ -18,9 +18,9 @@ use tracing::debug;
 
 pub(crate) struct ClockWidget {
     pub(crate) meta: PluginMeta,
+    pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) clock: Arc<Clock>,
     pub(crate) runtime: Arc<Runtime>,
-    pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) status_page: Arc<RwLock<Option<StatusPage>>>,
     pub(crate) time_sender: mpsc::Sender<String>,
     pub(crate) time_receiver: Option<mpsc::Receiver<String>>,
@@ -28,18 +28,15 @@ pub(crate) struct ClockWidget {
 
 impl ClockWidget {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionError> {
-        debug!("ClockWidget config: {config:?}");
-        let meta_raw: PluginMetaRaw =
-            serde_json::from_value(config.config.clone()).map_err(|e| PluginConstructionError::FailedToParseMetaData(e.to_string().into()))?;
         let clock_config: ClockConfig =
-            serde_json::from_value(config.config).map_err(|e| PluginConstructionError::FailedToParseWidgetConfig(e.to_string().into()))?;
+            serde_json::from_value(config.config.clone()).map_err(|e| PluginConstructionError::FailedToParseWidgetConfig(e.to_string().into()))?;
         let runtime = Arc::new(Runtime::new().map_err(|e| PluginConstructionError::FailedToCreateRuntime(e.to_string().into()))?);
         let (time_sender, time_receiver) = mpsc::channel();
         Ok(ClockWidget {
-            meta: PluginMeta::new(meta_raw.id, meta_raw.display_name, meta_raw.icon_name),
+            meta: PluginMeta::try_from(&config)?,
+            core_context,
             clock: Arc::new(Clock::new(clock_config)),
             runtime,
-            core_context,
             status_page: Arc::new(RwLock::new(None)),
             time_sender,
             time_receiver: Some(time_receiver),

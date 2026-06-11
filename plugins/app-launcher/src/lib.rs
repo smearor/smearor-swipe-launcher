@@ -12,10 +12,16 @@ use gtk4::Widget;
 use gtk4::ffi::GtkWidget;
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::*;
+use smearor_app_launcher_model::DesktopFileCommandAction;
+use smearor_app_launcher_model::DesktopFileCommandMessage;
+use smearor_app_launcher_model::TOPIC_COMMAND;
+use smearor_app_launcher_model::TOPIC_STATUS;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiWidget;
 use smearor_swipe_launcher_plugin_api::LoadedPlugin;
+use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
+use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
@@ -112,42 +118,50 @@ unsafe extern "C" fn build_widget(plugin: *mut ()) -> FfiWidget {
 
         // Gestures - Click to Launch
         let click_gesture = GestureClick::new();
-        let core_context_clone1 = widget.core_context.clone();
+        // let core_context_clone1 = widget.core_context.clone();
         let desktop_file_clone1 = widget.config.desktop_file_path.clone();
-        let widget_id_clone1 = widget.meta.id.clone();
-        click_gesture.connect_pressed(move |_, _, _, _| {
+        // let widget_id_clone1 = widget.meta.id.clone();
+        let message_broadcaster = widget.get_broadcaster();
+        click_gesture.connect_pressed(move |gesture_click, _, _, _| {
             info!("AppLauncher Widget: Single-click/tap detected for {}", desktop_file_clone1);
-            if let Some(ref context) = core_context_clone1 {
-                let envelope = FfiEnvelope {
-                    sender_id: widget_id_clone1.clone(),
-                    topic: RString::from("service/app_launcher/command"),
-                    payload: RString::from(format!("{{\"action\": \"Launch\", \"desktop_file\": \"{}\"}}", desktop_file_clone1)),
-                };
-                debug!("AppLauncher Widget: Sending message to app_launcher service: {}", envelope);
-                unsafe {
-                    (context.vtable.get().send_message)(context.core_obj, envelope);
-                }
-            }
+            let message = DesktopFileCommandMessage::new(&desktop_file_clone1, DesktopFileCommandAction::Exec);
+            message_broadcaster.broadcast_message(TOPIC_COMMAND, message);
+            // if let Some(ref context) = core_context_clone1 {
+            //     let message = DesktopFileCommandMessage::new(&desktop_file_clone1, DesktopFileCommandAction::Exec);
+            //     message_broadcaster.broadcast_message(TOPIC_COMMAND, message);
+            //     // let envelope = FfiEnvelope {
+            //     //     sender_id: widget_id_clone1.clone(),
+            //     //     topic: RString::from("service/app_launcher/command"),
+            //     //     payload: RString::from(format!("{{\"action\": \"Launch\", \"desktop_file\": \"{}\"}}", desktop_file_clone1)),
+            //     // };
+            //     // debug!("AppLauncher Widget: Sending message to app_launcher service: {}", envelope);
+            //     // unsafe {
+            //     //     (context.vtable.get().send_message)(context.core_obj, envelope);
+            //     // }
+            // }
         });
         main_box.add_controller(click_gesture);
 
         // Gestures - Longpress to Terminate
         let longpress_gesture = GestureLongPress::new();
-        let core_context_clone2 = widget.core_context.clone();
+        // let core_context_clone2 = widget.core_context.clone();
         let desktop_file_clone2 = widget.config.desktop_file_path.clone();
-        let widget_id_clone2 = widget.meta.id.clone();
-        longpress_gesture.connect_pressed(move |_, _, _| {
+        // let widget_id_clone2 = widget.meta.id.clone();
+        let message_broadcaster = widget.get_broadcaster();
+        longpress_gesture.connect_pressed(move |gesture_long_press, _, _| {
             info!("AppLauncher Widget: Longpress detected for {}", desktop_file_clone2);
-            if let Some(ref context) = core_context_clone2 {
-                let envelope = FfiEnvelope {
-                    sender_id: widget_id_clone2.clone(),
-                    topic: RString::from("service/app_launcher/command"),
-                    payload: RString::from(format!("{{\"action\": \"Terminate\", \"desktop_file\": \"{}\"}}", desktop_file_clone2)),
-                };
-                unsafe {
-                    (context.vtable.get().send_message)(context.core_obj, envelope);
-                }
-            }
+            let message = DesktopFileCommandMessage::new(&desktop_file_clone2, DesktopFileCommandAction::Terminate);
+            message_broadcaster.broadcast_message(TOPIC_COMMAND, message);
+            // if let Some(ref context) = core_context_clone2 {
+            //     let envelope = FfiEnvelope {
+            //         sender_id: widget_id_clone2.clone(),
+            //         topic: RString::from("service/app_launcher/command"),
+            //         payload: RString::from(format!("{{\"action\": \"Terminate\", \"desktop_file\": \"{}\"}}", desktop_file_clone2)),
+            //     };
+            //     unsafe {
+            //         (context.vtable.get().send_message)(context.core_obj, envelope);
+            //     }
+            // }
         });
         main_box.add_controller(longpress_gesture);
 
@@ -165,33 +179,11 @@ unsafe extern "C" fn on_message(plugin: *mut (), message: FfiEnvelope) {
     if plugin.is_null() {
         return;
     }
-
+    // if message.topic != TOPIC_STATUS {
+    //     return;
+    // }
     let widget = unsafe { &*(plugin as *const AppLauncherWidget) };
-    let topic = message.topic.to_string();
-    let payload = message.payload.to_string();
-
-    debug!("AppLauncher Widget {} received message on '{}'", widget.meta.id, topic);
-
-    if topic == "service/app_launcher/status" {
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&payload) {
-            let desktop_file = parsed.get("desktop_file").and_then(|v| v.as_str()).unwrap_or_default();
-            if desktop_file == widget.config.desktop_file_path {
-                let status = parsed.get("status").and_then(|v| v.as_str()).unwrap_or_default();
-                info!("AppLauncher Widget {} status updated for {}: {}", widget.meta.id, desktop_file, status);
-                if let Ok(guard) = widget.led_indicator.read() {
-                    if let Some(led) = guard.as_ref() {
-                        if status == "Running" {
-                            led.remove_css_class("led-unlit");
-                            led.add_css_class("led-lit");
-                        } else {
-                            led.remove_css_class("led-lit");
-                            led.add_css_class("led-unlit");
-                        }
-                    }
-                }
-            }
-        }
-    }
+    widget.handle_envelope_message(message);
 }
 
 unsafe extern "C" fn on_primary_action(_plugin: *mut (), _rotation: u32) -> i32 {

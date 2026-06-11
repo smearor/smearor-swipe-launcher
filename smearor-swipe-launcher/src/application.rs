@@ -50,21 +50,27 @@ impl LauncherApplication {
 
     pub fn load_plugins(&self) {
         for plugin_entry in &self.config.left_area.plugins {
+            info!("Loading plugin {} on left area", plugin_entry.id);
             let plugin_config = self.config.plugin_config(&plugin_entry.id);
+            info!("Plugin config: {plugin_config:?}");
             if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
                 error!("Failed to load plugin {}: {}", plugin_entry.id, e);
             }
         }
 
         for plugin_entry in &self.config.scroll_band.plugins {
+            info!("Loading plugin {} on scroll band", plugin_entry.id);
             let plugin_config = self.config.plugin_config(&plugin_entry.id);
+            info!("Plugin config: {plugin_config:?}");
             if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
                 error!("Failed to load plugin {}: {}", plugin_entry.id, e);
             }
         }
 
         for plugin_entry in &self.config.right_area.plugins {
+            info!("Loading plugin {} on right area", plugin_entry.id);
             let plugin_config = self.config.plugin_config(&plugin_entry.id);
+            info!("Plugin config: {plugin_config:?}");
             if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
                 error!("Failed to load plugin {}: {}", plugin_entry.id, e);
             }
@@ -74,8 +80,9 @@ impl LauncherApplication {
 
     pub fn load_services(&self) {
         for service_entry in &self.config.services {
+            info!("Loading service {}", service_entry.id);
             let service_config = self.config.plugin_config(&service_entry.id);
-            // let service_path = PathBuf::from(&service_entry.path);
+            info!("Service config: {service_config:?}");
             if let Err(e) = self.service_manager.load_service(&service_entry, service_config) {
                 error!("Failed to load service {}: {}", service_entry.id, e);
             }

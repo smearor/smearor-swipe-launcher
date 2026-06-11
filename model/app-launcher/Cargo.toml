@@ -1,24 +1,16 @@
 [package]
-name = "smearor-app-launcher-widget"
+name = "smearor-app-launcher-model"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
 abi_stable = { workspace = true }
-adw = { workspace = true }
 freedesktop_entry_parser = { workspace = true }
-gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
-glib = { workspace = true }
-miette = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-smearor-app-launcher-model = { path = "../../model/app-launcher" }
 smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }
 thiserror = { workspace = true }
 tracing = { workspace = true }

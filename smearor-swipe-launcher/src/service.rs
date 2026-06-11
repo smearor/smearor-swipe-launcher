@@ -37,7 +37,7 @@ impl LoadedService {
 
             let mut config_ext = config.config.clone();
             config_ext["id"] = Value::String(service_entry.id.clone());
-            let config_json = serde_json::to_string(&config.config)?;
+            let config_json = serde_json::to_string(&config_ext)?;
             let config_bytes = config_json.as_bytes();
             let config_ptr = config_bytes.as_ptr() as *const i8;
             let config_len = config_bytes.len();

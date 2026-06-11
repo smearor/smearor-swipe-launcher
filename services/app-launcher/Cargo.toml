@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 abi_stable = { workspace = true }
+freedesktop_entry_parser = { workspace = true }
 glib = { workspace = true }
 gtk4 = { workspace = true }
 miette = { workspace = true }
@@ -19,6 +20,7 @@ nix = { version = "0.29", features = ["signal"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }
+smearor-app-launcher-model = { path = "../../model/app-launcher" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

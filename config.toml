@@ -21,6 +21,9 @@ plugins = [
     { id = "clock_widget_date", path = "target/debug/libsmearor_clock_widget.so" },
     { id = "clock_widget_time", path = "target/debug/libsmearor_clock_widget.so" },
     { id = "firefox_nightly", path = "target/debug/libsmearor_app_launcher_widget.so" }
+    { id = "firefox_nightly", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_calculator", path = "target/debug/libsmearor_app_launcher_widget.so" },
 ]
 
 # Plugins in the right static area
@@ -33,6 +36,12 @@ plugins = [
 
 [firefox_nightly]
 desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
+
+[gnome_2048]
+desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
+
+[gnome_calculator]
+desktop_file_path = "/usr/share/applications/org.gnome.Calculator.desktop"
 
 [clock_widget_left]
 format = "[hour]:[minute]:[second]"

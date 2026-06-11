@@ -43,3 +43,16 @@ fn default_plugin_id() -> String {
 fn default_plugin_display_name() -> String {
     format!("Plugin {}", PLUGIN_ID.load(Ordering::SeqCst))
 }
+
+pub trait PluginMetaGetter {
+    fn meta(&self) -> PluginMeta;
+
+    fn meta_raw(&self) -> PluginMetaRaw {
+        let meta = self.meta();
+        PluginMetaRaw {
+            id: meta.id.to_string(),
+            display_name: meta.display_name.to_string(),
+            icon_name: meta.icon_name.map(|s| s.to_string()).into(),
+        }
+    }
+}
