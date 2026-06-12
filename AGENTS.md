@@ -34,6 +34,16 @@
 - Implement `Drop` only when necessary
 - Prefer composition over inheritance
 
+#### File and Module Organization
+
+- **One struct/enum per file**: Each struct or enum should be in its own file to maintain clear separation of concerns
+- **Logical module grouping**: Group related types into modules based on domain responsibility (e.g., `config/area/` for area-specific types, `config/layout/`
+  for layout-specific types)
+- **Module structure**: Create a `mod.rs` in each module directory with module declarations and `pub use` re-exports for a clean API
+- **Naming conventions**: Avoid redundant prefixes in filenames when the module name already provides context (e.g., `area_config.rs` → `config.rs` in
+  `config/area/` module)
+- **Clear separation**: Ensure modules have distinct responsibilities - if types belong to different domains, separate them into different modules
+
 ### 3. Error Handling
 
 - Use `Result<T, E>` for recoverable errors
@@ -179,6 +189,15 @@
 - **Panic-Free Code**: Avoid `unwrap()`, `expect()`, and panicking code
 - **English Comments**: All source code comments in English
 - **No Abbreviations**: Use descriptive variable names without abbreviations
+
+### Documentation Standards
+
+- **Type Documentation**: All public enums and structs must have rustdoc comments describing their purpose
+- **Enum Variants**: Each enum variant must be documented with a brief description of its meaning
+- **Struct Fields**: Each field in a struct must be documented with a description of its purpose and any relevant details
+- **Documentation Format**: Use `///` for rustdoc comments, follow rustdoc conventions
+- **Language**: All documentation must be in English
+- **Clarity**: Documentation should be clear, concise, and focus on semantic meaning
 
 ### Import Organization
 
