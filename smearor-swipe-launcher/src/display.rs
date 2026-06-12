@@ -44,7 +44,7 @@ pub fn calculate_area_size(rotation: SmearorRotation, height: i32) -> AreaSize {
 
     if is_horizontal {
         width = screen_width;
-        height = height;
+        // height = height;
     } else if is_vertical {
         width = height;
         height = screen_height;

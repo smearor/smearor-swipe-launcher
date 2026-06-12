@@ -1,4 +1,5 @@
 mod application;
+mod area;
 mod args;
 mod config;
 mod context;

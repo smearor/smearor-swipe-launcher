@@ -6,7 +6,6 @@ use miette::IntoDiagnostic;
 use miette::Result;
 use miette::miette;
 use std::path::PathBuf;
-use tracing::debug;
 use tracing::info;
 
 #[derive(Parser, Debug)]
