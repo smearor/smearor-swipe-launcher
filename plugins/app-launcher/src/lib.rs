@@ -1,5 +1,4 @@
 pub mod config;
-pub mod desktop_entry;
 pub mod widget;
 
 use crate::widget::AppLauncherWidget;

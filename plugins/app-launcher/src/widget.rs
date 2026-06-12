@@ -1,6 +1,6 @@
 use crate::config::AppLauncherConfig;
-use crate::desktop_entry::DesktopEntry;
 use adw::prelude::ObjectExt;
+use freedesktop_entry_parser::Entry;
 use gtk4::Align;
 use gtk4::EventSequenceState;
 use gtk4::GestureClick;
@@ -39,6 +39,7 @@ pub struct AppLauncherWidget {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
     pub config: AppLauncherConfig,
+    pub desktop_entry: Entry,
     pub app_name: String,
     pub icon_name: String,
     pub led_indicator: Arc<RwLock<Option<gtk4::Box>>>,
@@ -53,20 +54,31 @@ impl AppLauncherWidget {
         let mut icon_name = meta_raw.icon_name.unwrap_or_default().to_string();
 
         // Parse `.desktop` file
-        if let Some(entry) = DesktopEntry::parse(&config.desktop_file_path) {
-            app_name = entry.name;
-            icon_name = entry.icon;
-        } else {
-            error!("Could not load .desktop file at: {}", config.desktop_file_path);
+        let desktop_entry = match Entry::parse_file(&config.desktop_file_path) {
+            Ok(entry) => entry,
+            Err(e) => {
+                return Err(PluginConstructionError::Custom(
+                    format!("AppLauncher Service: Failed to parse desktop file {}: {e}", config.desktop_file_path).into(),
+                ));
+            }
+        };
+        if let Some(name) = desktop_entry.get("Desktop Entry", "Name").and_then(|names| names.first()) {
+            app_name = name.clone();
         }
-
-        if icon_name.is_empty() {
-            icon_name = "system-run".to_string(); // fallback
+        match desktop_entry.get("Desktop Entry", "Icon").and_then(|names| names.first()) {
+            Some(icon) => icon_name = icon.clone(),
+            None => {
+                // fallback
+                if icon_name.is_empty() {
+                    icon_name = "system-run".to_string();
+                }
+            }
         }
 
         Ok(AppLauncherWidget {
             meta: PluginMeta::new(meta_raw.id, app_name.clone(), Some(icon_name.clone())),
             config,
+            desktop_entry,
             app_name,
             icon_name,
             core_context,

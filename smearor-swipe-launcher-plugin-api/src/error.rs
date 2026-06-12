@@ -22,4 +22,7 @@ pub enum PluginConstructionError {
 
     #[error("Failed to parse config: {0}")]
     FailedToParseConfig(RString),
+
+    #[error("{0}")]
+    Custom(RString),
 }

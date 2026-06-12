@@ -1280,7 +1280,132 @@ pub enum AreaAction {
 pub fn request_area_change(action: AreaAction);
 ```
 
-#### 3. Dynamic Area Config File Format
+#### 3. Message System Integration
+
+The existing message system (`FfiEnvelope` with topic-based routing) is extended to support area actions. Plugins and services can trigger area changes by
+broadcasting messages on the `core/area` topic.
+
+**Message Format**:
+
+```rust
+// AreaAction is serializable via serde
+#[derive(Serialize, Deserialize)]
+pub enum AreaAction {
+    // ... variants as above
+}
+
+// Plugins broadcast area actions via the message system
+impl PluginWidget {
+    pub fn request_area_via_message(&self, action: AreaAction) {
+        self.get_broadcaster()
+            .broadcast_message("core/area", action);
+    }
+}
+
+// Services can also request area changes
+impl Service {
+    pub fn request_area_via_message(&self, action: AreaAction) {
+        self.get_broadcaster()
+            .broadcast_message("core/area", action);
+    }
+}
+```
+
+**Core Message Handler**:
+
+```rust
+// In smearor-swipe-launcher/src/messages.rs
+impl LauncherApplication {
+    pub fn handle_message(&self, envelope: FfiEnvelope, scrolled_window: &gtk4::ScrolledWindow) {
+        let sender_id = envelope.sender_id.to_string();
+        let topic = envelope.topic.to_string();
+        let payload = envelope.payload.to_string();
+
+        debug!("Event Broker: Received message from '{}' on topic '{}': {}", sender_id, topic, payload);
+
+        // ... existing routing for core/control, core/layout, plugin/, service/, etc. ...
+
+        // Area Management Messages
+        if topic == "core/area" {
+            if let Ok(action) = serde_json::from_str::<AreaAction>(&payload) {
+                debug!("Area action requested by {}: {:?}", sender_id, action);
+                if let Err(e) = self.area_manager.handle_action(action) {
+                    error!("Failed to handle area action: {}", e);
+                }
+            } else {
+                error!("Failed to parse area action from payload: {}", payload);
+            }
+        }
+    }
+}
+```
+
+**AreaManager Action Handler**:
+
+```rust
+impl AreaManager {
+    pub fn handle_action(&self, action: AreaAction) -> miette Result<() > {
+    match action {
+    AreaAction::AddArea { area_id, config_path, position } => {
+    self.add_area_from_config(area_id, PathBuf::from(config_path), position)
+    }
+    AreaAction::RemoveArea { area_id } => {
+    self.remove_area(area_id)
+    }
+    AreaAction::ReplaceArea { area_id, config_path } => {
+    self.replace_area_from_config(area_id, PathBuf::from(config_path))
+    }
+    AreaAction::CloneArea { source_area_id, new_area_id, position } => {
+    self.clone_area(source_area_id, new_area_id, position)
+    }
+    AreaAction::MergeAreas { source_area_ids, target_area_id, target_config } => {
+    self.merge_areas(source_area_ids, target_area_id, target_config)
+    }
+    AreaAction::HotReloadArea { area_id, config_path } => {
+    self.hot_reload_area(area_id, PathBuf::from(config_path))
+    }
+    }
+    }
+}
+```
+
+**Example Usage**:
+
+```rust
+// Plugin requesting to open a submenu
+impl ClockWidget {
+    pub fn on_settings_click(&self) {
+        let action = AreaAction::AddArea {
+            area_id: "settings_submenu".to_string(),
+            config_path: "configs/submenu_settings.toml".to_string(),
+            position: AreaPosition::After("main_area".to_string()),
+        };
+        self.request_area_via_message(action);
+    }
+}
+
+// Service requesting to reload an area configuration
+impl AppLauncherService {
+    pub fn on_config_change(&self, area_id: String) {
+        let action = AreaAction::HotReloadArea {
+            area_id: area_id.clone(),
+            config_path: format!("configs/{}.toml", area_id),
+        };
+        self.request_area_via_message(action);
+    }
+}
+```
+
+**Benefits of Message System Integration**:
+
+- **Decoupling**: Plugins/services don't need direct references to AreaManager
+- **Flexibility**: Any component can request area changes through the same interface
+- **Auditability**: All area changes are logged through the message broker
+- **Extensibility**: New area actions can be added without changing plugin API
+- **Security**: Message routing can include permission checks
+- **Async Support**: Message system naturally supports async operations
+
+#### 4. Dynamic Area Config File Format
 
 Separate config files for dynamic areas:
 
@@ -1325,10 +1450,12 @@ label = "Audio"
 
 #### Phase 3: Plugin API Extension
 
-1. Add `AreaAction` enum to plugin API
+1. Add `AreaAction` enum to plugin API with Serialize/Deserialize
 2. Implement `request_area_change()` function
-3. Route area change requests from plugins to AreaManager
-4. Add error handling for invalid area operations
+3. Add message system integration for area actions
+4. Extend core message handler with `core/area` topic routing
+5. Implement `AreaManager::handle_action()` method
+6. Add error handling for invalid area operations
 
 #### Phase 4: Config File Loading
 
