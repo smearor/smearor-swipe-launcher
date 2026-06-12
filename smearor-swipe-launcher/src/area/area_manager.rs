@@ -1,5 +1,6 @@
 use crate::SwipeLauncherConfig;
 use crate::area::area_stack::AreaStack;
+use crate::area::layout_transition::LayoutTransition;
 use crate::area::managed_area::ManagedArea;
 use crate::config::area::area_type::AreaType;
 use crate::config::area::config::AreaConfig;
@@ -30,6 +31,9 @@ pub struct AreaManager {
     /// Stack of areas for nested sub-menus
     area_stack: AreaStack,
 
+    /// Layout transition animator
+    layout_transition: LayoutTransition,
+
     /// Reference to the plugin manager for loading plugins
     plugin_manager: Arc<PluginManager>,
 
@@ -43,6 +47,7 @@ impl AreaManager {
         Self {
             areas: HashMap::new(),
             area_stack: AreaStack::new(),
+            layout_transition: LayoutTransition::new(),
             plugin_manager,
             config,
         }
@@ -68,6 +73,9 @@ impl AreaManager {
         self.areas.insert(area_id.to_string(), managed_area);
         main_container.append(&widget);
 
+        // Apply transition animation
+        self.layout_transition.animate_widget_addition(&widget, &area_config.transition);
+
         info!("Successfully added area {}", area_id);
         Ok(())
     }
@@ -83,9 +91,18 @@ impl AreaManager {
             self.plugin_manager.unload_plugin(&plugin_entry.id);
         }
 
-        main_container.remove(&managed_area.widget);
+        // Animate removal before cleanup
+        let widget_clone = managed_area.widget.clone();
+        let main_container_clone = main_container.clone();
+        let area_id_clone = area_id.to_string();
 
-        info!("Successfully removed area {}", area_id);
+        self.layout_transition
+            .animate_widget_removal(&managed_area.widget, &managed_area.config.transition, move || {
+                main_container_clone.remove(&widget_clone);
+                debug!("Successfully removed area {}", area_id_clone);
+            });
+
+        info!("Successfully initiated removal of area {}", area_id);
         Ok(())
     }
 
