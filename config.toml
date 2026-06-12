@@ -9,24 +9,37 @@ path = "target/debug/libsmearor_app_launcher_service.so"
 # Initial rotation in degrees (0, 90, 180, 270)
 rotation = 0
 
+[layout]
+orientation = "horizontal"
+spacing = 0
+
+# Define the layout order
+areas = ["left_area", "scroll_band", "right_area"]
+
 # Plugins in the left static area
 [left_area]
+type = "fixed"
+width = 200
 plugins = [
     { id = "clock_widget_left", path = "target/debug/libsmearor_clock_widget.so" }
 ]
 
 # Plugins in the center scroll band
 [scroll_band]
+type = "scroll"
 plugins = [
     { id = "clock_widget_date", path = "target/debug/libsmearor_clock_widget.so" },
     { id = "clock_widget_time", path = "target/debug/libsmearor_clock_widget.so" },
     { id = "firefox_nightly", path = "target/debug/libsmearor_app_launcher_widget.so" },
     { id = "gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" },
     { id = "gnome_calculator", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "smearor_wrot_gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" }
 ]
 
 # Plugins in the right static area
 [right_area]
+type = "fixed"
+width = 200
 plugins = [
     { id = "clock_widget_right", path = "target/debug/libsmearor_clock_widget.so" }
 ]
@@ -41,6 +54,10 @@ desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
 
 [gnome_calculator]
 desktop_file_path = "/usr/share/applications/org.gnome.Calculator.desktop"
+follows_rotation = true
+
+[smearor_wrot_gnome_2048]
+desktop_file_path = "/home/aschaeffer/.local/share/applications/io.smearor.wrot.org.gnome.TwentyFortyEight.desktop"
 
 [clock_widget_left]
 format = "[hour]:[minute]:[second]"

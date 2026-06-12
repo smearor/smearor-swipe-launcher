@@ -3,6 +3,7 @@ members = [
     "smearor-swipe-launcher",
     "smearor-swipe-launcher-plugin-api",
     "model/app-launcher",
+    "model/clock",
     "services/app-launcher",
     "plugins/clock",
     "plugins/app-launcher",

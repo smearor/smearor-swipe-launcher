@@ -1,28 +1,17 @@
 [package]
-name = "smearor-clock-widget"
+name = "smearor-clock-model"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
 abi_stable = { workspace = true }
-adw = { workspace = true }
-glib = { workspace = true }
-gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
-miette = { workspace = true }
-paste = { workspace = true }
+freedesktop_entry_parser = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }
-smearor-clock-model = { path = "../../model/clock" }
 thiserror = { workspace = true }
-time = { version = "0.3", features = ["local-offset", "formatting"] }
-tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-typed-builder = { workspace = true }

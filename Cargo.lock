@@ -1242,14 +1242,7 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 name = "smearor-app-launcher-model"
 version = "0.1.0"
 dependencies = [
-    "abi_stable",
-    "freedesktop_entry_parser",
     "serde",
-    "serde_json",
-    "smearor-swipe-launcher-plugin-api",
-    "thiserror",
-    "tracing",
-    "tracing-subscriber",
 ]
 
 [[package]]
@@ -1295,6 +1288,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "smearor-clock-model"
+version = "0.1.0"
+dependencies = [
+    "abi_stable",
+    "freedesktop_entry_parser",
+    "serde",
+    "serde_json",
+    "smearor-swipe-launcher-plugin-api",
+    "thiserror",
+    "tracing",
+    "tracing-subscriber",
+]
+
+[[package]]
 name = "smearor-clock-widget"
 version = "0.1.0"
 dependencies = [
@@ -1306,6 +1313,7 @@ dependencies = [
     "paste",
     "serde",
     "serde_json",
+    "smearor-clock-model",
     "smearor-swipe-launcher-plugin-api",
     "thiserror",
     "time",

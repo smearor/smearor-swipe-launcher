@@ -7,11 +7,4 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-abi_stable = { workspace = true }
-freedesktop_entry_parser = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
-smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }
-thiserror = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
