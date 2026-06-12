@@ -15,6 +15,7 @@ adw = { workspace = true }
 glib = { workspace = true }
 gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
 miette = { workspace = true }
+paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }

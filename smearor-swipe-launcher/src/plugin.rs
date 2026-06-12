@@ -80,14 +80,6 @@ impl LoadedPlugin {
         }
     }
 
-    pub unsafe fn on_primary_action(&self, rotation: u32) -> i32 {
-        unsafe { (self.vtable.get().on_primary_action)(self.instance, rotation) }
-    }
-
-    pub unsafe fn on_secondary_action(&self, rotation: u32) -> i32 {
-        unsafe { (self.vtable.get().on_secondary_action)(self.instance, rotation) }
-    }
-
     pub unsafe fn destroy(&self) {
         unsafe {
             (self.vtable.get().destroy)(self.instance);

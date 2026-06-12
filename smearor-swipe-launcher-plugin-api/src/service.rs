@@ -21,4 +21,13 @@ pub struct LoadedService {
     pub vtable: RRef<'static, ServiceVTable>,
 }
 
+impl LoadedService {
+    pub fn new<T>(service_instance: T, vtable: RRef<'static, ServiceVTable>) -> Self {
+        LoadedService {
+            service_instance: Box::into_raw(Box::new(service_instance)) as *mut (),
+            vtable,
+        }
+    }
+}
+
 pub type ServiceConstructor = unsafe extern "C" fn(config_json: *const i8, config_len: usize, core_context: FfiCoreContext) -> RResult<LoadedService, RString>;

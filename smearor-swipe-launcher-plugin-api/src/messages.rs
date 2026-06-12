@@ -4,11 +4,9 @@ use crate::PluginMetaGetter;
 use abi_stable::StableAbi;
 use abi_stable::std_types::RString;
 use serde::Serialize;
-use serde::de;
 use serde::de::DeserializeOwned;
 use std::fmt::Display;
 use std::ops::Deref;
-use tracing::debug;
 use tracing::error;
 use tracing::trace;
 
@@ -23,7 +21,7 @@ pub struct FfiEnvelope {
 impl FfiEnvelope {
     pub fn payload<T>(&self) -> Result<T, serde_json::Error>
     where
-        T: de::DeserializeOwned,
+        T: DeserializeOwned,
     {
         let payload = self.payload.to_string();
         serde_json::from_str(&payload)

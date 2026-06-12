@@ -1,21 +1,29 @@
 use crate::clock::Clock;
 use crate::config::ClockConfig;
 use adw::StatusPage;
+use adw::prelude::Cast;
+use gtk4::Widget;
 use gtk4::glib::ControlFlow;
 use gtk4::glib::timeout_add_seconds_local;
+use gtk4::prelude::WidgetExt;
 use serde_json;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
+use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::mpsc;
 use tokio::runtime::Runtime;
 use tokio::time::interval;
+use tracing::debug;
 
 pub(crate) struct ClockWidget {
     pub(crate) meta: PluginMeta,
+    #[allow(unused)]
     pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) clock: Arc<Clock>,
     pub(crate) runtime: Arc<Runtime>,
@@ -64,5 +72,31 @@ impl ClockWidget {
             }
             ControlFlow::Continue
         });
+    }
+}
+
+impl WidgetBuilder for ClockWidget {
+    fn build_widget(&mut self) -> Widget {
+        let _ = adw::init();
+        let status_page = StatusPage::builder()
+            .title(self.clock.get_current_time())
+            .description(self.clock.config.description.clone().as_str())
+            .width_request(200)
+            .build();
+        status_page.add_css_class("smart-desk-clock");
+
+        *self.status_page.write().unwrap() = Some(status_page.clone());
+        if let Some(time_receiver) = self.time_receiver.take() {
+            self.start_time_update(time_receiver);
+        }
+        status_page.upcast::<Widget>()
+    }
+}
+
+impl MessageHandler<FfiEnvelope> for ClockWidget {
+    fn handle_message(&self, message: FfiEnvelope) {
+        let topic = message.topic.to_string();
+        let payload = message.payload.to_string();
+        debug!("Clock widget {} received message on topic '{}' with payload '{}'", self.meta.id, topic, payload);
     }
 }

@@ -193,7 +193,7 @@ impl LauncherApplication {
             let start_value_clone1 = start_value.clone();
             let hadjustment_clone1 = hadjustment.clone();
             let is_dragging_clone1 = is_dragging.clone();
-            drag_gesture.connect_drag_begin(move |gesture, _, _| {
+            drag_gesture.connect_drag_begin(move |_gesture, _, _| {
                 info!("drag begin");
                 start_value_clone1.set(hadjustment_clone1.value());
                 is_dragging_clone1.set(false);

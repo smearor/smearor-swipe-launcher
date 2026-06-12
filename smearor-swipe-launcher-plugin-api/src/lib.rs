@@ -3,6 +3,7 @@ use smearor_wrot_rotation::SmearorRotation;
 mod config;
 mod context;
 mod error;
+mod r#macro;
 mod messages;
 mod meta;
 mod plugin;
@@ -27,5 +28,7 @@ pub use service::LoadedService;
 pub use service::ServiceConstructor;
 pub use service::ServiceVTable;
 pub use widget::FfiWidget;
+pub use widget::FfiWidgetBuilder;
+pub use widget::WidgetBuilder;
 
 pub type Rotation = SmearorRotation;

@@ -17,6 +17,7 @@ gtk4 = { workspace = true }
 miette = { workspace = true }
 dashmap = { workspace = true }
 nix = { version = "0.29", features = ["signal"] }
+paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }

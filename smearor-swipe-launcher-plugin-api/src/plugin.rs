@@ -16,8 +16,6 @@ pub struct PluginVTable {
     pub get_icon_name: unsafe extern "C" fn(plugin: *mut ()) -> ROption<RString>,
     pub build_widget: unsafe extern "C" fn(plugin: *mut ()) -> FfiWidget,
     pub on_message: unsafe extern "C" fn(plugin: *mut (), message: FfiEnvelope),
-    pub on_primary_action: unsafe extern "C" fn(plugin: *mut (), rotation: u32) -> i32,
-    pub on_secondary_action: unsafe extern "C" fn(plugin: *mut (), rotation: u32) -> i32,
 }
 
 #[repr(C)]
@@ -25,6 +23,15 @@ pub struct PluginVTable {
 pub struct LoadedPlugin {
     pub plugin_instance: *mut (),
     pub vtable: RRef<'static, PluginVTable>,
+}
+
+impl LoadedPlugin {
+    pub fn new<T>(plugin_instance: T, vtable: RRef<'static, PluginVTable>) -> Self {
+        LoadedPlugin {
+            plugin_instance: Box::into_raw(Box::new(plugin_instance)) as *mut (),
+            vtable,
+        }
+    }
 }
 
 pub type PluginConstructor = unsafe extern "C" fn(config_json: *const i8, config_len: usize, core_context: FfiCoreContext) -> RResult<LoadedPlugin, RString>;
