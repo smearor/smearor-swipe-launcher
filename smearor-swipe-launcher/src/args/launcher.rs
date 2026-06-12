@@ -6,6 +6,7 @@ use miette::IntoDiagnostic;
 use miette::Result;
 use miette::miette;
 use std::path::PathBuf;
+use tracing::debug;
 use tracing::info;
 
 #[derive(Parser, Debug)]
@@ -27,7 +28,13 @@ impl SwipeLauncherArguments {
             Some(config_path) => {
                 let config_content = std::fs::read_to_string(config_path).into_diagnostic()?;
                 let config: SwipeLauncherConfig = toml::from_str(&config_content).into_diagnostic()?;
-                info!("Loaded configuration with {} plugins in scroll band", config.scroll_band.plugins.len());
+                let total_plugins: usize = config
+                    .areas
+                    .iter()
+                    .filter_map(|area_id| config.get_area_config(area_id))
+                    .map(|area_config| area_config.plugins.len())
+                    .sum();
+                info!("Loaded configuration with {} plugins across {} areas", total_plugins, config.areas.len());
                 Ok(config)
             }
             None => Err(miette!("No config file specified")),

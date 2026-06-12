@@ -32,7 +32,6 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tracing::debug;
-use tracing::error;
 use tracing::info;
 
 pub struct AppLauncherWidget {

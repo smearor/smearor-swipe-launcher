@@ -1,5 +1,8 @@
 # smearor-swipe-launcher Configuration
 
+# Define the layout order
+areas = ["left_area", "scroll_band", "right_area"]
+
 # Services to load
 [[services]]
 id = "app_launcher"
@@ -13,12 +16,9 @@ rotation = 0
 orientation = "horizontal"
 spacing = 0
 
-# Define the layout order
-areas = ["left_area", "scroll_band", "right_area"]
-
 # Plugins in the left static area
 [left_area]
-type = "fixed"
+area_type = "fixed"
 width = 200
 plugins = [
     { id = "clock_widget_left", path = "target/debug/libsmearor_clock_widget.so" }
@@ -26,7 +26,7 @@ plugins = [
 
 # Plugins in the center scroll band
 [scroll_band]
-type = "scroll"
+area_type = "scroll"
 plugins = [
     { id = "clock_widget_date", path = "target/debug/libsmearor_clock_widget.so" },
     { id = "clock_widget_time", path = "target/debug/libsmearor_clock_widget.so" },
@@ -38,7 +38,7 @@ plugins = [
 
 # Plugins in the right static area
 [right_area]
-type = "fixed"
+area_type = "fixed"
 width = 200
 plugins = [
     { id = "clock_widget_right", path = "target/debug/libsmearor_clock_widget.so" }

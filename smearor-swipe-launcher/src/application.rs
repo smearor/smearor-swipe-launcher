@@ -51,30 +51,16 @@ impl LauncherApplication {
     }
 
     pub fn load_plugins(&self) {
-        for plugin_entry in &self.config.left_area.plugins {
-            info!("Loading plugin {} on left area", plugin_entry.id);
-            let plugin_config = self.config.plugin_config(&plugin_entry.id);
-            info!("Plugin config: {plugin_config:?}");
-            if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
-                error!("Failed to load plugin {}: {}", plugin_entry.id, e);
-            }
-        }
-
-        for plugin_entry in &self.config.scroll_band.plugins {
-            info!("Loading plugin {} on scroll band", plugin_entry.id);
-            let plugin_config = self.config.plugin_config(&plugin_entry.id);
-            info!("Plugin config: {plugin_config:?}");
-            if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
-                error!("Failed to load plugin {}: {}", plugin_entry.id, e);
-            }
-        }
-
-        for plugin_entry in &self.config.right_area.plugins {
-            info!("Loading plugin {} on right area", plugin_entry.id);
-            let plugin_config = self.config.plugin_config(&plugin_entry.id);
-            info!("Plugin config: {plugin_config:?}");
-            if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
-                error!("Failed to load plugin {}: {}", plugin_entry.id, e);
+        for area_id in &self.config.areas {
+            if let Some(area_config) = self.config.get_area_config(area_id) {
+                for plugin_entry in &area_config.plugins {
+                    info!("Loading plugin {} on area {}", plugin_entry.id, area_id);
+                    let plugin_config = self.config.plugin_config(&plugin_entry.id);
+                    info!("Plugin config: {plugin_config:?}");
+                    if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
+                        error!("Failed to load plugin {}: {}", plugin_entry.id, e);
+                    }
+                }
             }
         }
         info!("Successfully loaded {} plugins", self.plugin_manager.plugins.len());
@@ -95,10 +81,6 @@ impl LauncherApplication {
     pub fn build_ui(self: Arc<Self>, config: &SwipeLauncherConfig) -> miette::Result<()> {
         let plugins = Arc::new(self.plugin_manager.plugins.clone());
 
-        let left_plugin_ids: Vec<String> = config.left_area.plugin_ids();
-        let scroll_plugin_ids: Vec<String> = config.scroll_band.plugin_ids();
-        let right_plugin_ids: Vec<String> = config.right_area.plugin_ids();
-
         let config_inner = config.clone();
         let self_clone = self.clone();
         let Ok(mut receiver) = self.message_receiver.lock() else {
@@ -110,6 +92,7 @@ impl LauncherApplication {
         let receiver_cell = Rc::new(RefCell::new(Some(receiver)));
 
         let rotation = config.launcher.rotation.clone();
+        let layout_config = config.layout.clone();
         self.gtk_app.connect_activate(move |app| {
             info!("GTK application activated");
 
@@ -127,136 +110,125 @@ impl LauncherApplication {
             rotation_widget.set_animation_overshoot(rotation.animation_overshoot());
             rotation_widget.set_animations_enabled(rotation.animations_enabled());
 
-            let main_container = GtkBox::builder().orientation(Orientation::Horizontal).spacing(0).build();
+            let main_container = GtkBox::builder()
+                .orientation(Orientation::from(&layout_config.orientation))
+                .spacing(layout_config.spacing)
+                .build();
             rotation_widget.set_child(Some(&main_container));
 
-            let left_area = GtkBox::builder()
-                .orientation(Orientation::Horizontal)
-                .width_request(200)
-                .css_classes(["static-area"])
-                .build();
+            let mut first_scrolled_window: Option<ScrolledWindow> = None;
 
-            for id in &left_plugin_ids {
-                if let Some(plugin) = plugins.get(id) {
-                    unsafe {
-                        if let Some(ffi_widget) = plugin.build_widget() {
-                            let widget = Widget::from_glib_full(ffi_widget.raw_widget);
-                            left_area.append(&widget);
-                            info!("Left area plugin-Widget successfully added to UI");
-                        } else {
-                            error!("Left area plugin failed to build widget");
+            for area_id in &config_inner.areas {
+                if let Some(area_config) = config_inner.get_area_config(area_id) {
+                    let area_widget: Widget = match area_config.area_type {
+                        crate::config::area::area_type::AreaType::Fixed => {
+                            let width = area_config.width.unwrap_or(200);
+                            let box_widget = GtkBox::builder()
+                                .orientation(Orientation::Horizontal)
+                                .width_request(width)
+                                .css_classes(["static-area"])
+                                .build();
+
+                            for plugin_entry in &area_config.plugins {
+                                if let Some(plugin) = plugins.get(&plugin_entry.id) {
+                                    unsafe {
+                                        if let Some(ffi_widget) = plugin.build_widget() {
+                                            let widget = Widget::from_glib_full(ffi_widget.raw_widget);
+                                            box_widget.append(&widget);
+                                            info!("Area {} plugin {} successfully added to UI", area_id, plugin_entry.id);
+                                        } else {
+                                            error!("Area {} plugin {} failed to build widget", area_id, plugin_entry.id);
+                                        }
+                                    }
+                                }
+                            }
+
+                            box_widget.upcast()
                         }
-                    }
+                        crate::config::area::area_type::AreaType::Scroll => {
+                            let scrolled_window = ScrolledWindow::builder()
+                                .hscrollbar_policy(PolicyType::External)
+                                .vscrollbar_policy(PolicyType::Never)
+                                .hexpand(true)
+                                .vexpand(true)
+                                .build();
+
+                            if first_scrolled_window.is_none() {
+                                first_scrolled_window = Some(scrolled_window.clone());
+                            }
+
+                            let plugin_container = GtkBox::builder().orientation(Orientation::Horizontal).spacing(10).build();
+
+                            for plugin_entry in &area_config.plugins {
+                                if let Some(plugin) = plugins.get(&plugin_entry.id) {
+                                    unsafe {
+                                        if let Some(ffi_widget) = plugin.build_widget() {
+                                            let widget = Widget::from_glib_full(ffi_widget.raw_widget);
+                                            plugin_container.append(&widget);
+                                            info!("Area {} plugin {} successfully added to UI", area_id, plugin_entry.id);
+                                        } else {
+                                            error!("Area {} plugin {} failed to build widget", area_id, plugin_entry.id);
+                                        }
+                                    }
+                                }
+                            }
+
+                            scrolled_window.set_child(Some(&plugin_container));
+
+                            let hadjustment = scrolled_window.hadjustment();
+                            let drag_gesture = GestureDrag::new();
+                            drag_gesture.set_propagation_phase(PropagationPhase::Bubble);
+                            let start_value = Arc::new(Cell::new(0.0));
+                            let is_dragging = Arc::new(Cell::new(false));
+                            const DRAG_THRESHOLD: f64 = 10.0;
+
+                            let start_value_clone1 = start_value.clone();
+                            let hadjustment_clone1 = hadjustment.clone();
+                            let is_dragging_clone1 = is_dragging.clone();
+                            drag_gesture.connect_drag_begin(move |_gesture, _, _| {
+                                info!("drag begin");
+                                start_value_clone1.set(hadjustment_clone1.value());
+                                is_dragging_clone1.set(false);
+                            });
+
+                            let start_value_clone2 = start_value.clone();
+                            let hadjustment_clone2 = hadjustment.clone();
+                            let is_dragging_clone2 = is_dragging.clone();
+                            drag_gesture.connect_drag_update(move |gesture, offset_x, _| {
+                                if offset_x.abs() > DRAG_THRESHOLD {
+                                    info!("drag threshold -> claimed");
+                                    gesture.set_state(EventSequenceState::Claimed);
+                                    is_dragging_clone2.set(true);
+                                }
+                                let new_val = start_value_clone2.get() - offset_x;
+                                hadjustment_clone2.set_value(new_val);
+                            });
+
+                            let is_dragging_clone3 = is_dragging.clone();
+                            drag_gesture.connect_drag_end(move |gesture, _, _| {
+                                info!("drag end");
+                                if !is_dragging_clone3.get() {
+                                    info!("denied");
+                                    gesture.set_state(EventSequenceState::Denied);
+                                }
+                            });
+
+                            scrolled_window.add_controller(drag_gesture);
+                            scrolled_window.upcast()
+                        }
+                    };
+
+                    main_container.append(&area_widget);
                 }
             }
 
-            let center_area = GtkBox::builder()
-                .orientation(Orientation::Horizontal)
-                .hexpand(true)
-                .css_classes(["scroll-area"])
-                .build();
-
-            let scrolled_window = ScrolledWindow::builder()
-                .hscrollbar_policy(PolicyType::External)
-                .vscrollbar_policy(PolicyType::Never)
-                .hexpand(true)
-                .vexpand(true)
-                .build();
-
-            let plugin_container = GtkBox::builder().orientation(Orientation::Horizontal).spacing(10).build();
-
-            for id in &scroll_plugin_ids {
-                if let Some(plugin) = plugins.get(id) {
-                    unsafe {
-                        if let Some(ffi_widget) = plugin.build_widget() {
-                            let widget = Widget::from_glib_full(ffi_widget.raw_widget);
-                            plugin_container.append(&widget);
-                            info!("Scroll band plugin-Widget successfully added to UI");
-                        } else {
-                            error!("Scroll band plugin failed to build widget");
-                        }
-                    }
-                }
-            }
-
-            scrolled_window.set_child(Some(&plugin_container));
-
-            // Custom drag to scroll support with mouse on desktop
-            let hadjustment = scrolled_window.hadjustment();
-            let drag_gesture = GestureDrag::new();
-            // Bubble because there are long press gestures on the plugins
-            drag_gesture.set_propagation_phase(PropagationPhase::Bubble);
-            let start_value = Arc::new(Cell::new(0.0));
-            let is_dragging = Arc::new(Cell::new(false));
-            const DRAG_THRESHOLD: f64 = 10.0;
-
-            let start_value_clone1 = start_value.clone();
-            let hadjustment_clone1 = hadjustment.clone();
-            let is_dragging_clone1 = is_dragging.clone();
-            drag_gesture.connect_drag_begin(move |_gesture, _, _| {
-                info!("drag begin");
-                start_value_clone1.set(hadjustment_clone1.value());
-                is_dragging_clone1.set(false);
-            });
-
-            let start_value_clone2 = start_value.clone();
-            let hadjustment_clone2 = hadjustment.clone();
-            let is_dragging_clone2 = is_dragging.clone();
-            drag_gesture.connect_drag_update(move |gesture, offset_x, _| {
-                if offset_x.abs() > DRAG_THRESHOLD {
-                    info!("drag threshold -> claimed");
-                    gesture.set_state(EventSequenceState::Claimed);
-                    is_dragging_clone2.set(true);
-                }
-                let new_val = start_value_clone2.get() - offset_x;
-                hadjustment_clone2.set_value(new_val);
-            });
-
-            let is_dragging_clone3 = is_dragging.clone();
-            drag_gesture.connect_drag_end(move |gesture, _, _| {
-                info!("drag end");
-                if !is_dragging_clone3.get() {
-                    info!("denied");
-                    gesture.set_state(EventSequenceState::Denied);
-                }
-            });
-
-            scrolled_window.add_controller(drag_gesture);
-
-            center_area.append(&scrolled_window);
-
-            let right_area = GtkBox::builder()
-                .orientation(Orientation::Horizontal)
-                .width_request(200)
-                .css_classes(["static-area"])
-                .build();
-
-            for id in &right_plugin_ids {
-                if let Some(plugin) = plugins.get(id) {
-                    unsafe {
-                        if let Some(ffi_widget) = plugin.build_widget() {
-                            let widget = Widget::from_glib_full(ffi_widget.raw_widget);
-                            widget.set_width_request(200);
-                            right_area.append(&widget);
-                            info!("Right area plugin-Widget successfully added to UI");
-                        } else {
-                            error!("Right area plugin failed to build widget");
-                        }
-                    }
-                }
-            }
-
-            main_container.append(&left_area);
-            main_container.append(&center_area);
-            main_container.append(&right_area);
-
-            // Set up our FfiEnvelope message receiver on the main context loop
             let self_clone2 = self_clone.clone();
-            let scrolled_window_clone = scrolled_window.clone();
             if let Some(mut receiver) = receiver_cell.borrow_mut().take() {
                 MainContext::default().spawn_local(async move {
                     while let Some(envelope) = receiver.recv().await {
-                        self_clone2.handle_message(envelope, &scrolled_window_clone);
+                        if let Some(ref scrolled_window) = first_scrolled_window {
+                            self_clone2.handle_message(envelope, scrolled_window);
+                        }
                     }
                 });
             }
