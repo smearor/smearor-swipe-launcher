@@ -108,13 +108,11 @@
 - Profile before optimizing
 - Use `#[inline]` judiciously
 - Consider `Box<T>` for large types
-- Use `Vec::with_capacity` when size is known
 - Avoid unnecessary allocations
 
 ### Memory Efficiency
 
 - Use stack allocation when possible
-- Consider `Cow<T>` for borrowed vs owned data
 - Use `String::from` vs `to_string` appropriately
 - Be mindful of string allocations in loops
 
@@ -136,13 +134,6 @@
 
 ## Learning and Growth
 
-### Continuous Improvement
-
-- Stay updated with Rust ecosystem
-- Read Rust RFCs and blog posts
-- Participate in Rust community
-- Share knowledge with team members
-
 ### Code Quality Metrics
 
 - Monitor cyclomatic complexity
@@ -150,7 +141,35 @@
 - Measure performance regressions
 - Review security vulnerabilities
 
-## Project-Specific Requirements (smearor-wrot)
+## Project-Specific Requirements
+
+### Requirements
+
+1. Widgets sind einzelnen Crates (plugins/name)
+2. Services sind einzelnen Crates (services/name)
+3. Widget (View) und Service (Business Logic) sollen getrennt werden
+4. Wenn Widget und Service gemeinsame Structs oder Enums benötigen, sind diese in einer separaten Crate (model/name)
+5. Für Services benutze das Macro service_plugin!(MyService);
+6. Für Widgets benutze das Macro widget_plugin!(MyWidget);
+7. Implementiere den Service struct in service.rs und implementiere die Traits MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef<
+   Option<FfiCoreContext>>
+8. Implementiere das Widget struct in widget.rs und implementiere die Traits MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef<Option<FfiCoreContext>>
+9. Implementiere in model Actions und Message-Formate
+10. Wenn ein Widget eine Config benötigt, implementiere ein eigenes Struct in config.rs und implementiere eine parse Methode
+
+### Examples
+
+- Beispiel für Service: services/app-launcher
+    - service.rs: Service struct (+ implementation of MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef<Option<FfiCoreContext>>)
+    - lib.rs: Implement service_plugin! macro
+- Beispiel für Widget: plugins/app-launcher
+    - config.rs: Struct for the config file part (+ parsing)
+    - widget.rs: Widget struct (+ implementation of MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef<Option<FfiCoreContext>>)
+    - lib.rs: Implement widget_plugin! macro
+- Beispiel für Model: model/app-launcher
+    - Message System Topics
+    - Enums für Actions
+    - Structs für Message System Payload
 
 ### Rust Implementation Standards
 
@@ -169,18 +188,10 @@
 - **No Import Comments**: Don't comment import statements
 - **Macro Usage**: Use `debug!` instead of `tracing::debug!` with proper imports
 
-### Project Structure
-
-- **smearor-wrot-core**: Compositor functionality for process rendering
-- **smearor-wrot-gtk**: GTK4 widget for compositor rendering (depends on smearor-wrot-core)
-- **smearor-wrot-rotation**: GTK4 widget for rotating any GTK4 widget with input/output transformation
-- **smearor-wrot-wrapper**: CLI application providing the complete window solution
-
-### Required Dependencies
+### Dependencies
 
 - `thiserror`: Internal error types
 - `miette`: User-facing error types
-- `smithay`: Wayland compositor framework
 - `clap`: Command line argument parsing
 - `gtk4`: GTK4 framework for UI widgets
 - `glib`: GLib utilities and patterns
@@ -188,21 +199,14 @@
 ### Key Features to Implement
 
 - **Smart Pointers**: Use `Rc`, `RefCell`, `Box<dyn Fn>`, `Weak`, `glib::clone`
-- **Type Safety**: Leverage Smithay and GTK4 type systems
-- **Error Handling**: Integrate miette and thiserror (especially in smearor-wrot-core)
-- **Modern Architecture**: Separate compositor logic, GTK integration, and visual transformation
+- **Type Safety**: Leverage GTK4 type systems
+- **Error Handling**: Integrate miette and thiserror
 
 ### Testing Requirements
 
 - **Idiomatic Tests**: Use idiomatic Rust testing patterns
 - **Inline Tests**: Keep tests in the same file as the source code
 - **Comprehensive Coverage**: Test both success and error paths
-
-### Performance Considerations
-
-- **Hardware Acceleration**: Consider DMA-BUF support for GPU rendering
-- **Memory Efficiency**: Optimize for Wayland compositor requirements
-- **Input Handling**: Efficient mouse and touch event processing
 
 ## Resources
 
@@ -212,7 +216,6 @@
 - [Rust by Example](https://doc.rust-lang.org/rust-by-example/)
 - [API Guidelines](https://rust-lang.github.io/api-guidelines/)
 - [GTK4 Rust Documentation](https://gtk-rs.org/gtk4-rs/stable/latest/docs/gtk4/)
-- [Smithay Documentation](https://smithay.github.io/smithay/)
 
 ### Tools and Libraries
 
@@ -224,7 +227,6 @@
 - `anyhow` - Error handling
 - `tokio` - Async runtime
 - `serde` - Serialization
-- `smithay` - Wayland compositor framework
 - `gtk4` - GTK4 bindings
 - `clap` - CLI argument parsing
 
