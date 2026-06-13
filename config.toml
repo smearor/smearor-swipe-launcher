@@ -21,7 +21,8 @@ spacing = 0
 area_type = "fixed"
 width = 200
 plugins = [
-    { id = "clock_widget_left", path = "target/debug/libsmearor_clock_widget.so" }
+    { id = "clock_widget_left", path = "target/debug/libsmearor_clock_widget.so" },
+    { id = "games_button", path = "target/debug/libsmearor_button_widget.so" }
 ]
 
 # Plugins in the center scroll band
@@ -31,7 +32,6 @@ plugins = [
     { id = "clock_widget_date", path = "target/debug/libsmearor_clock_widget.so" },
     { id = "clock_widget_time", path = "target/debug/libsmearor_clock_widget.so" },
     { id = "firefox_nightly", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" },
     { id = "gnome_calculator", path = "target/debug/libsmearor_app_launcher_widget.so" },
     { id = "smearor_wrot_gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" }
 ]
@@ -51,6 +51,9 @@ desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
 
 [gnome_2048]
 desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
+
+[gnome_chess]
+desktop_file_path = "/usr/share/applications/org.gnome.Chess.desktop"
 
 [gnome_calculator]
 desktop_file_path = "/usr/share/applications/org.gnome.Calculator.desktop"
@@ -74,3 +77,26 @@ timezone = "UTC"
 [clock_widget_right]
 format = "[hour]:[minute]:[second]"
 timezone = "UTC"
+
+# Button widget configuration
+[games_button]
+text = "Games"
+icon = "applications-games"
+tooltip = "Open games menu"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "games_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "games_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+# Games submenu area configuration
+[games_area]
+area_type = "scroll"
+transition = "SlideLeft"
+plugins = [
+    { id = "gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_chess", path = "target/debug/libsmearor_app_launcher_widget.so" }
+]

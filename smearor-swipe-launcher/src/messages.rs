@@ -1,17 +1,89 @@
 use crate::application::LauncherApplication;
+use crate::config::area::config::AreaConfig;
 use gtk4::prelude::*;
 use serde_json::Value;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use tracing::debug;
+use tracing::error;
+use tracing::info;
 use tracing::trace;
 
 impl LauncherApplication {
-    pub fn handle_message(&self, envelope: FfiEnvelope, scrolled_window: &gtk4::ScrolledWindow) {
+    pub fn handle_message(&self, envelope: FfiEnvelope, scrolled_window: &gtk4::ScrolledWindow, main_container: &gtk4::Box) {
         let sender_id = envelope.sender_id.to_string();
         let topic = envelope.topic.to_string();
         let payload = envelope.payload.to_string();
 
         debug!("Event Broker: Received message from '{}' on topic '{}': {}", sender_id, topic, payload);
+
+        // Area management messages
+        if topic == "area.open" {
+            if let Ok(parsed) = serde_json::from_str::<Value>(&payload) {
+                if let Some(area_id) = parsed.get("area_id").and_then(|v| v.as_str()) {
+                    info!("Opening area: {}", area_id);
+                    if let Some(area_config) = self.config.get_area_config(area_id) {
+                        if let Ok(mut area_manager) = self.area_manager.lock() {
+                            if let Err(e) = area_manager.add_transient_area(area_id, area_config.clone(), main_container) {
+                                error!("Failed to open area {}: {}", area_id, e);
+                            } else {
+                                info!("Successfully opened area {}", area_id);
+                            }
+                        }
+                    } else {
+                        error!("Area config not found for: {}", area_id);
+                    }
+                }
+            }
+        }
+
+        if topic == "area.close" {
+            if let Ok(parsed) = serde_json::from_str::<Value>(&payload) {
+                if let Some(area_id) = parsed.get("area_id").and_then(|v| v.as_str()) {
+                    info!("Closing area: {}", area_id);
+                    if let Ok(mut area_manager) = self.area_manager.lock() {
+                        if let Err(e) = area_manager.remove_area(area_id, main_container) {
+                            error!("Failed to close area {}: {}", area_id, e);
+                        } else {
+                            info!("Successfully closed area {}", area_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        if topic == "area.add" {
+            if let Ok(parsed) = serde_json::from_str::<Value>(&payload) {
+                if let Some(area_id) = parsed.get("area_id").and_then(|v| v.as_str()) {
+                    info!("Adding area: {}", area_id);
+                    if let Some(area_config_value) = parsed.get("area_config") {
+                        if let Ok(area_config) = serde_json::from_value::<AreaConfig>(area_config_value.clone()) {
+                            if let Ok(mut area_manager) = self.area_manager.lock() {
+                                if let Err(e) = area_manager.add_area_from_config(area_id, area_config, main_container) {
+                                    error!("Failed to add area {}: {}", area_id, e);
+                                } else {
+                                    info!("Successfully added area {}", area_id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if topic == "area.remove" {
+            if let Ok(parsed) = serde_json::from_str::<Value>(&payload) {
+                if let Some(area_id) = parsed.get("area_id").and_then(|v| v.as_str()) {
+                    info!("Removing area: {}", area_id);
+                    if let Ok(mut area_manager) = self.area_manager.lock() {
+                        if let Err(e) = area_manager.remove_area(area_id, main_container) {
+                            error!("Failed to remove area {}: {}", area_id, e);
+                        } else {
+                            info!("Successfully removed area {}", area_id);
+                        }
+                    }
+                }
+            }
+        }
 
         // Example 1: RequestClose
         if topic == "core/control" {

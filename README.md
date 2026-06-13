@@ -80,4 +80,104 @@ component system where each type of widget encapsulates its own logic.
 
 Here is the architectural plan and the concrete implementation of how to build this system in Rust and GTK 4.
 
+## Flexible Layout System
+
+The launcher now features a flexible layout system that allows dynamic area management through configuration and runtime API.
+
+### Configuration Format
+
+The layout is defined in `config.toml` with the following structure:
+
+```toml
+# Define the order of areas
+areas = ["left_area", "scroll_band", "right_area"]
+
+# Area configurations
+[left_area]
+area_type = "Fixed"
+width = 200
+transition = "Fade"
+plugins = [{ id = "clock" }]
+
+[scroll_band]
+area_type = "Scroll"
+transition = "SlideLeft"
+plugins = [{ id = "app-launcher" }]
+
+[right_area]
+area_type = "Fixed"
+width = 150
+transition = "None"
+plugins = [{ id = "battery" }]
+```
+
+### Area Types
+
+- **Fixed**: Static area with fixed width
+    - `width`: Fixed width in pixels
+    - `width_percent`: Alternative width as percentage (optional)
+
+- **Scroll**: Scrollable area with drag gesture
+    - `hexpand`: Horizontal expansion (default: true)
+    - `vexpand`: Vertical expansion (default: true)
+
+### Transition Animations
+
+Areas support smooth transition animations:
+
+- `None` - No animation
+- `Fade` - Fade in/out effect
+- `SlideLeft` - Slide from left
+- `SlideRight` - Slide from right
+- `SlideUp` - Slide from top
+- `SlideDown` - Slide from bottom
+- `Pop` - Pop in/out effect
+- `Scale` - Scale in/out effect
+
+### Dynamic Area API
+
+The `AreaManager` provides runtime area management:
+
+```rust
+// Add a static area
+area_manager.add_area_from_config("my_area", area_config, & main_container) ?;
+
+// Add a transient area (auto-closing)
+area_manager.add_transient_area("popup_menu", area_config, & main_container) ?;
+
+// Remove an area
+area_manager.remove_area("my_area", & main_container) ?;
+
+// Pop from area stack (for nested sub-menus)
+area_manager.pop_area( & main_container) ?;
+
+// Get area information
+if let Some(area) = area_manager.get_area("my_area") {
+println ! ("Area: {}", area.id);
+}
+```
+
+### Transient Areas
+
+Transient areas automatically close when:
+
+- User clicks outside the area
+- Escape key is pressed (if `close_on_escape` is enabled)
+
+### Nested Sub-Menus
+
+The `AreaStack` manages nested sub-menus:
+
+- Push areas onto the stack when opening sub-menus
+- Pop areas when closing sub-menus
+- Supports unlimited nesting depth
+
+### Plugin Integration
+
+Plugins are automatically loaded into areas:
+
+- Each area can contain multiple plugins
+- Plugins are loaded from the configuration
+- Plugin lifecycle is managed by the `PluginManager`
+
 

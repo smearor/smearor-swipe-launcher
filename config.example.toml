@@ -1,0 +1,68 @@
+# Example configuration for the flexible layout system
+
+# Define the order of areas in the layout
+areas = ["left_area", "scroll_band", "right_area"]
+
+# Launcher settings
+[launcher]
+rotation = "Bottom"
+animation_speed = 300
+animation_overshoot = 0.1
+animations_enabled = true
+
+# Layout configuration
+[layout]
+orientation = "Horizontal"
+spacing = 10
+
+# Area configurations
+[left_area]
+area_type = "Fixed"
+width = 200
+transition = "Fade"
+auto_close = false
+close_on_escape = false
+plugins = [
+    { id = "clock" }
+]
+
+[scroll_band]
+area_type = "Scroll"
+transition = "SlideLeft"
+auto_close = false
+close_on_escape = false
+plugins = [
+    { id = "app-launcher" }
+]
+
+[right_area]
+area_type = "Fixed"
+width = 150
+transition = "None"
+auto_close = false
+close_on_escape = false
+plugins = [
+    { id = "battery" }
+]
+
+# Plugin-specific configurations
+[clock]
+format = "%H:%M"
+show_seconds = false
+
+[app-launcher]
+icon_size = 48
+show_descriptions = true
+
+[battery]
+show_percentage = true
+low_battery_threshold = 20
+
+# Services to load
+services = [
+    { id = "system-tray" }
+]
+
+# Service-specific configurations
+[system-tray]
+show_notifications = true

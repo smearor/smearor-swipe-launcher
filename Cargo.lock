@@ -1396,6 +1396,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "smearor-button-widget"
+version = "0.1.0"
+dependencies = [
+    "abi_stable",
+    "glib 0.21.5",
+    "gtk4",
+    "miette",
+    "paste",
+    "serde",
+    "serde_json",
+    "smearor-swipe-launcher-plugin-api",
+    "thiserror",
+    "tokio",
+    "tracing",
+    "tracing-subscriber",
+]
+
+[[package]]
 name = "smearor-clock-model"
 version = "0.1.0"
 dependencies = [
@@ -1429,6 +1447,13 @@ dependencies = [
     "tracing",
     "tracing-subscriber",
     "typed-builder",
+]
+
+[[package]]
+name = "smearor-model-message"
+version = "0.1.0"
+dependencies = [
+    "serde",
 ]
 
 [[package]]

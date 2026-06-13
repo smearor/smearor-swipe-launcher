@@ -4,9 +4,11 @@ members = [
     "smearor-swipe-launcher-plugin-api",
     "model/app-launcher",
     "model/clock",
+    "model/message",
     "services/app-launcher",
     "plugins/clock",
     "plugins/app-launcher",
+    "plugins/button",
 ]
 resolver = "2"
 
