@@ -33,6 +33,11 @@ plugins = [
     { id = "clock_widget_time", path = "target/debug/libsmearor_clock_widget.so" },
     { id = "firefox_nightly", path = "target/debug/libsmearor_app_launcher_widget.so" },
     { id = "gnome_calculator", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "nautilus", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "epiphany", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "loupe", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "totem", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_settings", path = "target/debug/libsmearor_app_launcher_widget.so" },
     { id = "smearor_wrot_gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" }
 ]
 
@@ -55,9 +60,27 @@ desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
 [gnome_chess]
 desktop_file_path = "/usr/share/applications/org.gnome.Chess.desktop"
 
+[gnome_mines]
+desktop_file_path = "/usr/share/applications/org.gnome.Mines.desktop"
+
 [gnome_calculator]
 desktop_file_path = "/usr/share/applications/org.gnome.Calculator.desktop"
 follows_rotation = true
+
+[nautilus]
+desktop_file_path = "/usr/share/applications/org.gnome.Nautilus.desktop"
+
+[epiphany]
+desktop_file_path = "/usr/share/applications/org.gnome.Epiphany.desktop"
+
+[loupe]
+desktop_file_path = "/usr/share/applications/org.gnome.Loupe.desktop"
+
+[totem]
+desktop_file_path = "/usr/share/applications/org.gnome.Totem.desktop"
+
+[gnome_settings]
+desktop_file_path = "/usr/share/applications/org.gnome.Settings.desktop"
 
 [smearor_wrot_gnome_2048]
 desktop_file_path = "/home/aschaeffer/.local/share/applications/io.smearor.wrot.org.gnome.TwentyFortyEight.desktop"
@@ -97,6 +120,20 @@ css_classes = ["menu-button", "primary"]
 area_type = "scroll"
 transition = "SlideLeft"
 plugins = [
+    { id = "close_games", path = "target/debug/libsmearor_button_widget.so" },
     { id = "gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_mines", path = "target/debug/libsmearor_app_launcher_widget.so" },
     { id = "gnome_chess", path = "target/debug/libsmearor_app_launcher_widget.so" }
 ]
+
+# Close button configuration
+[close_games]
+text = "✕"
+icon = "window-close"
+tooltip = "Close games menu"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "games_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]

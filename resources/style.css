@@ -9,3 +9,31 @@ window {
 .longpress {
     background-color: rgba(255, 255, 255, 0.1);
 }
+
+.scroll-area {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.static-area {
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+/* Center alignment for plugin containers */
+box {
+    justify-content: center;
+}
+
+/* Transient area specific styling */
+scrolledwindow {
+    min-width: 200px;
+    max-width: 400px;
+}
+
+/* Configure overlay to pass through events when no overlay children are present */
+overlay {
+    background: transparent;
+}

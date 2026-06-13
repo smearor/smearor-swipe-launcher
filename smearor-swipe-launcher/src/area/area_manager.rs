@@ -7,13 +7,11 @@ use crate::config::area::config::AreaConfig;
 use crate::config::area::transition::AreaTransition;
 use crate::plugin_manager::PluginManager;
 use gtk4::Box as GtkBox;
-use gtk4::EventControllerKey;
-use gtk4::GestureClick;
 use gtk4::Orientation;
+use gtk4::Overlay;
 use gtk4::PolicyType;
 use gtk4::ScrolledWindow;
 use gtk4::Widget;
-use gtk4::gdk::Key;
 use gtk4::glib;
 use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
@@ -27,6 +25,9 @@ use tracing::info;
 pub struct AreaManager {
     /// Currently managed areas keyed by ID
     areas: HashMap<String, ManagedArea>,
+
+    /// Overlay container for transient areas (submenus) - created on demand
+    overlay: Option<Overlay>,
 
     /// Stack of areas for nested sub-menus
     area_stack: AreaStack,
@@ -46,11 +47,22 @@ impl AreaManager {
     pub fn new(plugin_manager: Arc<PluginManager>, config: Arc<SwipeLauncherConfig>) -> Self {
         Self {
             areas: HashMap::new(),
+            overlay: None,
             area_stack: AreaStack::new(),
             layout_transition: LayoutTransition::new(),
             plugin_manager,
             config,
         }
+    }
+
+    /// Set the overlay for transient areas (called from application.rs)
+    pub fn set_overlay(&mut self, overlay: Overlay) {
+        self.overlay = Some(overlay);
+    }
+
+    /// Get the overlay for transient areas
+    fn get_overlay(&self) -> Option<&Overlay> {
+        self.overlay.as_ref()
     }
 
     /// Add an area from configuration
@@ -81,7 +93,7 @@ impl AreaManager {
     }
 
     /// Remove an area with plugin cleanup
-    pub fn remove_area(&mut self, area_id: &str, main_container: &GtkBox) -> Result<(), String> {
+    pub fn remove_area(&mut self, area_id: &str, _main_container: &GtkBox) -> Result<(), String> {
         debug!("Removing area {}", area_id);
 
         let managed_area = self.areas.remove(area_id).ok_or_else(|| format!("Area {} not found", area_id))?;
@@ -93,12 +105,14 @@ impl AreaManager {
 
         // Animate removal before cleanup
         let widget_clone = managed_area.widget.clone();
-        let main_container_clone = main_container.clone();
+        let overlay_clone = self.overlay.clone();
         let area_id_clone = area_id.to_string();
 
         self.layout_transition
             .animate_widget_removal(&managed_area.widget, &managed_area.config.transition, move || {
-                main_container_clone.remove(&widget_clone);
+                if let Some(overlay) = &overlay_clone {
+                    overlay.remove_overlay(&widget_clone);
+                }
                 debug!("Successfully removed area {}", area_id_clone);
             });
 
@@ -107,69 +121,57 @@ impl AreaManager {
     }
 
     /// Add a transient area with auto-close detection
-    pub fn add_transient_area(&mut self, area_id: &str, area_config: AreaConfig, main_container: &GtkBox) -> Result<(), String> {
+    pub fn add_transient_area(&mut self, area_id: &str, area_config: AreaConfig, _main_container: &GtkBox) -> Result<(), String> {
         debug!("Adding transient area {}", area_id);
+
+        // Check if area already exists
+        if self.areas.contains_key(area_id) {
+            info!("Area {} already exists, skipping", area_id);
+            return Ok(());
+        }
 
         let mut config = area_config;
         config.auto_close = true;
 
-        self.add_area_from_config(area_id, config, main_container)?;
+        // Load plugins for this transient area
+        for plugin_entry in &config.plugins {
+            if !self.plugin_manager.plugins.contains_key(&plugin_entry.id) {
+                let plugin_config = self.config.plugin_config(&plugin_entry.id);
+                info!("Loading plugin {} for transient area {}", plugin_entry.id, area_id);
+                if let Err(e) = self.plugin_manager.load_plugin(plugin_entry, plugin_config) {
+                    error!("Failed to load plugin {} for transient area {}: {}", plugin_entry.id, area_id, e);
+                } else {
+                    info!("Successfully loaded plugin {} for transient area {}", plugin_entry.id, area_id);
+                }
+            }
+        }
+
+        // Get overlay
+        let overlay = self.get_overlay().ok_or_else(|| "Overlay not set".to_string())?;
+        let overlay_clone = overlay.clone();
+
+        // Create the area widget
+        let widget = self.create_area_widget(&config)?;
+
+        let managed_area = ManagedArea {
+            id: area_id.to_string(),
+            config: config.clone(),
+            widget: widget.clone(),
+            is_transient: true,
+        };
+
+        self.areas.insert(area_id.to_string(), managed_area);
+
+        // Add to overlay
+        overlay_clone.add_overlay(&widget);
 
         // Push to area stack for nested sub-menus
         self.area_stack.push(area_id.to_string());
 
-        if let Some(managed_area) = self.areas.get(area_id) {
-            let area_id_clone = area_id.to_string();
-            let widget_clone = managed_area.widget.clone();
-            let main_container_clone = main_container.clone();
-            let close_on_escape = managed_area.config.close_on_escape;
+        // Apply transition animation
+        self.layout_transition.animate_widget_addition(&widget, &config.transition);
 
-            // Add click-outside detection
-            let click_controller = GestureClick::new();
-            click_controller.set_button(0);
-            click_controller.set_propagation_phase(gtk4::PropagationPhase::Capture);
-
-            let area_id_click = area_id_clone.clone();
-            let widget_click = widget_clone.clone();
-            let _main_container_click = main_container_clone.clone();
-
-            click_controller.connect_pressed(move |gesture, _n_press, x, y| {
-                let widget = gesture.widget();
-                if let Some(widget) = widget {
-                    let _widget_ref = widget.upcast_ref::<Widget>();
-
-                    // Check if click is outside the area widget
-                    if !widget_click.contains(x as f64, y as f64) {
-                        debug!("Click outside transient area {}", area_id_click);
-                        // Remove the area (this is a simplified implementation)
-                        // In a real implementation, we'd need to access the AreaManager
-                    }
-                }
-            });
-
-            main_container.add_controller(click_controller);
-
-            // Add escape key handler if configured
-            if close_on_escape {
-                let key_controller = EventControllerKey::new();
-                key_controller.set_propagation_phase(gtk4::PropagationPhase::Capture);
-
-                let area_id_key = area_id_clone.clone();
-                let _widget_key = widget_clone.clone();
-
-                key_controller.connect_key_pressed(move |_, keyval, _, _| {
-                    if keyval == Key::Escape {
-                        debug!("Escape key pressed for transient area {}", area_id_key);
-                        glib::Propagation::Stop
-                    } else {
-                        glib::Propagation::Proceed
-                    }
-                });
-
-                main_container.add_controller(key_controller);
-            }
-        }
-
+        info!("Successfully added transient area {}", area_id);
         Ok(())
     }
 

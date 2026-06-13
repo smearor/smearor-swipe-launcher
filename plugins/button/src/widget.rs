@@ -63,11 +63,9 @@ impl AsRef<Option<FfiCoreContext>> for ButtonWidget {
 
 impl WidgetBuilder for ButtonWidget {
     fn build_widget(&mut self) -> Widget {
-        info!("build widget 1");
         let button = Button::new();
-        info!("build widget 2");
         button.set_label(&self.config.text);
-        info!("build widget 3");
+
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
         let message_broadcaster = self.get_broadcaster();
@@ -87,9 +85,8 @@ impl WidgetBuilder for ButtonWidget {
                 gesture.set_state(EventSequenceState::Claimed);
             }
         });
-
         button.add_controller(long_press_gesture);
-        info!("build widget 4");
+
         button.clone().upcast::<Widget>()
     }
 }

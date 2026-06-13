@@ -111,7 +111,21 @@ impl LauncherApplication {
                 .orientation(Orientation::from(&layout_config.orientation))
                 .spacing(layout_config.spacing)
                 .build();
-            rotation_widget.set_child(Some(&main_container));
+
+            // Create overlay for transient areas
+            let overlay = gtk4::Overlay::builder().build();
+            overlay.set_child(Some(&main_container));
+
+            // Configure overlay to pass through events when no overlay children are present
+            overlay.set_halign(gtk4::Align::Fill);
+            overlay.set_valign(gtk4::Align::Fill);
+
+            rotation_widget.set_child(Some(&overlay));
+
+            // Set overlay in area manager
+            if let Ok(mut area_manager) = self_clone.area_manager.lock() {
+                area_manager.set_overlay(overlay.clone());
+            }
 
             let mut first_scrolled_window: Option<ScrolledWindow> = None;
 
