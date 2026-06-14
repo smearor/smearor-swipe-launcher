@@ -24,6 +24,7 @@ use std::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 /// Manages dynamic area operations at runtime
 pub struct AreaManager {
@@ -102,7 +103,7 @@ impl AreaManager {
         }
 
         // Animate removal before cleanup
-        let widget_clone = managed_area.widget.clone();
+        let _widget_clone = managed_area.widget.clone();
         let overlay_clone = managed_area.overlay.clone();
         let main_container_clone = main_container.clone();
         let area_id_clone = area_id.to_string();
@@ -122,9 +123,11 @@ impl AreaManager {
         self.layout_transition
             .animate_widget_removal(&managed_area.widget, &managed_area.config.transition, move || {
                 if is_transient {
-                    // Transient area: remove from source area overlay (not global overlay)
-                    if let Some(overlay) = &source_area_overlay_clone {
-                        overlay.remove_overlay(&widget_clone);
+                    // Transient area: remove overlay from source area overlay
+                    if let Some(overlay) = &overlay_clone {
+                        if let Some(source_overlay) = &source_area_overlay_clone {
+                            source_overlay.remove_overlay(overlay);
+                        }
                     }
                     // Restore source area widget visibility
                     if let Some(ref source_widget) = source_area_widget_clone {
@@ -191,21 +194,29 @@ impl AreaManager {
         // Create the area widget
         let widget = self.create_area_widget(&config)?;
 
+        // Create overlay for this transient area (for sub-transient areas)
+        let overlay = Overlay::builder().build();
+        overlay.set_child(Some(&widget.clone()));
+        overlay.add_css_class("area-overlay");
+
         let managed_area = ManagedArea {
             id: area_id.to_string(),
             config: config.clone(),
             widget: widget.clone(),
-            overlay: None,
+            overlay: Some(overlay.clone()),
             source_area_widget: source_area_widget.clone(),
             is_transient: true,
         };
 
         self.areas.insert(area_id.to_string(), managed_area);
 
-        // Add to overlay - either in source area overlay or global overlay
-        if let Some(overlay) = source_area_overlay {
-            overlay.add_overlay(&widget);
-            info!("Added transient area {} to source area overlay", area_id);
+        // Add overlay to source area overlay (not the widget)
+        if let Some(source_overlay) = source_area_overlay {
+            source_overlay.add_overlay(&overlay);
+            info!("Added transient area {} overlay to source area overlay", area_id);
+        } else {
+            // Fallback: if no source overlay found, this shouldn't happen but handle gracefully
+            warn!("No source area overlay found for transient area {}", area_id);
         }
 
         // Push to area stack for nested sub-menus
@@ -221,15 +232,22 @@ impl AreaManager {
     /// Find the overlay and widget of the area that contains a specific plugin
     fn find_area_overlay_and_widget_containing_plugin(&self, plugin_id: &str) -> (Option<Overlay>, Option<Widget>) {
         for managed_area in self.areas.values() {
-            if managed_area.is_transient {
-                continue;
-            }
-            // Check if this area contains the plugin
+            // Check if this area contains the plugin (including transient areas)
             if managed_area.config.plugins.iter().any(|p| p.id == plugin_id) {
                 return (managed_area.overlay.clone(), Some(managed_area.widget.clone()));
             }
         }
         (None, None)
+    }
+
+    /// Find the area ID for a given widget
+    fn find_area_id_for_widget(&self, widget: &Widget) -> Option<String> {
+        for (area_id, managed_area) in &self.areas {
+            if managed_area.widget == *widget {
+                return Some(area_id.clone());
+            }
+        }
+        None
     }
 
     /// Find the overlay that has a specific widget as its child
