@@ -240,17 +240,18 @@ impl AreaManager {
 
     fn add_plugins(&self, area_config: &AreaConfig, container: &GtkBox) {
         for plugin_entry in &area_config.plugins {
-            if let Some(plugin) = self.plugin_manager.plugins.get(&plugin_entry.id) {
-                unsafe {
-                    if let Some(ffi_widget) = plugin.build_widget() {
-                        let widget = Widget::from_glib_full(ffi_widget.raw_widget);
-                        container.append(&widget);
-                        info!("Plugin {} successfully added to area widget", plugin_entry.id);
-                    } else {
-                        error!("Plugin {} failed to build widget", plugin_entry.id);
-                    }
-                }
-            }
+            let Some(plugin) = self.plugin_manager.plugins.get(&plugin_entry.id) else {
+                continue;
+            };
+            let widget = unsafe {
+                let Some(ffi_widget) = plugin.build_widget() else {
+                    error!("Plugin {} failed to build widget", plugin_entry.id);
+                    continue;
+                };
+                Widget::from_glib_full(ffi_widget.raw_widget)
+            };
+            container.append(&widget);
+            info!("Plugin {} successfully added to area widget", plugin_entry.id);
         }
     }
 
