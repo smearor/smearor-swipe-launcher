@@ -9,6 +9,7 @@ use crate::config::area::area_type::AreaType;
 use crate::config::area::config::AreaConfig;
 use crate::config::area::transition::AreaTransition;
 use crate::plugin_manager::PluginManager;
+use glib::ControlFlow;
 use gtk4::Box as GtkBox;
 use gtk4::Orientation;
 use gtk4::Overlay;
@@ -20,6 +21,7 @@ use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -261,9 +263,9 @@ impl AreaManager {
             AreaTransition::Fade => {
                 widget.set_opacity(0.0);
                 let widget_clone = widget.clone();
-                glib::timeout_add_local(std::time::Duration::from_millis(10), move || {
+                glib::timeout_add_local(Duration::from_millis(10), move || {
                     widget_clone.set_opacity(1.0);
-                    glib::ControlFlow::Continue
+                    ControlFlow::Continue
                 });
             }
             _ => {
