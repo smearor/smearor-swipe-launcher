@@ -3,11 +3,13 @@ use crate::config::area::transition::AreaTransition;
 use crate::config::plugin::PluginEntry;
 use serde::Deserialize;
 
+pub const DEFAULT_AREA_WIDTH: i32 = 200;
+
 /// Configuration for a single area in the layout
 #[derive(Debug, Clone, Deserialize)]
 pub struct AreaConfig {
     /// Type of the area (fixed or scrollable)
-    #[serde(default = "default_area_type")]
+    #[serde(default)]
     pub area_type: AreaType,
 
     /// Fixed width in pixels (if specified)
@@ -42,23 +44,19 @@ pub struct AreaConfig {
     pub plugins: Vec<PluginEntry>,
 }
 
-fn default_area_type() -> AreaType {
-    AreaType::Fixed
-}
-
 fn default_width() -> Option<i32> {
-    Some(200)
+    Some(DEFAULT_AREA_WIDTH)
 }
 
 impl Default for AreaConfig {
     fn default() -> Self {
         AreaConfig {
-            area_type: default_area_type(),
+            area_type: Default::default(),
             width: default_width(),
             width_percent: None,
             min_width: None,
             max_width: None,
-            transition: AreaTransition::default(),
+            transition: Default::default(),
             auto_close: false,
             close_on_escape: false,
             plugins: Vec::new(),
