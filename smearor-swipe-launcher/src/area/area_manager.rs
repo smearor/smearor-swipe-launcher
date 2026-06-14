@@ -1,5 +1,8 @@
 use crate::SwipeLauncherConfig;
 use crate::area::area_stack::AreaStack;
+use crate::area::error::AddAreaError;
+use crate::area::error::CreateAreaError;
+use crate::area::error::RemoveAreaError;
 use crate::area::layout_transition::LayoutTransition;
 use crate::area::managed_area::ManagedArea;
 use crate::config::area::area_type::AreaType;
@@ -66,11 +69,11 @@ impl AreaManager {
     }
 
     /// Add an area from configuration
-    pub fn add_area_from_config(&mut self, area_id: &str, area_config: AreaConfig, main_container: &GtkBox) -> Result<(), String> {
+    pub fn add_area_from_config(&mut self, area_id: &str, area_config: AreaConfig, main_container: &GtkBox) -> Result<(), AddAreaError> {
         debug!("Adding area {} from config", area_id);
 
         if self.areas.contains_key(area_id) {
-            return Err(format!("Area {} already exists", area_id));
+            return Err(AddAreaError::AreaAlreadyExists(area_id.to_string()));
         }
 
         let widget = self.create_area_widget(&area_config)?;
@@ -93,10 +96,10 @@ impl AreaManager {
     }
 
     /// Remove an area with plugin cleanup
-    pub fn remove_area(&mut self, area_id: &str, _main_container: &GtkBox) -> Result<(), String> {
+    pub fn remove_area(&mut self, area_id: &str, _main_container: &GtkBox) -> Result<(), RemoveAreaError> {
         debug!("Removing area {}", area_id);
 
-        let managed_area = self.areas.remove(area_id).ok_or_else(|| format!("Area {} not found", area_id))?;
+        let managed_area = self.areas.remove(area_id).ok_or_else(|| RemoveAreaError::AreaNotFound(area_id.to_string()))?;
 
         // Unload plugins for this area
         for plugin_entry in &managed_area.config.plugins {
@@ -121,13 +124,12 @@ impl AreaManager {
     }
 
     /// Add a transient area with auto-close detection
-    pub fn add_transient_area(&mut self, area_id: &str, area_config: AreaConfig, _main_container: &GtkBox) -> Result<(), String> {
+    pub fn add_transient_area(&mut self, area_id: &str, area_config: AreaConfig, _main_container: &GtkBox) -> Result<(), AddAreaError> {
         debug!("Adding transient area {}", area_id);
 
         // Check if area already exists
         if self.areas.contains_key(area_id) {
-            info!("Area {} already exists, skipping", area_id);
-            return Ok(());
+            return Err(AddAreaError::AreaAlreadyExists(area_id.to_string()));
         }
 
         let mut config = area_config;
@@ -147,7 +149,7 @@ impl AreaManager {
         }
 
         // Get overlay
-        let overlay = self.get_overlay().ok_or_else(|| "Overlay not set".to_string())?;
+        let overlay = self.get_overlay().ok_or_else(|| AddAreaError::OverlayNotSetError)?;
         let overlay_clone = overlay.clone();
 
         // Create the area widget
@@ -176,7 +178,7 @@ impl AreaManager {
     }
 
     /// Pop the top area from the stack and remove it
-    pub fn pop_area(&mut self, main_container: &GtkBox) -> Result<Option<String>, String> {
+    pub fn pop_area(&mut self, main_container: &GtkBox) -> Result<Option<String>, RemoveAreaError> {
         if let Some(area_id) = self.area_stack.pop() {
             self.remove_area(&area_id, main_container)?;
             Ok(Some(area_id))
@@ -191,7 +193,7 @@ impl AreaManager {
     }
 
     /// Create the GTK widget for an area based on its configuration
-    fn create_area_widget(&self, area_config: &AreaConfig) -> Result<Widget, String> {
+    fn create_area_widget(&self, area_config: &AreaConfig) -> Result<Widget, CreateAreaError> {
         match area_config.area_type {
             AreaType::Fixed => {
                 let width = area_config.width.unwrap_or(200);
