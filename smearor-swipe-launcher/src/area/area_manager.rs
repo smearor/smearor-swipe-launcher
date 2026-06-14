@@ -198,7 +198,7 @@ impl AreaManager {
             AreaType::Fixed => {
                 let width = area_config.width.unwrap_or(200);
                 let mut css_classes = vec!["static-area"];
-                self.apply_transition_css_classes(&mut css_classes, &area_config.transition);
+                css_classes.push(area_config.transition.css_class());
 
                 let box_widget = GtkBox::builder()
                     .orientation(Orientation::Horizontal)
@@ -213,7 +213,7 @@ impl AreaManager {
             }
             AreaType::Scroll => {
                 let mut css_classes = vec!["scroll-area"];
-                self.apply_transition_css_classes(&mut css_classes, &area_config.transition);
+                css_classes.push(area_config.transition.css_class());
 
                 let scrolled_window = ScrolledWindow::builder()
                     .hscrollbar_policy(PolicyType::External)
@@ -248,36 +248,6 @@ impl AreaManager {
                         error!("Plugin {} failed to build widget", plugin_entry.id);
                     }
                 }
-            }
-        }
-    }
-
-    /// Apply CSS classes based on transition type
-    fn apply_transition_css_classes(&self, css_classes: &mut Vec<&str>, transition: &AreaTransition) {
-        match transition {
-            AreaTransition::None => {
-                css_classes.push("transition-none");
-            }
-            AreaTransition::Fade => {
-                css_classes.push("transition-fade");
-            }
-            AreaTransition::SlideLeft => {
-                css_classes.push("transition-slide-left");
-            }
-            AreaTransition::SlideRight => {
-                css_classes.push("transition-slide-right");
-            }
-            AreaTransition::SlideUp => {
-                css_classes.push("transition-slide-up");
-            }
-            AreaTransition::SlideDown => {
-                css_classes.push("transition-slide-down");
-            }
-            AreaTransition::Pop => {
-                css_classes.push("transition-pop");
-            }
-            AreaTransition::Scale => {
-                css_classes.push("transition-scale");
             }
         }
     }

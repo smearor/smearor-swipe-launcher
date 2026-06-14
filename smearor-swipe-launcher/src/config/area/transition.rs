@@ -22,6 +22,21 @@ pub enum AreaTransition {
     Scale,
 }
 
+impl AreaTransition {
+    pub fn css_class(&self) -> &str {
+        match self {
+            AreaTransition::None => "transition-none",
+            AreaTransition::Fade => "transition-fade",
+            AreaTransition::SlideLeft => "transition-slide-left",
+            AreaTransition::SlideRight => "transition-slide-right",
+            AreaTransition::SlideUp => "transition-slide-up",
+            AreaTransition::SlideDown => "transition-slide-down",
+            AreaTransition::Pop => "transition-pop",
+            AreaTransition::Scale => "transition-scale",
+        }
+    }
+}
+
 impl Default for AreaTransition {
     fn default() -> Self {
         AreaTransition::Fade
