@@ -1,4 +1,5 @@
 use crate::SwipeLauncherArguments;
+use crate::config::area::area_type::AreaType;
 use crate::config::area::config::AreaConfig;
 use crate::config::area::config_entry::ConfigEntry;
 use crate::config::error::ConfigValidationError;
@@ -138,7 +139,7 @@ impl SwipeLauncherConfig {
 
     fn validate_area_config(&self, area_id: &str, area_config: &AreaConfig) -> Result<(), ConfigValidationError> {
         match area_config.area_type {
-            crate::config::area::area_type::AreaType::Fixed => {
+            AreaType::Fixed => {
                 if area_config.width.is_none() && area_config.width_percent.is_none() {
                     return Err(ConfigValidationError::MissingWidthSpec { area_id: area_id.to_string() });
                 }
@@ -152,7 +153,7 @@ impl SwipeLauncherConfig {
                     }
                 }
             }
-            crate::config::area::area_type::AreaType::Scroll => {}
+            AreaType::Scroll => {}
         }
 
         Ok(())
