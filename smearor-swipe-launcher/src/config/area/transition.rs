@@ -35,6 +35,27 @@ impl AreaTransition {
             AreaTransition::Scale => "transition-scale",
         }
     }
+
+    pub fn transition_enter_css_class(&self) -> Option<String> {
+        match self {
+            AreaTransition::None => None,
+            _ => Some(format!("{}-enter", self.css_class())),
+        }
+    }
+
+    pub fn transition_exit_css_class(&self) -> Option<String> {
+        match self {
+            AreaTransition::None => None,
+            _ => Some(format!("{}-exit", self.css_class())),
+        }
+    }
+
+    pub fn transition_active_css_class(&self) -> Option<String> {
+        match self {
+            AreaTransition::None => None,
+            _ => Some(format!("{}-active", self.css_class())),
+        }
+    }
 }
 
 impl Default for AreaTransition {

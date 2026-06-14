@@ -48,97 +48,40 @@ impl LayoutTransition {
 
     /// Animate widget addition with different transition types
     pub fn animate_widget_addition(&self, widget: &Widget, transition: &AreaTransition) {
-        match transition {
-            AreaTransition::None => {
-                // No animation
-            }
-            AreaTransition::Fade => {
-                widget.set_opacity(0.0);
-                let widget_clone = widget.clone();
-
-                glib::timeout_add_local(Duration::from_millis(10), move || {
-                    widget_clone.set_opacity(1.0);
-                    glib::ControlFlow::Break
-                });
-            }
-            AreaTransition::SlideLeft => {
-                widget.set_opacity(0.0);
-                let widget_clone = widget.clone();
-
-                glib::timeout_add_local(Duration::from_millis(10), move || {
-                    widget_clone.set_opacity(1.0);
-                    glib::ControlFlow::Break
-                });
-            }
-            AreaTransition::SlideRight => {
-                widget.set_opacity(0.0);
-                let widget_clone = widget.clone();
-
-                glib::timeout_add_local(Duration::from_millis(10), move || {
-                    widget_clone.set_opacity(1.0);
-                    glib::ControlFlow::Break
-                });
-            }
-            AreaTransition::SlideUp => {
-                widget.set_opacity(0.0);
-                let widget_clone = widget.clone();
-
-                glib::timeout_add_local(Duration::from_millis(10), move || {
-                    widget_clone.set_opacity(1.0);
-                    glib::ControlFlow::Break
-                });
-            }
-            AreaTransition::SlideDown => {
-                widget.set_opacity(0.0);
-                let widget_clone = widget.clone();
-
-                glib::timeout_add_local(Duration::from_millis(10), move || {
-                    widget_clone.set_opacity(1.0);
-                    glib::ControlFlow::Break
-                });
-            }
-            AreaTransition::Pop => {
-                widget.set_opacity(0.0);
-                let widget_clone = widget.clone();
-
-                glib::timeout_add_local(Duration::from_millis(10), move || {
-                    widget_clone.set_opacity(1.0);
-                    glib::ControlFlow::Break
-                });
-            }
-            AreaTransition::Scale => {
-                widget.set_opacity(0.0);
-                let widget_clone = widget.clone();
-
-                glib::timeout_add_local(Duration::from_millis(10), move || {
-                    widget_clone.set_opacity(1.0);
-                    glib::ControlFlow::Break
-                });
-            }
-        }
+        let (Some(enter_class), Some(active_class)) = (transition.transition_enter_css_class(), transition.transition_active_css_class()) else {
+            return;
+        };
+        widget.add_css_class(&enter_class);
+        let widget_clone = widget.clone();
+        glib::timeout_add_local(Duration::from_millis(10), move || {
+            widget_clone.add_css_class(&active_class);
+            widget_clone.remove_css_class(&enter_class);
+            glib::ControlFlow::Break
+        });
     }
 
     /// Animate widget removal
     pub fn animate_widget_removal(&self, widget: &Widget, transition: &AreaTransition, callback: impl Fn() + 'static) {
-        match transition {
-            AreaTransition::None => {
-                callback();
-            }
-            AreaTransition::Fade => {
-                let widget_clone = widget.clone();
-                let duration = self.duration_ms;
+        let (Some(exit_class), Some(active_class)) = (transition.transition_exit_css_class(), transition.transition_active_css_class()) else {
+            callback();
+            return;
+        };
+        widget.add_css_class(&exit_class);
+        let widget_clone = widget.clone();
+        let active_class2 = active_class.clone();
+        glib::timeout_add_local(Duration::from_millis(10), move || {
+            widget_clone.add_css_class(&active_class);
+            widget_clone.remove_css_class(&exit_class);
+            glib::ControlFlow::Continue
+        });
 
-                glib::timeout_add_local(Duration::from_millis(duration as u64), move || {
-                    widget_clone.set_opacity(0.0);
-                    callback();
-                    glib::ControlFlow::Break
-                });
-            }
-            _ => {
-                // For other transitions, just call the callback
-                callback();
-            }
-        }
+        let duration = self.duration_ms;
+        let widget_clone2 = widget.clone();
+        glib::timeout_add_local(Duration::from_millis(duration as u64), move || {
+            widget_clone2.remove_css_class(&active_class2);
+            callback();
+            glib::ControlFlow::Break
+        });
     }
 }
 
