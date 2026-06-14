@@ -48,8 +48,14 @@ pub struct AreaConfig {
     pub plugins: Vec<PluginEntry>,
 }
 
-fn default_width() -> Option<i32> {
-    Some(DEFAULT_AREA_WIDTH)
+impl AreaConfig {
+    pub fn close_transition(&self) -> AreaTransition {
+        self.close_transition.clone().unwrap_or(self.open_transition.opposite())
+    }
+
+    pub fn plugin_ids(&self) -> Vec<String> {
+        self.plugins.iter().map(|p| p.id.clone()).collect()
+    }
 }
 
 impl Default for AreaConfig {
@@ -69,8 +75,6 @@ impl Default for AreaConfig {
     }
 }
 
-impl AreaConfig {
-    pub fn plugin_ids(&self) -> Vec<String> {
-        self.plugins.iter().map(|p| p.id.clone()).collect()
-    }
+fn default_width() -> Option<i32> {
+    Some(DEFAULT_AREA_WIDTH)
 }
