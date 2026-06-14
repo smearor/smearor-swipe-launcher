@@ -1,7 +1,6 @@
 use crate::PluginEntry;
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
-use crate::error::Result;
 use abi_stable::RRef;
 use abi_stable::std_types::RResult;
 use libloading::Library;
@@ -26,7 +25,7 @@ pub struct LoadedService {
 }
 
 impl LoadedService {
-    pub fn load(service_entry: &PluginEntry, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self)> {
+    pub fn load(service_entry: &PluginEntry, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self), LauncherError> {
         unsafe {
             let path = PathBuf::from(&service_entry.path);
             let library = Arc::new(Library::new(&path)?);

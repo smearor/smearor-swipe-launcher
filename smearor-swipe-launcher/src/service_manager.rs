@@ -1,5 +1,6 @@
 use crate::LoadedService;
 use crate::PluginEntry;
+use crate::error::LauncherError;
 use dashmap::DashMap;
 use dashmap::DashSet;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
@@ -25,7 +26,7 @@ impl ServiceManager {
         self.services.iter().map(|id| id.key().to_string()).collect()
     }
 
-    pub fn load_service(&self, service_entry: &PluginEntry, config: PluginConfig) -> crate::error::Result<()> {
+    pub fn load_service(&self, service_entry: &PluginEntry, config: PluginConfig) -> Result<(), LauncherError> {
         info!("Loading service {} from: {:?}", service_entry.id, service_entry.path);
 
         let (actual_service_id, service) = LoadedService::load(service_entry, &config, self.message_sender.clone())?;

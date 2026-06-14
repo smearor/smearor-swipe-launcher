@@ -12,6 +12,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
+use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::sync::Arc;
@@ -33,10 +34,11 @@ pub(crate) struct ClockWidget {
 }
 
 impl ClockWidget {
-    pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionError> {
-        let clock_config: ClockConfig =
-            serde_json::from_value(config.config.clone()).map_err(|e| PluginConstructionError::FailedToParseWidgetConfig(e.to_string().into()))?;
-        let runtime = Arc::new(Runtime::new().map_err(|e| PluginConstructionError::FailedToCreateRuntime(e.to_string().into()))?);
+    pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
+        let clock_config: ClockConfig = serde_json::from_value(config.config.clone())
+            .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
+        let runtime =
+            Arc::new(Runtime::new().map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToCreateRuntime, e.to_string().into()))?);
         let (time_sender, time_receiver) = mpsc::channel();
         Ok(ClockWidget {
             meta: PluginMeta::try_from(&config)?,

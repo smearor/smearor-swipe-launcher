@@ -1,7 +1,6 @@
 use crate::config::plugin::PluginEntry;
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
-use crate::error::Result;
 use abi_stable::RRef;
 use abi_stable::std_types::RResult;
 use libloading::Library;
@@ -27,7 +26,7 @@ pub struct LoadedPlugin {
 }
 
 impl LoadedPlugin {
-    pub fn load(plugin_entry: &PluginEntry, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self)> {
+    pub fn load(plugin_entry: &PluginEntry, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self), LauncherError> {
         unsafe {
             let path = PathBuf::from(&plugin_entry.path);
             let library = Arc::new(Library::new(&path)?);
@@ -49,8 +48,8 @@ impl LoadedPlugin {
 
             let api_loaded_plugin = match result {
                 RResult::ROk(plugin) => plugin,
-                RResult::RErr(err) => {
-                    return Err(LauncherError::PluginConstructorNull(err.to_string()));
+                RResult::RErr(e) => {
+                    return Err(LauncherError::PluginConstructionError(e.error, e.message.to_string()));
                 }
             };
 

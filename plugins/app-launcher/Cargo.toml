@@ -20,7 +20,7 @@ paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-app-launcher-model = { path = "../../model/app-launcher" }
-smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

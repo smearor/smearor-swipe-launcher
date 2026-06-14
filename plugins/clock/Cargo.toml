@@ -18,7 +18,7 @@ miette = { workspace = true }
 paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 smearor-clock-model = { path = "../../model/clock" }
 thiserror = { workspace = true }
 time = { version = "0.3", features = ["local-offset", "formatting"] }

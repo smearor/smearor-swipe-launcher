@@ -1,4 +1,5 @@
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 use tracing::subscriber::SetGlobalDefaultError;
@@ -34,6 +35,7 @@ pub enum LauncherError {
 
     #[error("Failed to set global tracing subscriber: {0}")]
     TracingError(#[from] SetGlobalDefaultError),
-}
 
-pub type Result<T> = std::result::Result<T, LauncherError>;
+    #[error("{0}: {1}")]
+    PluginConstructionError(PluginConstructionError, String),
+}

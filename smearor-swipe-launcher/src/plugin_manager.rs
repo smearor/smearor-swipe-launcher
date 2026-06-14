@@ -1,4 +1,5 @@
 use crate::PluginEntry;
+use crate::error::LauncherError;
 use crate::plugin::LoadedPlugin;
 use dashmap::DashMap;
 use dashmap::DashSet;
@@ -25,7 +26,7 @@ impl PluginManager {
         self.plugins.iter().map(|id| id.key().to_string()).collect()
     }
 
-    pub fn load_plugin(&self, plugin_entry: &PluginEntry, config: PluginConfig) -> crate::error::Result<()> {
+    pub fn load_plugin(&self, plugin_entry: &PluginEntry, config: PluginConfig) -> Result<(), LauncherError> {
         info!("Loading plugin {} from: {:?}", plugin_entry.id, plugin_entry.path);
 
         let (actual_plugin_id, plugin) = LoadedPlugin::load(plugin_entry, &config, self.message_sender.clone())?;

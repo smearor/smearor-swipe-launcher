@@ -1,14 +1,14 @@
 [workspace]
 members = [
-    "smearor-swipe-launcher",
-    "smearor-swipe-launcher-plugin-api",
     "model/app-launcher",
     "model/clock",
     "model/message",
-    "services/app-launcher",
+    "plugin-api",
     "plugins/clock",
     "plugins/app-launcher",
     "plugins/button",
+    "services/app-launcher",
+    "smearor-swipe-launcher",
 ]
 resolver = "2"
 

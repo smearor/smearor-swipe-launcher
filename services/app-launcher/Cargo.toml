@@ -20,7 +20,7 @@ nix = { version = "0.29", features = ["signal"] }
 paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-smearor-swipe-launcher-plugin-api = { path = "../../smearor-swipe-launcher-plugin-api" }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 smearor-app-launcher-model = { path = "../../model/app-launcher" }
 thiserror = { workspace = true }
 tokio = { workspace = true }

@@ -15,7 +15,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
-use smearor_swipe_launcher_plugin_api::PluginConstructionError;
+use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use std::path::Path;
@@ -33,7 +33,7 @@ pub struct AppLauncherService {
 }
 
 impl AppLauncherService {
-    pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionError> {
+    pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
         let service = AppLauncherService {
             meta: PluginMeta::try_from(&config)?,
             core_context,

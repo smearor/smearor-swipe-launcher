@@ -25,6 +25,7 @@ use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
+use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::PluginMetaRaw;
@@ -45,10 +46,11 @@ pub struct AppLauncherWidget {
 }
 
 impl AppLauncherWidget {
-    pub fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionError> {
+    pub fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
         debug!("AppLauncherWidget config: {config:?}");
         let meta_raw = PluginMetaRaw::try_from(&config)?;
-        let config = AppLauncherConfig::parse(&config.config).map_err(|e| PluginConstructionError::FailedToParseWidgetConfig(e.to_string().into()))?;
+        let config = AppLauncherConfig::parse(&config.config)
+            .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         let mut app_name = meta_raw.display_name.to_string();
         let mut icon_name = meta_raw.icon_name.unwrap_or_default().to_string();
 
@@ -56,7 +58,8 @@ impl AppLauncherWidget {
         let desktop_entry = match Entry::parse_file(&config.desktop_file_path) {
             Ok(entry) => entry,
             Err(e) => {
-                return Err(PluginConstructionError::Custom(
+                return Err(PluginConstructionErrorWrapper::new(
+                    PluginConstructionError::Custom,
                     format!("AppLauncher Service: Failed to parse desktop file {}: {e}", config.desktop_file_path).into(),
                 ));
             }

@@ -11,13 +11,11 @@ use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
+use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
-use std::sync::Arc;
-use std::sync::RwLock;
 use tracing::debug;
-use tracing::info;
 
 pub struct ButtonWidget {
     pub(crate) meta: PluginMeta,
@@ -26,17 +24,16 @@ pub struct ButtonWidget {
 }
 
 impl ButtonWidget {
-    pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionError> {
+    pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
         // You can't create a button here, because the GTK thread is not running yet.
         debug!("ButtonWidget plugin config: {config:?}");
         let meta = PluginMeta::try_from(&config)?;
         debug!("ButtonWidget meta: {meta:?}");
-        let config = ButtonConfig::parse(&config.config).map_err(|e| PluginConstructionError::FailedToParseWidgetConfig(e.to_string().into()))?;
+        let config = ButtonConfig::parse(&config.config)
+            .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         debug!("ButtonWidget button config: {config:?}");
         Ok(Self { meta, core_context, config })
     }
-
-    fn setup_handlers(&self) {}
 }
 
 impl MessageHandler<FfiEnvelope> for ButtonWidget {

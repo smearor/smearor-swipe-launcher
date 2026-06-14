@@ -14,6 +14,7 @@ pub use config::PluginConfig;
 pub use context::CoreContextVTable;
 pub use context::FfiCoreContext;
 pub use error::PluginConstructionError;
+pub use error::PluginConstructionErrorWrapper;
 pub use messages::FfiEnvelope;
 pub use messages::FfiEnvelopePayload;
 pub use messages::MessageBroadcaster;

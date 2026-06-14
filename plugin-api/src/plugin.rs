@@ -1,6 +1,7 @@
 use crate::FfiCoreContext;
 use crate::FfiEnvelope;
 use crate::FfiWidget;
+use crate::PluginConstructionErrorWrapper;
 use abi_stable::RRef;
 use abi_stable::StableAbi;
 use abi_stable::derive_macro_reexports::ROption;
@@ -34,4 +35,5 @@ impl LoadedPlugin {
     }
 }
 
-pub type PluginConstructor = unsafe extern "C" fn(config_json: *const i8, config_len: usize, core_context: FfiCoreContext) -> RResult<LoadedPlugin, RString>;
+pub type PluginConstructor =
+    unsafe extern "C" fn(config_json: *const i8, config_len: usize, core_context: FfiCoreContext) -> RResult<LoadedPlugin, PluginConstructionErrorWrapper>;

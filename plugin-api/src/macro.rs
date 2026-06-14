@@ -13,7 +13,7 @@
 ///
 /// The service type must:
 /// - Have a `meta` field with `id` and `display_name` attributes
-/// - Implement a `new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionError>` constructor
+/// - Implement a `new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper>` constructor
 /// - Implement a `handle_envelope_message(message: FfiEnvelope)` method
 ///
 /// # Example
@@ -71,7 +71,7 @@ macro_rules! service_plugin {
                 config_json: *const i8,
                 config_len: usize,
                 core_context: $crate::FfiCoreContext,
-            ) -> abi_stable::std_types::RResult<$crate::LoadedService, $crate::PluginConstructionError> {
+            ) -> abi_stable::std_types::RResult<$crate::LoadedService, $crate::PluginConstructionErrorWrapper> {
                 let subscriber = tracing_subscriber::FmtSubscriber::builder()
                     .with_env_filter(
                         tracing_subscriber::EnvFilter::from_default_env()
@@ -124,7 +124,7 @@ macro_rules! service_plugin {
 ///
 /// The widget type must:
 /// - Have a `meta` field with `id`, `display_name`, and `icon_name` attributes
-/// - Implement a `new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionError>` constructor
+/// - Implement a `new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper>` constructor
 /// - Implement a `build_ffi_widget(plugin: *mut ()) -> FfiWidget` method
 /// - Implement a `handle_envelope_message(message: FfiEnvelope)` method
 ///
@@ -197,7 +197,7 @@ macro_rules! widget_plugin {
                 config_json: *const i8,
                 config_len: usize,
                 core_context: $crate::FfiCoreContext,
-            ) -> abi_stable::std_types::RResult<$crate::LoadedPlugin, $crate::PluginConstructionError> {
+            ) -> abi_stable::std_types::RResult<$crate::LoadedPlugin, $crate::PluginConstructionErrorWrapper> {
                 let subscriber = tracing_subscriber::FmtSubscriber::builder()
                     .with_env_filter(
                         tracing_subscriber::EnvFilter::from_default_env()

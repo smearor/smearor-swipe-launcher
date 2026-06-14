@@ -6,7 +6,7 @@ areas = ["left_area", "scroll_band", "right_area"]
 # Services to load
 [[services]]
 id = "app_launcher"
-path = "target/debug/libsmearor_app_launcher_service.so"
+path = "target/release/libsmearor_app_launcher_service.so"
 
 [launcher]
 # Initial rotation in degrees (0, 90, 180, 270)
@@ -21,24 +21,25 @@ spacing = 0
 area_type = "fixed"
 width = 200
 plugins = [
-    { id = "clock_widget_left", path = "target/debug/libsmearor_clock_widget.so" },
-    { id = "games_button", path = "target/debug/libsmearor_button_widget.so" }
+    { id = "clock_widget_left", path = "target/release/libsmearor_clock_widget.so" },
+    { id = "games_button", path = "target/release/libsmearor_button_widget.so" }
 ]
 
 # Plugins in the center scroll band
 [scroll_band]
 area_type = "scroll"
 plugins = [
-    { id = "clock_widget_date", path = "target/debug/libsmearor_clock_widget.so" },
-    { id = "clock_widget_time", path = "target/debug/libsmearor_clock_widget.so" },
-    { id = "firefox_nightly", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "gnome_calculator", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "nautilus", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "epiphany", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "loupe", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "totem", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "gnome_settings", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "smearor_wrot_gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" }
+    { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "clock_widget_date", path = "target/release/libsmearor_clock_widget.so" },
+    { id = "clock_widget_time", path = "target/release/libsmearor_clock_widget.so" },
+    { id = "firefox_nightly", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_calculator", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "epiphany", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "totem", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "smearor_wrot_gnome_2048", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
 
 # Plugins in the right static area
@@ -46,10 +47,13 @@ plugins = [
 area_type = "fixed"
 width = 200
 plugins = [
-    { id = "clock_widget_right", path = "target/debug/libsmearor_clock_widget.so" }
+    { id = "clock_widget_right", path = "target/release/libsmearor_clock_widget.so" }
 ]
 
 # Plugin-specific configurations
+
+[nonexistent]
+desktop_file_path = "/usr/share/applications/nonexistent.desktop"
 
 [firefox_nightly]
 desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
@@ -120,10 +124,10 @@ css_classes = ["menu-button", "primary"]
 area_type = "scroll"
 transition = "SlideLeft"
 plugins = [
-    { id = "close_games", path = "target/debug/libsmearor_button_widget.so" },
-    { id = "gnome_2048", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "gnome_mines", path = "target/debug/libsmearor_app_launcher_widget.so" },
-    { id = "gnome_chess", path = "target/debug/libsmearor_app_launcher_widget.so" }
+    { id = "close_games", path = "target/release/libsmearor_button_widget.so" },
+    { id = "gnome_2048", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_mines", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_chess", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
 
 # Close button configuration
