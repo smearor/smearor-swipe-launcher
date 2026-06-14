@@ -91,6 +91,7 @@ impl LayoutTransition {
             if transition_params.start_margin_y != 0 || transition_params.target_margin_y != 0 {
                 widget.set_margin_top(margin_y);
             }
+            widget.queue_draw();
 
             if progress >= 1.0 {
                 if let Some(id) = handler_id_clone.borrow_mut().take() {
@@ -143,6 +144,7 @@ impl LayoutTransition {
             if transition_params.start_margin_y != 0 || transition_params.target_margin_y != 0 {
                 widget.set_margin_top(margin_y);
             }
+            widget.queue_draw();
 
             if progress >= 1.0 {
                 if let Some(id) = handler_id_clone.borrow_mut().take() {
