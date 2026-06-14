@@ -30,9 +30,6 @@ pub struct AreaManager {
     /// Currently managed areas keyed by ID
     areas: HashMap<String, ManagedArea>,
 
-    /// Overlay container for transient areas (submenus) - created on demand
-    overlay: Option<Overlay>,
-
     /// Stack of areas for nested sub-menus
     area_stack: AreaStack,
 
@@ -51,22 +48,11 @@ impl AreaManager {
     pub fn new(plugin_manager: Arc<PluginManager>, config: Arc<SwipeLauncherConfig>) -> Self {
         Self {
             areas: HashMap::new(),
-            overlay: None,
             area_stack: AreaStack::new(),
             layout_transition: LayoutTransition::new(),
             plugin_manager,
             config,
         }
-    }
-
-    /// Set the overlay for transient areas (called from application.rs)
-    pub fn set_overlay(&mut self, overlay: Overlay) {
-        self.overlay = Some(overlay);
-    }
-
-    /// Get the overlay for transient areas
-    fn get_overlay(&self) -> Option<&Overlay> {
-        self.overlay.as_ref()
     }
 
     /// Add an area from configuration
@@ -79,25 +65,33 @@ impl AreaManager {
 
         let widget = self.create_area_widget(&area_config)?;
 
+        // Create overlay for this area (for transient sub-areas)
+        let overlay = Overlay::builder().build();
+        overlay.set_child(Some(&widget.clone()));
+        overlay.add_css_class("area-overlay");
+
         let managed_area = ManagedArea {
             id: area_id.to_string(),
             config: area_config.clone(),
             widget: widget.clone(),
+            overlay: Some(overlay.clone()),
+            source_area_widget: None,
             is_transient: area_config.auto_close,
         };
 
         self.areas.insert(area_id.to_string(), managed_area);
-        main_container.append(&widget);
+        main_container.append(&overlay);
 
         // Apply transition animation
-        self.layout_transition.animate_widget_addition(&widget, &area_config.transition);
+        self.layout_transition
+            .animate_widget_addition(&overlay.clone().upcast::<Widget>(), &area_config.transition);
 
-        info!("Successfully added area {}", area_id);
+        info!("Successfully added area {} with overlay", area_id);
         Ok(())
     }
 
     /// Remove an area with plugin cleanup
-    pub fn remove_area(&mut self, area_id: &str, _main_container: &GtkBox) -> Result<(), RemoveAreaError> {
+    pub fn remove_area(&mut self, area_id: &str, main_container: &GtkBox) -> Result<(), RemoveAreaError> {
         debug!("Removing area {}", area_id);
 
         let managed_area = self.areas.remove(area_id).ok_or_else(|| RemoveAreaError::AreaNotFound(area_id.to_string()))?;
@@ -109,13 +103,39 @@ impl AreaManager {
 
         // Animate removal before cleanup
         let widget_clone = managed_area.widget.clone();
-        let overlay_clone = self.overlay.clone();
+        let overlay_clone = managed_area.overlay.clone();
+        let main_container_clone = main_container.clone();
         let area_id_clone = area_id.to_string();
+        let is_transient = managed_area.is_transient;
+        let source_area_widget_clone = managed_area.source_area_widget.clone();
+        let source_area_overlay_clone = if is_transient {
+            // Find the source area overlay for this transient area
+            if let Some(ref source_widget) = managed_area.source_area_widget {
+                self.find_overlay_for_widget(source_widget)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         self.layout_transition
             .animate_widget_removal(&managed_area.widget, &managed_area.config.transition, move || {
-                if let Some(overlay) = &overlay_clone {
-                    overlay.remove_overlay(&widget_clone);
+                if is_transient {
+                    // Transient area: remove from source area overlay (not global overlay)
+                    if let Some(overlay) = &source_area_overlay_clone {
+                        overlay.remove_overlay(&widget_clone);
+                    }
+                    // Restore source area widget visibility
+                    if let Some(ref source_widget) = source_area_widget_clone {
+                        source_widget.set_opacity(1.0);
+                        debug!("Restored source area widget visibility for {}", area_id_clone);
+                    }
+                } else {
+                    // Non-transient area: remove the overlay from main container
+                    if let Some(overlay) = &overlay_clone {
+                        main_container_clone.remove(overlay);
+                    }
                 }
                 debug!("Successfully removed area {}", area_id_clone);
             });
@@ -125,8 +145,14 @@ impl AreaManager {
     }
 
     /// Add a transient area with auto-close detection
-    pub fn add_transient_area(&mut self, area_id: &str, area_config: AreaConfig, _main_container: &GtkBox) -> Result<(), AddAreaError> {
-        debug!("Adding transient area {}", area_id);
+    pub fn add_transient_area(
+        &mut self,
+        area_id: &str,
+        area_config: AreaConfig,
+        _main_container: &GtkBox,
+        sender_id: Option<&str>,
+    ) -> Result<(), AddAreaError> {
+        debug!("Adding transient area {} from sender {:?}", area_id, sender_id);
 
         // Check if area already exists
         if self.areas.contains_key(area_id) {
@@ -149,9 +175,18 @@ impl AreaManager {
             }
         }
 
-        // Get overlay
-        let overlay = self.get_overlay().ok_or_else(|| AddAreaError::OverlayNotSetError)?;
-        let overlay_clone = overlay.clone();
+        // Find the source area that contains the sender plugin
+        let (source_area_overlay, source_area_widget) = if let Some(sender) = sender_id {
+            self.find_area_overlay_and_widget_containing_plugin(sender)
+        } else {
+            (None, None)
+        };
+
+        // Make source area widget transparent (overlay remains visible)
+        if let Some(ref widget) = source_area_widget {
+            widget.set_opacity(0.0);
+            info!("Made source area widget transparent for {}", area_id);
+        }
 
         // Create the area widget
         let widget = self.create_area_widget(&config)?;
@@ -160,13 +195,18 @@ impl AreaManager {
             id: area_id.to_string(),
             config: config.clone(),
             widget: widget.clone(),
+            overlay: None,
+            source_area_widget: source_area_widget.clone(),
             is_transient: true,
         };
 
         self.areas.insert(area_id.to_string(), managed_area);
 
-        // Add to overlay
-        overlay_clone.add_overlay(&widget);
+        // Add to overlay - either in source area overlay or global overlay
+        if let Some(overlay) = source_area_overlay {
+            overlay.add_overlay(&widget);
+            info!("Added transient area {} to source area overlay", area_id);
+        }
 
         // Push to area stack for nested sub-menus
         self.area_stack.push(area_id.to_string());
@@ -176,6 +216,34 @@ impl AreaManager {
 
         info!("Successfully added transient area {}", area_id);
         Ok(())
+    }
+
+    /// Find the overlay and widget of the area that contains a specific plugin
+    fn find_area_overlay_and_widget_containing_plugin(&self, plugin_id: &str) -> (Option<Overlay>, Option<Widget>) {
+        for managed_area in self.areas.values() {
+            if managed_area.is_transient {
+                continue;
+            }
+            // Check if this area contains the plugin
+            if managed_area.config.plugins.iter().any(|p| p.id == plugin_id) {
+                return (managed_area.overlay.clone(), Some(managed_area.widget.clone()));
+            }
+        }
+        (None, None)
+    }
+
+    /// Find the overlay that has a specific widget as its child
+    fn find_overlay_for_widget(&self, widget: &Widget) -> Option<Overlay> {
+        for managed_area in self.areas.values() {
+            if let Some(ref overlay) = managed_area.overlay {
+                if let Some(child) = overlay.child() {
+                    if child == *widget {
+                        return Some(overlay.clone());
+                    }
+                }
+            }
+        }
+        None
     }
 
     /// Pop the top area from the stack and remove it

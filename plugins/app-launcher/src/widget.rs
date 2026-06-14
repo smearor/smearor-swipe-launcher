@@ -13,7 +13,6 @@ use gtk4::Orientation;
 use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::prelude::BoxExt;
-use gtk4::prelude::ButtonExt;
 use gtk4::prelude::Cast;
 use gtk4::prelude::GestureExt;
 use gtk4::prelude::GestureSingleExt;

@@ -4,12 +4,10 @@ use crate::css_provider::create_css_provider;
 use crate::plugin_manager::PluginManager;
 use crate::service_manager::ServiceManager;
 use crate::window::create_window;
-use gtk4::Align;
 use gtk4::Application;
 use gtk4::Box as GtkBox;
 use gtk4::IconTheme;
 use gtk4::Orientation;
-use gtk4::Overlay;
 use gtk4::ScrolledWindow;
 use gtk4::gio;
 use gtk4::glib::MainContext;
@@ -121,21 +119,7 @@ impl LauncherApplication {
                 .spacing(layout_config.spacing)
                 .build();
 
-            // Create overlay for transient areas
-            let overlay = Overlay::builder().build();
-            overlay.set_child(Some(&main_container));
-            overlay.add_css_class("area-overlay");
-
-            // Configure overlay to pass through events when no overlay children are present
-            overlay.set_halign(Align::Fill);
-            overlay.set_valign(Align::Fill);
-
-            rotation_widget.set_child(Some(&overlay));
-
-            // Set overlay in area manager
-            if let Ok(mut area_manager) = self_clone.area_manager.lock() {
-                area_manager.set_overlay(overlay.clone());
-            }
+            rotation_widget.set_child(Some(&main_container));
 
             let mut first_scrolled_window: Option<ScrolledWindow> = None;
 

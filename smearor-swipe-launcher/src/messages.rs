@@ -20,10 +20,10 @@ impl LauncherApplication {
         if topic == "area.open" {
             if let Ok(parsed) = serde_json::from_str::<Value>(&payload) {
                 if let Some(area_id) = parsed.get("area_id").and_then(|v| v.as_str()) {
-                    info!("Opening area: {}", area_id);
+                    info!("Opening area: {} from sender: {}", area_id, sender_id);
                     if let Some(area_config) = self.config.get_area_config(area_id) {
                         if let Ok(mut area_manager) = self.area_manager.lock() {
-                            if let Err(e) = area_manager.add_transient_area(area_id, area_config.clone(), main_container) {
+                            if let Err(e) = area_manager.add_transient_area(area_id, area_config.clone(), main_container, Some(&sender_id)) {
                                 error!("Failed to open area {}: {}", area_id, e);
                             } else {
                                 info!("Successfully opened area {}", area_id);
