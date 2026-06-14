@@ -66,6 +66,10 @@ window {
     padding: 10px;
 }
 
+.scroll-area-transparent {
+    opacity: 0.0;
+}
+
 .static-area {
     /*background-color: rgba(0, 0, 0, 0.5);*/
     border-radius: 8px;

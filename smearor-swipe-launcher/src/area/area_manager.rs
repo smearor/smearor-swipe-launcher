@@ -131,7 +131,7 @@ impl AreaManager {
                     }
                     // Restore source area widget visibility
                     if let Some(ref source_widget) = source_area_widget_clone {
-                        source_widget.set_opacity(1.0);
+                        source_widget.remove_css_class("scroll-area-transparent");
                         debug!("Restored source area widget visibility for {}", area_id_clone);
                     }
                 } else {
@@ -187,7 +187,7 @@ impl AreaManager {
 
         // Make source area widget transparent (overlay remains visible)
         if let Some(ref widget) = source_area_widget {
-            widget.set_opacity(0.0);
+            widget.add_css_class("scroll-area-transparent");
             info!("Made source area widget transparent for {}", area_id);
         }
 
