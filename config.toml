@@ -107,7 +107,7 @@ css_classes = ["menu-button", "primary"]
 # Games submenu area configuration
 [games_area]
 area_type = "scroll"
-transition = "SlideLeft"
+transition = "SlideUp"
 plugins = [
     { id = "games_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "puzzle_games_menu_button", path = "target/release/libsmearor_button_widget.so" },

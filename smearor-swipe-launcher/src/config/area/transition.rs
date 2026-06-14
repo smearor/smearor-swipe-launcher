@@ -1,6 +1,41 @@
 use serde::Deserialize;
 use std::str::FromStr;
 
+pub struct AreaTransitionParams {
+    pub(crate) start_opacity: f64,
+    pub(crate) target_opacity: f64,
+    pub(crate) start_margin_x: i32,
+    pub(crate) target_margin_x: i32,
+    pub(crate) start_margin_y: i32,
+    pub(crate) target_margin_y: i32,
+    pub(crate) start_scale: f64,
+    pub(crate) target_scale: f64,
+}
+
+impl AreaTransitionParams {
+    pub fn new(
+        start_opacity: f64,
+        target_opacity: f64,
+        start_margin_x: i32,
+        target_margin_x: i32,
+        start_margin_y: i32,
+        target_margin_y: i32,
+        start_scale: f64,
+        target_scale: f64,
+    ) -> Self {
+        Self {
+            start_opacity,
+            target_opacity,
+            start_margin_x,
+            target_margin_x,
+            start_margin_y,
+            target_margin_y,
+            start_scale,
+            target_scale,
+        }
+    }
+}
+
 /// Defines the transition animation for area changes
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum AreaTransition {
@@ -56,6 +91,19 @@ impl AreaTransition {
             _ => Some(format!("{}-active", self.css_class())),
         }
     }
+
+    pub fn animation_parameters(&self) -> Option<AreaTransitionParams> {
+        Some(match self {
+            AreaTransition::None => return None,
+            AreaTransition::Fade => AreaTransitionParams::new(0.0, 1.0, 0, 0, 0, 0, 1.0, 1.0),
+            AreaTransition::SlideLeft => AreaTransitionParams::new(0.0, 1.0, 200, 0, 0, 0, 1.0, 1.0),
+            AreaTransition::SlideRight => AreaTransitionParams::new(0.0, 1.0, -200, 0, 0, 0, 1.0, 1.0),
+            AreaTransition::SlideUp => AreaTransitionParams::new(0.0, 1.0, 0, 0, 200, 0, 1.0, 1.0),
+            AreaTransition::SlideDown => AreaTransitionParams::new(0.0, 1.0, 0, 0, -200, 0, 1.0, 1.0),
+            AreaTransition::Pop => AreaTransitionParams::new(0.0, 1.0, 0, 0, 0, 0, 0.5, 1.0),
+            AreaTransition::Scale => AreaTransitionParams::new(0.0, 1.0, 0, 0, 0, 0, 0.0, 1.0),
+        })
+    }
 }
 
 impl Default for AreaTransition {
@@ -68,7 +116,7 @@ impl FromStr for AreaTransition {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
+        match s.to_lowercase().replace("_", "").replace("-", "").as_str() {
             "none" => Ok(AreaTransition::None),
             "fade" => Ok(AreaTransition::Fade),
             "slide_left" => Ok(AreaTransition::SlideLeft),
