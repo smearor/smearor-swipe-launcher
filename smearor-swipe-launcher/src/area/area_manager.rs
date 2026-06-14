@@ -15,12 +15,10 @@ use gtk4::Overlay;
 use gtk4::PolicyType;
 use gtk4::ScrolledWindow;
 use gtk4::Widget;
-use gtk4::glib;
 use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -85,7 +83,7 @@ impl AreaManager {
 
         // Apply transition animation
         self.layout_transition
-            .animate_widget_addition(&overlay.clone().upcast::<Widget>(), &area_config.transition);
+            .animate_widget_addition(&overlay.clone().upcast::<Widget>(), &area_config.open_transition);
 
         info!("Successfully added area {} with overlay", area_id);
         Ok(())
@@ -120,28 +118,29 @@ impl AreaManager {
             None
         };
 
-        self.layout_transition
-            .animate_widget_removal(&managed_area.widget, &managed_area.config.transition, move || {
-                if is_transient {
-                    // Transient area: remove overlay from source area overlay
-                    if let Some(overlay) = &overlay_clone {
-                        if let Some(source_overlay) = &source_area_overlay_clone {
-                            source_overlay.remove_overlay(overlay);
-                        }
-                    }
-                    // Restore source area widget visibility
-                    if let Some(ref source_widget) = source_area_widget_clone {
-                        source_widget.remove_css_class("scroll-area-transparent");
-                        debug!("Restored source area widget visibility for {}", area_id_clone);
-                    }
-                } else {
-                    // Non-transient area: remove the overlay from main container
-                    if let Some(overlay) = &overlay_clone {
-                        main_container_clone.remove(overlay);
+        let close_transition = managed_area.config.close_transition.unwrap_or(managed_area.config.open_transition.opposite());
+
+        self.layout_transition.animate_widget_removal(&managed_area.widget, &close_transition, move || {
+            if is_transient {
+                // Transient area: remove overlay from source area overlay
+                if let Some(overlay) = &overlay_clone {
+                    if let Some(source_overlay) = &source_area_overlay_clone {
+                        source_overlay.remove_overlay(overlay);
                     }
                 }
-                debug!("Successfully removed area {}", area_id_clone);
-            });
+                // Restore source area widget visibility
+                if let Some(ref source_widget) = source_area_widget_clone {
+                    source_widget.remove_css_class("scroll-area-transparent");
+                    debug!("Restored source area widget visibility for {}", area_id_clone);
+                }
+            } else {
+                // Non-transient area: remove the overlay from main container
+                if let Some(overlay) = &overlay_clone {
+                    main_container_clone.remove(overlay);
+                }
+            }
+            debug!("Successfully removed area {}", area_id_clone);
+        });
 
         info!("Successfully initiated removal of area {}", area_id);
         Ok(())
@@ -223,7 +222,7 @@ impl AreaManager {
         self.area_stack.push(area_id.to_string());
 
         // Apply transition animation
-        self.layout_transition.animate_widget_addition(&widget, &config.transition);
+        self.layout_transition.animate_widget_addition(&widget, &config.open_transition);
 
         info!("Successfully added transient area {}", area_id);
         Ok(())
@@ -285,7 +284,7 @@ impl AreaManager {
             AreaType::Fixed => {
                 let width = area_config.width.unwrap_or(200);
                 let mut css_classes = vec!["static-area"];
-                css_classes.push(area_config.transition.css_class());
+                css_classes.push(area_config.open_transition.css_class());
 
                 let box_widget = GtkBox::builder()
                     .orientation(Orientation::Horizontal)
@@ -294,13 +293,13 @@ impl AreaManager {
                     .build();
                 self.add_plugins(area_config, &box_widget);
 
-                self.apply_transition_animation(box_widget.upcast_ref(), &area_config.transition);
+                self.apply_transition_animation(box_widget.upcast_ref(), &area_config.open_transition);
 
                 Ok(box_widget.upcast())
             }
             AreaType::Scroll => {
                 let mut css_classes = vec!["scroll-area"];
-                css_classes.push(area_config.transition.css_class());
+                css_classes.push(area_config.open_transition.css_class());
 
                 let scrolled_window = ScrolledWindow::builder()
                     .hscrollbar_policy(PolicyType::External)
@@ -315,7 +314,7 @@ impl AreaManager {
 
                 // TODO: Apply drag gesture for scrolling
 
-                self.apply_transition_animation(scrolled_window.upcast_ref(), &area_config.transition);
+                self.apply_transition_animation(scrolled_window.upcast_ref(), &area_config.open_transition);
 
                 scrolled_window.set_child(Some(&plugin_container));
                 Ok(scrolled_window.upcast())
@@ -342,23 +341,7 @@ impl AreaManager {
 
     /// Apply transition animation to a widget
     fn apply_transition_animation(&self, widget: &Widget, transition: &AreaTransition) {
-        match transition {
-            AreaTransition::None => {
-                // No animation
-            }
-            AreaTransition::Fade => {
-                widget.set_opacity(0.0);
-                let widget_clone = widget.clone();
-                glib::timeout_add_local(Duration::from_millis(10), move || {
-                    widget_clone.set_opacity(1.0);
-                    return glib::ControlFlow::Continue;
-                });
-            }
-            _ => {
-                // For other transitions, we'll rely on CSS animations
-                debug!("Applying transition animation: {:?}", transition);
-            }
-        }
+        self.layout_transition.animate_widget_addition(widget, transition);
     }
 
     /// Get a managed area by ID

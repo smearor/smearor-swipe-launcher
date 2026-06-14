@@ -1,6 +1,5 @@
 use crate::config::area::transition::AreaTransition;
 use gtk4::Widget;
-use gtk4::gdk::FrameClockPhase;
 use gtk4::glib;
 use gtk4::prelude::*;
 use std::cell::RefCell;
@@ -49,22 +48,19 @@ impl LayoutTransition {
         }
     }
 
-    /// Animate widget addition with different transition types using FrameClock
+    /// Animate widget addition with smooth transition
     pub fn animate_widget_addition(&self, widget: &Widget, transition: &AreaTransition) {
         if transition == &AreaTransition::None {
             return;
         }
         let widget = widget.clone();
         let duration = self.duration_ms;
-        let start_time = glib::monotonic_time();
-        let duration_us = (duration as i64) * 1000;
 
-        // Get animation parameters based on transition type
-        let Some(transition_params) = transition.animation_parameters() else {
+        let Some(transition_params) = transition.enter_transition_parameters() else {
             return;
         };
 
-        // Set initial state
+        // Set initial state immediately so widget starts invisible
         widget.set_opacity(transition_params.start_opacity);
         if transition_params.start_margin_x != 0 {
             widget.set_margin_start(transition_params.start_margin_x);
@@ -73,26 +69,17 @@ impl LayoutTransition {
             widget.set_margin_top(transition_params.start_margin_y);
         }
 
-        let Some(frame_clock) = widget.frame_clock() else {
-            widget.set_opacity(transition_params.target_opacity);
-            if transition_params.start_margin_x != 0 || transition_params.target_margin_x != 0 {
-                widget.set_margin_start(transition_params.target_margin_x);
-            }
-            if transition_params.start_margin_y != 0 || transition_params.target_margin_y != 0 {
-                widget.set_margin_top(transition_params.target_margin_y);
-            }
-            return;
-        };
-        let handler_id = Rc::new(RefCell::new(None::<glib::SignalHandlerId>));
+        let start_time = glib::monotonic_time();
+        let duration_us = (duration as i64) * 1000;
+
+        let handler_id = Rc::new(RefCell::new(None::<glib::SourceId>));
         let handler_id_clone = handler_id.clone();
 
-        let id = frame_clock.connect_update(move |clock| {
-            let current_time = clock.frame_time();
-            let elapsed = current_time - start_time;
+        let id = glib::timeout_add_local(Duration::from_millis(16), move || {
+            let elapsed = glib::monotonic_time() - start_time;
             let progress = (elapsed as f64 / duration_us as f64).min(1.0);
             let eased = Self::ease_out_cubic(progress);
 
-            // Interpolate values
             let opacity = transition_params.start_opacity + (transition_params.target_opacity - transition_params.start_opacity) * eased;
             let margin_x = transition_params.start_margin_x + ((transition_params.target_margin_x - transition_params.start_margin_x) as f64 * eased) as i32;
             let margin_y = transition_params.start_margin_y + ((transition_params.target_margin_y - transition_params.start_margin_y) as f64 * eased) as i32;
@@ -107,69 +94,70 @@ impl LayoutTransition {
 
             if progress >= 1.0 {
                 if let Some(id) = handler_id_clone.borrow_mut().take() {
-                    clock.disconnect(id);
+                    id.remove();
                 }
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
             }
         });
 
         *handler_id.borrow_mut() = Some(id);
-        frame_clock.request_phase(FrameClockPhase::UPDATE);
     }
 
-    /// Animate widget removal using FrameClock
+    /// Animate widget removal with smooth transition
     pub fn animate_widget_removal(&self, widget: &Widget, transition: &AreaTransition, callback: impl Fn() + 'static) {
         if transition == &AreaTransition::None {
+            callback();
             return;
         }
         let widget = widget.clone();
         let duration = self.duration_ms;
-        let start_time = glib::monotonic_time();
-        let duration_us = (duration as i64) * 1000;
 
-        let Some(transition_params) = transition.animation_parameters() else {
-            return;
-        };
-
-        let Some(frame_clock) = widget.frame_clock() else {
-            widget.set_opacity(transition_params.target_opacity);
+        let Some(transition_params) = transition.exit_transition_parameters() else {
             callback();
             return;
         };
-        let handler_id = Rc::new(RefCell::new(None::<glib::SignalHandlerId>));
+
+        let start_time = glib::monotonic_time();
+        let duration_us = (duration as i64) * 1000;
+
+        let handler_id = Rc::new(RefCell::new(None::<glib::SourceId>));
         let handler_id_clone = handler_id.clone();
         let callback = Rc::new(RefCell::new(Some(callback)));
         let callback_clone = callback.clone();
 
-        let id = frame_clock.connect_update(move |clock| {
-            let current_time = clock.frame_time();
-            let elapsed = current_time - start_time;
+        let id = glib::timeout_add_local(Duration::from_millis(16), move || {
+            let elapsed = glib::monotonic_time() - start_time;
             let progress = (elapsed as f64 / duration_us as f64).min(1.0);
             let eased = Self::ease_out_cubic(progress);
 
-            let opacity = 1.0 - (1.0 - transition_params.target_opacity) * eased;
-            widget.set_opacity(opacity);
+            let opacity = transition_params.start_opacity + (transition_params.target_opacity - transition_params.start_opacity) * eased;
+            let margin_x = transition_params.start_margin_x + ((transition_params.target_margin_x - transition_params.start_margin_x) as f64 * eased) as i32;
+            let margin_y = transition_params.start_margin_y + ((transition_params.target_margin_y - transition_params.start_margin_y) as f64 * eased) as i32;
 
-            if transition_params.target_margin_x != 0 {
-                let margin = (transition_params.target_margin_x as f64 * eased) as i32;
-                widget.set_margin_start(margin);
+            widget.set_opacity(opacity);
+            if transition_params.start_margin_x != 0 || transition_params.target_margin_x != 0 {
+                widget.set_margin_start(margin_x);
             }
-            if transition_params.target_margin_y != 0 {
-                let margin = (transition_params.target_margin_y as f64 * eased) as i32;
-                widget.set_margin_top(margin);
+            if transition_params.start_margin_y != 0 || transition_params.target_margin_y != 0 {
+                widget.set_margin_top(margin_y);
             }
 
             if progress >= 1.0 {
                 if let Some(id) = handler_id_clone.borrow_mut().take() {
-                    clock.disconnect(id);
+                    id.remove();
                 }
                 if let Some(cb) = callback_clone.borrow_mut().take() {
                     cb();
                 }
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
             }
         });
 
         *handler_id.borrow_mut() = Some(id);
-        frame_clock.request_phase(FrameClockPhase::UPDATE);
     }
 
     /// Ease-out cubic function for smooth deceleration

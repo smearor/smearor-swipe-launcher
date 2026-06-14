@@ -19,7 +19,7 @@ spacing = 10
 [left_area]
 area_type = "Fixed"
 width = 200
-transition = "Fade"
+transition = "FadeIn"
 auto_close = false
 close_on_escape = false
 plugins = [

@@ -71,22 +71,40 @@ window {
 }
 
 /* CSS Transitions for area animations */
-.transition-fade-enter {
+.transition-fade-in-enter {
     opacity: 0;
     transition: opacity 300ms ease-in-out;
 }
 
-.transition-fade-enter-active {
+.transition-fade-in-enter-active {
     opacity: 1;
 }
 
-.transition-fade-exit {
+.transition-fade-in-exit {
     opacity: 1;
     transition: opacity 300ms ease-in-out;
 }
 
-.transition-fade-exit-active {
+.transition-fade-in-exit-active {
     opacity: 0;
+}
+
+.transition-fade-out-enter {
+    opacity: 1;
+    transition: opacity 300ms ease-in-out;
+}
+
+.transition-fade-out-enter-active {
+    opacity: 0;
+}
+
+.transition-fade-out-exit {
+    opacity: 0;
+    transition: opacity 300ms ease-in-out;
+}
+
+.transition-fade-out-exit-active {
+    opacity: 1;
 }
 
 .transition-slide-left-enter {
@@ -177,48 +195,92 @@ window {
     transform: translateY(100%);
 }
 
-.transition-pop-enter {
+.transition-pop-in-enter {
     opacity: 0;
     transform: scale(0.8);
     transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
 }
 
-.transition-pop-enter-active {
+.transition-pop-in-enter-active {
     opacity: 1;
     transform: scale(1);
 }
 
-.transition-pop-exit {
+.transition-pop-in-exit {
     opacity: 1;
     transform: scale(1);
     transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
 }
 
-.transition-pop-exit-active {
+.transition-pop-in-exit-active {
     opacity: 0;
     transform: scale(0.8);
 }
 
-.transition-scale-enter {
-    opacity: 0;
-    transform: scale(0.5);
-    transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
-}
-
-.transition-scale-enter-active {
-    opacity: 1;
-    transform: scale(1);
-}
-
-.transition-scale-exit {
+.transition-pop-out-enter {
     opacity: 1;
     transform: scale(1);
     transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
 }
 
-.transition-scale-exit-active {
+.transition-pop-out-enter-active {
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.transition-pop-out-exit {
+    opacity: 0;
+    transform: scale(0.8);
+    transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
+}
+
+.transition-pop-out-exit-active {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.transition-scale-in-enter {
     opacity: 0;
     transform: scale(0.5);
+    transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
+}
+
+.transition-scale-in-enter-active {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.transition-scale-in-exit {
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
+}
+
+.transition-scale-in-exit-active {
+    opacity: 0;
+    transform: scale(0.5);
+}
+
+.transition-scale-out-enter {
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
+}
+
+.transition-scale-out-enter-active {
+    opacity: 0;
+    transform: scale(0.5);
+}
+
+.transition-scale-out-exit {
+    opacity: 0;
+    transform: scale(0.5);
+    transition: opacity 300ms ease-in-out, transform 300ms ease-in-out;
+}
+
+.transition-scale-out-exit-active {
+    opacity: 1;
+    transform: scale(1);
 }
 
 .static-area {

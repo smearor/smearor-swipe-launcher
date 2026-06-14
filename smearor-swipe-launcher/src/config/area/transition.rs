@@ -8,21 +8,10 @@ pub struct AreaTransitionParams {
     pub(crate) target_margin_x: i32,
     pub(crate) start_margin_y: i32,
     pub(crate) target_margin_y: i32,
-    pub(crate) start_scale: f64,
-    pub(crate) target_scale: f64,
 }
 
 impl AreaTransitionParams {
-    pub fn new(
-        start_opacity: f64,
-        target_opacity: f64,
-        start_margin_x: i32,
-        target_margin_x: i32,
-        start_margin_y: i32,
-        target_margin_y: i32,
-        start_scale: f64,
-        target_scale: f64,
-    ) -> Self {
+    pub fn new(start_opacity: f64, target_opacity: f64, start_margin_x: i32, target_margin_x: i32, start_margin_y: i32, target_margin_y: i32) -> Self {
         Self {
             start_opacity,
             target_opacity,
@@ -30,8 +19,6 @@ impl AreaTransitionParams {
             target_margin_x,
             start_margin_y,
             target_margin_y,
-            start_scale,
-            target_scale,
         }
     }
 }
@@ -41,8 +28,10 @@ impl AreaTransitionParams {
 pub enum AreaTransition {
     /// No transition, instant change
     None,
-    /// Fade in/out transition
-    Fade,
+    /// Fade in (opacity 0 -> 1)
+    FadeIn,
+    /// Fade out (opacity 1 -> 0)
+    FadeOut,
     /// Slide from left
     SlideLeft,
     /// Slide from right
@@ -51,23 +40,45 @@ pub enum AreaTransition {
     SlideUp,
     /// Slide from bottom
     SlideDown,
-    /// Pop in/out effect
-    Pop,
-    /// Scale in/out effect
-    Scale,
+    /// Pop in effect (scale 0.5 -> 1.0 with bounce)
+    PopIn,
+    /// Pop out effect (scale 1.0 -> 0.5)
+    PopOut,
+    /// Scale in (scale 0.0 -> 1.0)
+    ScaleIn,
+    /// Scale out (scale 1.0 -> 0.0)
+    ScaleOut,
 }
 
 impl AreaTransition {
+    pub fn opposite(&self) -> AreaTransition {
+        match self {
+            AreaTransition::None => AreaTransition::None,
+            AreaTransition::FadeIn => AreaTransition::FadeOut,
+            AreaTransition::FadeOut => AreaTransition::FadeIn,
+            AreaTransition::SlideLeft => AreaTransition::SlideRight,
+            AreaTransition::SlideRight => AreaTransition::SlideLeft,
+            AreaTransition::SlideUp => AreaTransition::SlideDown,
+            AreaTransition::SlideDown => AreaTransition::SlideUp,
+            AreaTransition::PopIn => AreaTransition::PopOut,
+            AreaTransition::PopOut => AreaTransition::PopIn,
+            AreaTransition::ScaleIn => AreaTransition::ScaleOut,
+            AreaTransition::ScaleOut => AreaTransition::ScaleIn,
+        }
+    }
     pub fn css_class(&self) -> &str {
         match self {
             AreaTransition::None => "transition-none",
-            AreaTransition::Fade => "transition-fade",
+            AreaTransition::FadeIn => "transition-fade-in",
+            AreaTransition::FadeOut => "transition-fade-out",
             AreaTransition::SlideLeft => "transition-slide-left",
             AreaTransition::SlideRight => "transition-slide-right",
             AreaTransition::SlideUp => "transition-slide-up",
             AreaTransition::SlideDown => "transition-slide-down",
-            AreaTransition::Pop => "transition-pop",
-            AreaTransition::Scale => "transition-scale",
+            AreaTransition::PopIn => "transition-pop-in",
+            AreaTransition::PopOut => "transition-pop-out",
+            AreaTransition::ScaleIn => "transition-scale-in",
+            AreaTransition::ScaleOut => "transition-scale-out",
         }
     }
 
@@ -92,23 +103,42 @@ impl AreaTransition {
         }
     }
 
-    pub fn animation_parameters(&self) -> Option<AreaTransitionParams> {
+    pub fn enter_transition_parameters(&self) -> Option<AreaTransitionParams> {
         Some(match self {
             AreaTransition::None => return None,
-            AreaTransition::Fade => AreaTransitionParams::new(0.0, 1.0, 0, 0, 0, 0, 1.0, 1.0),
-            AreaTransition::SlideLeft => AreaTransitionParams::new(0.0, 1.0, 200, 0, 0, 0, 1.0, 1.0),
-            AreaTransition::SlideRight => AreaTransitionParams::new(0.0, 1.0, -200, 0, 0, 0, 1.0, 1.0),
-            AreaTransition::SlideUp => AreaTransitionParams::new(0.0, 1.0, 0, 0, 200, 0, 1.0, 1.0),
-            AreaTransition::SlideDown => AreaTransitionParams::new(0.0, 1.0, 0, 0, -200, 0, 1.0, 1.0),
-            AreaTransition::Pop => AreaTransitionParams::new(0.0, 1.0, 0, 0, 0, 0, 0.5, 1.0),
-            AreaTransition::Scale => AreaTransitionParams::new(0.0, 1.0, 0, 0, 0, 0, 0.0, 1.0),
+            AreaTransition::FadeIn => AreaTransitionParams::new(0.001, 1.0, 0, 0, 0, 0),
+            AreaTransition::FadeOut => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 0),
+            AreaTransition::SlideLeft => AreaTransitionParams::new(0.001, 1.0, 200, 0, 0, 0),
+            AreaTransition::SlideRight => AreaTransitionParams::new(0.001, 1.0, -200, 0, 0, 0),
+            AreaTransition::SlideUp => AreaTransitionParams::new(0.001, 1.0, 0, 0, 200, 0),
+            AreaTransition::SlideDown => AreaTransitionParams::new(0.001, 1.0, 0, 0, -200, 0),
+            AreaTransition::PopIn => AreaTransitionParams::new(0.001, 1.0, 0, 0, 0, 0),
+            AreaTransition::PopOut => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 0),
+            AreaTransition::ScaleIn => AreaTransitionParams::new(0.001, 1.0, 0, 0, 0, 0),
+            AreaTransition::ScaleOut => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 0),
+        })
+    }
+
+    pub fn exit_transition_parameters(&self) -> Option<AreaTransitionParams> {
+        Some(match self {
+            AreaTransition::None => return None,
+            AreaTransition::FadeIn => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 0),
+            AreaTransition::FadeOut => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 0),
+            AreaTransition::SlideLeft => AreaTransitionParams::new(1.0, 0.0, 0, -200, 0, 0),
+            AreaTransition::SlideRight => AreaTransitionParams::new(1.0, 0.0, 0, 200, 0, 0),
+            AreaTransition::SlideUp => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, -200),
+            AreaTransition::SlideDown => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 200),
+            AreaTransition::PopIn => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 0),
+            AreaTransition::PopOut => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 0),
+            AreaTransition::ScaleIn => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 0),
+            AreaTransition::ScaleOut => AreaTransitionParams::new(1.0, 0.0, 0, 0, 0, 0),
         })
     }
 }
 
 impl Default for AreaTransition {
     fn default() -> Self {
-        AreaTransition::Fade
+        AreaTransition::FadeIn
     }
 }
 
@@ -118,13 +148,16 @@ impl FromStr for AreaTransition {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().replace("_", "").replace("-", "").as_str() {
             "none" => Ok(AreaTransition::None),
-            "fade" => Ok(AreaTransition::Fade),
-            "slide_left" => Ok(AreaTransition::SlideLeft),
-            "slide_right" => Ok(AreaTransition::SlideRight),
-            "slide_up" => Ok(AreaTransition::SlideUp),
-            "slide_down" => Ok(AreaTransition::SlideDown),
-            "pop" => Ok(AreaTransition::Pop),
-            "scale" => Ok(AreaTransition::Scale),
+            "fadein" => Ok(AreaTransition::FadeIn),
+            "fadeout" => Ok(AreaTransition::FadeOut),
+            "slideleft" => Ok(AreaTransition::SlideLeft),
+            "slideright" => Ok(AreaTransition::SlideRight),
+            "slideup" => Ok(AreaTransition::SlideUp),
+            "slidedown" => Ok(AreaTransition::SlideDown),
+            "popin" => Ok(AreaTransition::PopIn),
+            "popout" => Ok(AreaTransition::PopOut),
+            "scalein" => Ok(AreaTransition::ScaleIn),
+            "scaleout" => Ok(AreaTransition::ScaleOut),
             _ => Err(format!("Invalid transition: {}", s)),
         }
     }

@@ -28,9 +28,13 @@ pub struct AreaConfig {
     #[serde(default)]
     pub max_width: Option<i32>,
 
-    /// Transition animation for area appearance/disappearance
+    /// Transition animation for area appearance
     #[serde(default)]
-    pub transition: AreaTransition,
+    pub open_transition: AreaTransition,
+
+    /// Transition animation for area disappearance (closes with same animation if not set)
+    #[serde(default)]
+    pub close_transition: Option<AreaTransition>,
 
     /// Automatically close the area when interaction ends
     #[serde(default)]
@@ -56,7 +60,8 @@ impl Default for AreaConfig {
             width_percent: None,
             min_width: None,
             max_width: None,
-            transition: Default::default(),
+            open_transition: Default::default(),
+            close_transition: None,
             auto_close: false,
             close_on_escape: false,
             plugins: Vec::new(),
