@@ -18,6 +18,18 @@ pub struct AppLauncherConfig {
     /// Show only icon without text
     #[serde(default)]
     pub icon_only: bool,
+    /// Message topic for single-click
+    #[serde(default)]
+    pub click_topic: Option<String>,
+    /// Message payload for single-click (JSON/TOML)
+    #[serde(default)]
+    pub click_payload: Option<Value>,
+    /// Message topic for long-press
+    #[serde(default)]
+    pub longpress_topic: Option<String>,
+    /// Message payload for long-press (JSON/TOML)
+    #[serde(default)]
+    pub longpress_payload: Option<Value>,
 }
 
 impl AppLauncherConfig {

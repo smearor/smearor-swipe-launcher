@@ -166,6 +166,8 @@ css_classes = ["close-button"]
 
 [gnome_2048]
 desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
+click_topic = "area.close"
+click_payload = { area_id = "puzzle_games_area" }
 
 [gnome_mines]
 desktop_file_path = "/usr/share/applications/org.gnome.Mines.desktop"

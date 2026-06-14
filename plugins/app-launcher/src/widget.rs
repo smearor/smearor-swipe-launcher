@@ -17,6 +17,7 @@ use gtk4::prelude::Cast;
 use gtk4::prelude::GestureExt;
 use gtk4::prelude::GestureSingleExt;
 use gtk4::prelude::WidgetExt;
+use serde_json::Value;
 use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatus;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
@@ -121,6 +122,8 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileStatusMessage>> for AppLaunche
 
 impl MessageBroadcaster<DesktopFileCommandMessage> for AppLauncherWidget {}
 
+impl MessageBroadcaster<Value> for AppLauncherWidget {}
+
 impl PluginMetaGetter for AppLauncherWidget {
     fn meta(&self) -> PluginMeta {
         self.meta.clone()
@@ -192,7 +195,10 @@ impl WidgetBuilder for AppLauncherWidget {
         click_gesture.connect_pressed(move |_, _, _, _| {});
 
         let desktop_file_inner = self.config.desktop_file_path.clone();
-        let message_broadcaster = self.get_broadcaster();
+        let message_broadcaster_desktop_file_command = MessageBroadcaster::<DesktopFileCommandMessage>::get_broadcaster(self);
+        let click_topic = self.config.click_topic.clone();
+        let click_payload = self.config.click_payload.clone();
+        let message_broadcaster_generic = MessageBroadcaster::<Value>::get_broadcaster(self);
         click_gesture.connect_released(move |gesture, n_clicks, _, _| {
             if let Some(seq) = gesture.current_sequence() {
                 let state = gesture.sequence_state(&seq);
@@ -201,7 +207,10 @@ impl WidgetBuilder for AppLauncherWidget {
                 }
             }
             info!("Click released {n_clicks}");
-            message_broadcaster.broadcast_message(TOPIC_COMMAND, DesktopFileCommandMessage::exec(&desktop_file_inner));
+            message_broadcaster_desktop_file_command.broadcast_message(TOPIC_COMMAND, DesktopFileCommandMessage::exec(&desktop_file_inner));
+            if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
+                message_broadcaster_generic.broadcast_message(&topic, &payload);
+            }
             gesture.set_state(EventSequenceState::Claimed);
         });
 
@@ -212,9 +221,16 @@ impl WidgetBuilder for AppLauncherWidget {
             }
         });
         let desktop_file_inner = self.config.desktop_file_path.clone();
-        let message_broadcaster = self.get_broadcaster();
+        let message_broadcaster_desktop_file_command = MessageBroadcaster::<DesktopFileCommandMessage>::get_broadcaster(self);
+        let long_press_topic = self.config.longpress_topic.clone();
+        let long_press_payload = self.config.longpress_payload.clone();
+        let message_broadcaster_generic = MessageBroadcaster::<Value>::get_broadcaster(self);
         longpress_gesture.connect_pressed(move |gesture, _n_clicks, _| {
-            message_broadcaster.broadcast_message(TOPIC_COMMAND, DesktopFileCommandMessage::terminate(&desktop_file_inner));
+            message_broadcaster_desktop_file_command.broadcast_message(TOPIC_COMMAND, DesktopFileCommandMessage::terminate(&desktop_file_inner));
+            if let (Some(topic), Some(payload)) = (long_press_topic.clone(), long_press_payload.clone()) {
+                message_broadcaster_generic.broadcast_message(&topic, &payload);
+                gesture.set_state(EventSequenceState::Claimed);
+            }
             gesture.set_state(EventSequenceState::Claimed);
         });
 
