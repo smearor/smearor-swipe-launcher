@@ -26,7 +26,8 @@ clap = { version = "4.5", features = ["derive"] }
 dashmap = "6.2.1"
 freedesktop_entry_parser = "2.0"
 gtk4 = "0.11"
-glib = "0.21"
+glib = "0.22"
+glib-build-tools = "0.22"
 gtk4-layer-shell = "0.8"
 libloading = "0.8"
 miette = { version = "7.4", features = ["fancy"] }

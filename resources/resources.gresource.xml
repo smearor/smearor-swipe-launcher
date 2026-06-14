@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+    <gresource prefix="/io/smearor/icons">
+        <file preprocess="xml-stripblanks" alias="scalable/actions/puzzle-piece-symbolic.svg">puzzle-piece-symbolic.svg</file>
+    </gresource>
+</gresources>

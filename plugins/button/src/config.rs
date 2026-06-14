@@ -1,14 +1,24 @@
 use serde::Deserialize;
 use serde_json::Value;
 
+pub const DEFAULT_WIDTH: i32 = 100;
+
+pub const DEFAULT_ICON_SIZE: i32 = 48;
+
 /// Configuration for a button widget
 #[derive(Debug, Clone, Deserialize)]
 pub struct ButtonConfig {
     /// Button label text (hidden if icon_only is true)
     pub text: String,
+    /// Button width
+    #[serde(default = "default_width")]
+    pub width: i32,
     /// Icon name from icon theme
     #[serde(default)]
     pub icon: Option<String>,
+    /// Icon size
+    #[serde(default = "default_icon_size")]
+    pub icon_size: i32,
     /// Tooltip text on hover
     #[serde(default)]
     pub tooltip: Option<String>,
@@ -52,4 +62,12 @@ impl ButtonConfig {
 
 fn default_enabled() -> bool {
     true
+}
+
+fn default_width() -> i32 {
+    DEFAULT_WIDTH
+}
+
+fn default_icon_size() -> i32 {
+    DEFAULT_ICON_SIZE
 }

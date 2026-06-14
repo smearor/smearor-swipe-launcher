@@ -7,9 +7,11 @@ use crate::window::create_window;
 use gtk4::Align;
 use gtk4::Application;
 use gtk4::Box as GtkBox;
+use gtk4::IconTheme;
 use gtk4::Orientation;
 use gtk4::Overlay;
 use gtk4::ScrolledWindow;
+use gtk4::gio;
 use gtk4::glib::MainContext;
 use gtk4::prelude::*;
 use miette::miette;
@@ -98,6 +100,15 @@ impl LauncherApplication {
 
             create_css_provider();
 
+            match gio::resources_register_include!("compiled.gresource") {
+                Ok(_) => {
+                    IconTheme::default().add_resource_path("/io/smearor/icons");
+                }
+                Err(e) => {
+                    error!("Failed to register gresource: {e}");
+                }
+            }
+
             let window = create_window(app, &config_inner);
 
             let rotation_widget = RotationWidget::new(rotation.rotation());
@@ -113,6 +124,7 @@ impl LauncherApplication {
             // Create overlay for transient areas
             let overlay = Overlay::builder().build();
             overlay.set_child(Some(&main_container));
+            overlay.add_css_class("area-overlay");
 
             // Configure overlay to pass through events when no overlay children are present
             overlay.set_halign(Align::Fill);

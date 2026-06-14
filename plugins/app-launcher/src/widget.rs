@@ -1,15 +1,19 @@
 use crate::config::AppLauncherConfig;
+use adw::gdk::pango::EllipsizeMode;
 use adw::prelude::ObjectExt;
 use freedesktop_entry_parser::Entry;
 use gtk4::Align;
+use gtk4::Button;
 use gtk4::EventSequenceState;
 use gtk4::GestureClick;
 use gtk4::GestureLongPress;
+use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
 use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::prelude::BoxExt;
+use gtk4::prelude::ButtonExt;
 use gtk4::prelude::Cast;
 use gtk4::prelude::GestureExt;
 use gtk4::prelude::GestureSingleExt;
@@ -132,29 +136,32 @@ impl AsRef<Option<FfiCoreContext>> for AppLauncherWidget {
 
 impl WidgetBuilder for AppLauncherWidget {
     fn build_widget(&mut self) -> Widget {
+        let _ = adw::init();
+
         let main_box = gtk4::Box::builder()
             .orientation(Orientation::Vertical)
-            .spacing(4)
-            .width_request(100)
-            .height_request(100)
-            .halign(Align::Center)
+            .spacing(30)
             .valign(Align::Center)
+            .halign(Align::Center)
+            .vexpand(true)
             .css_classes(["app-launcher-tile"])
             .build();
 
         // Render Icon
-        let image = gtk4::Image::from_icon_name(&self.icon_name);
-        image.set_pixel_size(48);
+        let image = Image::from_icon_name(&self.icon_name);
+        image.set_pixel_size(self.config.icon_size);
         main_box.append(&image);
 
-        // Render Name
-        let label = Label::builder()
-            .label(&self.app_name)
-            .ellipsize(gtk4::pango::EllipsizeMode::End)
-            .max_width_chars(12)
-            .css_classes(["app-launcher-label"])
-            .build();
-        main_box.append(&label);
+        if !self.config.icon_only {
+            // Render Name
+            let label = Label::builder()
+                .label(&self.app_name)
+                .ellipsize(EllipsizeMode::End)
+                .max_width_chars(12)
+                .css_classes(["app-launcher-label"])
+                .build();
+            main_box.append(&label);
+        }
 
         // LED Indicator Box to show if application is running
         let led_box = gtk4::Box::builder()
@@ -163,9 +170,15 @@ impl WidgetBuilder for AppLauncherWidget {
             .halign(Align::Center)
             .css_classes(["app-launcher-led", "led-unlit"])
             .build();
-        main_box.append(&led_box);
+        // main_box.append(&led_box);
 
         *self.led_indicator.write().unwrap() = Some(led_box);
+
+        let button = Button::builder()
+            .css_classes(["scroll-item", "menu-button"])
+            .width_request(self.config.width)
+            .child(&main_box)
+            .build();
 
         // Gestures - Click to Launch
         let longpress_gesture = GestureLongPress::builder()
@@ -193,10 +206,10 @@ impl WidgetBuilder for AppLauncherWidget {
             gesture.set_state(EventSequenceState::Claimed);
         });
 
-        let main_box_inner = main_box.downgrade();
+        let button_inner = button.downgrade();
         longpress_gesture.connect_begin(move |_, _| {
-            if let Some(main_box) = main_box_inner.upgrade() {
-                main_box.add_css_class("longpress");
+            if let Some(button) = button_inner.upgrade() {
+                button.add_css_class("menu-button-longpress");
             }
         });
         let desktop_file_inner = self.config.desktop_file_path.clone();
@@ -206,19 +219,21 @@ impl WidgetBuilder for AppLauncherWidget {
             gesture.set_state(EventSequenceState::Claimed);
         });
 
-        let main_box_inner = main_box.downgrade();
+        let button_inner = button.downgrade();
         longpress_gesture.connect_end(move |_, _| {
-            if let Some(main_box) = main_box_inner.upgrade() {
-                main_box.remove_css_class("longpress");
+            if let Some(button) = button_inner.upgrade() {
+                button.remove_css_class("menu-button-longpress");
             }
         });
         longpress_gesture.connect_cancelled(move |gesture| {
             gesture.set_state(EventSequenceState::None);
         });
 
-        main_box.add_controller(click_gesture);
-        main_box.add_controller(longpress_gesture);
+        button.add_controller(click_gesture);
+        button.add_controller(longpress_gesture);
 
-        main_box.upcast::<Widget>()
+        button.clone().upcast::<Widget>()
+
+        // main_box.upcast::<Widget>()
     }
 }

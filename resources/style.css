@@ -1,3 +1,53 @@
+@keyframes longpress-fill {
+    from {
+        background-size: 0% 100%;
+    }
+    to {
+        background-size: 100% 100%;
+    }
+}
+
+@keyframes longpress-glow {
+    0% {
+        box-shadow: 0 0 5px #00a1e433;
+    }
+    100% {
+        box-shadow: 0 0 40px #dc0073ff,
+        0 0 60px #dc007399;
+    }
+}
+
+@keyframes wiggle {
+    0% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: rotate(5deg);
+    }
+    50% {
+        transform: rotate(0deg);
+    }
+    75% {
+        transform: rotate(-5deg);
+    }
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes wiggle2 {
+    0% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-5px);
+    }
+    100% {
+        transform: translateY(0px);
+    }
+}
+
+
 .transparent-background {
     background-color: transparent;
 }
@@ -7,17 +57,17 @@ window {
 }
 
 .longpress {
-    background-color: rgba(255, 255, 255, 0.1);
+    /*background-color: rgba(255, 255, 255, 0.1);*/
 }
 
 .scroll-area {
-    background-color: rgba(0, 0, 0, 0.8);
+    /*background-color: rgba(0, 0, 0, 0.8);*/
     border-radius: 8px;
     padding: 10px;
 }
 
 .static-area {
-    background-color: rgba(0, 0, 0, 0.5);
+    /*background-color: rgba(0, 0, 0, 0.5);*/
     border-radius: 8px;
     padding: 10px;
 }
@@ -33,7 +83,22 @@ scrolledwindow {
     max-width: 400px;
 }
 
-/* Configure overlay to pass through events when no overlay children are present */
-overlay {
-    background: transparent;
+.area-overlay {
+    /*background: rgba(0.0, 0.0, 0.0, 0.5);*/
 }
+
+.menu-button {
+    background-color: rgba(0.0, 0.0, 0.0, 0.5);
+    /*background-color: transparent;*/
+}
+
+.menu-button:hover {
+    background-color: #00a1e433;
+}
+
+.menu-button image {
+    -gtk-icon-size: 48px;
+    min-width: 48px;
+    min-height: 48px;
+}
+

@@ -9,7 +9,6 @@ use crate::config::area::area_type::AreaType;
 use crate::config::area::config::AreaConfig;
 use crate::config::area::transition::AreaTransition;
 use crate::plugin_manager::PluginManager;
-use glib::ControlFlow;
 use gtk4::Box as GtkBox;
 use gtk4::Orientation;
 use gtk4::Overlay;
@@ -266,7 +265,7 @@ impl AreaManager {
                 let widget_clone = widget.clone();
                 glib::timeout_add_local(Duration::from_millis(10), move || {
                     widget_clone.set_opacity(1.0);
-                    ControlFlow::Continue
+                    return glib::ControlFlow::Continue;
                 });
             }
             _ => {
