@@ -1,14 +1,19 @@
 use crate::area::area_manager::AreaManager;
 use crate::config::launcher::SwipeLauncherConfig;
+use crate::css_provider::create_css_provider;
 use crate::plugin_manager::PluginManager;
 use crate::service_manager::ServiceManager;
 use crate::window::create_window;
+use gtk4::Align;
 use gtk4::Application;
 use gtk4::Box as GtkBox;
+use gtk4::CssProvider;
 use gtk4::Orientation;
+use gtk4::Overlay;
 use gtk4::ScrolledWindow;
 use gtk4::gdk::Display;
 use gtk4::glib::MainContext;
+use gtk4::prelude;
 use gtk4::prelude::*;
 use miette::miette;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
@@ -94,11 +99,7 @@ impl LauncherApplication {
         self.gtk_app.connect_activate(move |app| {
             info!("GTK application activated");
 
-            if let Some(display) = Display::default() {
-                let provider = gtk4::CssProvider::new();
-                provider.load_from_string(include_str!("../../resources/style.css"));
-                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
-            }
+            create_css_provider();
 
             let window = create_window(app, &config_inner);
 
@@ -113,12 +114,12 @@ impl LauncherApplication {
                 .build();
 
             // Create overlay for transient areas
-            let overlay = gtk4::Overlay::builder().build();
+            let overlay = Overlay::builder().build();
             overlay.set_child(Some(&main_container));
 
             // Configure overlay to pass through events when no overlay children are present
-            overlay.set_halign(gtk4::Align::Fill);
-            overlay.set_valign(gtk4::Align::Fill);
+            overlay.set_halign(Align::Fill);
+            overlay.set_valign(Align::Fill);
 
             rotation_widget.set_child(Some(&overlay));
 

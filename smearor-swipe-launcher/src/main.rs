@@ -3,6 +3,7 @@ mod area;
 mod args;
 mod config;
 mod context;
+mod css_provider;
 mod display;
 mod error;
 mod messages;
