@@ -1,10 +1,11 @@
-use crate::config::area::transition::AreaTransition;
 use gtk4::Widget;
 use gtk4::glib;
 use gtk4::prelude::*;
+use smearor_model_area::AreaTransition;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
+use tracing::error;
 
 /// Manages layout animations for smooth transitions
 pub struct LayoutTransition {
@@ -50,6 +51,7 @@ impl LayoutTransition {
 
     /// Animate widget addition with smooth transition
     pub fn animate_widget_addition(&self, widget: &Widget, transition: &AreaTransition) {
+        error!("transition {transition:?}");
         if transition == &AreaTransition::None {
             return;
         }
@@ -60,6 +62,7 @@ impl LayoutTransition {
             return;
         };
 
+        error!("start_opacity {}", transition_params.start_opacity);
         // Set initial state immediately so widget starts invisible
         widget.set_opacity(transition_params.start_opacity);
         if transition_params.start_margin_x != 0 {
@@ -119,6 +122,14 @@ impl LayoutTransition {
             callback();
             return;
         };
+
+        widget.set_opacity(transition_params.start_opacity);
+        if transition_params.start_margin_x != 0 {
+            widget.set_margin_start(transition_params.start_margin_x);
+        }
+        if transition_params.start_margin_y != 0 {
+            widget.set_margin_top(transition_params.start_margin_y);
+        }
 
         let start_time = glib::monotonic_time();
         let duration_us = (duration as i64) * 1000;

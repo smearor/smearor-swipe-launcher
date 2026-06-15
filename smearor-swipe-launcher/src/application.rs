@@ -18,6 +18,7 @@ use smearor_wrot_rotation::RotationWidget;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::channel;
 use tracing::error;
@@ -28,8 +29,8 @@ pub struct LauncherApplication {
     pub(crate) config: SwipeLauncherConfig,
     pub(crate) plugin_manager: Arc<PluginManager>,
     pub(crate) service_manager: Arc<ServiceManager>,
-    pub(crate) area_manager: Arc<std::sync::Mutex<AreaManager>>,
-    pub(crate) message_receiver: std::sync::Mutex<Option<Receiver<FfiEnvelope>>>,
+    pub(crate) area_manager: Arc<Mutex<AreaManager>>,
+    pub(crate) message_receiver: Mutex<Option<Receiver<FfiEnvelope>>>,
     pub(crate) gtk_app: Application,
 }
 
@@ -40,14 +41,14 @@ impl LauncherApplication {
         let (sender, receiver) = channel::<FfiEnvelope>(100);
         let plugin_manager = Arc::new(PluginManager::new(sender.clone()));
         let config_arc = Arc::new(config.clone());
-        let area_manager = Arc::new(std::sync::Mutex::new(AreaManager::new(plugin_manager.clone(), config_arc)));
+        let area_manager = Arc::new(Mutex::new(AreaManager::new(plugin_manager.clone(), config_arc)));
 
         LauncherApplication {
             config,
             plugin_manager,
             service_manager: Arc::new(ServiceManager::new(sender)),
             area_manager,
-            message_receiver: std::sync::Mutex::new(Some(receiver)),
+            message_receiver: Mutex::new(Some(receiver)),
             gtk_app,
         }
     }
@@ -81,7 +82,6 @@ impl LauncherApplication {
     }
 
     pub fn build_ui(self: Arc<Self>, config: &SwipeLauncherConfig) -> miette::Result<()> {
-        let config_inner = config.clone();
         let self_clone = self.clone();
         let Ok(mut receiver) = self.message_receiver.lock() else {
             return Err(miette!("Failed to lock message receiver"));
@@ -91,6 +91,8 @@ impl LauncherApplication {
         };
         let receiver_cell = Rc::new(RefCell::new(Some(receiver)));
 
+        let config_inner = config.clone();
+        let launcher_config = config.launcher.clone();
         let rotation = config.launcher.rotation.clone();
         let layout_config = config.layout.clone();
         self.gtk_app.connect_activate(move |app| {
@@ -107,7 +109,7 @@ impl LauncherApplication {
                 }
             }
 
-            let window = create_window(app, &config_inner);
+            let window = create_window(app, &launcher_config);
 
             let rotation_widget = RotationWidget::new(rotation.rotation());
             rotation_widget.set_animation_speed(rotation.animation_speed());
@@ -121,28 +123,28 @@ impl LauncherApplication {
 
             rotation_widget.set_child(Some(&main_container));
 
+            if let Ok(area_manager) = self_clone.area_manager.lock() {
+                if let Err(e) = area_manager.set_main_container(main_container) {
+                    error!("{e}");
+                }
+            };
+
             let mut first_scrolled_window: Option<ScrolledWindow> = None;
 
             for area_id in &config_inner.areas {
                 if let Some(area_config) = config_inner.get_area_config(area_id) {
                     let area_manager_clone = self_clone.area_manager.clone();
-                    let main_container_clone = main_container.clone();
                     let area_id_clone = area_id.clone();
                     let area_config_clone = area_config.clone();
 
-                    if let Ok(mut area_manager) = area_manager_clone.lock() {
-                        if let Err(e) = area_manager.add_area_from_config(&area_id_clone, area_config_clone, &main_container_clone) {
+                    if let Ok(area_manager) = area_manager_clone.lock() {
+                        if let Err(e) = area_manager.add_area_from_config(&area_id_clone, area_config_clone) {
                             error!("Failed to add area {}: {}", area_id_clone, e);
                         } else {
                             info!("Successfully added area {} using AreaManager", area_id_clone);
-
-                            if let Some(managed_area) = area_manager.get_area(&area_id_clone) {
-                                if managed_area.config.area_type == crate::config::area::area_type::AreaType::Scroll {
-                                    if first_scrolled_window.is_none() {
-                                        if let Some(scrolled_window) = managed_area.widget.downcast_ref::<ScrolledWindow>() {
-                                            first_scrolled_window = Some(scrolled_window.clone());
-                                        }
-                                    }
+                            if first_scrolled_window.is_none() {
+                                if let Some(scrolled_window) = area_manager.get_first_scrolled_window(&area_id_clone) {
+                                    first_scrolled_window = Some(scrolled_window);
                                 }
                             }
                         }
@@ -151,13 +153,13 @@ impl LauncherApplication {
             }
 
             let self_clone2 = self_clone.clone();
-            let main_container_clone = main_container.clone();
             if let Some(mut receiver) = receiver_cell.borrow_mut().take() {
                 MainContext::default().spawn_local(async move {
                     while let Some(envelope) = receiver.recv().await {
-                        if let Some(ref scrolled_window) = first_scrolled_window {
-                            self_clone2.handle_message(envelope, scrolled_window, &main_container_clone);
-                        }
+                        self_clone2.handle_message(envelope);
+                        // if let Some(ref scrolled_window) = first_scrolled_window {
+                        //     // self_clone2.handle_message(envelope, scrolled_window, &main_container_clone);
+                        // }
                     }
                 });
             }

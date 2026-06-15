@@ -1,13 +1,14 @@
 use serde::Deserialize;
+use serde::Serialize;
 use std::str::FromStr;
 
 pub struct AreaTransitionParams {
-    pub(crate) start_opacity: f64,
-    pub(crate) target_opacity: f64,
-    pub(crate) start_margin_x: i32,
-    pub(crate) target_margin_x: i32,
-    pub(crate) start_margin_y: i32,
-    pub(crate) target_margin_y: i32,
+    pub start_opacity: f64,
+    pub target_opacity: f64,
+    pub start_margin_x: i32,
+    pub target_margin_x: i32,
+    pub start_margin_y: i32,
+    pub target_margin_y: i32,
 }
 
 impl AreaTransitionParams {
@@ -24,7 +25,7 @@ impl AreaTransitionParams {
 }
 
 /// Defines the transition animation for area changes
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AreaTransition {
     /// No transition, instant change
     None,

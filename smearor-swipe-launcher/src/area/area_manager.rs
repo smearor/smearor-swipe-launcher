@@ -1,14 +1,14 @@
 use crate::SwipeLauncherConfig;
-use crate::area::area_stack::AreaStack;
+// use crate::area::area_stack::AreaStack;
 use crate::area::error::AddAreaError;
 use crate::area::error::CreateAreaError;
+use crate::area::error::MainContainerInitializationError;
+use crate::area::error::MainContainerNotInitialized;
 use crate::area::error::RemoveAreaError;
 use crate::area::layout_transition::LayoutTransition;
 use crate::area::managed_area::ManagedArea;
-use crate::config::area::area_type::AreaType;
-use crate::config::area::config::AreaConfig;
-use crate::config::area::transition::AreaTransition;
 use crate::plugin_manager::PluginManager;
+use dashmap::DashMap;
 use gtk4::Box as GtkBox;
 use gtk4::Orientation;
 use gtk4::Overlay;
@@ -17,8 +17,10 @@ use gtk4::ScrolledWindow;
 use gtk4::Widget;
 use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
-use std::collections::HashMap;
+use smearor_model_area::AreaConfig;
+use smearor_model_area::AreaType;
 use std::sync::Arc;
+use std::sync::RwLock;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -27,11 +29,10 @@ use tracing::warn;
 /// Manages dynamic area operations at runtime
 pub struct AreaManager {
     /// Currently managed areas keyed by ID
-    areas: HashMap<String, ManagedArea>,
+    areas: DashMap<String, ManagedArea>,
 
-    /// Stack of areas for nested sub-menus
-    area_stack: AreaStack,
-
+    // /// Stack of areas for nested sub-menus
+    // area_stack: AreaStack,
     /// Layout transition animator
     layout_transition: LayoutTransition,
 
@@ -39,24 +40,30 @@ pub struct AreaManager {
     plugin_manager: Arc<PluginManager>,
 
     /// Reference to the main configuration
-    config: Arc<SwipeLauncherConfig>,
+    pub(crate) config: Arc<SwipeLauncherConfig>,
+
+    /// Reference to the main container
+    pub(crate) main_container: Arc<RwLock<Option<GtkBox>>>,
 }
 
 impl AreaManager {
     /// Create a new AreaManager
     pub fn new(plugin_manager: Arc<PluginManager>, config: Arc<SwipeLauncherConfig>) -> Self {
         Self {
-            areas: HashMap::new(),
-            area_stack: AreaStack::new(),
+            areas: DashMap::new(),
+            // area_stack: AreaStack::new(),
             layout_transition: LayoutTransition::new(),
             plugin_manager,
             config,
+            main_container: Arc::new(RwLock::new(None)),
         }
     }
 
     /// Add an area from configuration
-    pub fn add_area_from_config(&mut self, area_id: &str, area_config: AreaConfig, main_container: &GtkBox) -> Result<(), AddAreaError> {
+    pub fn add_area_from_config(&self, area_id: &str, area_config: AreaConfig) -> Result<(), AddAreaError> {
         debug!("Adding area {} from config", area_id);
+
+        let main_container = self.get_main_container()?;
 
         if self.areas.contains_key(area_id) {
             return Err(AddAreaError::AreaAlreadyExists(area_id.to_string()));
@@ -83,17 +90,20 @@ impl AreaManager {
 
         // Apply transition animation
         self.layout_transition
-            .animate_widget_addition(&overlay.clone().upcast::<Widget>(), &area_config.open_transition);
+            .animate_widget_addition(&overlay.clone().upcast::<Widget>(), &area_config.open_transition());
+        // self.layout_transition.animate_widget_addition(&widget, &area_config.close_transition());
 
         info!("Successfully added area {} with overlay", area_id);
         Ok(())
     }
 
     /// Remove an area with plugin cleanup
-    pub fn remove_area(&mut self, area_id: &str, main_container: &GtkBox) -> Result<(), RemoveAreaError> {
+    pub fn remove_area(&self, area_id: &str) -> Result<(), RemoveAreaError> {
         debug!("Removing area {}", area_id);
 
-        let managed_area = self.areas.remove(area_id).ok_or_else(|| RemoveAreaError::AreaNotFound(area_id.to_string()))?;
+        let main_container = self.get_main_container()?;
+
+        let (area_id, managed_area) = self.areas.remove(area_id).ok_or_else(|| RemoveAreaError::AreaNotFound(area_id.to_string()))?;
 
         // Unload plugins for this area
         for plugin_entry in &managed_area.config.plugins {
@@ -118,7 +128,7 @@ impl AreaManager {
             None
         };
 
-        let close_transition = managed_area.config.close_transition.unwrap_or(managed_area.config.open_transition.opposite());
+        let close_transition = managed_area.config.close_transition();
 
         self.layout_transition.animate_widget_removal(&managed_area.widget, &close_transition, move || {
             if is_transient {
@@ -147,13 +157,7 @@ impl AreaManager {
     }
 
     /// Add a transient area with auto-close detection
-    pub fn add_transient_area(
-        &mut self,
-        area_id: &str,
-        area_config: AreaConfig,
-        _main_container: &GtkBox,
-        sender_id: Option<&str>,
-    ) -> Result<(), AddAreaError> {
+    pub fn add_transient_area(&self, area_id: &str, area_config: AreaConfig, sender_id: Option<&str>) -> Result<(), AddAreaError> {
         debug!("Adding transient area {} from sender {:?}", area_id, sender_id);
 
         // Check if area already exists
@@ -218,11 +222,13 @@ impl AreaManager {
             warn!("No source area overlay found for transient area {}", area_id);
         }
 
-        // Push to area stack for nested sub-menus
-        self.area_stack.push(area_id.to_string());
+        // // Push to area stack for nested sub-menus
+        // self.area_stack.push(area_id.to_string());
 
         // Apply transition animation
-        self.layout_transition.animate_widget_addition(&widget, &config.open_transition);
+        self.layout_transition.animate_widget_addition(&widget, &config.open_transition());
+        // let overlay_widget = overlay.clone().upcast::<Widget>();
+        // self.layout_transition.animate_widget_addition(&overlay_widget, &config.close_transition());
 
         info!("Successfully added transient area {}", area_id);
         Ok(())
@@ -230,7 +236,7 @@ impl AreaManager {
 
     /// Find the overlay and widget of the area that contains a specific plugin
     fn find_area_overlay_and_widget_containing_plugin(&self, plugin_id: &str) -> (Option<Overlay>, Option<Widget>) {
-        for managed_area in self.areas.values() {
+        for managed_area in &self.areas {
             // Check if this area contains the plugin (including transient areas)
             if managed_area.config.plugins.iter().any(|p| p.id == plugin_id) {
                 return (managed_area.overlay.clone(), Some(managed_area.widget.clone()));
@@ -241,9 +247,9 @@ impl AreaManager {
 
     /// Find the area ID for a given widget
     fn find_area_id_for_widget(&self, widget: &Widget) -> Option<String> {
-        for (area_id, managed_area) in &self.areas {
-            if managed_area.widget == *widget {
-                return Some(area_id.clone());
+        for managed_area in &self.areas {
+            if managed_area.value().widget == *widget {
+                return Some(managed_area.key().clone());
             }
         }
         None
@@ -251,7 +257,7 @@ impl AreaManager {
 
     /// Find the overlay that has a specific widget as its child
     fn find_overlay_for_widget(&self, widget: &Widget) -> Option<Overlay> {
-        for managed_area in self.areas.values() {
+        for managed_area in &self.areas {
             if let Some(ref overlay) = managed_area.overlay {
                 if let Some(child) = overlay.child() {
                     if child == *widget {
@@ -263,21 +269,21 @@ impl AreaManager {
         None
     }
 
-    /// Pop the top area from the stack and remove it
-    pub fn pop_area(&mut self, main_container: &GtkBox) -> Result<Option<String>, RemoveAreaError> {
-        if let Some(area_id) = self.area_stack.pop() {
-            self.remove_area(&area_id, main_container)?;
-            Ok(Some(area_id))
-        } else {
-            Ok(None)
-        }
-    }
+    // /// Pop the top area from the stack and remove it
+    // pub fn pop_area(&mut self) -> Result<Option<String>, RemoveAreaError> {
+    //     if let Some(area_id) = self.area_stack.pop() {
+    //         self.remove_area(&area_id)?;
+    //         Ok(Some(area_id))
+    //     } else {
+    //         Ok(None)
+    //     }
+    // }
 
-    /// Get the current area stack
-    pub fn get_area_stack(&self) -> &AreaStack {
-        &self.area_stack
-    }
-
+    // /// Get the current area stack
+    // pub fn get_area_stack(&self) -> &AreaStack {
+    //     &self.area_stack
+    // }
+    //
     /// Create the GTK widget for an area based on its configuration
     fn create_area_widget(&self, area_config: &AreaConfig) -> Result<Widget, CreateAreaError> {
         match area_config.area_type {
@@ -293,7 +299,7 @@ impl AreaManager {
                     .build();
                 self.add_plugins(area_config, &box_widget);
 
-                self.apply_transition_animation(box_widget.upcast_ref(), &area_config.open_transition);
+                // self.apply_transition_animation(box_widget.upcast_ref(), &area_config.open_transition);
 
                 Ok(box_widget.upcast())
             }
@@ -314,7 +320,7 @@ impl AreaManager {
 
                 // TODO: Apply drag gesture for scrolling
 
-                self.apply_transition_animation(scrolled_window.upcast_ref(), &area_config.open_transition);
+                // self.apply_transition_animation(scrolled_window.upcast_ref(), &area_config.open_transition);
 
                 scrolled_window.set_child(Some(&plugin_container));
                 Ok(scrolled_window.upcast())
@@ -339,23 +345,52 @@ impl AreaManager {
         }
     }
 
-    /// Apply transition animation to a widget
-    fn apply_transition_animation(&self, widget: &Widget, transition: &AreaTransition) {
-        self.layout_transition.animate_widget_addition(widget, transition);
-    }
+    // /// Apply transition animation to a widget
+    // fn apply_transition_animation(&self, widget: &Widget, transition: &AreaTransition) {
+    //     self.layout_transition.animate_widget_addition(widget, transition);
+    // }
 
-    /// Get a managed area by ID
-    pub fn get_area(&self, area_id: &str) -> Option<&ManagedArea> {
-        self.areas.get(area_id)
-    }
+    // /// Get a managed area by ID
+    // pub fn get_area(&self, area_id: &str) -> Option<&ManagedArea> {
+    //     self.areas.get(area_id)
+    //     // self.areas.get(area_id)
+    // }
 
-    /// Get all managed areas
-    pub fn get_all_areas(&self) -> &HashMap<String, ManagedArea> {
-        &self.areas
+    // /// Get all managed areas
+    // pub fn get_all_areas(&self) -> &HashMap<String, ManagedArea> {
+    //     &self.areas
+    // }
+
+    pub fn get_first_scrolled_window(&self, area_id: &str) -> Option<ScrolledWindow> {
+        let Some(managed_area) = self.areas.get(area_id) else {
+            return None;
+        };
+        if managed_area.config.area_type != AreaType::Scroll {
+            return None;
+        }
+        let Some(scrolled_window) = managed_area.widget.downcast_ref::<ScrolledWindow>() else {
+            return None;
+        };
+        Some(scrolled_window.clone())
     }
 
     /// Check if an area exists
     pub fn has_area(&self, area_id: &str) -> bool {
         self.areas.contains_key(area_id)
+    }
+
+    pub fn set_main_container(&self, main_container: gtk4::Box) -> Result<(), MainContainerInitializationError> {
+        let Ok(mut guard) = self.main_container.write() else {
+            return Err(MainContainerInitializationError);
+        };
+        guard.replace(main_container);
+        Ok(())
+    }
+
+    fn get_main_container(&self) -> Result<gtk4::Box, MainContainerNotInitialized> {
+        let Ok(guard) = self.main_container.read() else {
+            return Err(MainContainerNotInitialized);
+        };
+        guard.clone().ok_or(MainContainerNotInitialized)
     }
 }

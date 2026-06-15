@@ -9,6 +9,7 @@ use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::prelude::*;
 use serde_json::Value;
+use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
@@ -40,12 +41,14 @@ impl ButtonWidget {
     }
 }
 
-impl MessageHandler<FfiEnvelope> for ButtonWidget {
-    fn handle_message(&self, _message: FfiEnvelope) {}
-
+impl AcceptTopic<FfiEnvelope> for ButtonWidget {
     fn accept_topic(&self, _topic: &str) -> bool {
         false
     }
+}
+
+impl MessageHandler<FfiEnvelope> for ButtonWidget {
+    fn handle_message(&self, _message: FfiEnvelope, _sender_id: &str) {}
 }
 
 impl MessageBroadcaster<Value> for ButtonWidget {}

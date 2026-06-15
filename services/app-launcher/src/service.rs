@@ -8,12 +8,11 @@ use nix::unistd::Pid;
 use smearor_app_launcher_model::DesktopFileCommandAction;
 use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
-use smearor_app_launcher_model::TOPIC_COMMAND;
-use smearor_app_launcher_model::TOPIC_STATUS;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
+use smearor_swipe_launcher_plugin_api::MessageTopicBroadcaster;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
@@ -68,7 +67,7 @@ impl AppLauncherService {
 
             for desktop_file in completed_apps {
                 info!("AppLauncher Service: App exited naturally: {}", desktop_file);
-                broadcaster.broadcast_message(TOPIC_STATUS, DesktopFileStatusMessage::stopped(&desktop_file));
+                broadcaster.broadcast_message_to_topic(DesktopFileStatusMessage::stopped(&desktop_file));
             }
 
             ControlFlow::Continue
@@ -119,7 +118,7 @@ impl AppLauncherService {
                     let pid = c.id();
                     info!("AppLauncher Service: Successfully spawned {} with PID {}", program, pid);
                     self.tracked_processes.entry(desktop_file.to_string()).or_default().push(pid);
-                    self.broadcast_message(TOPIC_STATUS, DesktopFileStatusMessage::running(desktop_file));
+                    self.broadcast_message_to_topic(DesktopFileStatusMessage::running(desktop_file));
                 }
                 Err(e) => {
                     error!("AppLauncher Service: Failed to spawn Command {}: {}", program, e);
@@ -145,12 +144,12 @@ impl AppLauncherService {
             pids.clear();
         }
         self.tracked_processes.remove(desktop_file);
-        self.broadcast_message(TOPIC_STATUS, DesktopFileStatusMessage::stopped(desktop_file));
+        self.broadcast_message_to_topic(DesktopFileStatusMessage::stopped(desktop_file));
     }
 }
 
 impl MessageHandler<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLauncherService {
-    fn handle_message(&self, message: FfiEnvelopePayload<DesktopFileCommandMessage>) {
+    fn handle_message(&self, message: FfiEnvelopePayload<DesktopFileCommandMessage>, _sender_id: &str) {
         info!("handle_message: {message:?}");
         match message.action {
             DesktopFileCommandAction::Exec => {
@@ -167,13 +166,17 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLaunch
             }
         }
     }
-
-    fn accept_topic(&self, topic: &str) -> bool {
-        topic == TOPIC_COMMAND
-    }
 }
 
+// impl AcceptTopic<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLauncherService {
+//     fn accept_topic(&self, topic: &str) -> bool {
+//         topic == TOPIC_COMMAND
+//     }
+// }
+
 impl MessageBroadcaster<DesktopFileStatusMessage> for AppLauncherService {}
+
+impl MessageTopicBroadcaster<DesktopFileStatusMessage> for AppLauncherService {}
 
 impl PluginMetaGetter for AppLauncherService {
     fn meta(&self) -> PluginMeta {

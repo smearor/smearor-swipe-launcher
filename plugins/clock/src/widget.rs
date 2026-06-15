@@ -9,6 +9,7 @@ use gtk4::glib::timeout_add_seconds_local;
 use gtk4::prelude::WidgetExt;
 use serde_json;
 use serde_json::Value;
+use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
@@ -83,10 +84,12 @@ impl ClockWidget {
 }
 
 impl MessageHandler<FfiEnvelope> for ClockWidget {
-    fn handle_message(&self, message: FfiEnvelope) {
-        let topic = message.topic.to_string();
-        let payload = message.payload.to_string();
-        debug!("Clock widget {} received message on topic '{}' with payload '{}'", self.meta.id, topic, payload);
+    fn handle_message(&self, _message: FfiEnvelope, _sender_id: &str) {}
+}
+
+impl AcceptTopic<FfiEnvelope> for ClockWidget {
+    fn accept_topic(&self, _topic: &str) -> bool {
+        false
     }
 }
 

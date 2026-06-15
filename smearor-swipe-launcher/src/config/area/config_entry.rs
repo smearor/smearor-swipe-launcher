@@ -1,7 +1,7 @@
-use crate::config::area::config::AreaConfig;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde_json::Value;
+use smearor_model_area::AreaConfig;
 
 /// Represents a configuration entry that can be either an area or a plugin configuration
 #[derive(Debug, Clone)]

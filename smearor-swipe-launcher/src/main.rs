@@ -15,9 +15,7 @@ mod window;
 
 pub use application::LauncherApplication;
 pub use args::launcher::SwipeLauncherArguments;
-pub use config::area::config::AreaConfig;
 pub use config::launcher::SwipeLauncherConfig;
-pub use config::plugin::PluginEntry;
 pub use plugin::LoadedPlugin;
 pub use plugin_manager::PluginManager;
 pub use service::LoadedService;

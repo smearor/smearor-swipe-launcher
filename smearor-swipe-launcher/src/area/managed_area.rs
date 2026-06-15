@@ -1,6 +1,6 @@
-use crate::AreaConfig;
 use gtk4::Overlay;
 use gtk4::Widget;
+use smearor_model_area::AreaConfig;
 
 /// Represents a dynamically managed area in the layout
 #[derive(Debug, Clone)]

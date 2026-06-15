@@ -3,3 +3,4 @@ pub mod area_stack;
 pub mod error;
 pub mod layout_transition;
 pub mod managed_area;
+pub mod messages;

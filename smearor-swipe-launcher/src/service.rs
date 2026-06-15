@@ -1,4 +1,3 @@
-use crate::PluginEntry;
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
 use abi_stable::RRef;
@@ -6,6 +5,7 @@ use abi_stable::std_types::RResult;
 use libloading::Library;
 use libloading::Symbol;
 use serde_json::Value;
+use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::ServiceConstructor;

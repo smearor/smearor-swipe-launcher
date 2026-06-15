@@ -1,8 +1,10 @@
 [workspace]
 members = [
     "model/app-launcher",
+    "model/area",
     "model/clock",
     "model/message",
+    "model/plugin",
     "plugin-api",
     "plugins/clock",
     "plugins/app-launcher",

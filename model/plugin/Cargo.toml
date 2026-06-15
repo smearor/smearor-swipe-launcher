@@ -1,5 +1,5 @@
 [package]
-name = "smearor-app-launcher-model"
+name = "smearor-model-plugin"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -8,4 +8,3 @@ authors.workspace = true
 
 [dependencies]
 serde = { workspace = true }
-smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }

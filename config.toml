@@ -55,12 +55,19 @@ plugins = [
 area_type = "fixed"
 width = 200
 plugins = [
-    { id = "clock_widget_right", path = "target/release/libsmearor_clock_widget.so" }
+    { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
 ]
 
-[clock_widget_right]
-format = "[hour]:[minute]:[second]"
-timezone = "UTC"
+[close_launcher]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Exit Launcher"
+icon_only = true
+click_topic = "core.close"
+click_payload = { }
+enabled = true
+active = false
+css_classes = ["close-button"]
 
 # Plugin-specific configurations
 
@@ -107,8 +114,7 @@ css_classes = ["menu-button", "primary"]
 # Games submenu area configuration
 [games_area]
 area_type = "scroll"
-transition = "SlideDown"
-close_transition = "SlideDown"
+open_transition = "SlideUp"
 plugins = [
     { id = "games_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "puzzle_games_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -144,8 +150,7 @@ css_classes = ["menu-button", "primary"]
 
 [puzzle_games_area]
 area_type = "scroll"
-transition = "SlideRight"
-close_transition = "SlideRight"
+open_transition = "SlideLeft"
 plugins = [
     { id = "puzzle_games_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "gnome_2048", path = "target/release/libsmearor_app_launcher_widget.so" },
@@ -189,7 +194,7 @@ css_classes = ["menu-button", "primary"]
 
 [board_games_area]
 area_type = "scroll"
-transition = "SlideLeft"
+open_transition = "SlideLeft"
 plugins = [
     { id = "board_games_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "gnome_chess", path = "target/release/libsmearor_app_launcher_widget.so" }

@@ -1292,6 +1292,7 @@ name = "smearor-app-launcher-model"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "smearor-swipe-launcher-plugin-api",
 ]
 
 [[package]]
@@ -1392,7 +1393,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "smearor-model-area"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "smearor-model-plugin",
+ "smearor-swipe-launcher-plugin-api",
+ "thiserror",
+]
+
+[[package]]
 name = "smearor-model-message"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "smearor-model-plugin"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -1413,6 +1432,8 @@ dependencies = [
  "miette",
  "serde",
  "serde_json",
+ "smearor-model-area",
+ "smearor-model-plugin",
  "smearor-swipe-launcher-plugin-api",
  "smearor-wrot-rotation",
  "thiserror",

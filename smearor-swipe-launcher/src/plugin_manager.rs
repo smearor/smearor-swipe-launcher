@@ -1,8 +1,8 @@
-use crate::PluginEntry;
 use crate::error::LauncherError;
 use crate::plugin::LoadedPlugin;
 use dashmap::DashMap;
 use dashmap::DashSet;
+use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use tokio::sync::mpsc::Sender;

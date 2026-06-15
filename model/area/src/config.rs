@@ -1,12 +1,13 @@
-use crate::config::area::area_type::AreaType;
-use crate::config::area::transition::AreaTransition;
-use crate::config::plugin::PluginEntry;
+use crate::AreaTransition;
+use crate::AreaType;
 use serde::Deserialize;
+use serde::Serialize;
+use smearor_model_plugin::PluginEntry;
 
 pub const DEFAULT_AREA_WIDTH: i32 = 200;
 
 /// Configuration for a single area in the layout
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AreaConfig {
     /// Type of the area (fixed or scrollable)
     #[serde(default)]
@@ -49,6 +50,9 @@ pub struct AreaConfig {
 }
 
 impl AreaConfig {
+    pub fn open_transition(&self) -> AreaTransition {
+        self.open_transition.clone()
+    }
     pub fn close_transition(&self) -> AreaTransition {
         self.close_transition.clone().unwrap_or(self.open_transition.opposite())
     }

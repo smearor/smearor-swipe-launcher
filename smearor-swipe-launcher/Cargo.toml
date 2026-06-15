@@ -20,6 +20,8 @@ libloading = { workspace = true }
 thiserror = { workspace = true }
 miette = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../plugin-api" }
+smearor-model-area = { path = "../model/area" }
+smearor-model-plugin = { path = "../model/plugin" }
 smearor-wrot-rotation = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
