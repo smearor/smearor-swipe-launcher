@@ -9,6 +9,8 @@ pub const DEFAULT_ICON_SIZE: i32 = 48;
 pub struct AppLauncherConfig {
     /// The path to the `.desktop` file.
     pub(crate) desktop_file_path: String,
+    #[serde(default)]
+    pub follows_rotation: bool,
     /// Button width
     #[serde(default = "default_width")]
     pub width: i32,

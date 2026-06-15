@@ -12,6 +12,12 @@ pub struct LayerConfigFile {
     /// Namespace for the layer shell, used by compositors for rules.
     #[serde(default)]
     pub(crate) namespace: Option<String>,
+
+    /// Exclusive zone in pixels.
+    /// When set to None, auto-exclusive-zone is enabled.
+    /// Use 0 to disable exclusive zone (overlay mode).
+    #[serde(default)]
+    pub(crate) exclusive_zone: Option<i32>,
 }
 
 impl MergeWithArguments<LayerArguments> for LayerConfigFile {

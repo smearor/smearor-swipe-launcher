@@ -26,6 +26,7 @@ abi_stable = "0.11"
 adw = { package = "libadwaita", version = "0.9.1" }
 clap = { version = "4.5", features = ["derive"] }
 dashmap = "6.2.1"
+dirs = "6.0"
 freedesktop_entry_parser = "2.0"
 gtk4 = "0.11"
 glib = "0.22"
@@ -36,10 +37,12 @@ miette = { version = "7.4", features = ["fancy"] }
 paste = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-smearor-wrot-rotation = { version = "0.1", git = "https://github.com/smearor/smearor-wrot-rotation.git" }
+#smearor-wrot-rotation = { version = "0.1", git = "https://github.com/smearor/smearor-wrot-rotation.git" }
+smearor-wrot-rotation = { version = "0.1", path = "../smearor-wrot-rotation" }
 thiserror = "2.0"
 tokio = { version = "1.42", features = ["full"] }
 toml = "1.1.2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 typed-builder = "0.23.2"
+which = "8.0"

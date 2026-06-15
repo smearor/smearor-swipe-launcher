@@ -47,15 +47,12 @@ impl LoadedService {
 
             let api_loaded_service = match result {
                 RResult::ROk(service) => service,
-                RResult::RErr(err) => {
-                    return Err(LauncherError::PluginConstructorNull(err.to_string()));
+                RResult::RErr(e) => {
+                    return Err(LauncherError::PluginConstructionError(e.error, e.message.to_string()));
                 }
             };
 
-            let service_id = {
-                let id_rstring = (api_loaded_service.vtable.get().get_id)(api_loaded_service.service_instance);
-                id_rstring.to_string()
-            };
+            let service_id = (api_loaded_service.vtable.get().get_id)(api_loaded_service.service_instance).to_string();
 
             let service = LoadedService {
                 _library: library,

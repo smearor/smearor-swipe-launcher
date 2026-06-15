@@ -4,6 +4,7 @@ use crate::css_provider::create_css_provider;
 use crate::plugin_manager::PluginManager;
 use crate::service_manager::ServiceManager;
 use crate::window::create_window;
+use crate::window::set_anchors_for_rotation;
 use gtk4::Application;
 use gtk4::Box as GtkBox;
 use gtk4::IconTheme;
@@ -15,6 +16,7 @@ use gtk4::prelude::*;
 use miette::miette;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_wrot_rotation::RotationWidget;
+use smearor_wrot_rotation::SmearorRotation;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -115,6 +117,15 @@ impl LauncherApplication {
             rotation_widget.set_animation_speed(rotation.animation_speed());
             rotation_widget.set_animation_overshoot(rotation.animation_overshoot());
             rotation_widget.set_animations_enabled(rotation.animations_enabled());
+
+            let window_weak = window.downgrade();
+            rotation_widget.connect_notify_local(Some("rotation"), move |widget, _| {
+                if let Some(win) = window_weak.upgrade() {
+                    let degrees: f32 = widget.property("rotation");
+                    let rotation = SmearorRotation::new(degrees);
+                    set_anchors_for_rotation(&win, rotation);
+                }
+            });
 
             let main_container = GtkBox::builder()
                 .orientation(Orientation::from(&layout_config.orientation))

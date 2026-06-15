@@ -8,9 +8,16 @@ areas = ["left_area", "scroll_band", "right_area"]
 id = "app_launcher"
 path = "target/release/libsmearor_app_launcher_service.so"
 
+[app_launcher]
+smearor_wrot_path = "smearor-wrot"
+rotation = 0
+
 [launcher]
 # Initial rotation in degrees (0, 90, 180, 270)
 rotation = 0
+layer = "top"
+namespace = "smearor-swipe-launcher"
+#exclusive_zone = 100
 
 [layout]
 orientation = "horizontal"
@@ -79,6 +86,7 @@ desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
 
 [nautilus]
 desktop_file_path = "/usr/share/applications/org.gnome.Nautilus.desktop"
+follows_rotation = true
 
 [epiphany]
 desktop_file_path = "/usr/share/applications/org.gnome.Epiphany.desktop"
@@ -171,6 +179,7 @@ css_classes = ["close-button"]
 
 [gnome_2048]
 desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
+follows_rotation = true
 click_topic = "area.close"
 click_payload = { area_id = "puzzle_games_area" }
 

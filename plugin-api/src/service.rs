@@ -1,5 +1,6 @@
 use crate::FfiCoreContext;
 use crate::FfiEnvelope;
+use crate::PluginConstructionErrorWrapper;
 use abi_stable::RRef;
 use abi_stable::StableAbi;
 use abi_stable::derive_macro_reexports::RResult;
@@ -30,4 +31,5 @@ impl LoadedService {
     }
 }
 
-pub type ServiceConstructor = unsafe extern "C" fn(config_json: *const i8, config_len: usize, core_context: FfiCoreContext) -> RResult<LoadedService, RString>;
+pub type ServiceConstructor =
+    unsafe extern "C" fn(config_json: *const i8, config_len: usize, core_context: FfiCoreContext) -> RResult<LoadedService, PluginConstructionErrorWrapper>;
