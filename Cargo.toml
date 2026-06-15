@@ -12,6 +12,7 @@ members = [
     "plugins/app-launcher",
     "plugins/audio",
     "plugins/button",
+    "plugins/mpris",
     "services/app-launcher",
     "services/audio",
     "services/mpris",

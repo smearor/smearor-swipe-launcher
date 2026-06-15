@@ -14,6 +14,10 @@ path = "target/release/libsmearor_app_launcher_service.so"
 id = "audio"
 path = "target/release/libsmearor_audio_service.so"
 
+[[services]]
+id = "mpris"
+path = "target/release/libsmearor_mpris_service.so"
+
 ### Configure the app launcher service
 
 [app_launcher]
@@ -59,6 +63,7 @@ plugins = [
     { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "audio", path = "target/release/libsmearor_audio_widget.so" },
+    { id = "mpris", path = "target/release/libsmearor_mpris_widget.so" },
     { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "firefox_nightly", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },

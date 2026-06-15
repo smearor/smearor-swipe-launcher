@@ -16,20 +16,22 @@ pub struct MprisPlayerInfo {
 }
 
 /// Current playback status of an MPRIS player.
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 pub enum MprisPlaybackStatus {
     /// The player is actively playing
     Playing,
     /// The player is paused
     Paused,
     /// The player is stopped
+    #[default]
     Stopped,
 }
 
 /// Loop mode of an MPRIS player.
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 pub enum MprisLoopStatus {
     /// No looping
+    #[default]
     None,
     /// Loop the current track
     Track,

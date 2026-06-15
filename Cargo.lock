@@ -2078,6 +2078,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "smearor-mpris-widget"
+version = "0.1.0"
+dependencies = [
+ "abi_stable",
+ "glib",
+ "gtk4",
+ "libadwaita",
+ "miette",
+ "paste",
+ "serde",
+ "serde_json",
+ "smearor-mpris-model",
+ "smearor-swipe-launcher-plugin-api",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "smearor-swipe-launcher"
 version = "0.1.0"
 dependencies = [
