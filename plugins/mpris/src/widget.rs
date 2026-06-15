@@ -11,6 +11,7 @@ use gtk4::EventSequenceState;
 use gtk4::GestureClick;
 use gtk4::GestureDrag;
 use gtk4::GestureLongPress;
+use gtk4::GestureZoom;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::LevelBar;
@@ -32,6 +33,8 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::mpsc;
@@ -39,6 +42,8 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 use tracing::debug;
 use tracing::error;
 
@@ -105,6 +110,7 @@ impl MprisWidget {
         let progress_bar = Arc::clone(&self.progress_bar);
         let title_label = Arc::clone(&self.title_label);
         let artist_label = Arc::clone(&self.artist_label);
+        let last_status = RefCell::new(None);
 
         glib::timeout_add_local(Duration::from_millis(10), move || {
             while let Ok(status) = receiver.try_recv() {
@@ -118,35 +124,59 @@ impl MprisWidget {
                     }
                 }
 
-                if let Ok(guard) = progress_bar.lock() {
-                    if let Some(bar) = guard.as_ref() {
-                        let ratio = if let Some(ref meta) = status.metadata {
-                            if meta.length > 0 {
-                                (status.position as f64 / meta.length as f64).min(1.0)
-                            } else {
-                                0.0
-                            }
-                        } else {
-                            0.0
-                        };
-                        bar.set_value(ratio);
-                    }
-                }
-
                 if let Ok(guard) = title_label.lock() {
                     if let Some(label) = guard.as_ref() {
-                        let text = status.metadata.as_ref().map(|m| m.title.as_str()).unwrap_or("No Player");
+                        let text = if status.has_player {
+                            status
+                                .metadata
+                                .as_ref()
+                                .and_then(|m| if m.title.is_empty() { None } else { Some(m.title.as_str()) })
+                                .unwrap_or("Playing")
+                        } else {
+                            "No Player"
+                        };
                         label.set_text(text);
                     }
                 }
 
                 if let Ok(guard) = artist_label.lock() {
                     if let Some(label) = guard.as_ref() {
-                        let text = status.metadata.as_ref().map(|m| m.artist.as_str()).unwrap_or("");
+                        let text = status
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| if m.artist.is_empty() { None } else { Some(m.artist.as_str()) })
+                            .unwrap_or("");
                         label.set_text(text);
                     }
                 }
+
+                *last_status.borrow_mut() = Some(status);
             }
+
+            // Update progress bar every tick for smooth animation
+            if let Ok(guard) = progress_bar.lock() {
+                if let Some(bar) = guard.as_ref() {
+                    let ratio = if let Some(ref status) = *last_status.borrow() {
+                        if let Some(ref meta) = status.metadata {
+                            if meta.length > 0 {
+                                (status.position as f64 / meta.length as f64).min(1.0)
+                            } else if status.playback_status == MprisPlaybackStatus::Playing {
+                                // Indeterminate progress: gentle oscillation
+                                let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as f64;
+                                (0.5 + 0.4 * (t / 1200.0).sin()).clamp(0.1, 0.9)
+                            } else {
+                                0.0
+                            }
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    };
+                    bar.set_value(ratio);
+                }
+            }
+
             ControlFlow::Continue
         });
     }
@@ -236,11 +266,28 @@ impl WidgetBuilder for MprisWidget {
 
         let drag_gesture = GestureDrag::new();
         drag_gesture.set_propagation_phase(PropagationPhase::Capture);
+        let last_drag_command_time = Arc::clone(&self.last_command_time);
         let broadcaster_drag = self.get_broadcaster();
-        drag_gesture.connect_drag_end(move |_gesture, _offset_x, _offset_y| {
-            // Drag gestures are reserved for future use (e.g. seeking).
-            // No action is taken on drag end to avoid accidental triggers.
-            let _ = broadcaster_drag;
+        drag_gesture.connect_drag_end(move |_gesture, offset_x, offset_y| {
+            const SWIPE_THRESHOLD: f64 = 60.0;
+            if offset_y.abs() > offset_x.abs() && offset_y.abs() > SWIPE_THRESHOLD {
+                let elapsed = {
+                    let last = last_drag_command_time.lock().unwrap();
+                    Instant::now().duration_since(*last)
+                };
+                if elapsed < Duration::from_millis(150) {
+                    return;
+                }
+                if offset_y < 0.0 {
+                    debug!("MprisWidget: Swipe up detected (next track)");
+                    *last_drag_command_time.lock().unwrap() = Instant::now();
+                    broadcaster_drag.broadcast_message_to_topic(MprisCommandMessage::next_track());
+                } else {
+                    debug!("MprisWidget: Swipe down detected (previous track)");
+                    *last_drag_command_time.lock().unwrap() = Instant::now();
+                    broadcaster_drag.broadcast_message_to_topic(MprisCommandMessage::previous_track());
+                }
+            }
         });
         button.add_controller(drag_gesture);
 
@@ -287,12 +334,12 @@ impl WidgetBuilder for MprisWidget {
                     }
                 }
                 gdk::BUTTON_SECONDARY => {
-                    debug!("MprisWidget: Right click detected (next player)");
-                    broadcaster_click.broadcast_message_to_topic(MprisCommandMessage::next_player());
+                    debug!("MprisWidget: Right click detected (raise player)");
+                    broadcaster_click.broadcast_message_to_topic(MprisCommandMessage::raise());
                 }
                 gdk::BUTTON_MIDDLE => {
-                    debug!("MprisWidget: Middle click detected (toggle play/pause)");
-                    broadcaster_click.broadcast_message_to_topic(MprisCommandMessage::toggle_play_pause());
+                    debug!("MprisWidget: Middle click detected (quit player)");
+                    broadcaster_click.broadcast_message_to_topic(MprisCommandMessage::quit());
                 }
                 _ => {}
             }
@@ -323,6 +370,48 @@ impl WidgetBuilder for MprisWidget {
             gesture.set_state(EventSequenceState::Claimed);
         });
         button.add_controller(long_press_gesture);
+
+        let zoom_gesture = GestureZoom::builder().propagation_phase(PropagationPhase::Capture).build();
+        let last_zoom_command_time = Arc::clone(&self.last_command_time);
+        let broadcaster_zoom = self.get_broadcaster();
+        let zoom_start_scale = Rc::new(RefCell::new(1.0_f64));
+        let zoom_current_scale = Rc::new(RefCell::new(1.0_f64));
+        let zoom_start_clone = Rc::clone(&zoom_start_scale);
+        let zoom_current_clone = Rc::clone(&zoom_current_scale);
+        zoom_gesture.connect_begin(move |_gesture, _sequence| {
+            *zoom_start_clone.borrow_mut() = 1.0;
+            *zoom_current_clone.borrow_mut() = 1.0;
+        });
+        let zoom_current_clone2 = Rc::clone(&zoom_current_scale);
+        zoom_gesture.connect_scale_changed(move |_gesture, scale| {
+            *zoom_current_clone2.borrow_mut() = scale;
+        });
+        let zoom_start_clone3 = Rc::clone(&zoom_start_scale);
+        let zoom_current_clone3 = Rc::clone(&zoom_current_scale);
+        zoom_gesture.connect_end(move |_gesture, _sequence| {
+            let start = *zoom_start_clone3.borrow();
+            let current = *zoom_current_clone3.borrow();
+            if (current - start).abs() < 0.3 {
+                return;
+            }
+            let elapsed = {
+                let last = last_zoom_command_time.lock().unwrap();
+                Instant::now().duration_since(*last)
+            };
+            if elapsed < Duration::from_millis(150) {
+                return;
+            }
+            if current > start {
+                debug!("MprisWidget: Pinch out detected (raise player)");
+                *last_zoom_command_time.lock().unwrap() = Instant::now();
+                broadcaster_zoom.broadcast_message_to_topic(MprisCommandMessage::raise());
+            } else {
+                debug!("MprisWidget: Pinch in detected (quit player)");
+                *last_zoom_command_time.lock().unwrap() = Instant::now();
+                broadcaster_zoom.broadcast_message_to_topic(MprisCommandMessage::quit());
+            }
+        });
+        button.add_controller(zoom_gesture);
 
         if let Some(receiver) = self.status_receiver.take() {
             self.start_status_listener(receiver);

@@ -27,12 +27,19 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
+use std::time::Instant;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use zbus::Connection;
 use zbus::proxy;
 use zbus::zvariant::OwnedValue;
+
+#[proxy(interface = "org.mpris.MediaPlayer2", default_path = "/org/mpris/MediaPlayer2")]
+trait MediaPlayer2 {
+    fn raise(&self) -> zbus::Result<()>;
+    fn quit(&self) -> zbus::Result<()>;
+}
 
 #[proxy(interface = "org.mpris.MediaPlayer2.Player", default_path = "/org/mpris/MediaPlayer2")]
 trait Player {
@@ -45,6 +52,8 @@ trait Player {
     #[zbus(property, name = "Position")]
     fn position(&self) -> zbus::Result<i64>;
 
+    fn play(&self) -> zbus::Result<()>;
+    fn pause(&self) -> zbus::Result<()>;
     fn play_pause(&self) -> zbus::Result<()>;
     fn next(&self) -> zbus::Result<()>;
     fn previous(&self) -> zbus::Result<()>;
@@ -64,6 +73,8 @@ pub enum MprisCommand {
     ToggleShuffle,
     NextPlayer,
     PreviousPlayer,
+    Raise,
+    Quit,
     RefreshStatus,
 }
 
@@ -162,6 +173,12 @@ impl MprisService {
     fn handle_previous_player(&self) {
         let _ = self.command_sender.send(MprisCommand::PreviousPlayer);
     }
+    fn handle_raise(&self) {
+        let _ = self.command_sender.send(MprisCommand::Raise);
+    }
+    fn handle_quit(&self) {
+        let _ = self.command_sender.send(MprisCommand::Quit);
+    }
 }
 
 impl MessageHandler<FfiEnvelopePayload<MprisCommandMessage>> for MprisService {
@@ -188,6 +205,8 @@ impl MessageHandler<FfiEnvelopePayload<MprisCommandMessage>> for MprisService {
             MprisCommandAction::ToggleShuffle => self.handle_toggle_shuffle(),
             MprisCommandAction::NextPlayer => self.handle_next_player(),
             MprisCommandAction::PreviousPlayer => self.handle_previous_player(),
+            MprisCommandAction::Raise => self.handle_raise(),
+            MprisCommandAction::Quit => self.handle_quit(),
         }
     }
 }
@@ -208,11 +227,13 @@ impl AsRef<Option<FfiCoreContext>> for MprisService {
 async fn find_players(conn: &Connection) -> Result<Vec<String>, zbus::Error> {
     let dbus = zbus::fdo::DBusProxy::new(conn).await?;
     let names = dbus.list_names().await?;
-    Ok(names
+    let mpris_names: Vec<String> = names
         .into_iter()
         .filter(|n| n.starts_with("org.mpris.MediaPlayer2."))
         .map(|n| n.to_string())
-        .collect())
+        .collect();
+    debug!("MPRIS Service: found players: {:?}", mpris_names);
+    Ok(mpris_names)
 }
 
 fn extract_string(metadata: &HashMap<String, OwnedValue>, key: &str) -> Option<String> {
@@ -250,11 +271,17 @@ async fn query_player_status(conn: &Connection, bus_name: &str) -> Result<MprisS
     let proxy = PlayerProxy::builder(conn).destination(bus_name)?.build().await?;
     let playback_status = proxy.playback_status().await?;
     let metadata = proxy.metadata().await?;
-    let position = proxy.position().await.unwrap_or(0);
+    let position = match proxy.position().await {
+        Ok(p) => p,
+        Err(e) => {
+            debug!("MPRIS Service: player {bus_name} does not support position query: {e}");
+            0
+        }
+    };
     let title = extract_string(&metadata, "xesam:title").unwrap_or_default();
     let artist = extract_string_array(&metadata, "xesam:artist").join(", ");
     let album = extract_string(&metadata, "xesam:album").unwrap_or_default();
-    let length = extract_string(&metadata, "mpris:length").and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
+    let length = metadata.get("mpris:length").and_then(|v| v.downcast_ref::<i64>().ok()).unwrap_or(0);
     let art_url = extract_string(&metadata, "mpris:artUrl");
     let player_info = MprisPlayerInfo {
         bus_name: bus_name.to_string(),
@@ -281,13 +308,34 @@ async fn query_player_status(conn: &Connection, bus_name: &str) -> Result<MprisS
     ))
 }
 
-async fn send_player_command(conn: &Connection, bus_name: &str, command: &MprisCommand) -> Result<(), zbus::Error> {
-    let proxy = PlayerProxy::builder(conn).destination(bus_name)?.build().await?;
+async fn send_player_command(conn: &Connection, bus_name: &str, command: &MprisCommand, playback_status: &MprisPlaybackStatus) -> Result<(), zbus::Error> {
     match command {
-        MprisCommand::Play | MprisCommand::Pause | MprisCommand::TogglePlayPause => proxy.play_pause().await?,
-        MprisCommand::NextTrack => proxy.next().await?,
-        MprisCommand::PreviousTrack => proxy.previous().await?,
-        _ => {}
+        MprisCommand::Raise => {
+            let proxy = MediaPlayer2Proxy::builder(conn).destination(bus_name)?.build().await?;
+            proxy.raise().await?;
+        }
+        MprisCommand::Quit => {
+            let proxy = MediaPlayer2Proxy::builder(conn).destination(bus_name)?.build().await?;
+            proxy.quit().await?;
+        }
+        _ => {
+            let proxy = PlayerProxy::builder(conn).destination(bus_name)?.build().await?;
+            match command {
+                MprisCommand::Play => proxy.play().await?,
+                MprisCommand::Pause => proxy.pause().await?,
+                MprisCommand::TogglePlayPause => {
+                    if playback_status == &MprisPlaybackStatus::Playing {
+                        proxy.pause().await?;
+                    } else {
+                        proxy.play().await?;
+                    }
+                }
+                MprisCommand::Stop => proxy.pause().await?,
+                MprisCommand::NextTrack => proxy.next().await?,
+                MprisCommand::PreviousTrack => proxy.previous().await?,
+                _ => {}
+            }
+        }
     }
     Ok(())
 }
@@ -311,6 +359,8 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
         };
         let mut state = MprisState::default();
         let mut last_broadcast: Option<MprisStatusMessage> = None;
+        let mut blocked_players: HashMap<String, Instant> = HashMap::new();
+        const BLOCK_DURATION: Duration = Duration::from_secs(60);
         let _ = status_sender.send(MprisStatusMessage::new(
             false,
             None,
@@ -346,8 +396,22 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
                     debug!("MPRIS Service: received command {:?}", command);
                     if let Some(idx) = state.active_player_index {
                         if let Some((bus_name, _)) = state.players.get(idx) {
-                            if let Err(e) = send_player_command(&conn, bus_name, &command).await {
+                            if let Err(e) = send_player_command(&conn, bus_name, &command, &state.playback_status).await {
                                 error!("MPRIS Service: failed to send command to {bus_name}: {e}");
+                            } else {
+                                match command {
+                                    MprisCommand::Play => state.playback_status = MprisPlaybackStatus::Playing,
+                                    MprisCommand::Pause => state.playback_status = MprisPlaybackStatus::Paused,
+                                    MprisCommand::TogglePlayPause => {
+                                        state.playback_status = if state.playback_status == MprisPlaybackStatus::Playing {
+                                            MprisPlaybackStatus::Paused
+                                        } else {
+                                            MprisPlaybackStatus::Playing
+                                        };
+                                    }
+                                    MprisCommand::Stop => state.playback_status = MprisPlaybackStatus::Stopped,
+                                    _ => {}
+                                }
                             }
                         }
                     }
@@ -359,6 +423,10 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
             }
 
+            // Clean up expired blocked players
+            let now = Instant::now();
+            blocked_players.retain(|_, timestamp| now.duration_since(*timestamp) < BLOCK_DURATION);
+
             let players = match find_players(&conn).await {
                 Ok(p) => p,
                 Err(e) => {
@@ -369,11 +437,17 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
 
             let player_names: Vec<(String, String)> = players
                 .iter()
+                .filter(|n| !blocked_players.contains_key(*n))
                 .map(|n| {
                     let display = n.trim_start_matches("org.mpris.MediaPlayer2.").to_string();
                     (n.clone(), display)
                 })
                 .collect();
+
+            debug!(
+                "MPRIS Service: available players after filtering: {:?}",
+                player_names.iter().map(|(_, d)| d.clone()).collect::<Vec<_>>()
+            );
 
             if player_names.is_empty() {
                 state.players.clear();
@@ -406,8 +480,20 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
                             }
                         }
                         Err(e) => {
-                            error!("MPRIS Service: failed to query player {bus_name}: {e}");
-                            state.active_player_index = None;
+                            let error_str = e.to_string();
+                            if error_str.contains("AccessDenied") {
+                                debug!("MPRIS Service: blocking player {bus_name} for {}s", BLOCK_DURATION.as_secs());
+                                blocked_players.insert(bus_name.clone(), Instant::now());
+                                state.players.remove(idx);
+                                if state.players.is_empty() {
+                                    state.active_player_index = None;
+                                } else {
+                                    state.active_player_index = Some(idx % state.players.len());
+                                }
+                            } else {
+                                error!("MPRIS Service: failed to query player {bus_name}: {e}");
+                                state.active_player_index = None;
+                            }
                         }
                     }
                 }

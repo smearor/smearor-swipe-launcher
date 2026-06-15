@@ -32,6 +32,10 @@ pub enum MprisCommandAction {
     NextPlayer,
     /// Switch to the previous active player
     PreviousPlayer,
+    /// Bring the player window to the foreground
+    Raise,
+    /// Quit the player application
+    Quit,
 }
 
 /// Command message sent from the MPRIS widget to the MPRIS service.
@@ -103,6 +107,14 @@ impl MprisCommandMessage {
 
     pub fn previous_player() -> Self {
         Self::new(MprisCommandAction::PreviousPlayer, None, None, None)
+    }
+
+    pub fn raise() -> Self {
+        Self::new(MprisCommandAction::Raise, None, None, None)
+    }
+
+    pub fn quit() -> Self {
+        Self::new(MprisCommandAction::Quit, None, None, None)
     }
 }
 

@@ -62,14 +62,14 @@ area_type = "scroll"
 plugins = [
     { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "video_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "music_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "web_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "audio", path = "target/release/libsmearor_audio_widget.so" },
     { id = "mpris", path = "target/release/libsmearor_mpris_widget.so" },
     { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "firefox_nightly", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "epiphany", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "totem", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "smearor_wrot_gnome_2048", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
@@ -98,27 +98,22 @@ css_classes = ["close-button"]
 [nonexistent]
 desktop_file_path = "/usr/share/applications/nonexistent.desktop"
 
-[firefox_nightly]
-desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
-
 [nautilus]
 desktop_file_path = "/usr/share/applications/org.gnome.Nautilus.desktop"
+[nautilus.wrapper]
 follows_rotation = true
-
-[epiphany]
-desktop_file_path = "/usr/share/applications/org.gnome.Epiphany.desktop"
 
 [loupe]
 desktop_file_path = "/usr/share/applications/org.gnome.Loupe.desktop"
+[loupe.wrapper]
+follows_rotation = true
+#auto_color_mask = true
+#rotation = 270
+#layer = "background"
+#namespace = "gnome-mines"
 
-[totem]
-desktop_file_path = "/usr/share/applications/org.gnome.Totem.desktop"
-
-[gnome_settings]
-desktop_file_path = "/usr/share/applications/org.gnome.Settings.desktop"
-
-[smearor_wrot_gnome_2048]
-desktop_file_path = "/home/aschaeffer/.local/share/applications/io.smearor.wrot.org.gnome.TwentyFortyEight.desktop"
+#[gnome_settings]
+#desktop_file_path = "/usr/share/applications/org.gnome.Settings.desktop"
 
 
 
@@ -206,10 +201,6 @@ auto_color_mask = true
 desktop_file_path = "/usr/share/applications/org.gnome.Mines.desktop"
 [gnome_mines.wrapper]
 follows_rotation = true
-auto_color_mask = true
-rotation = 270
-layer = "background"
-namespace = "gnome-mines"
 
 
 
@@ -272,11 +263,18 @@ area_type = "scroll"
 transition = "SlideLeft"
 plugins = [
     { id = "tools_close", path = "target/release/libsmearor_button_widget.so" },
-    { id = "calculator", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "calculator", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "characters", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
 
 [calculator]
 desktop_file_path = "/usr/share/applications/org.gnome.Calculator.desktop"
+[calculator.wrapper]
+follows_rotation = true
+
+[characters]
+desktop_file_path = "/usr/share/applications/org.gnome.Characters.desktop"
+[characters.wrapper]
 follows_rotation = true
 
 # Close button configuration
@@ -287,6 +285,138 @@ tooltip = "Close tools menu"
 icon_only = true
 click_topic = "area.close"
 click_payload = { area_id = "tools_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+
+
+[video_menu_button]
+text = "Video"
+icon = "multimedia-video-player-symbolic"
+tooltip = "Video Players"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "video_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "video_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[video_area]
+area_type = "scroll"
+transition = "SlideLeft"
+plugins = [
+    { id = "video_close", path = "target/release/libsmearor_button_widget.so" },
+    { id = "totem", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[totem]
+desktop_file_path = "/usr/share/applications/org.gnome.Totem.desktop"
+[totem.wrapper]
+follows_rotation = true
+
+# Close button configuration
+[video_close]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close video menu"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "video_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+
+
+[music_menu_button]
+text = "Music"
+icon = "music-app-symbolic"
+tooltip = "Music Players"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "music_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "music_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[music_area]
+area_type = "scroll"
+transition = "SlideLeft"
+plugins = [
+    { id = "music_close", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shortwave", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "amberol", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[shortwave]
+desktop_file_path = "/usr/share/applications/de.haeckerfelix.Shortwave.desktop"
+[shortwave.wrapper]
+follows_rotation = true
+
+[amberol]
+desktop_file_path = "/usr/share/applications/io.bassi.Amberol.desktop"
+[shortamberolwave.wrapper]
+follows_rotation = true
+
+# Close button configuration
+[music_close]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close music menu"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "music_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+
+
+[web_menu_button]
+text = "Web"
+icon = "applications-internet-symbolic"
+tooltip = "Web"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "web_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "web_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[web_area]
+area_type = "scroll"
+transition = "SlideLeft"
+plugins = [
+    { id = "web_close", path = "target/release/libsmearor_button_widget.so" },
+    { id = "firefox_nightly", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "epiphany", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[firefox_nightly]
+desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
+[firefox_nightly.wrapper]
+follows_rotation = true
+
+[epiphany]
+desktop_file_path = "/usr/share/applications/org.gnome.Epiphany.desktop"
+[epiphany.wrapper]
+follows_rotation = true
+
+# Close button configuration
+[web_close]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close Web Menu"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "web_area" }
 enabled = true
 active = false
 css_classes = ["close-button"]
@@ -318,10 +448,12 @@ css_classes = ["close-button"]
 
 [clocks]
 desktop_file_path = "/usr/share/applications/org.gnome.clocks.desktop"
+[clocks.wrapper]
 follows_rotation = true
 
 [calendar]
 desktop_file_path = "/usr/share/applications/org.gnome.Calendar.desktop"
+[calendar.wrapper]
 follows_rotation = true
 
 [clock_widget_date]
