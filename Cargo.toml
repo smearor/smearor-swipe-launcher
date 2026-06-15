@@ -14,6 +14,7 @@ members = [
     "plugins/button",
     "services/app-launcher",
     "services/audio",
+    "services/mpris",
     "smearor-swipe-launcher",
 ]
 resolver = "2"
