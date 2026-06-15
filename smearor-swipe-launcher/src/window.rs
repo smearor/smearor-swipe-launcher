@@ -4,10 +4,8 @@ use crate::display::calculate_area_size;
 use gtk4::ApplicationWindow;
 use gtk4::prelude::*;
 use gtk4_layer_shell::Edge;
-use gtk4_layer_shell::Layer;
 use gtk4_layer_shell::LayerShell;
 use smearor_wrot_rotation::SmearorRotation;
-use smearor_wrot_rotation::layer::SmearorLayer;
 
 /// Creates the application window with layer-shell integration.
 pub fn create_window(app: &gtk4::Application, config: &SwipeLauncherSettings) -> ApplicationWindow {

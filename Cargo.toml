@@ -37,8 +37,8 @@ miette = { version = "7.4", features = ["fancy"] }
 paste = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-#smearor-wrot-rotation = { version = "0.1", git = "https://github.com/smearor/smearor-wrot-rotation.git" }
-smearor-wrot-rotation = { version = "0.1", path = "../smearor-wrot-rotation" }
+smearor-wrot-rotation = { version = "0.1", git = "https://github.com/smearor/smearor-wrot-rotation.git" }
+#smearor-wrot-rotation = { version = "0.1", path = "../smearor-wrot-rotation" }
 thiserror = "2.0"
 tokio = { version = "1.42", features = ["full"] }
 toml = "1.1.2"
