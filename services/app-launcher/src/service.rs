@@ -9,6 +9,7 @@ use nix::unistd::Pid;
 use smearor_app_launcher_model::DesktopFileCommandAction;
 use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
+use smearor_app_launcher_model::SmearorWindowRotationWrapper;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
@@ -83,8 +84,9 @@ impl AppLauncherService {
         });
     }
 
-    fn handle_exec(&self, desktop_file: &str, follows_rotation: bool) {
-        info!("AppLauncher Service: Launching app: {desktop_file} follows_rotation: {follows_rotation}");
+    fn handle_exec(&self, desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>) {
+        info!("AppLauncher Service: Launching app: {desktop_file}");
+        info!("Using wrapper smearor-wrot: {:?}", wrapper);
         let entry = match Entry::parse_file(desktop_file) {
             Ok(entry) => entry,
             Err(e) => {
@@ -108,17 +110,26 @@ impl AppLauncherService {
             trace!("raw_args: {:?}", raw_args);
             raw_args.remove(0);
             info!("AppLauncher Service: smearor_wrot_path: {:?}", self.config.smearor_wrot_path);
-            if follows_rotation
-                && let Some(rotation) = &self.config.rotation
-                && let Some(smearor_wrot_path) = &self.config.smearor_wrot_path
-            {
-                info!("AppLauncher Service: Launching app with rotation: {desktop_file}");
-                let actual_program = program.clone();
-                program = self.resolve_path(smearor_wrot_path).to_string_lossy().to_string();
+            if let Some(wrapper) = wrapper {
+                if let Some(smearor_wrot_path) = &self.config.smearor_wrot_path {
+                    info!("AppLauncher Service: Launching app {desktop_file} with wrapper");
+                    let actual_program = program.clone();
+                    program = self.resolve_path(smearor_wrot_path).to_string_lossy().to_string();
 
-                raw_args.insert(0, actual_program);
-                raw_args.insert(0, rotation.to_string());
-                raw_args.insert(0, "--rotation".to_string());
+                    raw_args.insert(0, actual_program);
+
+                    let launcher_rotation = if wrapper.follows_rotation
+                        && let Some(rotation) = self.config.rotation
+                    {
+                        Some(rotation)
+                    } else {
+                        None
+                    };
+                    let mut wrapper_args = wrapper.args(launcher_rotation);
+                    wrapper_args.append(&mut raw_args);
+
+                    raw_args = wrapper_args;
+                }
             }
             error!("program: {program}");
             error!("args: {:?}", raw_args);
@@ -129,6 +140,7 @@ impl AppLauncherService {
                 .filter(|arg| !arg.is_empty() && !arg.starts_with('%'))
                 .collect();
             error!("clean_args: {:?}", clean_args);
+            error!("full command: {program} {}", clean_args.join(" "));
 
             let child = Command::new(program.clone())
                 .args(&clean_args)
@@ -182,14 +194,6 @@ impl AppLauncherService {
                 executable_name.to_string().into()
             })
     }
-
-    // fn resolve_path(path: &str) -> Option<PathBuf> {
-    //     if path.starts_with('~') {
-    //         home_dir().map(|home| home.join(path.trim_start_matches("~/")))
-    //     } else {
-    //         Some(PathBuf::from(path))
-    //     }
-    // }
 }
 
 impl MessageHandler<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLauncherService {
@@ -197,13 +201,13 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLaunch
         info!("handle_message: {message:?}");
         match message.action {
             DesktopFileCommandAction::Exec => {
-                self.handle_exec(&message.desktop_file, message.follows_rotation);
+                self.handle_exec(&message.desktop_file, message.wrapper.clone());
             }
             DesktopFileCommandAction::ExecStart => {
-                self.handle_exec(&message.desktop_file, message.follows_rotation);
+                self.handle_exec(&message.desktop_file, message.wrapper.clone());
             }
             DesktopFileCommandAction::ExecReload => {
-                self.handle_exec(&message.desktop_file, message.follows_rotation);
+                self.handle_exec(&message.desktop_file, message.wrapper.clone());
             }
             DesktopFileCommandAction::Terminate => {
                 self.handle_terminate(&message.desktop_file);
@@ -211,12 +215,6 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLaunch
         }
     }
 }
-
-// impl AcceptTopic<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLauncherService {
-//     fn accept_topic(&self, topic: &str) -> bool {
-//         topic == TOPIC_COMMAND
-//     }
-// }
 
 impl MessageBroadcaster<DesktopFileStatusMessage> for AppLauncherService {}
 

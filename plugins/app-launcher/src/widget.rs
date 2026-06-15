@@ -92,11 +92,6 @@ impl AppLauncherWidget {
     }
 }
 
-// impl AcceptTopic<FfiEnvelopePayload<DesktopFileStatusMessage>> for AppLauncherWidget {
-//     fn accept_topic(&self, topic: &str) -> bool {
-//         topic == TOPIC_STATUS
-//     }
-// }
 impl MessageHandler<FfiEnvelopePayload<DesktopFileStatusMessage>> for AppLauncherWidget {
     fn handle_message(&self, message: FfiEnvelopePayload<DesktopFileStatusMessage>, _sender_id: &str) {
         if message.desktop_file != self.config.desktop_file_path {
@@ -195,7 +190,7 @@ impl WidgetBuilder for AppLauncherWidget {
         click_gesture.connect_pressed(move |_, _, _, _| {});
 
         let desktop_file_inner = self.config.desktop_file_path.clone();
-        let follows_rotation_inner = self.config.follows_rotation.clone();
+        let wrapper_config_inner = self.config.wrapper.clone();
         let message_broadcaster_desktop_file_command = MessageBroadcaster::<DesktopFileCommandMessage>::get_broadcaster(self);
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
@@ -208,7 +203,8 @@ impl WidgetBuilder for AppLauncherWidget {
                 }
             }
             info!("Click released {n_clicks}");
-            message_broadcaster_desktop_file_command.broadcast_message_to_topic(DesktopFileCommandMessage::exec(&desktop_file_inner, follows_rotation_inner));
+            message_broadcaster_desktop_file_command
+                .broadcast_message_to_topic(DesktopFileCommandMessage::exec(&desktop_file_inner, wrapper_config_inner.clone()));
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
                 message_broadcaster_generic.broadcast_message(&topic, &payload);
             }
@@ -222,13 +218,14 @@ impl WidgetBuilder for AppLauncherWidget {
             }
         });
         let desktop_file_inner = self.config.desktop_file_path.clone();
+        let wrapper_config_inner = self.config.wrapper.clone();
         let message_broadcaster_desktop_file_command = MessageBroadcaster::<DesktopFileCommandMessage>::get_broadcaster(self);
         let long_press_topic = self.config.longpress_topic.clone();
         let long_press_payload = self.config.longpress_payload.clone();
         let message_broadcaster_generic = MessageBroadcaster::<Value>::get_broadcaster(self);
         longpress_gesture.connect_pressed(move |gesture, _n_clicks, _| {
             message_broadcaster_desktop_file_command
-                .broadcast_message_to_topic(DesktopFileCommandMessage::terminate(&desktop_file_inner, follows_rotation_inner));
+                .broadcast_message_to_topic(DesktopFileCommandMessage::terminate(&desktop_file_inner, wrapper_config_inner.clone()));
             if let (Some(topic), Some(payload)) = (long_press_topic.clone(), long_press_payload.clone()) {
                 message_broadcaster_generic.broadcast_message(&topic, &payload);
                 gesture.set_state(EventSequenceState::Claimed);

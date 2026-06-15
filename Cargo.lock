@@ -1351,6 +1351,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "smearor-swipe-launcher-plugin-api",
+ "smearor-wrot-rotation",
 ]
 
 [[package]]
@@ -1396,6 +1397,14 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "smearor-audio-model"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "smearor-swipe-launcher-plugin-api",
 ]
 
 [[package]]

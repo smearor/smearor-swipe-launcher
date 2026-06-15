@@ -1,16 +1,18 @@
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
+use smearor_app_launcher_model::SmearorWindowRotationWrapper;
 
 pub const DEFAULT_WIDTH: i32 = 100;
 
 pub const DEFAULT_ICON_SIZE: i32 = 48;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppLauncherConfig {
     /// The path to the `.desktop` file.
-    pub(crate) desktop_file_path: String,
-    #[serde(default)]
-    pub follows_rotation: bool,
+    pub desktop_file_path: String,
+    /// The smearor window rotation wrapper configuration
+    pub wrapper: Option<SmearorWindowRotationWrapper>,
     /// Button width
     #[serde(default = "default_width")]
     pub width: i32,

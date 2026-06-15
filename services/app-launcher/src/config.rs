@@ -7,7 +7,7 @@ pub struct AppLauncherServiceConfig {
     #[builder(default, setter(into))]
     pub(crate) smearor_wrot_path: Option<String>,
     #[builder(default, setter(into))]
-    pub(crate) rotation: Option<i32>,
+    pub(crate) rotation: Option<f32>,
 }
 
 impl Default for AppLauncherServiceConfig {

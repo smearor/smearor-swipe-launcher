@@ -10,11 +10,11 @@ path = "target/release/libsmearor_app_launcher_service.so"
 
 [app_launcher]
 smearor_wrot_path = "smearor-wrot"
-rotation = 0
+rotation = 90
 
 [launcher]
 # Initial rotation in degrees (0, 90, 180, 270)
-rotation = 0
+rotation = 90
 layer = "top"
 namespace = "smearor-swipe-launcher"
 #exclusive_zone = 100
@@ -47,6 +47,7 @@ area_type = "scroll"
 plugins = [
     { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    # { id = "audio", path = "target/release/libsmearor_audio_widget.so" },
     { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "firefox_nightly", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
@@ -179,12 +180,20 @@ css_classes = ["close-button"]
 
 [gnome_2048]
 desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
-follows_rotation = true
 click_topic = "area.close"
 click_payload = { area_id = "puzzle_games_area" }
+[gnome_2048.wrapper]
+follows_rotation = true
+auto_color_mask = true
 
 [gnome_mines]
 desktop_file_path = "/usr/share/applications/org.gnome.Mines.desktop"
+[gnome_mines.wrapper]
+follows_rotation = true
+auto_color_mask = true
+rotation = 270
+layer = "background"
+namespace = "gnome-mines"
 
 
 
@@ -223,10 +232,12 @@ css_classes = ["close-button"]
 
 [gnome_chess]
 desktop_file_path = "/usr/share/applications/org.gnome.Chess.desktop"
+[gnome_chess.wrapper]
+follows_rotation = true
+auto_color_mask = true
 
 
 
-# Games submenu area configuration
 [tools_menu_button]
 text = "Tools"
 icon = "applications-engineering-symbolic"

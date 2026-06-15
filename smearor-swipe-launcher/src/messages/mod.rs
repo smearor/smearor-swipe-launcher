@@ -138,7 +138,7 @@ impl LauncherApplication {
         }
 
         // Routing to a specific service
-        if topic.starts_with("service/") {
+        if topic.starts_with("service.") {
             let parts: Vec<&str> = topic.split('/').collect();
             if parts.len() >= 2 {
                 let target_service_id = parts[1];

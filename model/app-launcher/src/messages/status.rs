@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 
-pub const TOPIC_STATUS: &str = "service/app_launcher/status";
+pub const TOPIC_STATUS: &str = "service.app_launcher.status";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DesktopFileStatus {

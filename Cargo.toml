@@ -2,6 +2,7 @@
 members = [
     "model/app-launcher",
     "model/area",
+    "model/audio",
     "model/clock",
     "model/message",
     "model/plugin",
