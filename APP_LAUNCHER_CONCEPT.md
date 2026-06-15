@@ -19,14 +19,14 @@ system is strictly split into two independent components:
              |                                             |
              |  1. Tap / Click (Launch)                    |
              |===========================================> |  2. GIO / procfs:
-             |  Topic: "service/app_launcher/command"      |     - Parse .desktop
+             |  Topic: "service.app_launcher.command"      |     - Parse .desktop
              |  Payload: {                                 |     - Command spawn
              |    "action": "Launch",                      |     - PID tracking
              |    "desktop_file": ".../firefox.desktop"    |
              |  }                                          |
              |                                             |
              |                                             |  3. Status Broadcast (Running)
-             | <===========================================|     Topic: "service/app_launcher/status"
+             | <===========================================|     Topic: "service.app_launcher.status"
              |                                             |     Payload: {
              |                                             |       "desktop_file": ".../firefox.desktop",
              |                                             |       "status": "Running"
@@ -64,7 +64,7 @@ desktop_file_path = "/usr/share/applications/firefox.desktop"
     * The app name is placed legibly below the icon.
     * In the top-right corner, a small, initially invisible LED dot serves as the "Running" indicator.
 3. **Message Subscription:**
-   At startup, the widget subscribes to the topic `service/app_launcher/status`.
+   At startup, the widget subscribes to the topic `service.app_launcher.status`.
 
 ### C. Interactions & Event Publishing
 
@@ -73,7 +73,7 @@ desktop_file_path = "/usr/share/applications/firefox.desktop"
 Triggers an asynchronous launch command sent to the service:
 
 ```json
-Topic:   "service/app_launcher/command"
+Topic:   "service.app_launcher.command"
 Payload: {
 "action": "Launch",
 "desktop_file": "/usr/share/applications/firefox.desktop"
@@ -85,7 +85,7 @@ Payload: {
 Triggers a termination command sent to the service:
 
 ```json
-Topic:   "service/app_launcher/command"
+Topic:   "service.app_launcher.command"
 Payload: {
 "action": "Terminate",
 "desktop_file": "/usr/share/applications/firefox.desktop"
@@ -94,7 +94,7 @@ Payload: {
 
 #### Status Feedback Loop:
 
-When a status message is received on `service/app_launcher/status`, the widget evaluates the JSON payload:
+When a status message is received on `service.app_launcher.status`, the widget evaluates the JSON payload:
 
 * Does the received `desktop_file` path match its own configuration?
     * Yes, and `status == "Running"`: LED indicator turns green.
@@ -118,7 +118,7 @@ pub struct AppLauncherService {
 
 ### B. Command Handler (on_message)
 
-The service processes incoming `FfiEnvelope` events on the `service/app_launcher/command` topic.
+The service processes incoming `FfiEnvelope` events on the `service.app_launcher.command` topic.
 
 #### 1. Executing "Launch" Command
 
@@ -136,7 +136,7 @@ When the service receives a launch command:
        .spawn()?;
    ```
 4. It registers the newly spawned PID under the entry for this `desktop_file` in its state map.
-5. It broadcasts a status event on `service/app_launcher/status`:
+5. It broadcasts a status event on `service.app_launcher.status`:
    ```json
    {
      "desktop_file": "/usr/share/applications/firefox.desktop",
@@ -156,7 +156,7 @@ When the service receives a termination command:
    ```
 4. If a process persists after a timeout (e.g., 2 seconds), it may optionally send `SIGKILL` (forceful termination).
 5. The PIDs are removed from the tracking list.
-6. It broadcasts a status event on `service/audio/status`:
+6. It broadcasts a status event on `service.audio.status`:
    ```json
    {
      "desktop_file": "/usr/share/applications/firefox.desktop",
@@ -180,7 +180,7 @@ Upon initialization, the service starts an asynchronous background task (spawned
 3. If `/proc/<pid>` does not exist, the process has exited. The service removes the PID from its map.
 4. If the PID list for a specific desktop file becomes empty (all windows closed), it broadcasts the "Stopped" status update:
    ```json
-   Topic: "service/app_launcher/status"
+   Topic: "service.app_launcher.status"
    Payload: { "desktop_file": "...", "status": "Stopped" }
    ```
    The corresponding widgets then automatically turn off their green LED indicators.
@@ -192,5 +192,5 @@ Upon initialization, the service starts an asynchronous background task (spawned
 * **High Modularity:** Changes to launcher UI sizing or design only affect the widget plugin. The process tracking service remains untouched.
 * **Consolidated Background Checks:** Checking `/proc` is grouped into a single asynchronous loop inside the service, rather than spawning 10 separate
   background threads for 10 individual widget instances.
-* **Trivial Integration:** Other system widgets (e.g., a bottom task bar or active window switcher) can easily subscribe to the `service/app_launcher/status`
+* **Trivial Integration:** Other system widgets (e.g., a bottom task bar or active window switcher) can easily subscribe to the `service.app_launcher.status`
   topic to receive real-time state without any duplicate process checking logic.

@@ -113,27 +113,27 @@ App läuft.
 * **Interaktion (Klick):**
   Sendet Nachricht an den Broker:
   ```json
-  Topic:   "service/app_launcher/command"
+  Topic:   "service.app_launcher.command"
   Payload: { "action": "Launch", "desktop_file": "/usr/share/applications/firefox.desktop" }
   ```
 * **Interaktion (Longpress):**
   Sendet Nachricht an den Broker:
   ```json
-  Topic:   "service/app_launcher/command"
+  Topic:   "service.app_launcher.command"
   Payload: { "action": "Terminate", "desktop_file": "/usr/share/applications/firefox.desktop" }
   ```
 
 #### 2. Der Service (ApplicationLauncher, Singleton)
 
-* **Start:** Wird beim Anwendungsstart genau *einmal* geladen und instanziiert. Er lauscht auf das Topic `service/app_launcher/command`.
+* **Start:** Wird beim Anwendungsstart genau *einmal* geladen und instanziiert. Er lauscht auf das Topic `service.app_launcher.command`.
 * **Zustand:** Hält eine interne `HashMap<String, Vec<u32>>` (Desktop-Pfad -> Liste aktiver PIDs).
 * **Abarbeitung von "Launch":**
     1. Startet das Programm via `Command::new` entkoppelt im Hintergrund.
     2. Merkt sich die PID in der Map für diesen Desktop-Pfad.
-    3. Publiziert Status-Update auf Topic `service/app_launcher/status`:
-       ```json
-       Payload: { "desktop_file": "/usr/share/applications/firefox.desktop", "status": "Running" }
-       ```
+    3. Publiziert Status-Update auf Topic `service.app_launcher.status`:
+         ```json
+         Payload: { "desktop_file": "/usr/share/applications/firefox.desktop", "status": "Running" }
+         ```
 * **Abarbeitung von "Terminate":**
     1. Holt alle PIDs für den Desktop-Pfad aus der Map.
     2. Sendet `SIGTERM` (und nach Timeout `SIGKILL`) an alle PIDs.
@@ -143,7 +143,7 @@ App läuft.
        Payload: { "desktop_file": "/usr/share/applications/firefox.desktop", "status": "Stopped" }
        ```
 * **Status-Feedback an Widgets:**
-  Sämtliche App-Launcher-Widgets lauschen auf `service/app_launcher/status`. Erhält ein Widget eine Nachricht, deren `desktop_file` mit seinem eigenen Pfad
+  Sämtliche App-Launcher-Widgets lauschen auf `service.app_launcher.status`. Erhält ein Widget eine Nachricht, deren `desktop_file` mit seinem eigenen Pfad
   übereinstimmt, schaltet es den aktiven Leucht-Indikator ein oder aus.
 
 ---
@@ -153,7 +153,7 @@ App läuft.
 #### 1. Der Service (AudioVolumeControl, Singleton)
 
 * **Zustand:** Verwaltet die asynchrone Verbindung zu **PipeWire** (oder PulseAudio).
-* **Status-Broadcasts:** Bei jeder Änderung (durch externe Programme, Tasten am Monitor oder Touch-Eingaben) publiziert der Service auf `service/audio/state`:
+* **Status-Broadcasts:** Bei jeder Änderung (durch externe Programme, Tasten am Monitor oder Touch-Eingaben) publiziert der Service auf `service.audio.state`:
   ```json
   Payload: {
     "volume": 0.65,
@@ -167,13 +167,13 @@ App läuft.
 
 #### 2. Die Widgets (z. B. Slider im Sidepanel + Mute-Button im Top-Bar)
 
-* **Abonnement:** Beide Widgets abonnieren beim Start das Topic `service/audio/state`.
+* **Abonnement:** Beide Widgets abonnieren beim Start das Topic `service.audio.state`.
 * **Sync-Rendering:** Empfangen sie das Event, aktualisiert das Slider-Widget die Balkenposition auf `65%` und das Button-Widget schaltet das Icon auf "
   Lautsprecher an".
 * **Gesten-Verarbeitung (Swipe up auf Slider):**
   Widget sendet Steuerungs-Befehl an den Broker:
   ```json
-  Topic:   "service/audio/command"
+  Topic:   "service.audio.command"
   Payload: { "action": "SetVolume", "volume": 0.70 }
   ```
   Der Service empfängt dies, reguliert über PipeWire die System-Lautstärke und sendet das neue globale State-Event heraus, woraufhin sich alle Widgets
@@ -200,7 +200,7 @@ Um diesen Service-Layer einzubauen, müssen folgende Schritte im Hauptprogramm d
 
 Der Broker steuert nun auch die Services an:
 
-1. Jede Nachricht mit dem Topic-Präfix `service/{service_id}/command` wird direkt an die `on_message`-Methode des entsprechenden Services in der
+1. Jede Nachricht mit dem Topic-Präfix `service.{service_id}/command` wird direkt an die `on_message`-Methode des entsprechenden Services in der
    `ServiceManager`-Map weitergeleitet.
 2. Wenn ein Service eine Status-Nachricht an den Broker schickt, leitet dieser die Nachricht (z. B. via Broadcast-Verteilung) an alle passenden Widgets weiter.
 

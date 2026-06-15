@@ -1323,10 +1323,10 @@ impl LauncherApplication {
 
         debug!("Event Broker: Received message from '{}' on topic '{}': {}", sender_id, topic, payload);
 
-        // ... existing routing for core/control, core/layout, plugin/, service/, etc. ...
+        // ... existing routing for core.control, core.layout, plugin., service., etc. ...
 
         // Area Management Messages
-        if topic == "core/area" {
+        if topic == "core.area" {
             if let Ok(action) = serde_json::from_str::<AreaAction>(&payload) {
                 debug!("Area action requested by {}: {:?}", sender_id, action);
                 if let Err(e) = self.area_manager.handle_action(action) {

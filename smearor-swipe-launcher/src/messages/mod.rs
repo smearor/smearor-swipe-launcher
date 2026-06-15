@@ -96,7 +96,7 @@ impl LauncherApplication {
         }
 
         // // Example 2: ScrollToPosition / FocusWidget
-        // if topic == "core/layout" {
+        // if topic == "core.layout" {
         //     if let Ok(parsed) = serde_json::from_str::<Value>(&payload) {
         //         if parsed.get("action").and_then(|v| v.as_str()) == Some("FocusWidget") {
         //             if let Some(plugin_id) = parsed.get("plugin_id").and_then(|v| v.as_str()) {
