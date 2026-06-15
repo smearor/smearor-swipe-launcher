@@ -5,6 +5,7 @@ members = [
     "model/audio",
     "model/clock",
     "model/message",
+    "model/mpris",
     "model/plugin",
     "plugin-api",
     "plugins/clock",
