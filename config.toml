@@ -1,20 +1,30 @@
 # smearor-swipe-launcher Configuration
 
-# Define the layout order
+### Define the layout order
+
 areas = ["left_area", "scroll_band", "right_area"]
 
-# Services to load
+### Services to load
+
 [[services]]
 id = "app_launcher"
 path = "target/release/libsmearor_app_launcher_service.so"
 
+[[services]]
+id = "audio"
+path = "target/release/libsmearor_audio_service.so"
+
+### Configure the app launcher service
+
 [app_launcher]
 smearor_wrot_path = "smearor-wrot"
-rotation = 90
+rotation = 0
+
+### Configure the application global settings
 
 [launcher]
 # Initial rotation in degrees (0, 90, 180, 270)
-rotation = 90
+rotation = 0
 layer = "top"
 namespace = "smearor-swipe-launcher"
 #exclusive_zone = 100
@@ -24,7 +34,8 @@ orientation = "horizontal"
 #orientation = "vertical"
 spacing = 0
 
-# Plugins in the left static area
+### Plugins in the left static area
+
 [left_area]
 area_type = "fixed"
 width = 200
@@ -47,7 +58,7 @@ area_type = "scroll"
 plugins = [
     { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
-    # { id = "audio", path = "target/release/libsmearor_audio_widget.so" },
+    { id = "audio", path = "target/release/libsmearor_audio_widget.so" },
     { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "firefox_nightly", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },

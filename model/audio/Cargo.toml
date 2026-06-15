@@ -1,0 +1,11 @@
+[package]
+name = "smearor-audio-model"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }

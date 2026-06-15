@@ -1,0 +1,27 @@
+[package]
+name = "smearor-audio-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+abi_stable = { workspace = true }
+glib = { workspace = true }
+gtk4 = { workspace = true }
+libpulse-binding = { workspace = true }
+miette = { workspace = true }
+paste = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+smearor-audio-model = { path = "../../model/audio" }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+thiserror = { workspace = true }
+typed-builder = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

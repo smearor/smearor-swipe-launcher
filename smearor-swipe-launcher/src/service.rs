@@ -12,7 +12,7 @@ use smearor_swipe_launcher_plugin_api::ServiceConstructor;
 use smearor_swipe_launcher_plugin_api::ServiceVTable;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 
 /// Represents a loaded background service with its library handle
@@ -25,7 +25,7 @@ pub struct LoadedService {
 }
 
 impl LoadedService {
-    pub fn load(service_entry: &PluginEntry, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self), LauncherError> {
+    pub fn load(service_entry: &PluginEntry, config: &PluginConfig, sender: UnboundedSender<FfiEnvelope>) -> Result<(String, Self), LauncherError> {
         unsafe {
             let path = PathBuf::from(&service_entry.path);
             let library = Arc::new(Library::new(&path)?);

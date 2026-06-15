@@ -9,8 +9,10 @@ members = [
     "plugin-api",
     "plugins/clock",
     "plugins/app-launcher",
+    "plugins/audio",
     "plugins/button",
     "services/app-launcher",
+    "services/audio",
     "smearor-swipe-launcher",
 ]
 resolver = "2"
@@ -33,6 +35,7 @@ gtk4 = "0.11"
 glib = "0.22"
 glib-build-tools = "0.22"
 gtk4-layer-shell = "0.8"
+libpulse-binding = "2.30"
 libloading = "0.8"
 miette = { version = "7.4", features = ["fancy"] }
 paste = "1.0"

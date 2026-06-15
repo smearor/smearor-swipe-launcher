@@ -18,11 +18,14 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_wrot_rotation::RotationWidget;
 use smearor_wrot_rotation::SmearorRotation;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::mpsc::channel;
+use std::time::Instant;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::unbounded_channel;
 use tracing::error;
 use tracing::info;
 
@@ -32,7 +35,9 @@ pub struct LauncherApplication {
     pub(crate) plugin_manager: Arc<PluginManager>,
     pub(crate) service_manager: Arc<ServiceManager>,
     pub(crate) area_manager: Arc<Mutex<AreaManager>>,
-    pub(crate) message_receiver: Mutex<Option<Receiver<FfiEnvelope>>>,
+    pub(crate) message_receiver: Mutex<Option<UnboundedReceiver<FfiEnvelope>>>,
+    pub(crate) message_sender: UnboundedSender<FfiEnvelope>,
+    pub(crate) topic_rate_limiter: Arc<Mutex<HashMap<String, Instant>>>,
     pub(crate) gtk_app: Application,
 }
 
@@ -40,7 +45,7 @@ impl LauncherApplication {}
 
 impl LauncherApplication {
     pub fn new(config: SwipeLauncherConfig, gtk_app: Application) -> Self {
-        let (sender, receiver) = channel::<FfiEnvelope>(100);
+        let (sender, receiver) = unbounded_channel::<FfiEnvelope>();
         let plugin_manager = Arc::new(PluginManager::new(sender.clone()));
         let config_arc = Arc::new(config.clone());
         let area_manager = Arc::new(Mutex::new(AreaManager::new(plugin_manager.clone(), config_arc)));
@@ -48,9 +53,11 @@ impl LauncherApplication {
         LauncherApplication {
             config,
             plugin_manager,
-            service_manager: Arc::new(ServiceManager::new(sender)),
+            service_manager: Arc::new(ServiceManager::new(sender.clone())),
             area_manager,
             message_receiver: Mutex::new(Some(receiver)),
+            message_sender: sender,
+            topic_rate_limiter: Arc::new(Mutex::new(HashMap::new())),
             gtk_app,
         }
     }
@@ -168,10 +175,8 @@ impl LauncherApplication {
                 MainContext::default().spawn_local(async move {
                     while let Some(envelope) = receiver.recv().await {
                         self_clone2.handle_message(envelope);
-                        // if let Some(ref scrolled_window) = first_scrolled_window {
-                        //     // self_clone2.handle_message(envelope, scrolled_window, &main_container_clone);
-                        // }
                     }
+                    error!("Message broker receive loop exited");
                 });
             }
 

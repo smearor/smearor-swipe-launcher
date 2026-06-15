@@ -13,7 +13,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructor;
 use smearor_swipe_launcher_plugin_api::PluginVTable;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 
 /// Represents a loaded plugin with its library handle
@@ -26,7 +26,7 @@ pub struct LoadedPlugin {
 }
 
 impl LoadedPlugin {
-    pub fn load(plugin_entry: &PluginEntry, config: &PluginConfig, sender: Sender<FfiEnvelope>) -> Result<(String, Self), LauncherError> {
+    pub fn load(plugin_entry: &PluginEntry, config: &PluginConfig, sender: UnboundedSender<FfiEnvelope>) -> Result<(String, Self), LauncherError> {
         unsafe {
             let path = PathBuf::from(&plugin_entry.path);
             let library = Arc::new(Library::new(&path)?);

@@ -5,17 +5,17 @@ use dashmap::DashSet;
 use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 use tracing::info;
 
 pub struct ServiceManager {
     pub(crate) services: DashMap<String, LoadedService>,
-    pub(crate) message_sender: Sender<FfiEnvelope>,
+    pub(crate) message_sender: UnboundedSender<FfiEnvelope>,
 }
 
 impl ServiceManager {
-    pub fn new(message_sender: Sender<FfiEnvelope>) -> Self {
+    pub fn new(message_sender: UnboundedSender<FfiEnvelope>) -> Self {
         ServiceManager {
             services: DashMap::new(),
             message_sender,

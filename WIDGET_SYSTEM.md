@@ -139,7 +139,7 @@ When the Core receives an envelope, the central broker routes it to all subscrib
   ```json
   {
     "sender_id": "core",
-    "topic": "plugins/broadcast/settings",
+    "topic": "plugins.broadcast.settings",
     "payload": "{ \"theme\": \"dark\", \"animations_enabled\": true }"
   }
   ```
