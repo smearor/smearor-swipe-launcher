@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use tracing::debug;
 use tracing::error;
-use tracing::info;
+use tracing::trace;
 use tracing::warn;
 
 /// Manages dynamic area operations at runtime
@@ -61,7 +61,7 @@ impl AreaManager {
 
     /// Add an area from configuration
     pub fn add_area_from_config(&self, area_id: &str, area_config: AreaConfig) -> Result<(), AddAreaError> {
-        debug!("Adding area {} from config", area_id);
+        trace!("Adding area {} from config", area_id);
 
         let main_container = self.get_main_container()?;
 
@@ -93,7 +93,7 @@ impl AreaManager {
             .animate_widget_addition(&overlay.clone().upcast::<Widget>(), &area_config.open_transition());
         // self.layout_transition.animate_widget_addition(&widget, &area_config.close_transition());
 
-        info!("Successfully added area {} with overlay", area_id);
+        trace!("Successfully added area {} with overlay", area_id);
         Ok(())
     }
 
@@ -152,13 +152,13 @@ impl AreaManager {
             debug!("Successfully removed area {}", area_id_clone);
         });
 
-        info!("Successfully initiated removal of area {}", area_id);
+        trace!("Successfully initiated removal of area {}", area_id);
         Ok(())
     }
 
     /// Add a transient area with auto-close detection
     pub fn add_transient_area(&self, area_id: &str, area_config: AreaConfig, sender_id: Option<&str>) -> Result<(), AddAreaError> {
-        debug!("Adding transient area {} from sender {:?}", area_id, sender_id);
+        trace!("Adding transient area {} from sender {:?}", area_id, sender_id);
 
         // Check if area already exists
         if self.areas.contains_key(area_id) {
@@ -172,11 +172,11 @@ impl AreaManager {
         for plugin_entry in &config.plugins {
             if !self.plugin_manager.plugins.contains_key(&plugin_entry.id) {
                 let plugin_config = self.config.plugin_config(&plugin_entry.id);
-                info!("Loading plugin {} for transient area {}", plugin_entry.id, area_id);
+                trace!("Loading plugin {} for transient area {}", plugin_entry.id, area_id);
                 if let Err(e) = self.plugin_manager.load_plugin(plugin_entry, plugin_config) {
                     error!("Failed to load plugin {} for transient area {}: {}", plugin_entry.id, area_id, e);
                 } else {
-                    info!("Successfully loaded plugin {} for transient area {}", plugin_entry.id, area_id);
+                    trace!("Successfully loaded plugin {} for transient area {}", plugin_entry.id, area_id);
                 }
             }
         }
@@ -191,7 +191,7 @@ impl AreaManager {
         // Make source area widget transparent (overlay remains visible)
         if let Some(ref widget) = source_area_widget {
             widget.add_css_class("scroll-area-transparent");
-            info!("Made source area widget transparent for {}", area_id);
+            trace!("Made source area widget transparent for {}", area_id);
         }
 
         // Create the area widget
@@ -216,7 +216,7 @@ impl AreaManager {
         // Add overlay to source area overlay (not the widget)
         if let Some(source_overlay) = source_area_overlay {
             source_overlay.add_overlay(&overlay);
-            info!("Added transient area {} overlay to source area overlay", area_id);
+            trace!("Added transient area {} overlay to source area overlay", area_id);
         } else {
             // Fallback: if no source overlay found, this shouldn't happen but handle gracefully
             warn!("No source area overlay found for transient area {}", area_id);
@@ -230,7 +230,7 @@ impl AreaManager {
         // let overlay_widget = overlay.clone().upcast::<Widget>();
         // self.layout_transition.animate_widget_addition(&overlay_widget, &config.close_transition());
 
-        info!("Successfully added transient area {}", area_id);
+        trace!("Successfully added transient area {}", area_id);
         Ok(())
     }
 
@@ -341,7 +341,7 @@ impl AreaManager {
                 Widget::from_glib_full(ffi_widget.raw_widget)
             };
             container.append(&widget);
-            info!("Plugin {} successfully added to area widget", plugin_entry.id);
+            trace!("Plugin {} successfully added to area widget", plugin_entry.id);
         }
     }
 

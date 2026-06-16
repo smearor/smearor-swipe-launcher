@@ -18,6 +18,10 @@ path = "target/release/libsmearor_audio_service.so"
 id = "mpris"
 path = "target/release/libsmearor_mpris_service.so"
 
+[[services]]
+id = "notifications"
+path = "target/release/libsmearor_notifications_service.so"
+
 ### Configure the app launcher service
 
 [app_launcher]
@@ -69,9 +73,8 @@ plugins = [
     { id = "mpris", path = "target/release/libsmearor_mpris_widget.so" },
     { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "smearor_wrot_gnome_2048", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" }
+    #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
 
 # Plugins in the right static area
@@ -79,6 +82,7 @@ plugins = [
 area_type = "fixed"
 width = 200
 plugins = [
+    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so" },
     { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
 ]
 

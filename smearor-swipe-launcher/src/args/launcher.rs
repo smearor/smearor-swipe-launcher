@@ -6,7 +6,7 @@ use miette::IntoDiagnostic;
 use miette::Result;
 use miette::miette;
 use std::path::PathBuf;
-use tracing::info;
+use tracing::trace;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -33,7 +33,7 @@ impl SwipeLauncherArguments {
                     .filter_map(|area_id| config.get_area_config(area_id))
                     .map(|area_config| area_config.plugins.len())
                     .sum();
-                info!("Loaded configuration with {} plugins across {} areas", total_plugins, config.areas.len());
+                trace!("Loaded configuration with {} plugins across {} areas", total_plugins, config.areas.len());
                 Ok(config)
             }
             None => Err(miette!("No config file specified")),

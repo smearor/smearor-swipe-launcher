@@ -4,8 +4,6 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageRouter;
 use std::time::Duration;
 use std::time::Instant;
-use tracing::debug;
-use tracing::info;
 use tracing::trace;
 use tracing::warn;
 
@@ -15,7 +13,7 @@ impl LauncherApplication {
         let topic = envelope.topic.to_string();
         let payload = envelope.payload.to_string();
 
-        debug!("Event Broker: Received message from '{}' on topic '{}': {}", sender_id, topic, payload);
+        trace!("Event Broker: Received message from '{}' on topic '{}': {}", sender_id, topic, payload);
 
         // Rate-limit command topics to protect the broker from burst overload.
         if topic.ends_with(".command") || topic.ends_with(".status") {
@@ -70,8 +68,6 @@ impl LauncherApplication {
         //     }
         // }
 
-        // Example 3: Routing to a specific plugin
-        // Example 5: Plugin-to-Plugin direct signaling
         if topic.starts_with("plugin.") {
             let parts: Vec<&str> = topic.split('.').collect();
             if parts.len() >= 2 {
@@ -85,9 +81,8 @@ impl LauncherApplication {
             }
         }
 
-        // Example 4: Broadcasting to all plugins
         if topic.starts_with("plugins.broadcast.") {
-            info!("Broadcasting message to all loaded plugins");
+            trace!("Broadcasting message to all loaded plugins");
             for r in self.plugin_manager.plugins.iter() {
                 let plugin = r.value();
                 unsafe {
@@ -101,16 +96,16 @@ impl LauncherApplication {
             let parts: Vec<&str> = topic.split('.').collect();
             if parts.len() >= 2 {
                 let target_service_id = parts[1];
-                debug!("target_service_id {target_service_id}");
+                trace!("target_service_id {target_service_id}");
                 if let Some(service) = self.service_manager.services.get(target_service_id) {
-                    info!("Route message to service {target_service_id}");
+                    trace!("Route message to service {target_service_id}");
                     unsafe {
                         service.on_message(envelope.clone());
                     }
                 }
             }
             if topic.ends_with(".status") {
-                info!("Broadcasting service status update to all plugins");
+                trace!("Broadcasting service status update to all plugins");
                 for r in self.plugin_manager.plugins.iter() {
                     let plugin = r.value();
                     unsafe {
@@ -122,7 +117,7 @@ impl LauncherApplication {
 
         // Broadcasting to all background services
         if topic.starts_with("services.broadcast.") {
-            info!("Broadcasting message to all background services");
+            trace!("Broadcasting message to all background services");
             for r in self.service_manager.services.iter() {
                 let service = r.value();
                 unsafe {

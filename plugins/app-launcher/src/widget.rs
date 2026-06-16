@@ -36,7 +36,7 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tracing::debug;
-use tracing::info;
+use tracing::trace;
 
 pub struct AppLauncherWidget {
     pub meta: PluginMeta,
@@ -97,7 +97,7 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileStatusMessage>> for AppLaunche
         if message.desktop_file != self.config.desktop_file_path {
             return;
         }
-        info!("AppLauncher Widget {} status updated for {}: {:?}", self.meta.id, message.desktop_file, message.status);
+        trace!("AppLauncher Widget {} status updated for {}: {:?}", self.meta.id, message.desktop_file, message.status);
         if let Ok(guard) = self.led_indicator.read() {
             if let Some(led) = guard.as_ref() {
                 match message.status {
@@ -195,14 +195,13 @@ impl WidgetBuilder for AppLauncherWidget {
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
         let message_broadcaster_generic = MessageBroadcaster::<Value>::get_broadcaster(self);
-        click_gesture.connect_released(move |gesture, n_clicks, _, _| {
+        click_gesture.connect_released(move |gesture, _n_clicks, _, _| {
             if let Some(seq) = gesture.current_sequence() {
                 let state = gesture.sequence_state(&seq);
                 if state == EventSequenceState::Claimed || state == EventSequenceState::Denied {
                     return;
                 }
             }
-            info!("Click released {n_clicks}");
             message_broadcaster_desktop_file_command
                 .broadcast_message_to_topic(DesktopFileCommandMessage::exec(&desktop_file_inner, wrapper_config_inner.clone()));
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {

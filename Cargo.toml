@@ -6,6 +6,7 @@ members = [
     "model/clock",
     "model/message",
     "model/mpris",
+    "model/notifications",
     "model/plugin",
     "plugin-api",
     "plugins/clock",
@@ -13,9 +14,11 @@ members = [
     "plugins/audio",
     "plugins/button",
     "plugins/mpris",
+    "plugins/notifications",
     "services/app-launcher",
     "services/audio",
     "services/mpris",
+    "services/notifications",
     "smearor-swipe-launcher",
 ]
 resolver = "2"

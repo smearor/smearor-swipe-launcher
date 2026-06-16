@@ -26,8 +26,9 @@ use std::time::Instant;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
+use tracing::debug;
 use tracing::error;
-use tracing::info;
+use tracing::trace;
 
 /// Main application state
 pub struct LauncherApplication {
@@ -66,28 +67,28 @@ impl LauncherApplication {
         for area_id in &self.config.areas {
             if let Some(area_config) = self.config.get_area_config(area_id) {
                 for plugin_entry in &area_config.plugins {
-                    info!("Loading plugin {} on area {}", plugin_entry.id, area_id);
+                    trace!("Loading plugin {} on area {}", plugin_entry.id, area_id);
                     let plugin_config = self.config.plugin_config(&plugin_entry.id);
-                    info!("Plugin config: {plugin_config:?}");
+                    trace!("Plugin config: {plugin_config:?}");
                     if let Err(e) = self.plugin_manager.load_plugin(&plugin_entry, plugin_config) {
                         error!("Failed to load plugin {}: {}", plugin_entry.id, e);
                     }
                 }
             }
         }
-        info!("Successfully loaded {} plugins", self.plugin_manager.plugins.len());
+        debug!("Successfully loaded {} plugins", self.plugin_manager.plugins.len());
     }
 
     pub fn load_services(&self) {
         for service_entry in &self.config.services {
-            info!("Loading service {}", service_entry.id);
+            trace!("Loading service {}", service_entry.id);
             let service_config = self.config.plugin_config(&service_entry.id);
-            info!("Service config: {service_config:?}");
+            trace!("Service config: {service_config:?}");
             if let Err(e) = self.service_manager.load_service(&service_entry, service_config) {
                 error!("Failed to load service {}: {}", service_entry.id, e);
             }
         }
-        info!("Successfully loaded {} services", self.service_manager.services.len());
+        debug!("Successfully loaded {} services", self.service_manager.services.len());
     }
 
     pub fn build_ui(self: Arc<Self>, config: &SwipeLauncherConfig) -> miette::Result<()> {
@@ -105,7 +106,7 @@ impl LauncherApplication {
         let rotation = config.launcher.rotation.clone();
         let layout_config = config.layout.clone();
         self.gtk_app.connect_activate(move |app| {
-            info!("GTK application activated");
+            trace!("GTK application activated");
 
             create_css_provider();
 
@@ -159,7 +160,7 @@ impl LauncherApplication {
                         if let Err(e) = area_manager.add_area_from_config(&area_id_clone, area_config_clone) {
                             error!("Failed to add area {}: {}", area_id_clone, e);
                         } else {
-                            info!("Successfully added area {} using AreaManager", area_id_clone);
+                            trace!("Successfully added area {} using AreaManager", area_id_clone);
                             if first_scrolled_window.is_none() {
                                 if let Some(scrolled_window) = area_manager.get_first_scrolled_window(&area_id_clone) {
                                     first_scrolled_window = Some(scrolled_window);

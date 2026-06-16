@@ -7,7 +7,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
-use tracing::info;
+use tracing::trace;
 
 pub struct PluginManager {
     pub(crate) plugins: DashMap<String, LoadedPlugin>,
@@ -27,12 +27,12 @@ impl PluginManager {
     }
 
     pub fn load_plugin(&self, plugin_entry: &PluginEntry, config: PluginConfig) -> Result<(), LauncherError> {
-        info!("Loading plugin {} from: {:?}", plugin_entry.id, plugin_entry.path);
+        trace!("Loading plugin {} from: {:?}", plugin_entry.id, plugin_entry.path);
 
         let (actual_plugin_id, plugin) = LoadedPlugin::load(plugin_entry, &config, self.message_sender.clone())?;
 
         self.plugins.insert(actual_plugin_id.clone(), plugin);
-        info!("Successfully loaded plugin: {}", actual_plugin_id);
+        debug!("Successfully loaded plugin: {}", actual_plugin_id);
 
         Ok(())
     }
@@ -42,15 +42,15 @@ impl PluginManager {
             unsafe {
                 plugin.destroy();
             }
-            info!("Successfully unloaded plugin {id}")
+            trace!("Successfully unloaded plugin {id}")
         }
     }
 
     pub fn unload_plugins(&self) {
-        info!("Cleaning up plugins");
+        trace!("Cleaning up plugins");
 
         for id in self.get_plugin_ids().iter() {
-            debug!("Destroying plugin: {}", id.as_str());
+            trace!("Destroying plugin: {}", id.as_str());
             self.unload_plugin(id.as_str());
         }
     }

@@ -5,7 +5,7 @@ use smearor_model_area::AreaTransition;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
-use tracing::error;
+use tracing::trace;
 
 /// Manages layout animations for smooth transitions
 pub struct LayoutTransition {
@@ -51,7 +51,7 @@ impl LayoutTransition {
 
     /// Animate widget addition with smooth transition
     pub fn animate_widget_addition(&self, widget: &Widget, transition: &AreaTransition) {
-        error!("transition {transition:?}");
+        trace!("animate_widget_addition with transition {transition:?}");
         if transition == &AreaTransition::None {
             return;
         }
@@ -62,7 +62,7 @@ impl LayoutTransition {
             return;
         };
 
-        error!("start_opacity {}", transition_params.start_opacity);
+        trace!("animate_widget_addition with start_opacity {}", transition_params.start_opacity);
         // Set initial state immediately so widget starts invisible
         widget.set_opacity(transition_params.start_opacity);
         if transition_params.start_margin_x != 0 {

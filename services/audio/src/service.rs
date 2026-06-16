@@ -38,7 +38,7 @@ use std::time::Duration;
 use std::time::Instant;
 use tracing::debug;
 use tracing::error;
-use tracing::info;
+use tracing::trace;
 
 pub enum PulseCommand {
     VolumeUp,
@@ -174,7 +174,7 @@ impl AudioService {
 
 impl MessageHandler<FfiEnvelopePayload<AudioCommandMessage>> for AudioService {
     fn handle_message(&self, message: FfiEnvelopePayload<AudioCommandMessage>, _sender_id: &str) {
-        info!("Audio Service: received command {:?}", message.action);
+        trace!("Audio Service: received command {:?}", message.action);
         match message.action {
             AudioCommandAction::VolumeUp => self.handle_volume_up(),
             AudioCommandAction::VolumeDown => self.handle_volume_down(),
@@ -279,7 +279,7 @@ fn run_pulse_thread(
     }
 
     context.set_state_callback(None);
-    debug!("Audio Service: PulseAudio context ready");
+    trace!("Audio Service: PulseAudio context ready");
 
     let pulse_state = Arc::new(Mutex::new(PulseState::default()));
     let last_status = Arc::new(Mutex::new(None::<AudioStatusMessage>));
@@ -496,7 +496,7 @@ fn refresh_and_broadcast(
     last_status: &Arc<Mutex<Option<AudioStatusMessage>>>,
     status_sender: &Sender<AudioStatusMessage>,
 ) {
-    debug!("Audio Service: refresh_and_broadcast ");
+    trace!("Audio Service: refresh_and_broadcast ");
     let Some(status) = query_status(mainloop, introspect, pulse_state) else {
         return;
     };
@@ -504,14 +504,13 @@ fn refresh_and_broadcast(
         return;
     };
     if last.as_ref() != Some(&status) {
-        debug!("Audio status updated: {status:?}");
+        trace!("Audio status updated: {status:?}");
         *last = Some(status.clone());
         let _ = status_sender.send(status);
     }
 }
 
 fn query_status(mainloop: &mut Mainloop, introspect: &mut Introspector, state: &Arc<Mutex<PulseState>>) -> Option<AudioStatusMessage> {
-    debug!("Audio Service: query_status");
     let default_sink_name = Arc::new(Mutex::new(None::<String>));
     let ds = default_sink_name.clone();
     let ml: *mut Mainloop = mainloop;
@@ -525,8 +524,6 @@ fn query_status(mainloop: &mut Mainloop, introspect: &mut Introspector, state: &
     });
     mainloop.wait();
     mainloop.unlock();
-
-    debug!("Audio Service: query_status 2");
 
     let sinks_data = Arc::new(Mutex::new(Vec::new()));
     let sk = sinks_data.clone();
@@ -560,8 +557,6 @@ fn query_status(mainloop: &mut Mainloop, introspect: &mut Introspector, state: &
         }
         std::thread::sleep(Duration::from_millis(10));
     }
-
-    debug!("Audio Service: query_status 3");
 
     let mut default_name = default_sink_name.lock().unwrap().clone();
     let sinks = sinks_data.lock().unwrap();
@@ -599,8 +594,6 @@ fn query_status(mainloop: &mut Mainloop, introspect: &mut Introspector, state: &
         sink_list.push((*id, name.clone()));
     }
 
-    debug!("Audio Service: query_status 4");
-
     if let Ok(mut st) = state.lock() {
         st.default_sink_name = default_name;
         st.default_sink_index = active_device.as_ref().map(|d| d.id);
@@ -609,8 +602,6 @@ fn query_status(mainloop: &mut Mainloop, introspect: &mut Introspector, state: &
         st.channels = active_channels;
         st.sinks = sink_list;
     }
-
-    debug!("Audio Service: query_status 5");
 
     Some(AudioStatusMessage::new(volume, is_muted, output_devices, Vec::new(), active_device))
 }

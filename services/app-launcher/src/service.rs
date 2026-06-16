@@ -27,7 +27,6 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tracing::debug;
 use tracing::error;
-use tracing::info;
 use tracing::trace;
 use which::which;
 
@@ -76,7 +75,7 @@ impl AppLauncherService {
             });
 
             for desktop_file in completed_apps {
-                info!("AppLauncher Service: App exited naturally: {}", desktop_file);
+                debug!("AppLauncher Service: App exited naturally: {}", desktop_file);
                 broadcaster.broadcast_message_to_topic(DesktopFileStatusMessage::stopped(&desktop_file));
             }
 
@@ -85,8 +84,8 @@ impl AppLauncherService {
     }
 
     fn handle_exec(&self, desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>) {
-        info!("AppLauncher Service: Launching app: {desktop_file}");
-        info!("Using wrapper smearor-wrot: {:?}", wrapper);
+        trace!("AppLauncher Service: Launching app: {desktop_file}");
+        trace!("Using wrapper smearor-wrot: {:?}", wrapper);
         let entry = match Entry::parse_file(desktop_file) {
             Ok(entry) => entry,
             Err(e) => {
@@ -109,10 +108,10 @@ impl AppLauncherService {
             };
             trace!("raw_args: {:?}", raw_args);
             raw_args.remove(0);
-            info!("AppLauncher Service: smearor_wrot_path: {:?}", self.config.smearor_wrot_path);
+            trace!("AppLauncher Service: smearor_wrot_path: {:?}", self.config.smearor_wrot_path);
             if let Some(wrapper) = wrapper {
                 if let Some(smearor_wrot_path) = &self.config.smearor_wrot_path {
-                    info!("AppLauncher Service: Launching app {desktop_file} with wrapper");
+                    trace!("AppLauncher Service: Launching app {desktop_file} with wrapper");
                     let actual_program = program.clone();
                     program = self.resolve_path(smearor_wrot_path).to_string_lossy().to_string();
 
@@ -131,16 +130,16 @@ impl AppLauncherService {
                     raw_args = wrapper_args;
                 }
             }
-            error!("program: {program}");
-            error!("args: {:?}", raw_args);
+            trace!("program: {program}");
+            trace!("args: {:?}", raw_args);
             // Sanitize placeholders like %u, %F
             let clean_args: Vec<String> = raw_args
                 .iter()
                 .map(|arg| arg.trim().to_string())
                 .filter(|arg| !arg.is_empty() && !arg.starts_with('%'))
                 .collect();
-            error!("clean_args: {:?}", clean_args);
-            error!("full command: {program} {}", clean_args.join(" "));
+            trace!("clean_args: {:?}", clean_args);
+            debug!("full command: {program} {}", clean_args.join(" "));
 
             let child = Command::new(program.clone())
                 .args(&clean_args)
@@ -152,7 +151,7 @@ impl AppLauncherService {
             match child {
                 Ok(c) => {
                     let pid = c.id();
-                    info!("AppLauncher Service: Successfully spawned {} with PID {}", program, pid);
+                    debug!("AppLauncher Service: Successfully spawned {} with PID {}", program, pid);
                     self.tracked_processes.entry(desktop_file.to_string()).or_default().push(pid);
                     self.broadcast_message_to_topic(DesktopFileStatusMessage::running(desktop_file));
                 }
@@ -164,13 +163,13 @@ impl AppLauncherService {
     }
 
     fn handle_terminate(&self, desktop_file: &str) {
-        info!("AppLauncher Service: Terminating app: {desktop_file}");
+        trace!("AppLauncher Service: Terminating app: {desktop_file}");
         if let Some(mut r) = self.tracked_processes.get_mut(desktop_file) {
             let pids = r.value_mut();
             for &pid in pids.iter() {
                 let proc_path = format!("/proc/{}", pid);
                 if Path::new(&proc_path).exists() {
-                    info!("AppLauncher Service: Sending SIGTERM to process {}", pid);
+                    trace!("AppLauncher Service: Sending SIGTERM to process {}", pid);
                     let posix_pid = Pid::from_raw(pid as i32);
                     if let Err(e) = kill(posix_pid, Signal::SIGTERM) {
                         error!("AppLauncher Service: Failed to kill process {}: {}", pid, e);
@@ -186,11 +185,11 @@ impl AppLauncherService {
     pub fn resolve_path(&self, executable_name: &str) -> OsString {
         which(&executable_name)
             .map(|path| {
-                debug!("Resolved executable '{executable_name}' to: {path:?}");
+                trace!("Resolved executable '{executable_name}' to: {path:?}");
                 path.as_os_str().to_os_string()
             })
             .unwrap_or_else(|e| {
-                debug!("Failed to resolve executable '{executable_name}': {}", e);
+                trace!("Failed to resolve executable '{executable_name}': {}", e);
                 executable_name.to_string().into()
             })
     }
@@ -198,7 +197,7 @@ impl AppLauncherService {
 
 impl MessageHandler<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLauncherService {
     fn handle_message(&self, message: FfiEnvelopePayload<DesktopFileCommandMessage>, _sender_id: &str) {
-        info!("handle_message: {message:?}");
+        trace!("handle_message: {message:?}");
         match message.action {
             DesktopFileCommandAction::Exec => {
                 self.handle_exec(&message.desktop_file, message.wrapper.clone());

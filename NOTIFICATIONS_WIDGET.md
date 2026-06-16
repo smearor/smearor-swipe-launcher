@@ -1,72 +1,255 @@
-# Notifications Widget Concept
+# Notifications Widget Architecture
 
-Ein Notifications-Widget unter Linux (besonders in einer Hyprland-Umgebung) ist eines der kritischsten Elemente, da es die gesamte systemweite Kommunikation
-bündelt. Da es bei dir mit AGS und Rust zusammenarbeitet, sollte der Funktionsumfang so gestaltet sein, dass er den **Desktop-Notification-Standard (Desktop
-Notifications Specification)** vollständig ausschöpft.
+## Overview
 
-Hier ist der Funktionsumfang, unterteilt in die wichtigsten Ebenen:
+This document describes the architecture for the notifications widget following the workspace's plugin-service-model pattern. The implementation consists of
+three separate crates that communicate via typed message passing.
 
-### 1. Kern-Funktionen (Standard)
-
-* **Real-time Empfang:** Anzeige eingehender Benachrichtigungen via D-Bus (`org.freedesktop.Notifications`).
-* **Kategorisierung (Urgency):** Unterscheidung zwischen `Low`, `Normal` und `Critical`. Das Widget sollte diese optisch unterschiedlich behandeln (z.B.
-  farbliche Akzente oder Animationen für kritische Nachrichten).
-* **Aktions-Buttons:** Viele Benachrichtigungen (z. B. von E-Mail-Clients oder Messengern) bieten Aktionen an (z. B. "Antworten", "Löschen", "Archivieren").
-  Dein Widget muss diese Buttons rendern und die Rückmeldung korrekt an den Absender-Prozess übermitteln.
-
-### 2. Management & Historie
-
-* **Benachrichtigungshistorie:** Ein erweiterbares Panel, das bereits gelesene Benachrichtigungen speichert, falls der Benutzer sie kurzzeitig verpasst hat.
-* **Filterung & Stummschaltung (Do Not Disturb):** Ein Modus, der Benachrichtigungen unterdrückt oder nur in der Historie ablegt, ohne den Benutzer durch
-  Pop-ups zu stören.
-* **Gruppierung:** Wenn ein Programm (z.B. ein Chat-Client) mehrere Nachrichten in kurzer Zeit sendet, sollte das Widget diese gruppieren (z.B. "3 neue
-  Nachrichten von X"), statt den Desktop mit einzelnen Pop-ups zu fluten.
-
-### 3. Visuelle & Interaktive Features
-
-* **Custom Widgets innerhalb der Benachrichtigung:** Fortschrittsbalken (z. B. für Datei-Downloads oder Audio-Uploads).
-* **Timeout-Steuerung:** Die Möglichkeit, ein "Sticky"-Flag zu setzen, damit kritische Benachrichtigungen erst verschwinden, wenn der Benutzer sie explizit
-  wegklickt.
-* **Animationen:** Sanftes Ein- und Ausblenden (`Fade-in`/`Slide-in`), was in Hyprland mit AGS extrem flüssig umgesetzt werden kann.
-
-### 4. Technische Struktur (Die "Rust-AGS" Verbindung)
-
-Da du Rust als Backend für deine AGS-Logik nutzt, wäre hier eine effiziente Architektur sinnvoll:
-
-#### Empfohlene Konfigurations-Struktur
-
-Damit das Widget für deine Bedürfnisse flexibel bleibt:
-
-```rust
-#[derive(Debug, Clone, Deserialize)]
-pub struct NotificationSettings {
-    pub max_visible: u32,
-    pub timeout_ms: u64,
-    pub show_history: bool,
-    pub critical_only_do_not_disturb: bool,
-    pub ignore_apps: Vec<String>, // Liste von Apps, die niemals benachrichtigen dürfen
-}
-
-impl Default for NotificationSettings {
-    fn default() -> Self {
-        Self {
-            max_visible: 5,
-            timeout_ms: 5000,
-            show_history: true,
-            critical_only_do_not_disturb: true,
-            ignore_apps: vec![],
-        }
-    }
-}
+## Crate Structure
 
 ```
+model/notifications/       # Shared message types
+services/notifications/    # Backend service plugin
+plugins/notifications/     # GTK4 UI widget plugin
+```
 
-### Zusammenfassung der Architektur-Strategie
+---
 
-* **Backend:** Nutze in Rust ein Crate wie `notify-rust` oder `zbus`, um den D-Bus-Server für Benachrichtigungen zu implementieren.
-* **Frontend:** Dein AGS-Widget fungiert nur als "View". Es erhält die Daten vom Rust-Backend und rendert sie.
-* **Interaktion:** Der wichtigste Punkt bei Notifications ist das **`Dismiss` und `Invoke**`. Dein Widget muss sicherstellen, dass beim Klick auf eine Nachricht
-  das entsprechende Signal zurück an den Sender-Prozess gesendet wird, damit z.B. eine E-Mail als gelesen markiert wird.
+## 1. model/notifications
 
-Möchtest du, dass wir für das Notifications-Backend eine kleine Schnittstelle in Rust entwerfen, damit du die eingehenden Benachrichtigungen filtern oder loggen
-kannst, bevor sie im AGS-Widget landen?
+**Purpose:** Defines all message types exchanged between the widget and the service. This crate has no plugin dependencies and serves as the contract between UI
+and backend.
+
+### Files
+
+- `Cargo.toml` — Dependencies: `serde`, `smearor_swipe_launcher_plugin_api`
+- `src/lib.rs` — Exports the messages module
+- `src/messages/mod.rs` — Declares `command` and `status` sub-modules
+- `src/messages/command.rs` — Actions the widget can send to the service
+- `src/messages/status.rs` — Status updates broadcast by the service
+
+### Message Topics
+
+- `service.notifications.command` — Widget → Service (user actions)
+- `service.notifications.status` — Service → Widget (state updates)
+
+### Command Message Types
+
+```rust
+pub enum NotificationCommandAction {
+    Dismiss,        // Dismiss a single notification by ID
+    DismissAll,     // Dismiss all visible notifications
+    DismissLast,    // Dismiss the most recent notification
+    InvokeAction,    // Invoke an action button on a notification
+    ToggleDoNotDisturb, // Toggle DND mode
+}
+```
+
+### Status Message Types
+
+```rust
+pub struct NotificationStatusMessage {
+    pub do_not_disturb: bool,
+    pub notifications: Vec<NotificationInfo>,
+    pub unread_count: u32,
+}
+
+pub struct NotificationInfo {
+    pub id: u32,
+    pub app_name: String,
+    pub summary: String,
+    pub body: String,
+    pub icon: Option<String>,
+    pub urgency: UrgencyLevel,
+    pub actions: Vec<NotificationAction>,
+    pub timestamp: u64,
+    pub timeout_ms: i32,
+}
+
+pub enum UrgencyLevel {
+    Low,
+    Normal,
+    Critical,
+}
+```
+
+---
+
+## 2. services/notifications
+
+**Purpose:** Backend service that connects to the D-Bus notification daemon (`org.freedesktop.Notifications`), receives system notifications, maintains state,
+and broadcasts updates to all listening widgets.
+
+### Files
+
+- `Cargo.toml` — Dependencies: `zbus`, `tokio`, `serde_json`, `tracing`, `model/notifications`
+- `src/lib.rs` — Declares modules, implements `service_plugin!(NotificationService)`
+- `src/service.rs` — Core service logic
+- `src/config.rs` — `NotificationServiceConfig` struct with `parse` method
+
+### Service Responsibilities
+
+1. **D-Bus Connection:** Register as a notification client on `org.freedesktop.Notifications`
+2. **Notification Reception:** Handle `Notify` signals from the D-Bus daemon
+3. **Action Handling:** Process user-triggered actions (dismiss, invoke)
+4. **State Management:** Maintain the list of active notifications
+5. **Broadcasting:** Send `NotificationStatusMessage` updates to widgets
+
+### Service Struct
+
+```rust
+pub struct NotificationService {
+    pub meta: PluginMeta,
+    pub core_context: Option<FfiCoreContext>,
+    pub config: NotificationServiceConfig,
+    pub command_sender: Sender<NotificationCommand>,
+    pub status_receiver: Arc<Mutex<Receiver<NotificationStatusMessage>>>,
+}
+```
+
+### Implemented Traits
+
+- `MessageHandler<FfiEnvelopePayload<NotificationCommandMessage>>`
+- `MessageBroadcaster<NotificationStatusMessage>`
+- `MessageTopicBroadcaster<NotificationStatusMessage>`
+- `PluginMetaGetter`
+- `AsRef<Option<FfiCoreContext>>`
+
+---
+
+## 3. plugins/notifications
+
+**Purpose:** GTK4 UI widget that displays notifications, handles user interactions, and sends commands to the service via message broadcasting.
+
+### Files
+
+- `Cargo.toml` — Dependencies: `gtk4`, `glib`, `adw`, `model/notifications`
+- `src/lib.rs` — Declares `config` and `widget` modules, implements `widget_plugin!(NotificationWidget)`
+- `src/widget.rs` — Widget struct and UI logic
+- `src/config.rs` — `NotificationWidgetConfig` struct with `parse` method
+
+### UI Components
+
+- **Notification List:** Scrollable list of active notifications
+- **Notification Card:** Individual notification with icon, title, body, and action buttons
+- **Dismiss Button:** Per-notification dismiss control
+- **DND Toggle:** Do Not Disturb mode indicator/control
+- **Clear All Button:** Dismiss all notifications
+
+### Interaction Mapping
+
+| Gesture                 | Action                             |
+|-------------------------|------------------------------------|
+| Primary click on card   | Invoke default action              |
+| Secondary click on card | Dismiss notification               |
+| Long press              | Show action buttons (if any)       |
+| Swipe left              | Dismiss notification               |
+| Scroll up/down          | Navigate through notification list |
+
+### Widget Struct
+
+```rust
+pub struct NotificationWidget {
+    pub meta: PluginMeta,
+    pub core_context: Option<FfiCoreContext>,
+    pub config: NotificationWidgetConfig,
+    pub status_receiver: Option<Receiver<NotificationStatusMessage>>,
+    pub last_command_time: Arc<Mutex<Instant>>,
+}
+```
+
+### Implemented Traits
+
+- `MessageHandler<FfiEnvelopePayload<NotificationStatusMessage>>`
+- `MessageBroadcaster<NotificationCommandMessage>`
+- `MessageTopicBroadcaster<NotificationCommandMessage>`
+- `PluginMetaGetter`
+- `AsRef<Option<FfiCoreContext>>`
+- `WidgetBuilder`
+
+---
+
+## Workspace Integration
+
+### Cargo.toml (workspace root)
+
+Add the new crates to workspace members:
+
+```toml
+[workspace]
+members = [
+    # ... existing members ...
+    "model/notifications",
+    "services/notifications",
+    "plugins/notifications",
+]
+```
+
+### config.toml (launcher configuration)
+
+```toml
+[services.notifications]
+enabled = true
+# Service-specific configuration
+
+[widgets.notifications]
+enabled = true
+# Widget-specific configuration (position, styling, etc.)
+```
+
+---
+
+## Message Flow
+
+```
++---------------+    +------------------------+    +-------------------+
+| D-Bus Daemon  |    | services/notifications |    | plugins/          |
+| (freedesktop) |    | (NotificationService)   |    | notifications     |
++-------+-------+    +-----------+------------+    +---------+---------+
+        |                        |                          |
+        | Notify signal          |                          |
+        +----------------------->|                          |
+        |                        |                          |
+        |                        | Broadcast status update  |
+        |                        +------------------------->|
+        |                        |                          |
+        |                        | <------------------------+
+        |                        | Command message          |
+        |                        | (dismiss, invoke, etc.) |
+        |                        |                          |
+        |                        | Send action back to D-Bus|
+        | <----------------------+                          |
+```
+
+---
+
+## Implementation Order
+
+1. **Create `model/notifications`** — Define all message types first
+2. **Create `services/notifications`** — Implement D-Bus notification client
+3. **Create `plugins/notifications`** — Build GTK4 UI widget
+4. **Update workspace `Cargo.toml`** — Register new crates
+5. **Update `config.toml`** — Configure the new widget and service
+
+---
+
+## Notes
+
+- The service uses `zbus` for D-Bus communication with the notification daemon
+- Notifications follow the [Desktop Notifications Specification](https://specifications.freedesktop.org/notification-spec/notification-spec-latest.html)
+- The widget uses GTK4 containers (`ListBox`, `Box`, `Button`) for the notification list
+- Action buttons are dynamically generated based on the `actions` field in `NotificationInfo`
+- Urgency levels are visually differentiated (color coding, animation for critical)
+- The service maintains a bounded history of dismissed notifications
+- Debounce logic (150ms) applies to all gesture-based interactions
+
+## Comparison with MPRIS Widget
+
+| Aspect          | MPRIS                          | Notifications                   |
+|-----------------|--------------------------------|---------------------------------|
+| D-Bus Interface | `org.mpris.MediaPlayer2`       | `org.freedesktop.Notifications` |
+| State           | Single active player           | Multiple active notifications   |
+| Primary Action  | Play/Pause toggle              | Invoke default action / Dismiss |
+| Visual          | Compact (album art + progress) | List-based (cards with actions) |
+| Grouping        | Player rotation                | App-based grouping (optional)   |
+| Commands        | 12 actions                     | 5 actions (simpler)             |

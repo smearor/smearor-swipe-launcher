@@ -30,7 +30,7 @@ use std::time::Duration;
 use std::time::Instant;
 use tracing::debug;
 use tracing::error;
-use tracing::info;
+use tracing::trace;
 use zbus::Connection;
 use zbus::proxy;
 use zbus::zvariant::OwnedValue;
@@ -183,7 +183,7 @@ impl MprisService {
 
 impl MessageHandler<FfiEnvelopePayload<MprisCommandMessage>> for MprisService {
     fn handle_message(&self, message: FfiEnvelopePayload<MprisCommandMessage>, _sender_id: &str) {
-        info!("MPRIS Service: received command {:?}", message.action);
+        trace!("MPRIS Service: received command {:?}", message.action);
         match message.action {
             MprisCommandAction::Play => self.handle_play(),
             MprisCommandAction::Pause => self.handle_pause(),
@@ -232,7 +232,7 @@ async fn find_players(conn: &Connection) -> Result<Vec<String>, zbus::Error> {
         .filter(|n| n.starts_with("org.mpris.MediaPlayer2."))
         .map(|n| n.to_string())
         .collect();
-    debug!("MPRIS Service: found players: {:?}", mpris_names);
+    trace!("MPRIS Service: found players: {:?}", mpris_names);
     Ok(mpris_names)
 }
 
@@ -274,7 +274,7 @@ async fn query_player_status(conn: &Connection, bus_name: &str) -> Result<MprisS
     let position = match proxy.position().await {
         Ok(p) => p,
         Err(e) => {
-            debug!("MPRIS Service: player {bus_name} does not support position query: {e}");
+            trace!("MPRIS Service: player {bus_name} does not support position query: {e}");
             0
         }
     };
@@ -341,7 +341,7 @@ async fn send_player_command(conn: &Connection, bus_name: &str, command: &MprisC
 }
 
 fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sender<MprisStatusMessage>) {
-    debug!("MPRIS Service: starting MPRIS thread");
+    trace!("MPRIS Service: starting MPRIS thread");
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
         Err(e) => {
@@ -379,7 +379,7 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
                     if !state.players.is_empty() {
                         let new_idx = state.active_player_index.map(|i| (i + 1) % state.players.len()).unwrap_or(0);
                         state.active_player_index = Some(new_idx);
-                        debug!("MPRIS Service: switched to player {}", state.players[new_idx].1);
+                        trace!("MPRIS Service: switched to player {}", state.players[new_idx].1);
                     }
                 }
                 Ok(MprisCommand::PreviousPlayer) => {
@@ -389,11 +389,11 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
                             .map(|i| if i == 0 { state.players.len() - 1 } else { i - 1 })
                             .unwrap_or(0);
                         state.active_player_index = Some(new_idx);
-                        debug!("MPRIS Service: switched to player {}", state.players[new_idx].1);
+                        trace!("MPRIS Service: switched to player {}", state.players[new_idx].1);
                     }
                 }
                 Ok(command) => {
-                    debug!("MPRIS Service: received command {:?}", command);
+                    trace!("MPRIS Service: received command {:?}", command);
                     if let Some(idx) = state.active_player_index {
                         if let Some((bus_name, _)) = state.players.get(idx) {
                             if let Err(e) = send_player_command(&conn, bus_name, &command, &state.playback_status).await {
@@ -417,7 +417,7 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    debug!("MPRIS Service: command channel disconnected, exiting thread");
+                    trace!("MPRIS Service: command channel disconnected, exiting thread");
                     break;
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -444,7 +444,7 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
                 })
                 .collect();
 
-            debug!(
+            trace!(
                 "MPRIS Service: available players after filtering: {:?}",
                 player_names.iter().map(|(_, d)| d.clone()).collect::<Vec<_>>()
             );
@@ -482,7 +482,7 @@ fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sen
                         Err(e) => {
                             let error_str = e.to_string();
                             if error_str.contains("AccessDenied") {
-                                debug!("MPRIS Service: blocking player {bus_name} for {}s", BLOCK_DURATION.as_secs());
+                                trace!("MPRIS Service: blocking player {bus_name} for {}s", BLOCK_DURATION.as_secs());
                                 blocked_players.insert(bus_name.clone(), Instant::now());
                                 state.players.remove(idx);
                                 if state.players.is_empty() {
