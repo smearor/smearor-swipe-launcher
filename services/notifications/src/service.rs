@@ -24,6 +24,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
+use std::time::Instant;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -302,7 +303,6 @@ fn run_notification_thread(
     };
     runtime.block_on(async {
         let state = Arc::new(Mutex::new(NotificationState::default()));
-        let mut last_broadcast: Option<NotificationStatusMessage> = None;
 
         let (signal_sender, mut signal_receiver) = tokio::sync::mpsc::channel::<SignalCommand>(100);
         let notifications = Notifications {
@@ -311,76 +311,91 @@ fn run_notification_thread(
             signal_sender: signal_sender.clone(),
         };
 
-        let builder = match zbus::ConnectionBuilder::session() {
-            Ok(b) => b,
+        let conn = match zbus::ConnectionBuilder::session() {
+            Ok(b) => match b.serve_at("/org/freedesktop/Notifications", notifications) {
+                Ok(b) => match b.build().await {
+                    Ok(c) => c,
+                    Err(e) => {
+                        error!("Notification Service: failed to build D-Bus connection: {e}");
+                        return;
+                    }
+                },
+                Err(e) => {
+                    error!("Notification Service: failed to serve at path: {e}");
+                    return;
+                }
+            },
             Err(e) => {
                 error!("Notification Service: failed to create session builder: {e}");
                 return;
             }
         };
-        let builder = match builder.name("org.freedesktop.Notifications") {
-            Ok(b) => b,
-            Err(e) => {
-                error!("Notification Service: failed to request bus name: {e}");
-                return;
-            }
-        };
-        let builder = match builder.serve_at("/org/freedesktop/Notifications", notifications) {
-            Ok(b) => b,
-            Err(e) => {
-                error!("Notification Service: failed to serve at path: {e}");
-                return;
-            }
-        };
-        let conn = match builder.build().await {
-            Ok(c) => c,
-            Err(e) => {
-                error!("Notification Service: failed to build D-Bus connection: {e}");
-                return;
-            }
-        };
 
-        debug!("Notification Service: registered as org.freedesktop.Notifications");
-        let conn_for_signals = conn.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            let iface_ref = match conn_for_signals
-                .object_server()
-                .interface::<_, Notifications>("/org/freedesktop/Notifications")
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    error!("Notification Service: failed to get interface ref for signals: {e}");
-                    return;
-                }
-            };
-            while let Some(cmd) = signal_receiver.recv().await {
-                match cmd {
-                    SignalCommand::NotificationClosed(id, reason) => {
-                        let iface = iface_ref.get().await;
-                        if let Err(e) = iface.notification_closed(&iface_ref.signal_context(), id, reason).await {
-                            error!("Notification Service: failed to emit NotificationClosed: {e}");
-                        } else {
-                            debug!("Notification Service: emitted NotificationClosed {id} reason={reason}");
-                        }
+        let is_primary_daemon = match conn.request_name("org.freedesktop.Notifications").await {
+            Ok(_) => {
+                debug!("Notification Service: registered as org.freedesktop.Notifications");
+                true
+            }
+            Err(e) => {
+                error!("Notification Service: failed to request bus name (another daemon may be running): {e}");
+                false
+            }
+        };
+        if is_primary_daemon {
+            let conn_for_signals = conn.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                let iface_ref = match conn_for_signals
+                    .object_server()
+                    .interface::<_, Notifications>("/org/freedesktop/Notifications")
+                    .await
+                {
+                    Ok(r) => r,
+                    Err(e) => {
+                        error!("Notification Service: failed to get interface ref for signals: {e}");
+                        return;
                     }
-                    SignalCommand::ActionInvoked(id, action_key) => {
-                        let iface = iface_ref.get().await;
-                        if let Err(e) = iface.action_invoked(&iface_ref.signal_context(), id, &action_key).await {
-                            error!("Notification Service: failed to emit ActionInvoked: {e}");
-                        } else {
-                            debug!("Notification Service: emitted ActionInvoked {id} key={action_key}");
+                };
+                while let Some(cmd) = signal_receiver.recv().await {
+                    match cmd {
+                        SignalCommand::NotificationClosed(id, reason) => {
+                            let iface = iface_ref.get().await;
+                            if let Err(e) = iface.notification_closed(&iface_ref.signal_context(), id, reason).await {
+                                error!("Notification Service: failed to emit NotificationClosed: {e}");
+                            } else {
+                                debug!("Notification Service: emitted NotificationClosed {id} reason={reason}");
+                            }
+                        }
+                        SignalCommand::ActionInvoked(id, action_key) => {
+                            let iface = iface_ref.get().await;
+                            if let Err(e) = iface.action_invoked(&iface_ref.signal_context(), id, &action_key).await {
+                                error!("Notification Service: failed to emit ActionInvoked: {e}");
+                            } else {
+                                debug!("Notification Service: emitted ActionInvoked {id} key={action_key}");
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        } else {
+            tokio::spawn(async move { while signal_receiver.recv().await.is_some() {} });
+            debug!("Notification Service: running in passive mode, signal emission disabled");
+        }
 
-        let status = state.lock().unwrap().to_status_message();
-        let _ = status_sender.send(status);
+        let initial_status = state.lock().unwrap().to_status_message();
+        let _ = status_sender.send(initial_status.clone());
+        let mut last_broadcast = Some(initial_status);
+
+        let mut last_periodic_broadcast = Instant::now();
+        const PERIODIC_INTERVAL: Duration = Duration::from_secs(5);
 
         loop {
+            if Instant::now().duration_since(last_periodic_broadcast) >= PERIODIC_INTERVAL {
+                let status = state.lock().unwrap().to_status_message();
+                let _ = status_sender.send(status);
+                last_periodic_broadcast = Instant::now();
+            }
+
             match command_receiver.recv_timeout(Duration::from_millis(500)) {
                 Ok(NotificationCommand::Dismiss(id)) => {
                     debug!("Notification Service: dismissing notification {id}");

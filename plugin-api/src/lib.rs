@@ -19,6 +19,7 @@ pub use messages::AcceptTopic;
 pub use messages::FfiEnvelope;
 pub use messages::FfiEnvelopePayload;
 pub use messages::MessageBroadcaster;
+pub use messages::MessageBroadcasterInner;
 pub use messages::MessageHandler;
 pub use messages::MessageRouter;
 pub use messages::MessageTopic;

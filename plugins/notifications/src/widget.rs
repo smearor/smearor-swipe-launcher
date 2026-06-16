@@ -1,22 +1,29 @@
 use crate::config::NotificationWidgetConfig;
 use adw::gdk;
+use adw::gdk::pango::EllipsizeMode;
+use adw::gdk::pango::WrapMode;
 use glib::ControlFlow;
+use gtk4::Align;
 use gtk4::Box;
+use gtk4::Button;
 use gtk4::EventControllerScroll;
 use gtk4::EventControllerScrollFlags;
 use gtk4::EventSequenceState;
 use gtk4::GestureClick;
 use gtk4::GestureLongPress;
+use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
 use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::prelude::*;
 use smearor_notifications_model::NotificationCommandMessage;
+use smearor_notifications_model::NotificationInfo;
 use smearor_notifications_model::NotificationStatusMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
+use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopicBroadcaster;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
@@ -61,16 +68,120 @@ impl NotificationWidget {
         })
     }
 
-    fn start_status_listener(&self, receiver: Receiver<NotificationStatusMessage>, count_label: Label, dnd_label: Label) {
+    fn start_status_listener(
+        &self,
+        receiver: Receiver<NotificationStatusMessage>,
+        list_box: Box,
+        count_label: Label,
+        dnd_badge: Label,
+        broadcaster: MessageBroadcasterInner,
+    ) {
         glib::timeout_add_local(Duration::from_millis(100), move || {
             while let Ok(status) = receiver.try_recv() {
-                let count = status.notifications.len();
-                count_label.set_text(&format!("{count}"));
-                let dnd_text = if status.do_not_disturb { "DND" } else { "" };
-                dnd_label.set_text(dnd_text);
+                count_label.set_text(&format!("{}", status.unread_count));
+                dnd_badge.set_visible(status.do_not_disturb);
+
+                while let Some(child) = list_box.first_child() {
+                    list_box.remove(&child);
+                }
+
+                if status.do_not_disturb {
+                    let label = Label::builder().label("Do Not Disturb").css_classes(["title"]).build();
+                    list_box.append(&label);
+                } else if status.notifications.is_empty() {
+                    let label = Label::builder().label("No notifications").css_classes(["subtitle"]).build();
+                    list_box.append(&label);
+                } else {
+                    for notification in status.notifications.iter().take(5) {
+                        let card = Self::create_notification_card(notification, &broadcaster);
+                        list_box.append(&card);
+                    }
+                }
             }
             ControlFlow::Continue
         });
+    }
+
+    fn create_notification_card(notification: &NotificationInfo, broadcaster: &MessageBroadcasterInner) -> Box {
+        let card = Box::builder()
+            .orientation(Orientation::Vertical)
+            .spacing(2)
+            .css_classes(["notification-card"])
+            .build();
+
+        let header = Box::builder().orientation(Orientation::Horizontal).spacing(4).build();
+
+        let icon_name = notification.icon.as_deref().unwrap_or("dialog-information-symbolic");
+        let icon = Image::from_icon_name(icon_name);
+        icon.set_pixel_size(16);
+        header.append(&icon);
+
+        let app_label = Label::builder()
+            .label(&notification.app_name)
+            .css_classes(["notification-app-name"])
+            .halign(Align::Start)
+            .hexpand(true)
+            .build();
+        header.append(&app_label);
+
+        let dismiss_button = Button::builder().icon_name("window-close-symbolic").css_classes(["flat", "circular"]).build();
+        let notification_id = notification.id;
+        let broadcaster_clone = MessageBroadcasterInner {
+            meta: broadcaster.meta.clone(),
+            core_context: broadcaster.core_context,
+        };
+        dismiss_button.connect_clicked(move |_button| {
+            debug!("NotificationWidget: Dismiss notification {notification_id}");
+            broadcaster_clone.broadcast_message_to_topic(NotificationCommandMessage::dismiss_id(notification_id));
+        });
+        header.append(&dismiss_button);
+
+        card.append(&header);
+
+        if !notification.summary.is_empty() {
+            let summary_label = Label::builder()
+                .label(&notification.summary)
+                .css_classes(["notification-summary"])
+                .halign(Align::Start)
+                .ellipsize(EllipsizeMode::End)
+                .max_width_chars(20)
+                .build();
+            card.append(&summary_label);
+        }
+
+        if !notification.body.is_empty() {
+            let body_label = Label::builder()
+                .label(&notification.body)
+                .css_classes(["notification-body"])
+                .halign(Align::Start)
+                .wrap(true)
+                .wrap_mode(WrapMode::WordChar)
+                .max_width_chars(20)
+                .lines(2)
+                .build();
+            card.append(&body_label);
+        }
+
+        if !notification.actions.is_empty() {
+            let actions_box = Box::builder().orientation(Orientation::Horizontal).spacing(4).build();
+            for action in &notification.actions {
+                let action_button = Button::builder().label(&action.label).css_classes(["pill"]).build();
+                let notification_id = notification.id;
+                let action_key = action.key.clone();
+                let broadcaster_clone = MessageBroadcasterInner {
+                    meta: broadcaster.meta.clone(),
+                    core_context: broadcaster.core_context,
+                };
+                action_button.connect_clicked(move |_button| {
+                    debug!("NotificationWidget: Invoke action {action_key} on notification {notification_id}");
+                    broadcaster_clone.broadcast_message_to_topic(NotificationCommandMessage::invoke_action(notification_id, action_key.clone()));
+                });
+                actions_box.append(&action_button);
+            }
+            card.append(&actions_box);
+        }
+
+        card
     }
 }
 
@@ -97,19 +208,22 @@ impl AsRef<Option<FfiCoreContext>> for NotificationWidget {
 
 impl WidgetBuilder for NotificationWidget {
     fn build_widget(&mut self) -> Widget {
-        let container = Box::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(4)
-            .width_request(self.config.width)
-            .height_request(self.config.height)
-            .css_classes(["scroll-item"])
-            .build();
+        let main_box = Box::builder().orientation(Orientation::Vertical).spacing(4).build();
+
+        let header = Box::builder().orientation(Orientation::Horizontal).spacing(4).build();
 
         let count_label = Label::builder().label("0").css_classes(["title"]).build();
-        container.append(&count_label);
+        header.append(&count_label);
 
-        let dnd_label = Label::builder().label("").css_classes(["subtitle"]).build();
-        container.append(&dnd_label);
+        let dnd_badge = Label::builder().label("DND").css_classes(["badge"]).visible(false).build();
+        header.append(&dnd_badge);
+
+        main_box.append(&header);
+
+        let notification_list = Box::builder().orientation(Orientation::Vertical).spacing(4).vexpand(true).build();
+        let empty_label = Label::builder().label("No notifications").css_classes(["subtitle"]).build();
+        notification_list.append(&empty_label);
+        main_box.append(&notification_list);
 
         let scroll_controller = EventControllerScroll::builder()
             .flags(EventControllerScrollFlags::VERTICAL)
@@ -131,7 +245,14 @@ impl WidgetBuilder for NotificationWidget {
             }
             glib::Propagation::Stop
         });
-        container.add_controller(scroll_controller);
+        let button = Button::builder()
+            .css_classes(["scroll-item", "menu-button"])
+            .width_request(self.config.width)
+            .height_request(self.config.height)
+            .child(&main_box)
+            .build();
+
+        button.add_controller(scroll_controller);
 
         let click_gesture = GestureClick::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
         let broadcaster_click = self.get_broadcaster();
@@ -157,7 +278,7 @@ impl WidgetBuilder for NotificationWidget {
             }
             gesture.set_state(EventSequenceState::Claimed);
         });
-        container.add_controller(click_gesture);
+        button.add_controller(click_gesture);
 
         let long_press_gesture = GestureLongPress::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
         let broadcaster_long = self.get_broadcaster();
@@ -165,12 +286,13 @@ impl WidgetBuilder for NotificationWidget {
             debug!("NotificationWidget: Long press (dismiss all)");
             broadcaster_long.broadcast_message_to_topic(NotificationCommandMessage::dismiss_all());
         });
-        container.add_controller(long_press_gesture);
+        button.add_controller(long_press_gesture);
 
         if let Some(receiver) = self.status_receiver.take() {
-            self.start_status_listener(receiver, count_label.clone(), dnd_label.clone());
+            let broadcaster = self.get_broadcaster();
+            self.start_status_listener(receiver, notification_list, count_label, dnd_badge, broadcaster);
         }
 
-        container.clone().upcast::<Widget>()
+        button.clone().upcast::<Widget>()
     }
 }

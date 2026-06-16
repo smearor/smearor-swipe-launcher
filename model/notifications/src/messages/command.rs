@@ -40,8 +40,8 @@ impl NotificationCommandMessage {
         }
     }
 
-    pub fn dismiss() -> Self {
-        Self::new(NotificationCommandAction::Dismiss, None, None)
+    pub fn dismiss_id(id: u32) -> Self {
+        Self::new(NotificationCommandAction::Dismiss, Some(id), None)
     }
 
     pub fn dismiss_all() -> Self {
