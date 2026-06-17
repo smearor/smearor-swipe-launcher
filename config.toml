@@ -73,7 +73,8 @@ plugins = [
     { id = "mpris", path = "target/release/libsmearor_mpris_widget.so" },
     { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "wike", path = "target/release/libsmearor_app_launcher_widget.so" }
     #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
 
@@ -115,6 +116,11 @@ follows_rotation = true
 #rotation = 270
 #layer = "background"
 #namespace = "gnome-mines"
+
+[wike]
+desktop_file_path = "/usr/share/applications/com.github.hugolabe.Wike.desktop"
+[wike.wrapper]
+follows_rotation = true
 
 #[gnome_settings]
 #desktop_file_path = "/usr/share/applications/org.gnome.Settings.desktop"
@@ -364,7 +370,7 @@ follows_rotation = true
 
 [amberol]
 desktop_file_path = "/usr/share/applications/io.bassi.Amberol.desktop"
-[shortamberolwave.wrapper]
+[amberol.wrapper]
 follows_rotation = true
 
 # Close button configuration
