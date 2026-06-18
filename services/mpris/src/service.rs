@@ -1,6 +1,5 @@
 use crate::config::MprisServiceConfig;
-use abi_stable::std_types::RString;
-use glib::ControlFlow;
+use glib::MainContext;
 use smearor_mpris_model::MprisCommandAction;
 use smearor_mpris_model::MprisCommandMessage;
 use smearor_mpris_model::MprisLoopStatus;
@@ -20,12 +19,11 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
+use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
 use std::time::Duration;
 use std::time::Instant;
 use tracing::debug;
@@ -95,46 +93,54 @@ pub struct MprisService {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
     pub config: MprisServiceConfig,
-    pub command_sender: Sender<MprisCommand>,
-    pub status_receiver: Arc<Mutex<Receiver<MprisStatusMessage>>>,
+    pub command_sender: tokio::sync::mpsc::UnboundedSender<MprisCommand>,
 }
 
 impl MprisService {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
         let mpris_config: MprisServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
-        let (command_sender, command_receiver) = mpsc::channel::<MprisCommand>();
-        let (status_sender, status_receiver) = mpsc::channel::<MprisStatusMessage>();
+        let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel::<MprisCommand>();
+        let (status_sender, mut status_receiver) = tokio::sync::mpsc::unbounded_channel::<MprisStatusMessage>();
         let meta = PluginMeta::try_from(&config)?;
+
         std::thread::spawn(move || {
-            run_mpris_thread(command_receiver, status_sender);
+            let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    error!("MPRIS Service: failed to create tokio runtime: {e}");
+                    return;
+                }
+            };
+            rt.block_on(async move {
+                run_mpris_async(command_receiver, status_sender).await;
+            });
         });
-        let service = MprisService {
+
+        let meta_clone = meta.clone();
+        let core_context_clone = core_context.clone();
+        MainContext::default().spawn_local(async move {
+            while let Some(status) = status_receiver.recv().await {
+                let payload_ptr = Box::into_raw(Box::new(status)) as *mut core::ffi::c_void;
+                let envelope = FfiEnvelope {
+                    sender_id: stabby::string::String::from(meta_clone.id.clone()),
+                    topic: stabby::string::String::from(MprisStatusMessage::topic()),
+                    type_id: MprisStatusMessage::TYPE_ID,
+                    payload: payload_ptr,
+                    destroy_payload: Some(destroy_mpris_status),
+                };
+                if let Some(ctx) = &core_context_clone {
+                    ctx.send_message(envelope);
+                }
+            }
+        });
+
+        Ok(MprisService {
             meta,
             core_context,
             config: mpris_config,
             command_sender,
-            status_receiver: Arc::new(Mutex::new(status_receiver)),
-        };
-        let meta_clone = service.meta.clone();
-        let core_context_clone = service.core_context.clone();
-        let status_receiver_clone = Arc::clone(&service.status_receiver);
-        glib::timeout_add_local(Duration::from_millis(50), move || {
-            while let Ok(status) = status_receiver_clone.lock().unwrap().try_recv() {
-                if let Ok(payload) = serde_json::to_string(&status) {
-                    let envelope = FfiEnvelope {
-                        sender_id: RString::from(meta_clone.id.clone()),
-                        topic: RString::from(MprisStatusMessage::topic()),
-                        payload: RString::from(payload),
-                    };
-                    if let Some(ctx) = &core_context_clone {
-                        ctx.send_message(envelope);
-                    }
-                }
-            }
-            ControlFlow::Continue
-        });
-        Ok(service)
+        })
     }
 
     fn handle_play(&self) {
@@ -192,12 +198,12 @@ impl MessageHandler<FfiEnvelopePayload<MprisCommandMessage>> for MprisService {
             MprisCommandAction::NextTrack => self.handle_next_track(),
             MprisCommandAction::PreviousTrack => self.handle_previous_track(),
             MprisCommandAction::Seek => {
-                if let Some(o) = message.seek_offset {
+                if let Some(o) = message.seek_offset.as_ref().copied() {
                     self.handle_seek(o);
                 }
             }
             MprisCommandAction::SetPosition => {
-                if let Some(p) = message.position {
+                if let Some(p) = message.position.as_ref().copied() {
                     self.handle_set_position(p);
                 }
             }
@@ -211,7 +217,7 @@ impl MessageHandler<FfiEnvelopePayload<MprisCommandMessage>> for MprisService {
     }
 }
 
-impl MessageBroadcaster<MprisStatusMessage> for MprisService {}
+impl MessageBroadcaster for MprisService {}
 impl MessageTopicBroadcaster<MprisStatusMessage> for MprisService {}
 impl PluginMetaGetter for MprisService {
     fn meta(&self) -> PluginMeta {
@@ -223,6 +229,8 @@ impl AsRef<Option<FfiCoreContext>> for MprisService {
         &self.core_context
     }
 }
+
+impl Service for MprisService {}
 
 async fn find_players(conn: &Connection) -> Result<Vec<String>, zbus::Error> {
     let dbus = zbus::fdo::DBusProxy::new(conn).await?;
@@ -278,14 +286,17 @@ async fn query_player_status(conn: &Connection, bus_name: &str) -> Result<MprisS
             0
         }
     };
-    let title = extract_string(&metadata, "xesam:title").unwrap_or_default();
-    let artist = extract_string_array(&metadata, "xesam:artist").join(", ");
-    let album = extract_string(&metadata, "xesam:album").unwrap_or_default();
+    let title = stabby::string::String::from(extract_string(&metadata, "xesam:title").unwrap_or_default());
+    let artist = stabby::string::String::from(extract_string_array(&metadata, "xesam:artist").join(", "));
+    let album = stabby::string::String::from(extract_string(&metadata, "xesam:album").unwrap_or_default());
     let length = metadata.get("mpris:length").and_then(|v| v.downcast_ref::<i64>().ok()).unwrap_or(0);
-    let art_url = extract_string(&metadata, "mpris:artUrl");
+    let art_url = match extract_string(&metadata, "mpris:artUrl") {
+        Some(s) => stabby::option::Option::Some(stabby::string::String::from(s)),
+        None => stabby::option::Option::None(),
+    };
     let player_info = MprisPlayerInfo {
-        bus_name: bus_name.to_string(),
-        name: bus_name.trim_start_matches("org.mpris.MediaPlayer2.").to_string(),
+        bus_name: stabby::string::String::from(bus_name.to_string()),
+        name: stabby::string::String::from(bus_name.trim_start_matches("org.mpris.MediaPlayer2.").to_string()),
         is_active: true,
     };
     let track_metadata = MprisTrackMetadata {
@@ -295,12 +306,14 @@ async fn query_player_status(conn: &Connection, bus_name: &str) -> Result<MprisS
         length,
         art_url,
     };
+    let mut players = stabby::vec::Vec::new();
+    players.push(player_info.clone());
     Ok(MprisStatusMessage::new(
         true,
-        Some(player_info.clone()),
-        vec![player_info],
+        stabby::option::Option::Some(player_info.clone()),
+        players,
         parse_playback_status(&playback_status),
-        Some(track_metadata),
+        stabby::option::Option::Some(track_metadata),
         position,
         MprisLoopStatus::None,
         false,
@@ -340,165 +353,178 @@ async fn send_player_command(conn: &Connection, bus_name: &str, command: &MprisC
     Ok(())
 }
 
-fn run_mpris_thread(command_receiver: Receiver<MprisCommand>, status_sender: Sender<MprisStatusMessage>) {
-    trace!("MPRIS Service: starting MPRIS thread");
-    let runtime = match tokio::runtime::Runtime::new() {
-        Ok(rt) => rt,
+async fn run_mpris_async(
+    mut command_receiver: tokio::sync::mpsc::UnboundedReceiver<MprisCommand>,
+    status_sender: tokio::sync::mpsc::UnboundedSender<MprisStatusMessage>,
+) {
+    trace!("MPRIS Service: starting MPRIS async task");
+    let conn = match Connection::session().await {
+        Ok(c) => c,
         Err(e) => {
-            error!("MPRIS Service: failed to create tokio runtime: {e}");
+            error!("MPRIS Service: failed to connect to D-Bus session: {e}");
             return;
         }
     };
-    runtime.block_on(async {
-        let conn = match Connection::session().await {
-            Ok(c) => c,
-            Err(e) => {
-                error!("MPRIS Service: failed to connect to D-Bus session: {e}");
-                return;
-            }
-        };
-        let mut state = MprisState::default();
-        let mut last_broadcast: Option<MprisStatusMessage> = None;
-        let mut blocked_players: HashMap<String, Instant> = HashMap::new();
-        const BLOCK_DURATION: Duration = Duration::from_secs(60);
-        let _ = status_sender.send(MprisStatusMessage::new(
-            false,
-            None,
-            Vec::new(),
-            MprisPlaybackStatus::Stopped,
-            None,
-            0,
-            MprisLoopStatus::None,
-            false,
-            1.0,
-        ));
+    let mut state = MprisState::default();
+    let mut last_broadcast: Option<MprisStatusMessage> = None;
+    let mut blocked_players: HashMap<String, Instant> = HashMap::new();
+    const BLOCK_DURATION: Duration = Duration::from_secs(60);
+    let _ = status_sender.send(MprisStatusMessage::new(
+        false,
+        stabby::option::Option::None(),
+        stabby::vec::Vec::new(),
+        MprisPlaybackStatus::Stopped,
+        stabby::option::Option::None(),
+        0,
+        MprisLoopStatus::None,
+        false,
+        1.0,
+    ));
 
-        loop {
-            match command_receiver.recv_timeout(Duration::from_millis(500)) {
-                Ok(MprisCommand::NextPlayer) => {
-                    if !state.players.is_empty() {
-                        let new_idx = state.active_player_index.map(|i| (i + 1) % state.players.len()).unwrap_or(0);
-                        state.active_player_index = Some(new_idx);
-                        trace!("MPRIS Service: switched to player {}", state.players[new_idx].1);
-                    }
+    loop {
+        let command = tokio::time::timeout(Duration::from_millis(500), command_receiver.recv()).await;
+        match command {
+            Ok(Some(MprisCommand::NextPlayer)) => {
+                if !state.players.is_empty() {
+                    let new_idx = state.active_player_index.map(|i| (i + 1) % state.players.len()).unwrap_or(0);
+                    state.active_player_index = Some(new_idx);
+                    trace!("MPRIS Service: switched to player {}", state.players[new_idx].1);
                 }
-                Ok(MprisCommand::PreviousPlayer) => {
-                    if !state.players.is_empty() {
-                        let new_idx = state
-                            .active_player_index
-                            .map(|i| if i == 0 { state.players.len() - 1 } else { i - 1 })
-                            .unwrap_or(0);
-                        state.active_player_index = Some(new_idx);
-                        trace!("MPRIS Service: switched to player {}", state.players[new_idx].1);
-                    }
+            }
+            Ok(Some(MprisCommand::PreviousPlayer)) => {
+                if !state.players.is_empty() {
+                    let new_idx = state
+                        .active_player_index
+                        .map(|i| if i == 0 { state.players.len() - 1 } else { i - 1 })
+                        .unwrap_or(0);
+                    state.active_player_index = Some(new_idx);
+                    trace!("MPRIS Service: switched to player {}", state.players[new_idx].1);
                 }
-                Ok(command) => {
-                    trace!("MPRIS Service: received command {:?}", command);
-                    if let Some(idx) = state.active_player_index {
-                        if let Some((bus_name, _)) = state.players.get(idx) {
-                            if let Err(e) = send_player_command(&conn, bus_name, &command, &state.playback_status).await {
-                                error!("MPRIS Service: failed to send command to {bus_name}: {e}");
-                            } else {
-                                match command {
-                                    MprisCommand::Play => state.playback_status = MprisPlaybackStatus::Playing,
-                                    MprisCommand::Pause => state.playback_status = MprisPlaybackStatus::Paused,
-                                    MprisCommand::TogglePlayPause => {
-                                        state.playback_status = if state.playback_status == MprisPlaybackStatus::Playing {
-                                            MprisPlaybackStatus::Paused
-                                        } else {
-                                            MprisPlaybackStatus::Playing
-                                        };
-                                    }
-                                    MprisCommand::Stop => state.playback_status = MprisPlaybackStatus::Stopped,
-                                    _ => {}
+            }
+            Ok(Some(command)) => {
+                trace!("MPRIS Service: received command {:?}", command);
+                if let Some(idx) = state.active_player_index {
+                    if let Some((bus_name, _)) = state.players.get(idx) {
+                        if let Err(e) = send_player_command(&conn, bus_name, &command, &state.playback_status).await {
+                            error!("MPRIS Service: failed to send command to {bus_name}: {e}");
+                        } else {
+                            match command {
+                                MprisCommand::Play => state.playback_status = MprisPlaybackStatus::Playing,
+                                MprisCommand::Pause => state.playback_status = MprisPlaybackStatus::Paused,
+                                MprisCommand::TogglePlayPause => {
+                                    state.playback_status = if state.playback_status == MprisPlaybackStatus::Playing {
+                                        MprisPlaybackStatus::Paused
+                                    } else {
+                                        MprisPlaybackStatus::Playing
+                                    };
                                 }
+                                MprisCommand::Stop => state.playback_status = MprisPlaybackStatus::Stopped,
+                                _ => {}
                             }
                         }
                     }
                 }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    trace!("MPRIS Service: command channel disconnected, exiting thread");
-                    break;
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
             }
+            Ok(None) => {
+                trace!("MPRIS Service: command channel closed, exiting task");
+                break;
+            }
+            Err(_) => {}
+        }
 
-            // Clean up expired blocked players
-            let now = Instant::now();
-            blocked_players.retain(|_, timestamp| now.duration_since(*timestamp) < BLOCK_DURATION);
+        // Clean up expired blocked players
+        let now = Instant::now();
+        blocked_players.retain(|_, timestamp| now.duration_since(*timestamp) < BLOCK_DURATION);
 
-            let players = match find_players(&conn).await {
-                Ok(p) => p,
-                Err(e) => {
-                    error!("MPRIS Service: failed to find players: {e}");
-                    continue;
-                }
-            };
-
-            let player_names: Vec<(String, String)> = players
-                .iter()
-                .filter(|n| !blocked_players.contains_key(*n))
-                .map(|n| {
-                    let display = n.trim_start_matches("org.mpris.MediaPlayer2.").to_string();
-                    (n.clone(), display)
-                })
-                .collect();
-
-            trace!(
-                "MPRIS Service: available players after filtering: {:?}",
-                player_names.iter().map(|(_, d)| d.clone()).collect::<Vec<_>>()
-            );
-
-            if player_names.is_empty() {
-                state.players.clear();
-                state.active_player_index = None;
-                let no_player = MprisStatusMessage::new(false, None, Vec::new(), MprisPlaybackStatus::Stopped, None, 0, MprisLoopStatus::None, false, 1.0);
-                if last_broadcast.as_ref() != Some(&no_player) {
-                    let _ = status_sender.send(no_player.clone());
-                    last_broadcast = Some(no_player);
-                }
+        let players = match find_players(&conn).await {
+            Ok(p) => p,
+            Err(e) => {
+                error!("MPRIS Service: failed to find players: {e}");
                 continue;
             }
+        };
 
-            state.players = player_names.clone();
-            if state.active_player_index.is_none() {
+        let player_names: Vec<(String, String)> = players
+            .iter()
+            .filter(|n| !blocked_players.contains_key(*n))
+            .map(|n| {
+                let display = n.trim_start_matches("org.mpris.MediaPlayer2.").to_string();
+                (n.clone(), display)
+            })
+            .collect();
+
+        trace!(
+            "MPRIS Service: available players after filtering: {:?}",
+            player_names.iter().map(|(_, d)| d.clone()).collect::<Vec<_>>()
+        );
+
+        if player_names.is_empty() {
+            state.players.clear();
+            state.active_player_index = None;
+            let no_player = MprisStatusMessage::new(
+                false,
+                stabby::option::Option::None(),
+                stabby::vec::Vec::new(),
+                MprisPlaybackStatus::Stopped,
+                stabby::option::Option::None(),
+                0,
+                MprisLoopStatus::None,
+                false,
+                1.0,
+            );
+            if last_broadcast.as_ref() != Some(&no_player) {
+                let _ = status_sender.send(no_player.clone());
+                last_broadcast = Some(no_player);
+            }
+            continue;
+        }
+
+        state.players = player_names.clone();
+        if state.active_player_index.is_none() {
+            state.active_player_index = Some(0);
+        }
+        if let Some(idx) = state.active_player_index {
+            if idx >= state.players.len() {
                 state.active_player_index = Some(0);
             }
-            if let Some(idx) = state.active_player_index {
-                if idx >= state.players.len() {
-                    state.active_player_index = Some(0);
-                }
-            }
+        }
 
-            if let Some(idx) = state.active_player_index {
-                if let Some((bus_name, _)) = state.players.get(idx) {
-                    match query_player_status(&conn, bus_name).await {
-                        Ok(status) => {
-                            if last_broadcast.as_ref() != Some(&status) {
-                                let _ = status_sender.send(status.clone());
-                                last_broadcast = Some(status);
-                            }
+        if let Some(idx) = state.active_player_index {
+            if let Some((bus_name, _)) = state.players.get(idx) {
+                match query_player_status(&conn, bus_name).await {
+                    Ok(status) => {
+                        if last_broadcast.as_ref() != Some(&status) {
+                            let _ = status_sender.send(status.clone());
+                            last_broadcast = Some(status);
                         }
-                        Err(e) => {
-                            let error_str = e.to_string();
-                            if error_str.contains("AccessDenied") {
-                                trace!("MPRIS Service: blocking player {bus_name} for {}s", BLOCK_DURATION.as_secs());
-                                blocked_players.insert(bus_name.clone(), Instant::now());
-                                state.players.remove(idx);
-                                if state.players.is_empty() {
-                                    state.active_player_index = None;
-                                } else {
-                                    state.active_player_index = Some(idx % state.players.len());
-                                }
-                            } else {
-                                error!("MPRIS Service: failed to query player {bus_name}: {e}");
+                    }
+                    Err(e) => {
+                        let error_str = e.to_string();
+                        if error_str.contains("AccessDenied") {
+                            trace!("MPRIS Service: blocking player {bus_name} for {}s", BLOCK_DURATION.as_secs());
+                            blocked_players.insert(bus_name.clone(), Instant::now());
+                            state.players.remove(idx);
+                            if state.players.is_empty() {
                                 state.active_player_index = None;
+                            } else {
+                                state.active_player_index = Some(idx % state.players.len());
                             }
+                        } else {
+                            error!("MPRIS Service: failed to query player {bus_name}: {e}");
+                            state.active_player_index = None;
                         }
                     }
                 }
             }
         }
-    });
-    debug!("MPRIS Service: MPRIS thread exiting");
+    }
+    debug!("MPRIS Service: MPRIS async task exiting");
+}
+
+extern "C" fn destroy_mpris_status(ptr: *mut core::ffi::c_void) {
+    if !ptr.is_null() {
+        unsafe {
+            let _ = Box::from_raw(ptr as *mut MprisStatusMessage);
+        }
+    }
 }

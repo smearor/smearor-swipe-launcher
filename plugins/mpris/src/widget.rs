@@ -18,6 +18,7 @@ use gtk4::LevelBar;
 use gtk4::Orientation;
 use gtk4::PropagationPhase;
 use gtk4::Widget;
+use gtk4::glib::MainContext;
 use gtk4::prelude::*;
 use smearor_mpris_model::MprisCommandMessage;
 use smearor_mpris_model::MprisPlaybackStatus;
@@ -27,6 +28,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopicBroadcaster;
+use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -37,9 +39,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -52,8 +51,8 @@ pub struct MprisWidget {
     pub(crate) meta: PluginMeta,
     pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) config: MprisWidgetConfig,
-    pub(crate) status_sender: Sender<MprisStatusMessage>,
-    pub(crate) status_receiver: Option<Receiver<MprisStatusMessage>>,
+    pub(crate) status_sender: tokio::sync::mpsc::UnboundedSender<MprisStatusMessage>,
+    pub(crate) status_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<MprisStatusMessage>>,
     pub(crate) last_command_time: Arc<Mutex<Instant>>,
     pub(crate) album_art: Arc<Mutex<Option<Image>>>,
     pub(crate) progress_bar: Arc<Mutex<Option<LevelBar>>>,
@@ -66,7 +65,7 @@ impl MprisWidget {
         let mpris_config = MprisWidgetConfig::parse(&config.config)
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         let meta = PluginMeta::try_from(&config)?;
-        let (status_sender, status_receiver) = mpsc::channel();
+        let (status_sender, status_receiver) = tokio::sync::mpsc::unbounded_channel();
         Ok(MprisWidget {
             meta,
             core_context,
@@ -105,65 +104,89 @@ impl MprisWidget {
         }
     }
 
-    fn start_status_listener(&self, receiver: Receiver<MprisStatusMessage>) {
+    fn start_status_listener(&mut self) {
         let album_art = Arc::clone(&self.album_art);
         let progress_bar = Arc::clone(&self.progress_bar);
         let title_label = Arc::clone(&self.title_label);
         let artist_label = Arc::clone(&self.artist_label);
-        let last_status = RefCell::new(None);
+        let current_status: Arc<Mutex<Option<MprisStatusMessage>>> = Arc::new(Mutex::new(None));
+        let current_status_for_ticker = Arc::clone(&current_status);
+        let progress_bar_for_ticker = Arc::clone(&self.progress_bar);
 
-        glib::timeout_add_local(Duration::from_millis(10), move || {
-            while let Ok(status) = receiver.try_recv() {
-                if let Ok(guard) = album_art.lock() {
-                    if let Some(image) = guard.as_ref() {
-                        if status.has_player {
-                            Self::load_album_art(image, &status.metadata.as_ref().and_then(|m| m.art_url.clone()));
-                        } else {
-                            image.set_icon_name(Some("audio-x-generic-symbolic"));
+        if let Some(mut receiver) = self.status_receiver.take() {
+            MainContext::default().spawn_local(async move {
+                while let Some(status) = receiver.recv().await {
+                    if let Ok(guard) = album_art.lock() {
+                        if let Some(image) = guard.as_ref() {
+                            if status.has_player {
+                                let art_url: Option<String> = status.metadata.as_ref().and_then(|m| m.art_url.as_ref().map(|s| s.as_str().to_string()));
+                                Self::load_album_art(image, &art_url);
+                            } else {
+                                image.set_icon_name(Some("audio-x-generic-symbolic"));
+                            }
                         }
                     }
-                }
 
-                if let Ok(guard) = title_label.lock() {
-                    if let Some(label) = guard.as_ref() {
-                        let text = if status.has_player {
-                            status
+                    if let Ok(guard) = title_label.lock() {
+                        if let Some(label) = guard.as_ref() {
+                            let text = if status.has_player {
+                                status
+                                    .metadata
+                                    .as_ref()
+                                    .and_then(|m| if m.title.is_empty() { None } else { Some(m.title.as_str()) })
+                                    .unwrap_or("Playing")
+                            } else {
+                                "No Player"
+                            };
+                            label.set_text(text);
+                        }
+                    }
+
+                    if let Ok(guard) = artist_label.lock() {
+                        if let Some(label) = guard.as_ref() {
+                            let text = status
                                 .metadata
                                 .as_ref()
-                                .and_then(|m| if m.title.is_empty() { None } else { Some(m.title.as_str()) })
-                                .unwrap_or("Playing")
-                        } else {
-                            "No Player"
-                        };
-                        label.set_text(text);
+                                .and_then(|m| if m.artist.is_empty() { None } else { Some(m.artist.as_str()) })
+                                .unwrap_or("");
+                            label.set_text(text);
+                        }
                     }
-                }
 
-                if let Ok(guard) = artist_label.lock() {
-                    if let Some(label) = guard.as_ref() {
-                        let text = status
-                            .metadata
-                            .as_ref()
-                            .and_then(|m| if m.artist.is_empty() { None } else { Some(m.artist.as_str()) })
-                            .unwrap_or("");
-                        label.set_text(text);
+                    if let Ok(guard) = progress_bar.lock() {
+                        if let Some(bar) = guard.as_ref() {
+                            let ratio = if let Some(meta) = status.metadata.as_ref() {
+                                if meta.length > 0 {
+                                    (status.position as f64 / meta.length as f64).min(1.0)
+                                } else {
+                                    0.0
+                                }
+                            } else {
+                                0.0
+                            };
+                            bar.set_value(ratio);
+                        }
                     }
+
+                    *current_status.lock().unwrap() = Some(status);
                 }
+            });
+        }
 
-                *last_status.borrow_mut() = Some(status);
-            }
-
-            // Update progress bar every tick for smooth animation
-            if let Ok(guard) = progress_bar.lock() {
+        glib::timeout_add_local(Duration::from_millis(50), move || {
+            if let Ok(guard) = progress_bar_for_ticker.lock() {
                 if let Some(bar) = guard.as_ref() {
-                    let ratio = if let Some(ref status) = *last_status.borrow() {
-                        if let Some(ref meta) = status.metadata {
-                            if meta.length > 0 {
-                                (status.position as f64 / meta.length as f64).min(1.0)
-                            } else if status.playback_status == MprisPlaybackStatus::Playing {
-                                // Indeterminate progress: gentle oscillation
-                                let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as f64;
-                                (0.5 + 0.4 * (t / 1200.0).sin()).clamp(0.1, 0.9)
+                    let ratio = if let Ok(status_guard) = current_status_for_ticker.lock() {
+                        if let Some(ref status) = *status_guard {
+                            if let Some(meta) = status.metadata.as_ref() {
+                                if meta.length > 0 {
+                                    (status.position as f64 / meta.length as f64).min(1.0)
+                                } else if status.playback_status == MprisPlaybackStatus::Playing {
+                                    let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as f64;
+                                    (0.5 + 0.4 * (t / 1200.0).sin()).clamp(0.1, 0.9)
+                                } else {
+                                    0.0
+                                }
                             } else {
                                 0.0
                             }
@@ -176,7 +199,6 @@ impl MprisWidget {
                     bar.set_value(ratio);
                 }
             }
-
             ControlFlow::Continue
         });
     }
@@ -190,7 +212,7 @@ impl MessageHandler<FfiEnvelopePayload<MprisStatusMessage>> for MprisWidget {
     }
 }
 
-impl MessageBroadcaster<MprisCommandMessage> for MprisWidget {}
+impl MessageBroadcaster for MprisWidget {}
 
 impl MessageTopicBroadcaster<MprisCommandMessage> for MprisWidget {}
 
@@ -205,6 +227,8 @@ impl AsRef<Option<FfiCoreContext>> for MprisWidget {
         &self.core_context
     }
 }
+
+impl Plugin for MprisWidget {}
 
 impl WidgetBuilder for MprisWidget {
     fn build_widget(&mut self) -> Widget {
@@ -413,9 +437,7 @@ impl WidgetBuilder for MprisWidget {
         });
         button.add_controller(zoom_gesture);
 
-        if let Some(receiver) = self.status_receiver.take() {
-            self.start_status_listener(receiver);
-        }
+        self.start_status_listener();
 
         button.clone().upcast::<Widget>()
     }

@@ -51,6 +51,60 @@ pub enum AreaTransition {
     ScaleOut,
 }
 
+/// ABI-stable version of `AreaTransition` for cross-plugin messaging.
+#[repr(u8)]
+#[stabby::stabby]
+#[derive(Debug, Clone, PartialEq)]
+pub enum AreaTransitionStabby {
+    None,
+    FadeIn,
+    FadeOut,
+    SlideLeft,
+    SlideRight,
+    SlideUp,
+    SlideDown,
+    PopIn,
+    PopOut,
+    ScaleIn,
+    ScaleOut,
+}
+
+impl From<AreaTransition> for AreaTransitionStabby {
+    fn from(value: AreaTransition) -> Self {
+        match value {
+            AreaTransition::None => AreaTransitionStabby::None,
+            AreaTransition::FadeIn => AreaTransitionStabby::FadeIn,
+            AreaTransition::FadeOut => AreaTransitionStabby::FadeOut,
+            AreaTransition::SlideLeft => AreaTransitionStabby::SlideLeft,
+            AreaTransition::SlideRight => AreaTransitionStabby::SlideRight,
+            AreaTransition::SlideUp => AreaTransitionStabby::SlideUp,
+            AreaTransition::SlideDown => AreaTransitionStabby::SlideDown,
+            AreaTransition::PopIn => AreaTransitionStabby::PopIn,
+            AreaTransition::PopOut => AreaTransitionStabby::PopOut,
+            AreaTransition::ScaleIn => AreaTransitionStabby::ScaleIn,
+            AreaTransition::ScaleOut => AreaTransitionStabby::ScaleOut,
+        }
+    }
+}
+
+impl From<AreaTransitionStabby> for AreaTransition {
+    fn from(value: AreaTransitionStabby) -> Self {
+        match value {
+            AreaTransitionStabby::None => AreaTransition::None,
+            AreaTransitionStabby::FadeIn => AreaTransition::FadeIn,
+            AreaTransitionStabby::FadeOut => AreaTransition::FadeOut,
+            AreaTransitionStabby::SlideLeft => AreaTransition::SlideLeft,
+            AreaTransitionStabby::SlideRight => AreaTransition::SlideRight,
+            AreaTransitionStabby::SlideUp => AreaTransition::SlideUp,
+            AreaTransitionStabby::SlideDown => AreaTransition::SlideDown,
+            AreaTransitionStabby::PopIn => AreaTransition::PopIn,
+            AreaTransitionStabby::PopOut => AreaTransition::PopOut,
+            AreaTransitionStabby::ScaleIn => AreaTransition::ScaleIn,
+            AreaTransitionStabby::ScaleOut => AreaTransition::ScaleOut,
+        }
+    }
+}
+
 impl AreaTransition {
     pub fn opposite(&self) -> AreaTransition {
         match self {

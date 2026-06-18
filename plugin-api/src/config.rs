@@ -3,11 +3,11 @@ use crate::PluginMeta;
 use crate::PluginMetaGetter;
 use crate::PluginMetaRaw;
 use crate::error::PluginConstructionErrorWrapper;
-use abi_stable::std_types::RString;
 use serde::Deserialize;
 use serde_json::Value;
 use std::str::FromStr;
 
+/// Configuration passed to a plugin during construction.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PluginConfig {
     pub config: Value,
@@ -16,7 +16,10 @@ pub struct PluginConfig {
 impl PluginConfig {
     pub fn new(config_json: *const i8, config_len: usize) -> Result<Self, PluginConstructionErrorWrapper> {
         if config_json.is_null() {
-            return Err(PluginConstructionErrorWrapper::new(PluginConstructionError::ConfigJsonIsNull, RString::new()));
+            return Err(PluginConstructionErrorWrapper::new(
+                PluginConstructionError::ConfigJsonIsNull,
+                stabby::string::String::from(""),
+            ));
         }
         let slice = unsafe { std::slice::from_raw_parts(config_json as *const u8, config_len) };
         Self::from_str(
@@ -41,6 +44,7 @@ impl FromStr for PluginConfig {
         })
     }
 }
+
 impl From<Value> for PluginConfig {
     fn from(config: Value) -> Self {
         PluginConfig { config }

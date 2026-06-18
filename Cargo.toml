@@ -31,7 +31,7 @@ license = "MIT"
 authors = ["Andreas Schaeffer"]
 
 [workspace.dependencies]
-abi_stable = "0.11"
+stabby = { version = "72.1", features = ["libloading"] }
 adw = { package = "libadwaita", version = "0.9.1" }
 clap = { version = "4.5", features = ["derive"] }
 dashmap = "6.2.1"

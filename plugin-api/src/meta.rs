@@ -1,18 +1,16 @@
-use abi_stable::StableAbi;
-use abi_stable::derive_macro_reexports::ROption;
-use abi_stable::std_types::RString;
 use serde::Deserialize;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
 pub static PLUGIN_ID: AtomicU32 = AtomicU32::new(0);
 
-#[repr(C)]
-#[derive(Debug, Clone, Deserialize, StableAbi)]
+/// Metadata describing a plugin or service.
+#[stabby::stabby]
+#[derive(Debug, Clone)]
 pub struct PluginMeta {
-    pub id: RString,
-    pub display_name: RString,
-    pub icon_name: ROption<RString>,
+    pub id: stabby::string::String,
+    pub display_name: stabby::string::String,
+    pub icon_name: stabby::option::Option<stabby::string::String>,
 }
 
 impl PluginMeta {
@@ -25,6 +23,7 @@ impl PluginMeta {
     }
 }
 
+/// Raw metadata from the config file, before conversion to PluginMeta.
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
 pub struct PluginMetaRaw {
@@ -44,6 +43,7 @@ fn default_plugin_display_name() -> String {
     format!("Plugin {}", PLUGIN_ID.load(Ordering::SeqCst))
 }
 
+/// Trait for types that expose their plugin metadata.
 pub trait PluginMetaGetter {
     fn meta(&self) -> PluginMeta;
 
@@ -52,7 +52,10 @@ pub trait PluginMetaGetter {
         PluginMetaRaw {
             id: meta.id.to_string(),
             display_name: meta.display_name.to_string(),
-            icon_name: meta.icon_name.map(|s| s.to_string()).into(),
+            icon_name: {
+                let opt: Option<stabby::string::String> = meta.icon_name.into();
+                opt.map(|s| s.to_string())
+            },
         }
     }
 }

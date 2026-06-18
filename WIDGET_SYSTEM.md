@@ -16,7 +16,7 @@ criteria:
 * **Multi-threaded & Asynchronous:** Heavy tasks (e.g., networking, database/DBus, file parsing) must run concurrently on a thread pool and never block the GTK
   main UI thread.
 * **FFI Safety:** Message passing across library boundaries (`libloading`) must respect Rust's ownership model, prevent allocator mismatches, and utilize
-  ABI-stable data types via `abi_stable`.
+  ABI-stable data types via `stabby` (previously `abi_stable`, migrated in 2026).
 
 ---
 
@@ -30,15 +30,16 @@ JSON payload.
 We define an ABI-stable structure for cross-FFI message passing:
 
 ```rust
-use abi_stable::StableAbi;
-use abi_stable::std_types::RString;
+use stabby::string::String;
 
 #[repr(C)]
-#[derive(Debug, Clone, StableAbi)]
+#[derive(Debug, Clone)]
 pub struct FfiEnvelope {
-    pub sender_id: RString,
-    pub topic: RString,
-    pub payload: RString, // Serialized JSON payload
+    pub sender_id: stabby::string::String,
+    pub topic: stabby::string::String,
+    pub type_id: u64,
+    pub payload: *mut core::ffi::c_void,
+    pub destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
 }
 ```
 

@@ -28,6 +28,74 @@ pub struct ColorMaskConfigFile {
     pub color_mask_shader: Option<bool>,
 }
 
+/// ABI-stable version of `ColorMaskConfigFile` for cross-plugin messaging.
+#[stabby::stabby(no_opt)]
+#[derive(Clone, Debug, Default)]
+pub struct ColorMaskConfigFileStabby {
+    pub background_color: stabby::option::Option<stabby::string::String>,
+    pub color_mask: stabby::option::Option<stabby::string::String>,
+    pub auto_color_mask: stabby::option::Option<bool>,
+    pub subsurface_background_color: stabby::option::Option<stabby::string::String>,
+    pub subsurface_color_mask: stabby::option::Option<stabby::string::String>,
+    pub auto_subsurface_color_mask: stabby::option::Option<bool>,
+    pub color_mask_tolerance: stabby::option::Option<f32>,
+    pub color_mask_shader: stabby::option::Option<bool>,
+}
+
+impl From<ColorMaskConfigFile> for ColorMaskConfigFileStabby {
+    fn from(value: ColorMaskConfigFile) -> Self {
+        Self {
+            background_color: value.background_color.map(Into::into).into(),
+            color_mask: value.color_mask.map(Into::into).into(),
+            auto_color_mask: value.auto_color_mask.map(Into::into).into(),
+            subsurface_background_color: value.subsurface_background_color.map(Into::into).into(),
+            subsurface_color_mask: value.subsurface_color_mask.map(Into::into).into(),
+            auto_subsurface_color_mask: value.auto_subsurface_color_mask.map(Into::into).into(),
+            color_mask_tolerance: value.color_mask_tolerance.map(Into::into).into(),
+            color_mask_shader: value.color_mask_shader.map(Into::into).into(),
+        }
+    }
+}
+
+impl From<ColorMaskConfigFileStabby> for ColorMaskConfigFile {
+    fn from(value: ColorMaskConfigFileStabby) -> Self {
+        Self {
+            background_color: {
+                let opt: Option<stabby::string::String> = value.background_color.into();
+                opt.map(|s| s.to_string())
+            },
+            color_mask: {
+                let opt: Option<stabby::string::String> = value.color_mask.into();
+                opt.map(|s| s.to_string())
+            },
+            auto_color_mask: {
+                let opt: Option<bool> = value.auto_color_mask.into();
+                opt
+            },
+            subsurface_background_color: {
+                let opt: Option<stabby::string::String> = value.subsurface_background_color.into();
+                opt.map(|s| s.to_string())
+            },
+            subsurface_color_mask: {
+                let opt: Option<stabby::string::String> = value.subsurface_color_mask.into();
+                opt.map(|s| s.to_string())
+            },
+            auto_subsurface_color_mask: {
+                let opt: Option<bool> = value.auto_subsurface_color_mask.into();
+                opt
+            },
+            color_mask_tolerance: {
+                let opt: Option<f32> = value.color_mask_tolerance.into();
+                opt
+            },
+            color_mask_shader: {
+                let opt: Option<bool> = value.color_mask_shader.into();
+                opt
+            },
+        }
+    }
+}
+
 impl ColorMaskConfigFile {
     pub fn args(&self) -> Vec<String> {
         let mut args = vec![];

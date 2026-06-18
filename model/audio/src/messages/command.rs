@@ -1,10 +1,15 @@
-use serde::Deserialize;
-use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
+use smearor_swipe_launcher_plugin_api::SharedMessage;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::generate_type_id;
+use stabby::option::Option;
 
 pub const TOPIC_COMMAND: &str = "service.audio.command";
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+/// Actions that can be sent to the audio service.
+#[repr(u8)]
+#[stabby::stabby]
+#[derive(Clone, Debug, Default)]
 pub enum AudioCommandAction {
     #[default]
     /// Increase the volume by a relative amount
@@ -25,7 +30,9 @@ pub enum AudioCommandAction {
     PreviousDevice,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+/// Command message sent from the audio widget to the audio service.
+#[stabby::stabby(no_opt)]
+#[derive(Clone, Debug, Default)]
 pub struct AudioCommandMessage {
     /// The action to execute
     pub action: AudioCommandAction,
@@ -41,40 +48,50 @@ impl AudioCommandMessage {
     }
 
     pub fn volume_up() -> Self {
-        Self::new(AudioCommandAction::VolumeUp, None, None)
+        Self::new(AudioCommandAction::VolumeUp, Option::None(), Option::None())
     }
 
     pub fn volume_down() -> Self {
-        Self::new(AudioCommandAction::VolumeDown, None, None)
+        Self::new(AudioCommandAction::VolumeDown, Option::None(), Option::None())
     }
 
     pub fn set_volume(volume: f32) -> Self {
-        Self::new(AudioCommandAction::SetVolume, Some(volume), None)
+        Self::new(AudioCommandAction::SetVolume, Option::Some(volume), Option::None())
     }
 
     pub fn toggle_mute() -> Self {
-        Self::new(AudioCommandAction::ToggleMute, None, None)
+        Self::new(AudioCommandAction::ToggleMute, Option::None(), Option::None())
     }
 
     pub fn mute() -> Self {
-        Self::new(AudioCommandAction::Mute, None, None)
+        Self::new(AudioCommandAction::Mute, Option::None(), Option::None())
     }
 
     pub fn unmute() -> Self {
-        Self::new(AudioCommandAction::Unmute, None, None)
+        Self::new(AudioCommandAction::Unmute, Option::None(), Option::None())
     }
 
     pub fn next_device() -> Self {
-        Self::new(AudioCommandAction::NextDevice, None, None)
+        Self::new(AudioCommandAction::NextDevice, Option::None(), Option::None())
     }
 
     pub fn previous_device() -> Self {
-        Self::new(AudioCommandAction::PreviousDevice, None, None)
+        Self::new(AudioCommandAction::PreviousDevice, Option::None(), Option::None())
     }
+}
+
+impl TypedMessage for AudioCommandMessage {
+    const TYPE_ID: u64 = generate_type_id("smearor_audio_model::AudioCommandMessage");
 }
 
 impl MessageTopic for AudioCommandMessage {
     fn topic() -> &'static str {
+        TOPIC_COMMAND
+    }
+}
+
+impl SharedMessage for AudioCommandMessage {
+    fn topic(&self) -> &'static str {
         TOPIC_COMMAND
     }
 }

@@ -1,20 +1,15 @@
-/// Macro to generate FFI boilerplate for service plugins.
+/// Macro to generate FFI boilerplate for service plugins using stabby.
 ///
-/// This macro generates all the necessary FFI functions and vtable for a service type,
-/// including:
-/// - `destroy_{service_type}`: Destroys the service instance
-/// - `get_id_{service_type}`: Returns the service ID
-/// - `get_display_name_{service_type}`: Returns the service display name
-/// - `on_message_{service_type}`: Handles incoming messages
-/// - `VTABLE_{service_type}`: Static vtable for the service
-/// - `smearor_service_create`: Entry point for creating the service
+/// This macro generates a `#[stabby::export]` entry point (`smearor_service_create`)
+/// that constructs the service and returns a `ServiceContainer` with a manual VTable.
 ///
 /// # Requirements
 ///
 /// The service type must:
 /// - Have a `meta` field with `id` and `display_name` attributes
-/// - Implement a `new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper>` constructor
-/// - Implement a `handle_envelope_message(message: FfiEnvelope)` method
+/// - Implement `PluginMetaGetter`
+/// - Implement `Service`
+/// - Implement a `new(config: PluginConfig, executor: PluginExecutor, broker: MessageBrokerHandle) -> Result<Self, PluginConstructionErrorWrapper>` constructor
 ///
 /// # Example
 ///
@@ -27,51 +22,48 @@
 macro_rules! service_plugin {
     ($service_type:ty) => {
         paste::paste! {
-            unsafe extern "C" fn [<destroy_ $service_type:snake>](service: *mut ()) {
-                if !service.is_null() {
+            unsafe extern "C" fn [<destroy_ $service_type:snake>](instance: *mut core::ffi::c_void) {
+                if !instance.is_null() {
                     unsafe {
-                        let _ = Box::from_raw(service as *mut $service_type);
+                        let _ = Box::from_raw(instance as *mut $service_type);
                     }
                 }
             }
 
-            unsafe extern "C" fn [<get_id_ $service_type:snake>](service: *mut ()) -> abi_stable::std_types::RString {
-                if service.is_null() {
-                    return abi_stable::std_types::RString::from("");
-                }
-                let service = unsafe { &*(service as *const $service_type) };
-                abi_stable::std_types::RString::from(service.meta.id.clone())
-            }
-
-            unsafe extern "C" fn [<get_display_name_ $service_type:snake>](service: *mut ()) -> abi_stable::std_types::RString {
-                if service.is_null() {
-                    return abi_stable::std_types::RString::from("");
-                }
-                let service = unsafe { &*(service as *const $service_type) };
-                abi_stable::std_types::RString::from(service.meta.display_name.clone())
-            }
-
-            unsafe extern "C" fn [<on_message_ $service_type:snake>](service: *mut (), message: $crate::FfiEnvelope) {
-                if service.is_null() {
+            unsafe extern "C" fn [<on_message_ $service_type:snake>](
+                instance: *mut core::ffi::c_void,
+                message: *mut core::ffi::c_void,
+            ) {
+                if instance.is_null() {
                     return;
                 }
-                let service = unsafe { &*(service as *const $service_type) };
-                smearor_swipe_launcher_plugin_api::MessageHandler::handle_envelope_message(service, message);
+                let service = unsafe { &mut *(instance as *mut $service_type) };
+                smearor_swipe_launcher_plugin_api::Service::on_message(service, message);
+            }
+
+            unsafe extern "C" fn [<start_ $service_type:snake>](instance: *mut core::ffi::c_void) {
+                if instance.is_null() {
+                    return;
+                }
+                let service = unsafe { &mut *(instance as *mut $service_type) };
+                smearor_swipe_launcher_plugin_api::Service::start(service);
             }
 
             static [<VTABLE_ $service_type:snake>]: $crate::ServiceVTable = $crate::ServiceVTable {
                 destroy: [<destroy_ $service_type:snake>],
-                get_id: [<get_id_ $service_type:snake>],
-                get_display_name: [<get_display_name_ $service_type:snake>],
                 on_message: [<on_message_ $service_type:snake>],
+                start: [<start_ $service_type:snake>],
             };
 
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn smearor_service_create(
+            #[stabby::export]
+            pub extern "C" fn smearor_service_create(
                 config_json: *const i8,
                 config_len: usize,
-                core_context: $crate::FfiCoreContext,
-            ) -> abi_stable::std_types::RResult<$crate::LoadedService, $crate::PluginConstructionErrorWrapper> {
+                core_context: *mut core::ffi::c_void,
+            ) -> stabby::result::Result<
+                *mut core::ffi::c_void,
+                $crate::PluginConstructionErrorWrapper,
+            > {
                 let subscriber = tracing_subscriber::FmtSubscriber::builder()
                     .with_env_filter(
                         tracing_subscriber::EnvFilter::from_default_env()
@@ -82,51 +74,45 @@ macro_rules! service_plugin {
 
                 let config = match $crate::PluginConfig::new(config_json, config_len) {
                     Ok(config) => config,
-                    Err(e) => {
-                        return abi_stable::std_types::RResult::RErr(e);
-                    }
+                    Err(e) => return stabby::result::Result::Err(e),
                 };
 
-                let core_context = if core_context.core_obj.is_null() {
+                let ffi_context = if core_context.is_null() {
                     None
                 } else {
-                    Some(core_context)
+                    Some(unsafe { *(core_context as *mut $crate::FfiCoreContext) })
                 };
 
-                match <$service_type>::new(config, core_context) {
+                match <$service_type>::new(config, ffi_context) {
                     Ok(service) => {
-                        abi_stable::std_types::RResult::ROk($crate::LoadedService::new(
-                            service,
-                            abi_stable::RRef::new(&[<VTABLE_ $service_type:snake>]),
-                        ))
+                        let container = $crate::ServiceContainer {
+                            instance: Box::into_raw(Box::new(service)) as *mut core::ffi::c_void,
+                            vtable: & [<VTABLE_ $service_type:snake>],
+                            vtable_version: $crate::SERVICE_VTABLE_VERSION,
+                        };
+                        stabby::result::Result::Ok(
+                            Box::into_raw(Box::new(container)) as *mut core::ffi::c_void
+                        )
                     }
-                    Err(e) => abi_stable::std_types::RResult::RErr(e),
+                    Err(e) => stabby::result::Result::Err(e),
                 }
             }
         }
     };
 }
 
-/// Macro to generate FFI boilerplate for widget plugins.
+/// Macro to generate FFI boilerplate for widget plugins using stabby.
 ///
-/// This macro generates all the necessary FFI functions and vtable for a widget type,
-/// including:
-/// - `destroy_{widget_type}`: Destroys the widget instance
-/// - `get_id_{widget_type}`: Returns the widget ID
-/// - `get_display_name_{widget_type}`: Returns the widget display name
-/// - `get_icon_name_{widget_type}`: Returns the widget icon name
-/// - `build_widget_{widget_type}`: Builds the FFI widget
-/// - `on_message_{widget_type}`: Handles incoming messages
-/// - `VTABLE_{widget_type}`: Static vtable for the widget
-/// - `smearor_plugin_create`: Entry point for creating the widget
+/// This macro generates a `#[stabby::export]` entry point (`smearor_plugin_create`)
+/// that constructs the widget and returns a `PluginContainer` with a manual VTable.
 ///
 /// # Requirements
 ///
 /// The widget type must:
 /// - Have a `meta` field with `id`, `display_name`, and `icon_name` attributes
-/// - Implement a `new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper>` constructor
-/// - Implement a `build_ffi_widget(plugin: *mut ()) -> FfiWidget` method
-/// - Implement a `handle_envelope_message(message: FfiEnvelope)` method
+/// - Implement `PluginMetaGetter`
+/// - Implement `Plugin` and `WidgetBuilder`
+/// - Implement a `new(config: PluginConfig, executor: PluginExecutor, broker: MessageBrokerHandle) -> Result<Self, PluginConstructionErrorWrapper>` constructor
 ///
 /// # Example
 ///
@@ -139,65 +125,63 @@ macro_rules! service_plugin {
 macro_rules! widget_plugin {
     ($widget_type:ty) => {
         paste::paste! {
-            unsafe extern "C" fn [<destroy_ $widget_type:snake>](plugin: *mut ()) {
-                if !plugin.is_null() {
+            unsafe extern "C" fn [<destroy_ $widget_type:snake>](instance: *mut core::ffi::c_void) {
+                if !instance.is_null() {
                     unsafe {
-                        let _ = Box::from_raw(plugin as *mut $widget_type);
+                        let _ = Box::from_raw(instance as *mut $widget_type);
                     }
                 }
             }
 
-            unsafe extern "C" fn [<get_id_ $widget_type:snake>](plugin: *mut ()) -> abi_stable::std_types::RString {
-                if plugin.is_null() {
-                    return abi_stable::std_types::RString::from("");
+            unsafe extern "C" fn [<build_widget_ $widget_type:snake>](
+                instance: *mut core::ffi::c_void,
+            ) -> $crate::FfiWidget {
+                if instance.is_null() {
+                    return $crate::FfiWidget::null();
                 }
-                let widget = unsafe { &*(plugin as *const $widget_type) };
-                widget.meta.id.clone()
+                let result = std::panic::catch_unwind(|| {
+                    let widget = unsafe { &mut *(instance as *mut $widget_type) };
+                    let status_page = <$widget_type as $crate::WidgetBuilder>::build_widget(widget);
+                    $crate::FfiWidget::new(status_page)
+                });
+                result.unwrap_or($crate::FfiWidget::null())
             }
 
-            unsafe extern "C" fn [<get_display_name_ $widget_type:snake>](plugin: *mut ()) -> abi_stable::std_types::RString {
-                if plugin.is_null() {
-                    return abi_stable::std_types::RString::from("");
-                }
-                let widget = unsafe { &*(plugin as *const $widget_type) };
-                widget.meta.display_name.clone()
-            }
-
-            unsafe extern "C" fn [<get_icon_name_ $widget_type:snake>](plugin: *mut ()) -> abi_stable::derive_macro_reexports::ROption<abi_stable::std_types::RString> {
-                if plugin.is_null() {
-                    return abi_stable::derive_macro_reexports::ROption::RNone;
-                }
-                let widget = unsafe { &*(plugin as *const $widget_type) };
-                widget.meta.icon_name.clone()
-            }
-
-            unsafe extern "C" fn [<build_widget_ $widget_type:snake>](plugin: *mut ()) -> $crate::FfiWidget {
-                <$widget_type as $crate::FfiWidgetBuilder>::build_ffi_widget(plugin)
-            }
-
-            unsafe extern "C" fn [<on_message_ $widget_type:snake>](plugin: *mut (), message: $crate::FfiEnvelope) {
-                if plugin.is_null() {
+            unsafe extern "C" fn [<on_message_ $widget_type:snake>](
+                instance: *mut core::ffi::c_void,
+                message: *mut core::ffi::c_void,
+            ) {
+                if instance.is_null() {
                     return;
                 }
-                let widget = unsafe { &*(plugin as *const $widget_type) };
-                smearor_swipe_launcher_plugin_api::MessageHandler::handle_envelope_message(widget, message);
+                let widget = unsafe { &mut *(instance as *mut $widget_type) };
+                <$widget_type as $crate::Plugin>::on_message(widget, message);
+            }
+
+            unsafe extern "C" fn [<start_ $widget_type:snake>](instance: *mut core::ffi::c_void) {
+                if instance.is_null() {
+                    return;
+                }
+                let widget = unsafe { &mut *(instance as *mut $widget_type) };
+                <$widget_type as $crate::Plugin>::start(widget);
             }
 
             static [<VTABLE_ $widget_type:snake>]: $crate::PluginVTable = $crate::PluginVTable {
                 destroy: [<destroy_ $widget_type:snake>],
-                get_id: [<get_id_ $widget_type:snake>],
-                get_display_name: [<get_display_name_ $widget_type:snake>],
-                get_icon_name: [<get_icon_name_ $widget_type:snake>],
                 build_widget: [<build_widget_ $widget_type:snake>],
                 on_message: [<on_message_ $widget_type:snake>],
+                start: [<start_ $widget_type:snake>],
             };
 
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn smearor_plugin_create(
+            #[stabby::export]
+            pub extern "C" fn smearor_plugin_create(
                 config_json: *const i8,
                 config_len: usize,
-                core_context: $crate::FfiCoreContext,
-            ) -> abi_stable::std_types::RResult<$crate::LoadedPlugin, $crate::PluginConstructionErrorWrapper> {
+                core_context: *mut core::ffi::c_void,
+            ) -> stabby::result::Result<
+                *mut core::ffi::c_void,
+                $crate::PluginConstructionErrorWrapper,
+            > {
                 let subscriber = tracing_subscriber::FmtSubscriber::builder()
                     .with_env_filter(
                         tracing_subscriber::EnvFilter::from_default_env()
@@ -208,25 +192,27 @@ macro_rules! widget_plugin {
 
                 let config = match $crate::PluginConfig::new(config_json, config_len) {
                     Ok(config) => config,
-                    Err(e) => {
-                        return abi_stable::std_types::RResult::RErr(e);
-                    }
+                    Err(e) => return stabby::result::Result::Err(e),
                 };
 
-                let core_context = if core_context.core_obj.is_null() {
+                let ffi_context = if core_context.is_null() {
                     None
                 } else {
-                    Some(core_context)
+                    Some(unsafe { *(core_context as *mut $crate::FfiCoreContext) })
                 };
 
-                match <$widget_type>::new(config, core_context) {
+                match <$widget_type>::new(config, ffi_context) {
                     Ok(widget) => {
-                        abi_stable::std_types::RResult::ROk($crate::LoadedPlugin::new(
-                            widget,
-                            abi_stable::RRef::new(&[<VTABLE_ $widget_type:snake>]),
-                        ))
+                        let container = $crate::PluginContainer {
+                            instance: Box::into_raw(Box::new(widget)) as *mut core::ffi::c_void,
+                            vtable: & [<VTABLE_ $widget_type:snake>],
+                            vtable_version: $crate::PLUGIN_VTABLE_VERSION,
+                        };
+                        stabby::result::Result::Ok(
+                            Box::into_raw(Box::new(container)) as *mut core::ffi::c_void
+                        )
                     }
-                    Err(e) => abi_stable::std_types::RResult::RErr(e),
+                    Err(e) => stabby::result::Result::Err(e),
                 }
             }
         }

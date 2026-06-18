@@ -38,7 +38,7 @@ impl Clock {
     }
 
     fn format_current_time(format: &str, default_format: &str, timezone: OffsetDateTime) -> String {
-        let format_desc = parse(&format).unwrap_or_else(|_| parse(default_format).unwrap());
+        let format_desc = parse(format).unwrap_or_else(|_| parse(default_format).unwrap());
         timezone.format(&format_desc).unwrap_or_else(|_| "Invalid Format".to_string())
     }
 }

@@ -4,16 +4,15 @@ use adw::StatusPage;
 use adw::prelude::Cast;
 use gtk4::GestureClick;
 use gtk4::Widget;
-use gtk4::glib::ControlFlow;
-use gtk4::glib::timeout_add_seconds_local;
+use gtk4::glib::MainContext;
 use gtk4::prelude::WidgetExt;
 use serde_json;
-use serde_json::Value;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
+use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -22,9 +21,8 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::mpsc;
-use tokio::runtime::Runtime;
-use tokio::time::interval;
+use std::thread;
+use std::time::Duration;
 use tracing::debug;
 
 pub(crate) struct ClockWidget {
@@ -32,54 +30,51 @@ pub(crate) struct ClockWidget {
     pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) config: ClockConfig,
     pub(crate) clock: Arc<Clock>,
-    pub(crate) runtime: Arc<Runtime>,
     pub(crate) status_page: Arc<RwLock<Option<StatusPage>>>,
-    pub(crate) time_sender: mpsc::Sender<String>,
-    pub(crate) time_receiver: Option<mpsc::Receiver<String>>,
+    pub(crate) time_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<String>>,
 }
 
 impl ClockWidget {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
         let clock_config: ClockConfig = serde_json::from_value(config.config.clone())
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
-        let runtime =
-            Arc::new(Runtime::new().map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToCreateRuntime, e.to_string().into()))?);
-        let (time_sender, time_receiver) = mpsc::channel();
         Ok(ClockWidget {
             meta: PluginMeta::try_from(&config)?,
             core_context,
             config: clock_config.clone(),
             clock: Arc::new(Clock::new(clock_config)),
-            runtime,
             status_page: Arc::new(RwLock::new(None)),
-            time_sender,
-            time_receiver: Some(time_receiver),
+            time_receiver: None,
         })
     }
 
-    pub(crate) fn start_time_update(&self, time_receiver: mpsc::Receiver<String>) {
+    pub(crate) fn start_time_update(&mut self) {
+        let (time_sender, time_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
+        self.time_receiver = Some(time_receiver);
+
         let clock = self.clock.clone();
-        let runtime = self.runtime.clone();
-        let time_sender = self.time_sender.clone();
-        runtime.spawn(async move {
-            let mut interval = interval(tokio::time::Duration::from_secs(1));
+        thread::spawn(move || {
             loop {
-                interval.tick().await;
-                let _ = time_sender.send(clock.get_current_time_1());
+                let time_str = clock.get_current_time_1();
+                if time_sender.send(time_str).is_err() {
+                    break;
+                }
+                thread::sleep(Duration::from_secs(1));
             }
         });
 
-        let status_page = self.status_page.clone();
-        timeout_add_seconds_local(1, move || {
-            if let Ok(time_str) = time_receiver.try_recv() {
-                if let Ok(page_guard) = status_page.read() {
-                    if let Some(page) = page_guard.as_ref() {
-                        page.set_title(&time_str);
+        if let Some(mut rx) = self.time_receiver.take() {
+            let status_page = self.status_page.clone();
+            MainContext::default().spawn_local(async move {
+                while let Some(time_str) = rx.recv().await {
+                    if let Ok(page_guard) = status_page.read() {
+                        if let Some(page) = page_guard.as_ref() {
+                            page.set_title(&time_str);
+                        }
                     }
                 }
-            }
-            ControlFlow::Continue
-        });
+            });
+        }
     }
 }
 
@@ -93,7 +88,7 @@ impl AcceptTopic<FfiEnvelope> for ClockWidget {
     }
 }
 
-impl MessageBroadcaster<Value> for ClockWidget {}
+impl MessageBroadcaster for ClockWidget {}
 
 impl PluginMetaGetter for ClockWidget {
     fn meta(&self) -> PluginMeta {
@@ -106,6 +101,8 @@ impl AsRef<Option<FfiCoreContext>> for ClockWidget {
         &self.core_context
     }
 }
+
+impl Plugin for ClockWidget {}
 
 impl WidgetBuilder for ClockWidget {
     fn build_widget(&mut self) -> Widget {
@@ -128,15 +125,14 @@ impl WidgetBuilder for ClockWidget {
         let gesture = GestureClick::new();
         gesture.connect_released(move |_gesture, _, _, _| {
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
-                message_broadcaster.broadcast_message(&topic, &payload);
+                let payload_str = payload.to_string();
+                message_broadcaster.broadcast_string(&topic, &payload_str);
             }
         });
         status_page.add_controller(gesture);
 
         *self.status_page.write().unwrap() = Some(status_page.clone());
-        if let Some(time_receiver) = self.time_receiver.take() {
-            self.start_time_update(time_receiver);
-        }
+        self.start_time_update();
         status_page.upcast::<Widget>()
     }
 }

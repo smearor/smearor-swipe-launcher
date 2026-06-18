@@ -10,7 +10,7 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-abi_stable = { workspace = true }
+stabby = { workspace = true }
 dirs = { workspace = true }
 freedesktop_entry_parser = { workspace = true }
 glib = { workspace = true }

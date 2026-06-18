@@ -7,11 +7,10 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-abi_stable = { workspace = true }
+stabby = { workspace = true }
 glib = { workspace = true }
 gtk4 = { workspace = true }
 miette = { workspace = true }
-paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-wrot-rotation = { workspace = true }

@@ -11,9 +11,8 @@ impl LauncherApplication {
     pub fn handle_message(&self, envelope: FfiEnvelope) {
         let sender_id = envelope.sender_id.to_string();
         let topic = envelope.topic.to_string();
-        let payload = envelope.payload.to_string();
 
-        trace!("Event Broker: Received message from '{}' on topic '{}': {}", sender_id, topic, payload);
+        trace!("Event Broker: Received message from '{}' on topic '{}' (type_id={})", sender_id, topic, envelope.type_id);
 
         // Rate-limit command topics to protect the broker from burst overload.
         if topic.ends_with(".command") || topic.ends_with(".status") {
@@ -122,6 +121,15 @@ impl LauncherApplication {
                 let service = r.value();
                 unsafe {
                     service.on_message(envelope.clone());
+                }
+            }
+        }
+
+        // Destroy the payload after all handlers have processed the message
+        if !envelope.payload.is_null() {
+            if let Some(destroy) = envelope.destroy_payload {
+                unsafe {
+                    (destroy)(envelope.payload);
                 }
             }
         }

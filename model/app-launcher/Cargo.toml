@@ -10,3 +10,4 @@ authors.workspace = true
 serde = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 smearor-wrot-rotation = { workspace = true }
+stabby = { workspace = true }

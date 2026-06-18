@@ -10,7 +10,7 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-abi_stable = { workspace = true }
+stabby = { workspace = true }
 futures-util = { workspace = true }
 glib = { workspace = true }
 gtk4 = { workspace = true }

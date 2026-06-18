@@ -1,12 +1,10 @@
-use abi_stable::StableAbi;
 use gtk4::Widget;
 use gtk4::ffi::GtkWidget;
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::Cast;
 
+/// An FFI-safe wrapper around a GTK widget pointer.
 #[repr(C)]
-#[derive(StableAbi)]
-#[sabi(unsafe_opaque_fields)]
 pub struct FfiWidget {
     pub raw_widget: *mut GtkWidget,
 }
@@ -24,10 +22,12 @@ impl FfiWidget {
     }
 }
 
+/// Trait for types that can build a GTK widget.
 pub trait WidgetBuilder {
     fn build_widget(&mut self) -> Widget;
 }
 
+/// Trait for building an FfiWidget from a raw plugin pointer.
 pub trait FfiWidgetBuilder {
     fn build_ffi_widget(plugin: *mut ()) -> FfiWidget;
 }

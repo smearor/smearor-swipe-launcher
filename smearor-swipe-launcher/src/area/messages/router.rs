@@ -12,21 +12,25 @@ use smearor_swipe_launcher_plugin_api::MessageRouter;
 impl MessageRouter for AreaManager {
     fn route(&self, envelope: &FfiEnvelope) {
         if AcceptTopic::<FfiEnvelopePayload<AddAreaMessage>>::accept_topic(self, envelope.topic.as_str()) {
-            MessageHandler::<FfiEnvelopePayload<AddAreaMessage>>::handle_envelope_message(self, envelope.clone());
+            MessageHandler::<FfiEnvelopePayload<AddAreaMessage>>::handle_envelope_message(self, envelope);
+            return;
         }
         if AcceptTopic::<FfiEnvelopePayload<CloseAreaMessage>>::accept_topic(self, envelope.topic.as_str()) {
-            MessageHandler::<FfiEnvelopePayload<CloseAreaMessage>>::handle_envelope_message(self, envelope.clone());
+            MessageHandler::<FfiEnvelopePayload<CloseAreaMessage>>::handle_envelope_message(self, envelope);
+            return;
         }
         if AcceptTopic::<FfiEnvelopePayload<OpenAreaMessage>>::accept_topic(self, envelope.topic.as_str()) {
-            MessageHandler::<FfiEnvelopePayload<OpenAreaMessage>>::handle_envelope_message(self, envelope.clone());
+            MessageHandler::<FfiEnvelopePayload<OpenAreaMessage>>::handle_envelope_message(self, envelope);
+            return;
         }
         if AcceptTopic::<FfiEnvelopePayload<RemoveAreaMessage>>::accept_topic(self, envelope.topic.as_str()) {
-            MessageHandler::<FfiEnvelopePayload<RemoveAreaMessage>>::handle_envelope_message(self, envelope.clone());
+            MessageHandler::<FfiEnvelopePayload<RemoveAreaMessage>>::handle_envelope_message(self, envelope);
+            return;
         }
     }
 }
 
-impl AcceptTopic<FfiEnvelope> for AreaManager {
+impl<T> AcceptTopic<T> for AreaManager {
     fn accept_topic(&self, topic: &str) -> bool {
         topic.starts_with("area.")
     }

@@ -55,31 +55,35 @@ The new architecture is built on three pillars:
 ### 2.1 stabby FFI Traits
 
 The `plugin-api` crate replaces manual VTables with `#[stabby::stabby]` traits. stabby automatically generates ABI-stable v-tables (`PluginDyn`, `ServiceDyn`)
-and provides `dynptr!`/`DynBox`/`DynRef` for type-safe trait objects across FFI.
+and provides `dynptr!`/`Dyn`/`DynRef` for type-safe trait objects across FFI.
+
+> **Note:** `SharedMessage` cannot be a stabby trait because stabby traits do not support trait-object parameters in their methods. Therefore, message passing
+> continues to use raw pointers with `type_id` for manual down-casting. The `Plugin` and `Service` traits below are conceptual; the actual implementation uses
+> manual `#[repr(C)]` VTables.
 
 ```rust
 #[stabby::stabby]
 pub trait Plugin {
-    fn id(&self) -> stabby::string::String;
-    fn display_name(&self) -> stabby::string::String;
-    fn icon_name(&self) -> stabby::option::Option<stabby::string::String>;
-    fn build_widget(&mut self) -> FfiWidget;
-    fn on_message(&mut self, message: stabby::dyn::DynRef<dyn SharedMessage>);
+    extern "C" fn id(&self) -> stabby::string::String;
+    extern "C" fn display_name(&self) -> stabby::string::String;
+    extern "C" fn icon_name(&self) -> stabby::option::Option<stabby::string::String>;
+    extern "C" fn build_widget(&mut self) -> FfiWidget;
+    extern "C" fn on_message(&mut self, message: *mut core::ffi::c_void, type_id: u64);
 }
 
 #[stabby::stabby]
 pub trait Service {
-    fn id(&self) -> stabby::string::String;
-    fn display_name(&self) -> stabby::string::String;
-    fn on_message(&mut self, message: stabby::dyn::DynRef<dyn SharedMessage>);
+    extern "C" fn id(&self) -> stabby::string::String;
+    extern "C" fn display_name(&self) -> stabby::string::String;
+    extern "C" fn on_message(&mut self, message: *mut core::ffi::c_void, type_id: u64);
 }
 ```
 
 **Why traits instead of manual VTables?**
 
 - **No boilerplate:** `destroy`, `get_id`, `on_message` — all generated automatically by stabby
-- **Type safety:** `DynBox<dyn Plugin>` carries the v-table inline; no raw `*mut ()` pointers
-- **Drop handled automatically:** When `DynBox` goes out of scope, the destructor is called via the v-table
+- **Type safety:** `stabby::dynptr!(Box<dyn Plugin>)` carries the v-table inline; no raw `*mut ()` pointers
+- **Drop handled automatically:** When the stabby trait object goes out of scope, the destructor is called via the v-table
 
 ### 2.2 PluginExecutor — Delegated Async Runtime
 
@@ -93,11 +97,13 @@ pub struct PluginExecutor {
     /// The Host guarantees this pointer remains valid for the entire plugin lifetime.
     pub context: *const core::ffi::c_void,
     /// Spawn a future on the Host's async runtime.
-    /// `stabby::compiler::Send` ensures the future is thread-safe and can migrate
-    /// across Tokio worker threads.
+    /// `stabby::future::DynFuture` already implies `Send + Sync`.
+    /// (Note: `stabby::compiler::Send` does not exist in stabby 72.1.8;
+    ///  stabby uses separate type aliases instead: `DynFuture` = Send+Sync,
+    ///  `DynFutureUnsync` = Send, `DynFutureUnsend` = no bound.)
     pub spawn: extern "C" fn(
         context: *const core::ffi::c_void,
-        future: stabby::future::DynFuture<'static, (), stabby::compiler::Send>,
+        future: stabby::future::DynFuture<'static, ()>,
     ),
 }
 ```
@@ -107,7 +113,7 @@ pub struct PluginExecutor {
 ```rust
 unsafe extern "C" fn host_spawn(
     context: *const core::ffi::c_void,
-    future: stabby::future::DynFuture<'static, (), stabby::compiler::Send>,
+    future: stabby::future::DynFuture<'static, ()>,
 ) {
     let handle = &*(context as *const tokio::runtime::Handle);
     handle.spawn(async move { future.await });
@@ -169,14 +175,14 @@ pub trait SharedMessage {
 }
 ```
 
-The broker routes `stabby::dyn::DynBox<dyn SharedMessage>` directly from sender to receiver. The receiver down-casts using the stable `type_id` and accesses the
+The broker routes `FfiEnvelope` (containing a raw pointer + `type_id`) from sender to receiver. The receiver down-casts using the stable `type_id` and accesses
+the
 message fields directly from memory:
 
 ```rust
-extern "C" fn on_message(plugin: *mut (), msg: stabby::dyn::DynRef<dyn SharedMessage>) {
-    if msg.type_id() == NOTIFICATION_STATUS_TYPE_ID {
-        let raw_ptr = msg.as_ptr() as *const NotificationStatusMessage;
-        let status = unsafe { &*raw_ptr };
+extern "C" fn on_message(plugin: *mut (), msg: *mut core::ffi::c_void, type_id: u64) {
+    if type_id == NOTIFICATION_STATUS_TYPE_ID {
+        let status = unsafe { &*(msg as *const NotificationStatusMessage) };
         // Use directly — no copy, no deserialization
     }
 }
@@ -244,9 +250,9 @@ impl NotificationService {
 #### Message Send Flow
 
 1. Plugin constructs a message using shared `model` types
-2. Plugin calls `broker.send(stabby::dyn::DynBox::new(message))`
+2. Plugin boxes the message and calls `broker.send(FfiEnvelope { type_id: T::TYPE_ID, payload: Box::into_raw(...), ... })`
 3. Host broker routes to target plugin(s)
-4. Receiving plugin receives `stabby::dyn::DynRef<dyn SharedMessage>`, down-casts via `type_id`, and handles
+4. Receiving plugin receives raw pointer + `type_id`, down-casts, and handles
 
 ### 2.5 Service Architecture
 
@@ -275,7 +281,7 @@ impl NotificationService {
 
     pub fn start(&self) {
         // Spawn the zbus listener directly on the Host's Tokio runtime.
-        // stabby::compiler::Send guarantees the future is thread-safe.
+        // DynFuture already implies Send + Sync; no explicit bound needed.
         (self.executor.spawn)(
             self.executor.context,
             stabby::future::DynFuture::new(async move {
@@ -292,12 +298,16 @@ impl NotificationService {
 }
 ```
 
-### 2.6 Macro Implementation with `stabby::export` and `stabby::import`
+### 2.6 Macro Implementation with `stabby::export` and `stabby::libloading`
 
-stabby provides `#[stabby::export]` to generate `#[no_mangle]` entry points with automatic type-report verification, and `#[stabby::import]` to load them with
-ABI-safety checks. This eliminates the manual VTable boilerplate entirely.
+stabby provides `#[stabby::export]` to generate `#[no_mangle]` entry points with automatic type-report verification. Plugins export their constructors with
+`#[stabby::export]`, and the Host loads them via `stabby::libloading::StabbyLibrary::get_stabbied`, which verifies the type reports at runtime before returning
+the function pointer. This eliminates manual ABI mismatches and prevents segfaults from incompatible plugins.
 
 #### Plugin-side macro (`widget_plugin!`)
+
+> **Note:** The original concept used `stabby::dyn::DynBox<dyn Plugin>`, but `DynBox` does not exist in stabby 72.1.8. The actual implementation uses manual
+`#[repr(C)]` VTables with version checking.
 
 ```rust
 #[macro_export]
@@ -310,12 +320,21 @@ macro_rules! widget_plugin {
             executor: $crate::PluginExecutor,
             broker: $crate::MessageBrokerHandle,
         ) -> stabby::result::Result<
-            stabby::dyn::DynBox<dyn $crate::Plugin>,
+            $crate::PluginContainer,
             $crate::PluginConstructionErrorWrapper,
         > {
             let config = $crate::PluginConfig::new(config_json, config_len)?;
             let widget = <$widget_type>::new(config, executor, broker)?;
-            Ok(stabby::dyn::DynBox::new(widget))
+            Ok($crate::PluginContainer {
+                instance: Box::into_raw(Box::new(widget)) as *mut core::ffi::c_void,
+                vtable: &$crate::PluginVTable {
+                    destroy: destroy_fn,
+                    build_widget: build_widget_fn,
+                    on_message: on_message_fn,
+                    start: start_fn,
+                },
+                vtable_version: $crate::PLUGIN_VTABLE_VERSION,
+            })
         }
     };
 }
@@ -329,6 +348,9 @@ What `#[stabby::export]` generates automatically:
 
 #### Service-side macro (`service_plugin!`)
 
+> **Note:** The original concept used `stabby::dyn::DynBox<dyn Service>`, but `DynBox` does not exist in stabby 72.1.8. The actual implementation uses manual
+`#[repr(C)]` VTables with version checking.
+
 ```rust
 #[macro_export]
 macro_rules! service_plugin {
@@ -340,36 +362,51 @@ macro_rules! service_plugin {
             executor: $crate::PluginExecutor,
             broker: $crate::MessageBrokerHandle,
         ) -> stabby::result::Result<
-            stabby::dyn::DynBox<dyn $crate::Service>,
+            $crate::ServiceContainer,
             $crate::PluginConstructionErrorWrapper,
         > {
             let config = $crate::PluginConfig::new(config_json, config_len)?;
             let service = <$service_type>::new(config, executor, broker)?;
-            Ok(stabby::dyn::DynBox::new(service))
+            Ok($crate::ServiceContainer {
+                instance: Box::into_raw(Box::new(service)) as *mut core::ffi::c_void,
+                vtable: &$crate::ServiceVTable {
+                    destroy: destroy_fn,
+                    get_id: get_id_fn,
+                    on_message: on_message_fn,
+                    start: start_fn,
+                },
+                vtable_version: $crate::SERVICE_VTABLE_VERSION,
+            })
         }
     };
 }
 ```
 
-#### Host-side plugin loading (`stabby::import`)
+#### Host-side plugin loading (`stabby::libloading`)
+
+The Host uses `stabby::libloading::StabbyLibrary` to load plugin constructors at runtime with automatic ABI verification:
 
 ```rust
-#[stabby::import(library = "libplugin.so")]
-extern "C" {
-    fn smearor_plugin_create(
-        config_json: *const i8,
-        config_len: usize,
-        executor: PluginExecutor,
-        broker: MessageBrokerHandle,
-    ) -> stabby::result::Result<
-        stabby::dyn::DynBox<dyn Plugin>,
-        PluginConstructionErrorWrapper,
-    >;
-}
+use stabby::libloading::StabbyLibrary;
+use smearor_swipe_launcher_plugin_api::PluginConstructor;
+
+let library = libloading::Library::new("libplugin.so") ?;
+let constructor = unsafe {
+library.get_stabbied::<PluginConstructor>(b"smearor_plugin_create")
+}.map_err( | e| LauncherError::PluginStabbiedLoadError(e.to_string())) ?;
 ```
 
-`stabby::import` lazy-initializes the symbol using `smearor_plugin_create_stabbied`, verifying that the type reports match before allowing the call. If the
-plugin was compiled with an incompatible rustc version or optimization level, the load fails gracefully with a report instead of a segfault.
+`get_stabbied` looks up `smearor_plugin_create_stabbied_v3` (generated by `#[stabby::export]`) and compares the type report of the plugin's constructor with the
+Host's expected type report. If they mismatch (e.g., different parameter order, incompatible stabby version, or different compiler settings), the load fails
+gracefully with a detailed error message instead of a segfault.
+
+For services, the same pattern is used with `ServiceConstructor`:
+
+```rust
+let constructor = unsafe {
+library.get_stabbied::<ServiceConstructor>(b"smearor_service_create")
+}.map_err( | e| LauncherError::PluginStabbiedLoadError(e.to_string())) ?;
+```
 
 ---
 
@@ -388,15 +425,15 @@ plugin was compiled with an incompatible rustc version or optimization level, th
 
 ### 3.2 Disadvantages and Risks
 
-| Disadvantage                                 | Mitigation                                                                                                                                                                                                    |
-|----------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`stabby` is pre-1.0**                      | Pin to a specific minor version via `Cargo.lock`. Monitor the `stabby` repository for breaking changes. The API surface we use (structs, enums, `DynFuture`, `DynBox`) is stable in practice.                 |
-| **Breaking change for all plugins**          | All 8 model crates, 6 plugins, and 4 services must migrate. Mitigate by migrating one plugin pair (service + widget) as a Proof of Concept before touching the others.                                        |
-| **GTK main thread constraint remains**       | Widgets must still update GTK objects on the main thread. Use `glib::MainContext::default().spawn_local` inside async handlers. This is a GTK limitation, not an architecture flaw.                           |
-| **Conversion overhead for external APIs**    | Libraries like zbus return `std::string::String`; these must be converted to `stabby::string::String` before crossing the model boundary. This is a one-time cost at the service edge, not per message.       |
-| **Lifetime management of `context` pointer** | Using `Arc::into_raw` would leak memory on plugin unload. Instead, store the `Handle` in a `Box` on the Host heap and pass `Box::into_raw`. Reclaim with `Box::from_raw` during Host shutdown.                |
-| **Thread-safety of plugin Futures (`Send`)** | `DynFuture<'static, (), stabby::compiler::Send>` enforces at the type level that the future is `Send`. Plugin developers cannot accidentally capture non-`Send` state (e.g., GTK widgets) in spawned futures. |
-| **GTK main context bridge deadlock risk**    | Never use `block_on` or synchronous waits inside `spawn_local`. The flow must always be unidirectional: Tokio task → async channel → `spawn_local` → GTK update. No back-pressure that blocks the GTK thread. |
+| Disadvantage                                 | Mitigation                                                                                                                                                                                                                                                                                    |
+|----------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`stabby` is pre-1.0**                      | Pin to a specific minor version via `Cargo.lock`. Monitor the `stabby` repository for breaking changes. The API surface we use (structs, enums, `DynFuture`) is stable in practice. (`DynBox` does not exist in stabby 72.1.8; we use manual VTables instead.)                                |
+| **Breaking change for all plugins**          | All 8 model crates, 6 plugins, and 4 services must migrate. Mitigate by migrating one plugin pair (service + widget) as a Proof of Concept before touching the others.                                                                                                                        |
+| **GTK main thread constraint remains**       | Widgets must still update GTK objects on the main thread. Use `glib::MainContext::default().spawn_local` inside async handlers. This is a GTK limitation, not an architecture flaw.                                                                                                           |
+| **Conversion overhead for external APIs**    | Libraries like zbus return `std::string::String`; these must be converted to `stabby::string::String` before crossing the model boundary. This is a one-time cost at the service edge, not per message.                                                                                       |
+| **Lifetime management of `context` pointer** | Using `Arc::into_raw` would leak memory on plugin unload. Instead, store the `Handle` in a `Box` on the Host heap and pass `Box::into_raw`. Reclaim with `Box::from_raw` during Host shutdown.                                                                                                |
+| **Thread-safety of plugin Futures (`Send`)** | `stabby::future::DynFuture` already implies `Send + Sync` at the type level. Plugin developers cannot accidentally capture non-`Send` state in futures spawned on the Host runtime. (Note: `stabby::compiler::Send` does not exist in stabby 72.1.8; separate type aliases are used instead.) |
+| **GTK main context bridge deadlock risk**    | Never use `block_on` or synchronous waits inside `spawn_local`. The flow must always be unidirectional: Tokio task → async channel → `spawn_local` → GTK update. No back-pressure that blocks the GTK thread.                                                                                 |
 
 ### 3.3 Why This Solves the Current Problems
 
@@ -416,8 +453,10 @@ Three specific problems must be handled carefully during implementation:
 the reference count never reaches zero. **Fix:** Store the handle in a `Box` and pass `Box::into_raw`. The Host reclaims it with `Box::from_raw` on shutdown.
 
 **Gotcha B — Thread-Safety of Spawned Futures:** `tokio::runtime::Handle::spawn` may execute the future on any worker thread. If the plugin captures non-`Send`
-state (e.g., GTK widgets, `Rc<RefCell<T>>`), this is undefined behavior. **Fix:** Use `DynFuture<'static, (), stabby::compiler::Send>` in the `PluginExecutor`
-signature. This enforces `Send` at the type level; the compiler rejects non-thread-safe futures.
+state (e.g., GTK widgets, `Rc<RefCell<T>>`), this is undefined behavior. **Fix:** Use `stabby::future::DynFuture` in the `PluginExecutor`
+signature. This type alias already implies `Send + Sync`; the compiler rejects non-thread-safe futures.
+/// NOTE: `stabby::compiler::Send` does not exist in stabby 72.1.8. Stabby uses separate type aliases
+/// (`DynFuture`, `DynFutureUnsync`, `DynFutureUnsend`) rather than generic Send bounds.
 
 **Gotcha C — GTK Main Context Deadlock:** If a `spawn_local` task on the GTK main thread ever blocks waiting for a Tokio future (e.g., `block_on`, `.await` on a
 non-`LocalSet` future), the GTK thread deadlocks because Tokio cannot complete the future without the GTK thread making progress. **Fix:** The bridge must be
@@ -441,14 +480,14 @@ Never use `block_on`, never `.await` a Tokio future inside `spawn_local`.
 
 **Scope:** `plugin-api` crate only. No model or plugin changes yet.
 
-- [ ] Add `stabby` dependency to workspace `Cargo.toml`
-- [ ] Define `Plugin` and `Service` traits with `#[stabby::stabby]`
-- [ ] Define `PluginExecutor`, `SharedMessage` trait, and `MessageBrokerHandle`
-- [ ] Rewrite `widget_plugin!` macro using `#[stabby::export]` for the constructor
-- [ ] Rewrite `service_plugin!` macro using `#[stabby::export]` for the constructor
-- [ ] Define `new`/`start` pattern: constructor receives `PluginExecutor` + `MessageBrokerHandle`, `start()` spawns async tasks
-- [ ] Host-side: update plugin loader to use `stabby::import` with ABI verification
-- [ ] Remove `abi_stable` from `plugin-api` dependencies
+- [x] Add `stabby` dependency to workspace `Cargo.toml`
+- [x] Define `Plugin` and `Service` traits (normal Rust traits; `#[stabby::stabby]` traits blocked by stabby's trait-object limitation)
+- [x] Define `PluginExecutor`, `SharedMessage` trait, and `MessageBrokerHandle`
+- [x] Rewrite `widget_plugin!` macro using `#[stabby::export]` for the constructor
+- [x] Rewrite `service_plugin!` macro using `#[stabby::export]` for the constructor
+- [x] Define `new`/`start` pattern: constructor receives `PluginExecutor` + `MessageBrokerHandle`, `start()` spawns async tasks
+- [x] Host-side: update plugin loader to use `stabby::libloading::StabbyLibrary::get_stabbied` with ABI verification
+- [x] Remove `abi_stable` from `plugin-api` dependencies
 
 **Estimated effort:** Medium. The trait-to-FFI transition and macro rewrite are the most complex parts.
 
@@ -456,12 +495,30 @@ Never use `block_on`, never `.await` a Tokio future inside `spawn_local`.
 
 **Scope:** All `model/<name>` crates.
 
-- [ ] Convert `String` → `stabby::string::String`
-- [ ] Convert `Vec<T>` → `stabby::vec::Vec<T>`
-- [ ] Convert `Option<T>` → `stabby::option::Option<T>`
-- [ ] Add `#[stabby::stabby]` to all message structs and enums
-- [ ] Remove `serde::Serialize` / `serde::Deserialize` derives from FFI-facing types (keep for config parsing if needed)
-- [ ] Ensure `MessageTopic` trait is compatible with stabby strings
+- [x] Convert `String` → `stabby::string::String`
+- [x] Convert `Vec<T>` → `stabby::vec::Vec<T>`
+- [x] Convert `Option<T>` → `stabby::option::Option<T>`
+- [x] Add `#[stabby::stabby]` to all message structs and enums
+- [x] Remove `serde::Serialize` / `serde::Deserialize` derives from FFI-facing types (keep for config parsing if needed)
+- [x] Ensure `MessageTopic` trait is compatible with stabby strings
+
+**Status:** ✅ **Complete.** All FFI-facing types in `model/audio`, `model/area`, `model/plugin`, `model/notifications`, `model/mpris`, and `model/app-launcher`
+have `#[stabby::stabby]` or `#[stabby::stabby(no_opt)]`. Non-stabby types (`AreaConfig`, `AreaTransition`, `PluginEntry`) are Host-side config types with
+`serde` for JSON parsing and do not cross FFI.
+
+#### Why two structs per type?
+
+Some model crates define **two versions** of the same concept: a normal Rust struct (`AreaConfig`) and an ABI-stable counterpart (`AreaConfigStabby`). This is
+intentional:
+
+- **Normal Rust structs** (`#[derive(Serialize, Deserialize)]`) are used for **Host-side JSON config parsing** (e.g., `config.json` → `AreaConfig`). These never
+  cross FFI boundaries and use standard Rust types (`String`, `Vec<T>`, `Option<T>`).
+- **Stabby structs** (`#[stabby::stabby]`) are used for **cross-plugin FFI messaging** (e.g., `AudioStatusMessage` sent from service to widget). These use
+  `stabby::string::String`, `stabby::vec::Vec<T>`, `stabby::option::Option<T>` and have a stable ABI layout.
+- **Conversion traits** (`From<X> for XStabby` and vice versa) bridge the two worlds at the service/widget edge.
+
+This separation is necessary because `#[stabby::stabby]` and `#[derive(Serialize, Deserialize)]` cannot coexist on the same struct — stabby controls the memory
+layout, while serde expects standard Rust layout. Mixing them would lead to compilation errors or undefined behavior.
 
 **Estimated effort:** Low per crate. Purely mechanical refactoring.
 
@@ -469,9 +526,15 @@ Never use `block_on`, never `.await` a Tokio future inside `spawn_local`.
 
 **Scope:** `smearor-swipe-launcher/src/` message broker and plugin loading.
 
-- [ ] Replace `FfiEnvelope` (JSON payload) with `DynBox<dyn SharedMessage>` routing
-- [ ] Rewrite `PluginManager` and `ServiceManager` to use stabby traits (`DynBox<dyn Plugin>`, `DynBox<dyn Service>`)
-- [ ] Implement `host_spawn` and pass `PluginExecutor` during plugin init
+- [x] Replace `FfiEnvelope` JSON payload with raw pointer + `type_id` (zero-copy, no serialization)
+- [x] Rewrite `PluginManager` and `ServiceManager` to use stabby traits (manual `#[repr(C)]` VTables with version checking; stabby trait-objects blocked by
+  limitations)
+
+> **Note:** `DynBox` does not exist in stabby 72.1.8. The trait-object approach via `stabby::dynptr!` is possible, but requires `SharedMessage` to be a
+`#[stabby::stabby]` trait — which is blocked by stabby's limitation on trait-object parameters in trait methods. The current manual VTable + raw pointer
+> approach is the practical solution.
+
+- [x] Implement `host_spawn` and pass `PluginExecutor` during plugin init
 - [ ] Remove `serde_json` dependency from the Host (where only used for plugin messages)
 
 **Estimated effort:** Medium. The broker routing logic changes significantly.
@@ -480,11 +543,11 @@ Never use `block_on`, never `.await` a Tokio future inside `spawn_local`.
 
 **Scope:** `services/notifications` + `plugins/notifications` + `model/notifications`.
 
-- [ ] Migrate `model/notifications` to stabby types
-- [ ] Rewrite `NotificationService` with `new`/`start` pattern — `new` stores `PluginExecutor`, `start` spawns zbus listener via Host Tokio
-- [ ] Use idiomatic async zbus inside the service task
-- [ ] Rewrite `NotificationWidget` to use `tokio::sync::mpsc` + `glib::MainContext::spawn_local` instead of `timeout_add_local`
-- [ ] Verify end-to-end: notification arrives via zbus → service → broker → widget → GTK update
+- [x] Migrate `model/notifications` to stabby types
+- [x] Rewrite `NotificationService` with `new`/`start` pattern — `new` stores `PluginExecutor`, `start` spawns zbus listener via Host Tokio
+- [x] Use idiomatic async zbus inside the service task
+- [x] Rewrite `NotificationWidget` to use `tokio::sync::mpsc` + `glib::MainContext::spawn_local` instead of `timeout_add_local`
+- [x] Verify end-to-end: notification arrives via zbus → service → broker → widget → GTK update
 
 **Estimated effort:** Medium. This validates the entire stack.
 
@@ -502,10 +565,10 @@ Order of migration (simplest to most complex):
 
 For each:
 
-- [ ] Migrate `model/<name>` to stabby
-- [ ] Rewrite service (if applicable) as async Tokio task
-- [ ] Rewrite widget to remove polling loops
-- [ ] Verify functionality end-to-end
+- [x] Migrate `model/<name>` to stabby
+- [x] Rewrite service (if applicable) as async Tokio task
+- [x] Rewrite widget to remove polling loops
+- [x] Verify functionality end-to-end
 
 **Estimated effort:** Low per plugin after the PoC pattern is established.
 
@@ -513,13 +576,13 @@ For each:
 
 **Scope:** Repository-wide.
 
-- [ ] Remove `abi_stable` from workspace dependencies
-- [ ] Remove `serde_json` from crates where no longer needed
-- [ ] Audit and remove all `std::thread::spawn` from plugins
-- [ ] Audit and remove all `glib::timeout_add_local` polling loops
-- [ ] Reclaim Host runtime handle via `Box::from_raw` during Host shutdown
-- [ ] Update documentation (`WIDGET_CONCEPT.md`, `SERVICE_PLUGIN_CONCEPT.md`, etc.)
-- [ ] Update `AGENTS.md` with new architecture guidelines
+- [x] Remove `abi_stable` from workspace dependencies
+- [x] Remove `serde_json` from crates where no longer needed (still required for Host-side config parsing)
+- [x] Audit and remove all `std::thread::spawn` from plugins (all services now use Tokio)
+- [x] Audit and remove all `glib::timeout_add_local` polling loops (replaced with event-driven `spawn_local`)
+- [x] Reclaim Host runtime handle via `Box::from_raw` during Host shutdown (`Drop` impls in `LoadedPlugin`/`LoadedService`)
+- [x] Update documentation (`WIDGET_SYSTEM.md`, `SERVICE_PLUGIN_CONCEPT.md`, `ASYNC_PLUGINS_ARCHITECTURE.md`, etc.)
+- [x] Update `AGENTS.md` with new architecture guidelines
 
 **Estimated effort:** Low. Cleanup and documentation.
 

@@ -17,7 +17,6 @@ use gtk4::prelude::Cast;
 use gtk4::prelude::GestureExt;
 use gtk4::prelude::GestureSingleExt;
 use gtk4::prelude::WidgetExt;
-use serde_json::Value;
 use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatus;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
@@ -25,7 +24,7 @@ use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
-use smearor_swipe_launcher_plugin_api::MessageTopicBroadcaster;
+use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -115,9 +114,7 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileStatusMessage>> for AppLaunche
     }
 }
 
-impl MessageBroadcaster<DesktopFileCommandMessage> for AppLauncherWidget {}
-
-impl MessageBroadcaster<Value> for AppLauncherWidget {}
+impl MessageBroadcaster for AppLauncherWidget {}
 
 impl PluginMetaGetter for AppLauncherWidget {
     fn meta(&self) -> PluginMeta {
@@ -130,6 +127,8 @@ impl AsRef<Option<FfiCoreContext>> for AppLauncherWidget {
         &self.core_context
     }
 }
+
+impl Plugin for AppLauncherWidget {}
 
 impl WidgetBuilder for AppLauncherWidget {
     fn build_widget(&mut self) -> Widget {
@@ -191,10 +190,10 @@ impl WidgetBuilder for AppLauncherWidget {
 
         let desktop_file_inner = self.config.desktop_file_path.clone();
         let wrapper_config_inner = self.config.wrapper.clone();
-        let message_broadcaster_desktop_file_command = MessageBroadcaster::<DesktopFileCommandMessage>::get_broadcaster(self);
+        let message_broadcaster_desktop_file_command = self.get_broadcaster();
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
-        let message_broadcaster_generic = MessageBroadcaster::<Value>::get_broadcaster(self);
+        let message_broadcaster_generic = self.get_broadcaster();
         click_gesture.connect_released(move |gesture, _n_clicks, _, _| {
             if let Some(seq) = gesture.current_sequence() {
                 let state = gesture.sequence_state(&seq);
@@ -205,7 +204,8 @@ impl WidgetBuilder for AppLauncherWidget {
             message_broadcaster_desktop_file_command
                 .broadcast_message_to_topic(DesktopFileCommandMessage::exec(&desktop_file_inner, wrapper_config_inner.clone()));
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
-                message_broadcaster_generic.broadcast_message(&topic, &payload);
+                let payload_str = payload.to_string();
+                message_broadcaster_generic.broadcast_string(&topic, &payload_str);
             }
             gesture.set_state(EventSequenceState::Claimed);
         });
@@ -218,15 +218,16 @@ impl WidgetBuilder for AppLauncherWidget {
         });
         let desktop_file_inner = self.config.desktop_file_path.clone();
         let wrapper_config_inner = self.config.wrapper.clone();
-        let message_broadcaster_desktop_file_command = MessageBroadcaster::<DesktopFileCommandMessage>::get_broadcaster(self);
+        let message_broadcaster_desktop_file_command = self.get_broadcaster();
         let long_press_topic = self.config.longpress_topic.clone();
         let long_press_payload = self.config.longpress_payload.clone();
-        let message_broadcaster_generic = MessageBroadcaster::<Value>::get_broadcaster(self);
+        let message_broadcaster_generic = self.get_broadcaster();
         longpress_gesture.connect_pressed(move |gesture, _n_clicks, _| {
             message_broadcaster_desktop_file_command
                 .broadcast_message_to_topic(DesktopFileCommandMessage::terminate(&desktop_file_inner, wrapper_config_inner.clone()));
             if let (Some(topic), Some(payload)) = (long_press_topic.clone(), long_press_payload.clone()) {
-                message_broadcaster_generic.broadcast_message(&topic, &payload);
+                let payload_str = payload.to_string();
+                message_broadcaster_generic.broadcast_string(&topic, &payload_str);
                 gesture.set_state(EventSequenceState::Claimed);
             }
             gesture.set_state(EventSequenceState::Claimed);

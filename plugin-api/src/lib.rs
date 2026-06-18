@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 use smearor_wrot_rotation::SmearorRotation;
 
 mod config;
@@ -8,11 +10,15 @@ mod messages;
 mod meta;
 mod plugin;
 mod service;
+mod type_id;
 mod widget;
 
 pub use config::PluginConfig;
-pub use context::CoreContextVTable;
 pub use context::FfiCoreContext;
+pub use context::MessageBrokerHandle;
+pub use context::PluginExecutor;
+pub use context::dummy_broker_send;
+pub use context::dummy_executor_spawn;
 pub use error::PluginConstructionError;
 pub use error::PluginConstructionErrorWrapper;
 pub use messages::AcceptTopic;
@@ -24,15 +30,23 @@ pub use messages::MessageHandler;
 pub use messages::MessageRouter;
 pub use messages::MessageTopic;
 pub use messages::MessageTopicBroadcaster;
+pub use messages::SharedMessage;
+pub use messages::default_destroy_payload;
 pub use meta::PluginMeta;
 pub use meta::PluginMetaGetter;
 pub use meta::PluginMetaRaw;
-pub use plugin::LoadedPlugin;
+pub use plugin::PLUGIN_VTABLE_VERSION;
+pub use plugin::Plugin;
 pub use plugin::PluginConstructor;
+pub use plugin::PluginContainer;
 pub use plugin::PluginVTable;
-pub use service::LoadedService;
+pub use service::SERVICE_VTABLE_VERSION;
+pub use service::Service;
 pub use service::ServiceConstructor;
+pub use service::ServiceContainer;
 pub use service::ServiceVTable;
+pub use type_id::TypedMessage;
+pub use type_id::generate_type_id;
 pub use widget::FfiWidget;
 pub use widget::FfiWidgetBuilder;
 pub use widget::WidgetBuilder;

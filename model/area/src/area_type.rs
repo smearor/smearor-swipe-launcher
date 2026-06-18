@@ -13,3 +13,31 @@ pub enum AreaType {
     #[serde(alias = "scroll", alias = "SCROLL", alias = "Scroll")]
     Scroll,
 }
+
+/// ABI-stable version of `AreaType` for cross-plugin messaging.
+#[repr(u8)]
+#[stabby::stabby]
+#[derive(Debug, Clone, Default, PartialEq)]
+pub enum AreaTypeStabby {
+    #[default]
+    Fixed,
+    Scroll,
+}
+
+impl From<AreaType> for AreaTypeStabby {
+    fn from(value: AreaType) -> Self {
+        match value {
+            AreaType::Fixed => AreaTypeStabby::Fixed,
+            AreaType::Scroll => AreaTypeStabby::Scroll,
+        }
+    }
+}
+
+impl From<AreaTypeStabby> for AreaType {
+    fn from(value: AreaTypeStabby) -> Self {
+        match value {
+            AreaTypeStabby::Fixed => AreaType::Fixed,
+            AreaTypeStabby::Scroll => AreaType::Scroll,
+        }
+    }
+}

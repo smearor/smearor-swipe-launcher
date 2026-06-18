@@ -1,11 +1,15 @@
 use crate::SmearorWindowRotationWrapper;
-use serde::Deserialize;
-use serde::Serialize;
+use crate::SmearorWindowRotationWrapperStabby;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
+use smearor_swipe_launcher_plugin_api::SharedMessage;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::generate_type_id;
 
 pub const TOPIC_COMMAND: &str = "service.app_launcher.command";
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[repr(u8)]
+#[stabby::stabby]
+#[derive(Clone, Debug, Default)]
 pub enum DesktopFileCommandAction {
     #[default]
     Exec,
@@ -14,7 +18,7 @@ pub enum DesktopFileCommandAction {
     Terminate,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct DesktopFileCommandMessage {
     /// The canonical path of the desktop file
     pub desktop_file: String,
@@ -24,6 +28,38 @@ pub struct DesktopFileCommandMessage {
 
     /// The action to execute on the desktop file
     pub action: DesktopFileCommandAction,
+}
+
+/// ABI-stable version of `DesktopFileCommandMessage` for cross-plugin messaging.
+#[stabby::stabby(no_opt)]
+#[derive(Clone, Debug, Default)]
+pub struct DesktopFileCommandMessageStabby {
+    pub desktop_file: stabby::string::String,
+    pub wrapper: stabby::option::Option<SmearorWindowRotationWrapperStabby>,
+    pub action: DesktopFileCommandAction,
+}
+
+impl From<DesktopFileCommandMessage> for DesktopFileCommandMessageStabby {
+    fn from(value: DesktopFileCommandMessage) -> Self {
+        Self {
+            desktop_file: value.desktop_file.into(),
+            wrapper: value.wrapper.map(Into::into).into(),
+            action: value.action,
+        }
+    }
+}
+
+impl From<DesktopFileCommandMessageStabby> for DesktopFileCommandMessage {
+    fn from(value: DesktopFileCommandMessageStabby) -> Self {
+        Self {
+            desktop_file: value.desktop_file.to_string(),
+            wrapper: {
+                let opt: Option<SmearorWindowRotationWrapperStabby> = value.wrapper.into();
+                opt.map(Into::into)
+            },
+            action: value.action,
+        }
+    }
 }
 
 impl DesktopFileCommandMessage {
@@ -48,8 +84,28 @@ impl DesktopFileCommandMessage {
     }
 }
 
+impl TypedMessage for DesktopFileCommandMessageStabby {
+    const TYPE_ID: u64 = generate_type_id("smearor_app_launcher_model::DesktopFileCommandMessageStabby");
+}
+
+impl TypedMessage for DesktopFileCommandMessage {
+    const TYPE_ID: u64 = generate_type_id("smearor_app_launcher_model::DesktopFileCommandMessage");
+}
+
 impl MessageTopic for DesktopFileCommandMessage {
     fn topic() -> &'static str {
+        TOPIC_COMMAND
+    }
+}
+
+impl MessageTopic for DesktopFileCommandMessageStabby {
+    fn topic() -> &'static str {
+        TOPIC_COMMAND
+    }
+}
+
+impl SharedMessage for DesktopFileCommandMessageStabby {
+    fn topic(&self) -> &'static str {
         TOPIC_COMMAND
     }
 }

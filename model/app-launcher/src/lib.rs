@@ -2,8 +2,18 @@ mod messages;
 
 pub use messages::command::DesktopFileCommandAction;
 pub use messages::command::DesktopFileCommandMessage;
+pub use messages::command::DesktopFileCommandMessageStabby;
 pub use messages::status::DesktopFileStatus;
 pub use messages::status::DesktopFileStatusMessage;
+pub use messages::status::DesktopFileStatusMessageStabby;
 pub use messages::wrapper::color_mask::ColorMaskConfigFile;
+pub use messages::wrapper::color_mask::ColorMaskConfigFileStabby;
+pub use messages::wrapper::layer::LayerConfigFile;
+pub use messages::wrapper::layer::LayerConfigFileStabby;
+pub use messages::wrapper::layer::StabbyLayer;
+pub use messages::wrapper::rotation::RotationConfigFile;
+pub use messages::wrapper::rotation::RotationConfigFileStabby;
 pub use messages::wrapper::window::WindowConfigFile;
+pub use messages::wrapper::window::WindowConfigFileStabby;
 pub use messages::wrapper::wrapper::SmearorWindowRotationWrapper;
+pub use messages::wrapper::wrapper::SmearorWindowRotationWrapperStabby;

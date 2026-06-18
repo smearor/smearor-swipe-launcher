@@ -155,31 +155,37 @@
 
 ### Requirements
 
-1. Widgets sind einzelnen Crates (plugins/name)
-2. Services sind einzelnen Crates (services/name)
-3. Widget (View) und Service (Business Logic) sollen getrennt werden
-4. Wenn Widget und Service gemeinsame Structs oder Enums benötigen, sind diese in einer separaten Crate (model/name)
-5. Für Services benutze das Macro service_plugin!(MyService);
-6. Für Widgets benutze das Macro widget_plugin!(MyWidget);
-7. Implementiere den Service struct in service.rs und implementiere die Traits MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef<
-   Option<FfiCoreContext>>
-8. Implementiere das Widget struct in widget.rs und implementiere die Traits MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef<Option<FfiCoreContext>>
-9. Implementiere in model Actions und Message-Formate
-10. Wenn ein Widget eine Config benötigt, implementiere ein eigenes Struct in config.rs und implementiere eine parse Methode
+1. Widgets are individual crates (`plugins/<name>`)
+2. Services are individual crates (`services/<name>`)
+3. Widget (View) and Service (Business Logic) must be separated
+4. When Widget and Service need shared structs or enums, these belong in a separate crate (`model/<name>`)
+5. For Services, use the `service_plugin!(MyService);` macro
+6. For Widgets, use the `widget_plugin!(MyWidget);` macro
+7. Implement the Service struct in `service.rs` and implement the traits `MessageHandler`, `MessageBroadcaster`, `PluginMetaGetter`, `AsRef<
+   Option<FfiCoreContext>>`
+8. Implement the Widget struct in `widget.rs` and implement the traits `MessageHandler`, `MessageBroadcaster`, `PluginMetaGetter`,
+   `AsRef<Option<FfiCoreContext>>`
+9. In `model`, implement Actions and Message formats
+10. When a Widget needs a config, implement a dedicated struct in `config.rs` with a `parse` method
+11. FFI-relevant types in `model` crates must carry `#[stabby::stabby]`
+12. Services must use `tokio::sync::mpsc` instead of `std::sync::mpsc` and spawn async tasks via `PluginExecutor`
+13. Widgets must use `glib::MainContext::spawn_local` for GTK updates and `tokio::sync::mpsc` for message reception
+14. Polling loops (`timeout_add_local`) are forbidden; use event-driven `recv().await` instead
 
 ### Examples
 
-- Beispiel für Service: services/app-launcher
+- Example for Service: services/app-launcher
     - service.rs: Service struct (+ implementation of MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef<Option<FfiCoreContext>>)
     - lib.rs: Implement service_plugin! macro
-- Beispiel für Widget: plugins/app-launcher
+- Example for Widget: plugins/app-launcher
     - config.rs: Struct for the config file part (+ parsing)
     - widget.rs: Widget struct (+ implementation of MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef<Option<FfiCoreContext>>)
     - lib.rs: Implement widget_plugin! macro
-- Beispiel für Model: model/app-launcher
-    - Message System Topics
-    - Enums für Actions
-    - Structs für Message System Payload
+- Example for Model: model/app-launcher
+    - Message system topics
+    - Enums for Actions
+    - Structs for message system payload
+    - All FFI-relevant types with `#[stabby::stabby]`
 
 ### Rust Implementation Standards
 
@@ -214,12 +220,18 @@
 - `clap`: Command line argument parsing
 - `gtk4`: GTK4 framework for UI widgets
 - `glib`: GLib utilities and patterns
+- `stabby`: ABI-stable types and FFI trait objects
+- `tokio`: Async runtime for services
+- `libloading`: Dynamic library loading (used with stabby ABI verification)
 
 ### Key Features to Implement
 
 - **Smart Pointers**: Use `Rc`, `RefCell`, `Box<dyn Fn>`, `Weak`, `glib::clone`
 - **Type Safety**: Leverage GTK4 type systems
 - **Error Handling**: Integrate miette and thiserror
+- **Async I/O**: Use `tokio::sync::mpsc` for message passing; spawn async tasks via `PluginExecutor`
+- **ABI Stability**: Use `#[stabby::stabby]` for FFI-relevant types; use `stabby::libloading::StabbyLibrary` for verified plugin loading
+- **Zero-Copy Messages**: Pass messages via raw pointers with `type_id` for type-safe downcasting (no serialization overhead)
 
 ### Testing Requirements
 
@@ -248,6 +260,7 @@
 - `serde` - Serialization
 - `gtk4` - GTK4 bindings
 - `clap` - CLI argument parsing
+- `stabby` - ABI-stable FFI types and trait objects
 
 ---
 

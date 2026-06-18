@@ -1,27 +1,25 @@
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
-use abi_stable::RRef;
-use abi_stable::std_types::RResult;
 use libloading::Library;
-use libloading::Symbol;
 use serde_json::Value;
 use smearor_model_plugin::PluginEntry;
+use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::ServiceConstructor;
 use smearor_swipe_launcher_plugin_api::ServiceVTable;
+use stabby::libloading::StabbyLibrary;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 
-/// Represents a loaded background service with its library handle
-#[derive(Clone)]
+/// Represents a loaded background service with its library handle.
 pub struct LoadedService {
     _library: Arc<Library>,
-    pub instance: *mut (),
-    pub vtable: RRef<'static, ServiceVTable>,
-    core_context: Arc<*mut ()>,
+    pub instance: *mut core::ffi::c_void,
+    pub vtable: *const ServiceVTable,
+    core_context: *mut core::ffi::c_void,
 }
 
 impl LoadedService {
@@ -31,7 +29,9 @@ impl LoadedService {
             let library = Arc::new(Library::new(&path)?);
 
             debug!("Loading service: {:?}", config);
-            let constructor: Symbol<ServiceConstructor> = library.get(b"smearor_service_create")?;
+            let constructor = library
+                .get_stabbied::<ServiceConstructor>(b"smearor_service_create")
+                .map_err(|e| LauncherError::PluginStabbiedLoadError(e.to_string()))?;
 
             let mut config_ext = config.config.clone();
             config_ext["id"] = Value::String(service_entry.id.clone());
@@ -40,25 +40,34 @@ impl LoadedService {
             let config_ptr = config_bytes.as_ptr() as *const i8;
             let config_len = config_bytes.len();
 
-            let core_context = SimpleCoreContext::new(sender);
+            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current());
             let ffi_context = core_context.into_ffi_context();
 
-            let result = constructor(config_ptr, config_len, ffi_context);
+            let ffi_context_ptr = Box::into_raw(Box::new(ffi_context)) as *mut core::ffi::c_void;
+            let result = constructor(config_ptr, config_len, ffi_context_ptr);
 
-            let api_loaded_service = match result {
-                RResult::ROk(service) => service,
-                RResult::RErr(e) => {
-                    return Err(LauncherError::PluginConstructionError(e.error, e.message.to_string()));
-                }
+            let container_ptr = if result.is_ok() {
+                result.unwrap()
+            } else {
+                let e = result.unwrap_err();
+                return Err(LauncherError::PluginConstructionError(e.error, e.message.to_string()));
             };
 
-            let service_id = (api_loaded_service.vtable.get().get_id)(api_loaded_service.service_instance).to_string();
+            if container_ptr.is_null() {
+                return Err(LauncherError::PluginConstructionError(
+                    smearor_swipe_launcher_plugin_api::PluginConstructionError::Custom,
+                    "Service constructor returned null".to_string(),
+                ));
+            }
+
+            let api_loaded_service = &*(container_ptr as *mut smearor_swipe_launcher_plugin_api::ServiceContainer);
+            let service_id = service_entry.id.clone();
 
             let service = LoadedService {
                 _library: library,
-                instance: api_loaded_service.service_instance,
+                instance: api_loaded_service.instance,
                 vtable: api_loaded_service.vtable,
-                core_context: Arc::new(ffi_context.core_obj),
+                core_context: ffi_context_ptr,
             };
 
             Ok((service_id, service))
@@ -67,24 +76,33 @@ impl LoadedService {
 
     pub unsafe fn on_message(&self, message: FfiEnvelope) {
         unsafe {
-            (self.vtable.get().on_message)(self.instance, message);
+            if !self.vtable.is_null() && !self.instance.is_null() {
+                let message_ptr = Box::into_raw(Box::new(message));
+                ((*self.vtable).on_message)(self.instance, message_ptr as *mut core::ffi::c_void);
+            }
         }
     }
 
     pub unsafe fn destroy(&self) {
         unsafe {
-            (self.vtable.get().destroy)(self.instance);
+            if !self.vtable.is_null() && !self.instance.is_null() {
+                ((*self.vtable).destroy)(self.instance);
+            }
         }
     }
 }
 
 impl Drop for LoadedService {
     fn drop(&mut self) {
-        if let Ok(context_ptr) = Arc::try_unwrap(self.core_context.clone()) {
-            unsafe {
-                if !context_ptr.is_null() {
-                    let _ = Box::from_raw(context_ptr as *mut SimpleCoreContext);
+        unsafe {
+            let ffi_ptr = self.core_context;
+            if !ffi_ptr.is_null() {
+                let ffi = &*(ffi_ptr as *const FfiCoreContext);
+                let simple_ptr = ffi.broker.context as *mut SimpleCoreContext;
+                if !simple_ptr.is_null() {
+                    let _ = Box::from_raw(simple_ptr);
                 }
+                let _ = Box::from_raw(ffi_ptr as *mut FfiCoreContext);
             }
         }
     }

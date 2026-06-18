@@ -18,6 +18,9 @@ pub enum LauncherError {
     #[error("Failed to load plugin library: {0}")]
     PluginLoadError(#[from] libloading::Error),
 
+    #[error("Failed to load stabbied plugin symbol: {0}")]
+    PluginStabbiedLoadError(String),
+
     #[error("Plugin constructor returned null pointer: {0}")]
     PluginConstructorNull(String),
 

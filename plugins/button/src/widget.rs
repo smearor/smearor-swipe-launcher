@@ -8,12 +8,12 @@ use gtk4::Label;
 use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::prelude::*;
-use serde_json::Value;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
+use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -51,7 +51,7 @@ impl MessageHandler<FfiEnvelope> for ButtonWidget {
     fn handle_message(&self, _message: FfiEnvelope, _sender_id: &str) {}
 }
 
-impl MessageBroadcaster<Value> for ButtonWidget {}
+impl MessageBroadcaster for ButtonWidget {}
 
 impl PluginMetaGetter for ButtonWidget {
     fn meta(&self) -> PluginMeta {
@@ -64,6 +64,8 @@ impl AsRef<Option<FfiCoreContext>> for ButtonWidget {
         &self.core_context
     }
 }
+
+impl Plugin for ButtonWidget {}
 
 impl WidgetBuilder for ButtonWidget {
     fn build_widget(&mut self) -> Widget {
@@ -100,7 +102,8 @@ impl WidgetBuilder for ButtonWidget {
         let message_broadcaster = self.get_broadcaster();
         button.connect_clicked(move |_| {
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
-                message_broadcaster.broadcast_message(&topic, &payload);
+                let payload_str = payload.to_string();
+                message_broadcaster.broadcast_string(&topic, &payload_str);
             }
         });
 
@@ -110,7 +113,8 @@ impl WidgetBuilder for ButtonWidget {
         let message_broadcaster = self.get_broadcaster();
         long_press_gesture.connect_pressed(move |gesture, _, _| {
             if let (Some(topic), Some(payload)) = (long_press_topic.clone(), long_press_payload.clone()) {
-                message_broadcaster.broadcast_message(&topic, &payload);
+                let payload_str = payload.to_string();
+                message_broadcaster.broadcast_string(&topic, &payload_str);
                 gesture.set_state(EventSequenceState::Claimed);
             }
         });

@@ -1,11 +1,11 @@
-use abi_stable::StableAbi;
-use abi_stable::std_types::RString;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 
-#[repr(C)]
-#[derive(StableAbi, Debug)]
+/// Errors that can occur during plugin construction.
+#[repr(u8)]
+#[stabby::stabby]
+#[derive(Debug)]
 pub enum PluginConstructionError {
     FailedToParseMetaData,
     FailedToParseWidgetConfig,
@@ -16,15 +16,16 @@ pub enum PluginConstructionError {
     Custom,
 }
 
-#[repr(C)]
-#[derive(StableAbi, Debug)]
+/// Wrapper around a plugin construction error with a descriptive message.
+#[stabby::stabby]
+#[derive(Debug)]
 pub struct PluginConstructionErrorWrapper {
     pub error: PluginConstructionError,
-    pub message: RString,
+    pub message: stabby::string::String,
 }
 
 impl PluginConstructionErrorWrapper {
-    pub fn new(error: PluginConstructionError, message: RString) -> Self {
+    pub fn new(error: PluginConstructionError, message: stabby::string::String) -> Self {
         Self { error, message }
     }
 }

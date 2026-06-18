@@ -1,7 +1,7 @@
 use crate::config::AudioWidgetConfig;
 use adw::gdk;
 use adw::gdk::pango::EllipsizeMode;
-use glib::ControlFlow;
+use glib::MainContext;
 use gtk4::Align;
 use gtk4::Box;
 use gtk4::Button;
@@ -25,6 +25,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopicBroadcaster;
+use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -33,9 +34,6 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
 use std::time::Duration;
 use std::time::Instant;
 use tracing::debug;
@@ -46,8 +44,8 @@ pub struct AudioWidget {
     pub(crate) meta: PluginMeta,
     pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) config: AudioWidgetConfig,
-    pub(crate) status_sender: Sender<AudioStatusMessage>,
-    pub(crate) status_receiver: Option<Receiver<AudioStatusMessage>>,
+    pub(crate) status_sender: tokio::sync::mpsc::UnboundedSender<AudioStatusMessage>,
+    pub(crate) status_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<AudioStatusMessage>>,
     pub(crate) last_command_time: Arc<Mutex<Instant>>,
     pub(crate) icon_image: Arc<Mutex<Option<Image>>>,
     pub(crate) volume_bar: Arc<Mutex<Option<LevelBar>>>,
@@ -60,7 +58,7 @@ impl AudioWidget {
         let audio_config = AudioWidgetConfig::parse(&config.config)
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         let meta = PluginMeta::try_from(&config)?;
-        let (status_sender, status_receiver) = mpsc::channel();
+        let (status_sender, status_receiver) = tokio::sync::mpsc::unbounded_channel();
         Ok(AudioWidget {
             meta,
             core_context,
@@ -89,39 +87,40 @@ impl AudioWidget {
         }
     }
 
-    fn start_status_listener(&self, receiver: Receiver<AudioStatusMessage>) {
-        let icon_image = Arc::clone(&self.icon_image);
-        let volume_bar = Arc::clone(&self.volume_bar);
-        let device_label = Arc::clone(&self.device_label);
-        let current_volume = Arc::clone(&self.current_volume);
+    fn start_status_listener(&mut self) {
+        if let Some(mut receiver) = self.status_receiver.take() {
+            let icon_image = Arc::clone(&self.icon_image);
+            let volume_bar = Arc::clone(&self.volume_bar);
+            let device_label = Arc::clone(&self.device_label);
+            let current_volume = Arc::clone(&self.current_volume);
 
-        glib::timeout_add_local(Duration::from_millis(10), move || {
-            while let Ok(status) = receiver.try_recv() {
-                if let Ok(guard) = icon_image.lock() {
-                    if let Some(image) = guard.as_ref() {
-                        image.set_icon_name(Some(Self::select_icon_name(status.volume, status.is_muted)));
+            MainContext::default().spawn_local(async move {
+                while let Some(status) = receiver.recv().await {
+                    if let Ok(guard) = icon_image.lock() {
+                        if let Some(image) = guard.as_ref() {
+                            image.set_icon_name(Some(Self::select_icon_name(status.volume, status.is_muted)));
+                        }
+                    }
+
+                    if let Ok(guard) = volume_bar.lock() {
+                        if let Some(bar) = guard.as_ref() {
+                            bar.set_value(status.volume as f64);
+                        }
+                    }
+
+                    if let Ok(mut guard) = current_volume.lock() {
+                        *guard = status.volume;
+                    }
+
+                    if let Ok(guard) = device_label.lock() {
+                        if let Some(label) = guard.as_ref() {
+                            let text = status.active_device.as_ref().map(|d| d.name.as_str()).unwrap_or("Unknown Device");
+                            label.set_text(text);
+                        }
                     }
                 }
-
-                if let Ok(guard) = volume_bar.lock() {
-                    if let Some(bar) = guard.as_ref() {
-                        bar.set_value(status.volume as f64);
-                    }
-                }
-
-                if let Ok(mut guard) = current_volume.lock() {
-                    *guard = status.volume;
-                }
-
-                if let Ok(guard) = device_label.lock() {
-                    if let Some(label) = guard.as_ref() {
-                        let text = status.active_device.as_ref().map(|d| d.name.as_str()).unwrap_or("Unknown Device");
-                        label.set_text(text);
-                    }
-                }
-            }
-            ControlFlow::Continue
-        });
+            });
+        }
     }
 }
 
@@ -133,7 +132,7 @@ impl MessageHandler<FfiEnvelopePayload<AudioStatusMessage>> for AudioWidget {
     }
 }
 
-impl MessageBroadcaster<AudioCommandMessage> for AudioWidget {}
+impl MessageBroadcaster for AudioWidget {}
 
 impl MessageTopicBroadcaster<AudioCommandMessage> for AudioWidget {}
 
@@ -148,6 +147,8 @@ impl AsRef<Option<FfiCoreContext>> for AudioWidget {
         &self.core_context
     }
 }
+
+impl Plugin for AudioWidget {}
 
 impl WidgetBuilder for AudioWidget {
     fn build_widget(&mut self) -> Widget {
@@ -309,9 +310,7 @@ impl WidgetBuilder for AudioWidget {
         });
         button.add_controller(long_press_gesture);
 
-        if let Some(receiver) = self.status_receiver.take() {
-            self.start_status_listener(receiver);
-        }
+        self.start_status_listener();
 
         button.clone().upcast::<Widget>()
     }

@@ -1,8 +1,7 @@
 use crate::config::AppLauncherServiceConfig;
 use dashmap::DashMap;
 use freedesktop_entry_parser::Entry;
-use gtk4::glib::ControlFlow;
-use gtk4::glib::timeout_add_seconds_local;
+use glib::MainContext;
 use nix::sys::signal::Signal;
 use nix::sys::signal::kill;
 use nix::unistd::Pid;
@@ -20,11 +19,13 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
+use smearor_swipe_launcher_plugin_api::Service;
 use std::ffi::OsString;
 use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::trace;
@@ -48,39 +49,50 @@ impl AppLauncherService {
             tracked_processes: Arc::new(DashMap::new()),
         };
 
-        // Start local reaper timer loop on the GLib main context
-        service.init_reaper();
+        let (status_sender, mut status_receiver) = tokio::sync::mpsc::unbounded_channel::<DesktopFileStatusMessage>();
+        let tracked_processes_clone = service.tracked_processes.clone();
 
-        Ok(service)
-    }
-
-    pub fn init_reaper(&self) {
-        let broadcaster = self.get_broadcaster();
-        let tracked_processes = self.tracked_processes.clone();
-        timeout_add_seconds_local(2, move || {
-            let mut completed_apps = Vec::new();
-            tracked_processes.retain(|desktop_file, pids| {
-                // Retain only currently active processes via procfs
-                pids.retain(|&pid| {
-                    let proc_path = format!("/proc/{}", pid);
-                    Path::new(&proc_path).exists()
-                });
-
-                if pids.is_empty() {
-                    completed_apps.push(desktop_file.clone());
-                    false // Remove from DashMap
-                } else {
-                    true // Keep in DashMap
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    error!("AppLauncher Service: failed to create tokio runtime: {e}");
+                    return;
+                }
+            };
+            rt.block_on(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(2));
+                loop {
+                    interval.tick().await;
+                    let mut completed_apps = Vec::new();
+                    tracked_processes_clone.retain(|desktop_file, pids| {
+                        pids.retain(|&pid| {
+                            let proc_path = format!("/proc/{}", pid);
+                            Path::new(&proc_path).exists()
+                        });
+                        if pids.is_empty() {
+                            completed_apps.push(desktop_file.clone());
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                    for desktop_file in completed_apps {
+                        debug!("AppLauncher Service: App exited naturally: {}", desktop_file);
+                        let _ = status_sender.send(DesktopFileStatusMessage::stopped(&desktop_file));
+                    }
                 }
             });
-
-            for desktop_file in completed_apps {
-                debug!("AppLauncher Service: App exited naturally: {}", desktop_file);
-                broadcaster.broadcast_message_to_topic(DesktopFileStatusMessage::stopped(&desktop_file));
-            }
-
-            ControlFlow::Continue
         });
+
+        let broadcaster = service.get_broadcaster();
+        MainContext::default().spawn_local(async move {
+            while let Some(status) = status_receiver.recv().await {
+                broadcaster.broadcast_message_to_topic(status);
+            }
+        });
+
+        Ok(service)
     }
 
     fn handle_exec(&self, desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>) {
@@ -215,7 +227,7 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLaunch
     }
 }
 
-impl MessageBroadcaster<DesktopFileStatusMessage> for AppLauncherService {}
+impl MessageBroadcaster for AppLauncherService {}
 
 impl MessageTopicBroadcaster<DesktopFileStatusMessage> for AppLauncherService {}
 
@@ -230,3 +242,5 @@ impl AsRef<Option<FfiCoreContext>> for AppLauncherService {
         &self.core_context
     }
 }
+
+impl Service for AppLauncherService {}

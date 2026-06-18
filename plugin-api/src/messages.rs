@@ -1,66 +1,76 @@
 use crate::FfiCoreContext;
+use crate::MessageBrokerHandle;
 use crate::PluginMeta;
 use crate::PluginMetaGetter;
-use abi_stable::StableAbi;
-use abi_stable::std_types::RString;
-use serde::Serialize;
-use serde::de::DeserializeOwned;
-use serde_json::Value;
-use serde_json::json;
-use std::fmt::Display;
-use std::ops::Deref;
-use tracing::error;
-use tracing::trace;
+use crate::TypedMessage;
+use crate::dummy_broker_send;
+use crate::generate_type_id;
 
-#[repr(C)]
-#[derive(Debug, Clone, StableAbi)]
+/// Trait for messages that can be routed through the Host's message broker.
+///
+/// All message types in the shared `model` crates implement this trait.
+/// The broker routes messages as raw pointers, and receivers down-cast
+/// using the stable `type_id`.
+///
+/// This is a normal Rust trait (not annotated with `#[stabby::stabby]`),
+/// because stabby traits cannot contain trait-object parameters in their methods.
+pub trait SharedMessage: Send + TypedMessage {
+    /// The topic this message is published on.
+    fn topic(&self) -> &'static str;
+}
+
+/// Trait for types that declare a static topic string.
+///
+/// This is implemented by message structs in the `model` crates.
+pub trait MessageTopic {
+    fn topic() -> &'static str;
+}
+
+impl MessageTopic for () {
+    fn topic() -> &'static str {
+        ""
+    }
+}
+
+/// A default `extern "C"` destructor for boxed messages.
+///
+/// Pass this as `destroy_payload` to `MessageBrokerHandle::send`
+/// when the message was allocated with `Box::into_raw`.
+pub extern "C" fn default_destroy_payload(ptr: *mut core::ffi::c_void) {
+    if !ptr.is_null() {
+        unsafe {
+            let _ = Box::from_raw(ptr);
+        }
+    }
+}
+
+/// An ABI-safe envelope for a message crossing the FFI boundary.
+///
+/// The Host constructs this and passes it to plugin/service VTables.
+/// Receivers down-cast `payload` using the stable `type_id`.
+#[stabby::stabby(no_opt)]
+#[derive(Clone)]
 pub struct FfiEnvelope {
-    pub sender_id: RString,
-    pub topic: RString,
-    pub payload: RString, // Serialized JSON payload
+    pub sender_id: stabby::string::String,
+    pub topic: stabby::string::String,
+    pub type_id: u64,
+    pub payload: *mut core::ffi::c_void,
+    pub destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
 }
 
-impl FfiEnvelope {
-    pub fn payload<T>(&self) -> Result<T, serde_json::Error>
-    where
-        T: DeserializeOwned,
-    {
-        let payload = self.payload.to_string();
-        serde_json::from_str(&payload)
-    }
+/// Router trait for dispatching `FfiEnvelope` to the correct handler.
+pub trait MessageRouter {
+    fn route(&self, envelope: &FfiEnvelope);
 }
 
-impl Display for FfiEnvelope {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FfiEnvelope {{ sender_id: {}, topic: {}, payload: {} }}", self.sender_id, self.topic, self.payload)
-    }
-}
-
-impl TryFrom<FfiEnvelope> for Value {
-    type Error = serde_json::Error;
-
-    fn try_from(envelope: FfiEnvelope) -> Result<Self, Self::Error> {
-        let payload: Value = envelope.payload()?;
-        Ok(json!({
-            "sender_id": Value::String(envelope.sender_id.to_string()),
-            "topic": Value::String(envelope.topic.to_string()),
-            "payload": payload,
-        }))
-    }
-}
-// = note: required for `FfiEnvelope` to implement `Into<serde_json::Value>`
-// = note: required for `serde_json::Value` to implement `TryFrom<FfiEnvelope>`
-
+/// Wrapper for a typed payload inside an `FfiEnvelope`.
+///
+/// This is used by the `MessageHandler` API to extract the typed payload
+/// from an envelope after the Host has validated the `type_id`.
 #[derive(Debug, Clone)]
 pub struct FfiEnvelopePayload<T>(pub T);
 
-impl<T> From<T> for FfiEnvelopePayload<T> {
-    fn from(payload: T) -> Self {
-        Self(payload)
-    }
-}
-
-impl<T> Deref for FfiEnvelopePayload<T> {
+impl<T> std::ops::Deref for FfiEnvelopePayload<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -68,95 +78,117 @@ impl<T> Deref for FfiEnvelopePayload<T> {
     }
 }
 
-impl<T> TryFrom<FfiEnvelope> for FfiEnvelopePayload<T>
-where
-    T: DeserializeOwned,
-{
-    type Error = serde_json::Error;
-
-    fn try_from(message: FfiEnvelope) -> Result<Self, Self::Error> {
-        let payload = message.payload.to_string();
-        Ok(FfiEnvelopePayload(serde_json::from_str(&payload)?))
+impl<T> std::ops::DerefMut for FfiEnvelopePayload<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
-pub trait AcceptTopic<T: TryFrom<FfiEnvelope>> {
+/// Trait for types that can handle a specific message type.
+///
+/// Implemented by widgets and services that want to receive messages.
+pub trait MessageHandler<T: Clone> {
+    fn handle_message(&self, message: T, sender_id: &str);
+
+    /// Convenience method called by the Host router.
+    fn handle_envelope_message(&self, envelope: &FfiEnvelope) {
+        let sender_id = envelope.sender_id.to_string();
+        if !envelope.payload.is_null() {
+            unsafe {
+                if let Some(payload) = (envelope.payload as *mut T).as_ref() {
+                    self.handle_message(payload.clone(), &sender_id);
+                }
+            }
+        }
+    }
+}
+
+/// Trait for types that declare which topics they accept.
+pub trait AcceptTopic<T> {
     fn accept_topic(&self, topic: &str) -> bool;
 }
 
-impl<T, M> AcceptTopic<FfiEnvelopePayload<M>> for T
-where
-    FfiEnvelopePayload<M>: TryFrom<FfiEnvelope>,
-    M: MessageTopic,
-{
-    fn accept_topic(&self, topic: &str) -> bool {
-        topic == M::topic()
-    }
-}
-
-pub trait MessageRouter: AcceptTopic<FfiEnvelope> {
-    fn route(&self, envelope: &FfiEnvelope);
-}
-
-pub trait MessageHandler<T: TryFrom<FfiEnvelope>>: AcceptTopic<T> {
-    fn handle_message(&self, message: T, sender_id: &str);
-
-    fn handle_envelope_message(&self, envelope: FfiEnvelope)
-    where
-        <T as TryFrom<FfiEnvelope>>::Error: Display,
-    {
-        if !self.accept_topic(envelope.topic.as_str()) {
-            trace!("Topic {} not accepted by message handler", envelope.topic);
-            return;
-        }
-        let sender_id = envelope.sender_id.to_string();
-        match T::try_from(envelope) {
-            Ok(message) => {
-                self.handle_message(message, &sender_id);
-            }
-            Err(e) => {
-                error!("Failed to parse message payload: {}", e);
-            }
-        }
-    }
-}
-
+/// Legacy struct used by widgets to broadcast messages.
+///
+/// Plugins clone this struct into closures that send messages on user interaction.
+#[derive(Clone, Debug)]
 pub struct MessageBroadcasterInner {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
 }
 
-impl<T> MessageBroadcaster<T> for MessageBroadcasterInner
-where
-    Self: PluginMetaGetter + AsRef<Option<FfiCoreContext>>,
-    T: Serialize,
-{
-}
+impl MessageBroadcasterInner {
+    /// Broadcast a message to the broker.
+    ///
+    /// `T` is the payload type. For ABI-safe transmission, `T` should be a
+    /// `#[stabby::stabby]` struct. The payload is boxed and sent as a raw
+    /// pointer with the correct `type_id`.
+    pub fn broadcast_message<T: Clone + TypedMessage>(&self, topic: &str, payload: &T) {
+        if let Some(ctx) = &self.core_context {
+            let payload_ptr = Box::into_raw(Box::new(payload.clone())) as *mut core::ffi::c_void;
+            let envelope = FfiEnvelope {
+                sender_id: stabby::string::String::from(self.meta.id.clone()),
+                topic: stabby::string::String::from(topic),
+                type_id: T::TYPE_ID,
+                payload: payload_ptr,
+                destroy_payload: Some(default_destroy_payload),
+            };
+            ctx.send_message(envelope);
+        }
+    }
 
-impl<T> MessageTopicBroadcaster<T> for MessageBroadcasterInner
-where
-    Self: PluginMetaGetter + AsRef<Option<FfiCoreContext>>,
-    T: Serialize + MessageTopic,
-{
-}
+    /// Broadcast a typed message to a specific topic.
+    ///
+    /// The topic is derived from the `MessageTopic` trait.
+    pub fn broadcast_message_to_topic<T: Clone + MessageTopic + TypedMessage>(&self, message: T) {
+        self.broadcast_message(T::topic(), &message);
+    }
 
-impl PluginMetaGetter for MessageBroadcasterInner {
-    fn meta(&self) -> PluginMeta {
-        self.meta.clone()
+    /// Broadcast a plain string payload.
+    ///
+    /// Used by generic widgets (e.g. button, clock) that read topic/payload
+    /// from config and do not have a typed message struct.
+    pub fn broadcast_string(&self, topic: &str, payload: &str) {
+        if let Some(ctx) = &self.core_context {
+            let boxed = Box::into_raw(Box::new(payload.to_string())) as *mut core::ffi::c_void;
+            let envelope = FfiEnvelope {
+                sender_id: stabby::string::String::from(self.meta.id.clone()),
+                topic: stabby::string::String::from(topic),
+                type_id: generate_type_id("std::string::String"),
+                payload: boxed,
+                destroy_payload: Some(default_destroy_payload),
+            };
+            ctx.send_message(envelope);
+        }
     }
 }
 
-impl AsRef<Option<FfiCoreContext>> for MessageBroadcasterInner {
-    fn as_ref(&self) -> &Option<FfiCoreContext> {
-        &self.core_context
+/// Helper trait for broadcasting typed messages to a specific topic.
+///
+/// Implemented by widgets and services with empty impl blocks.
+/// Requires `PluginMetaGetter` and `AsRef<Option<FfiCoreContext>>` so that
+/// `get_broadcaster` can construct a `MessageBroadcasterInner` from the
+/// plugin's metadata and core context.
+pub trait MessageTopicBroadcaster<T: Clone + MessageTopic + TypedMessage>: MessageBroadcaster {
+    fn broadcast_message_to_topic(&self, message: T) {
+        self.get_broadcaster().broadcast_message_to_topic(message);
     }
 }
 
-pub trait MessageBroadcaster<T>
-where
-    Self: PluginMetaGetter + AsRef<Option<FfiCoreContext>>,
-    T: Serialize,
-{
+/// Helper trait for broadcasting typed messages to the Host broker.
+///
+/// Implemented by widgets and services with empty impl blocks.
+/// Requires `PluginMetaGetter` and `AsRef<Option<FfiCoreContext>>` so that
+/// `get_broadcaster` can construct a `MessageBroadcasterInner` from the
+/// plugin's metadata and core context.
+pub trait MessageBroadcaster: PluginMetaGetter + AsRef<Option<FfiCoreContext>> {
+    fn broker(&self) -> MessageBrokerHandle {
+        MessageBrokerHandle {
+            context: core::ptr::null(),
+            send: dummy_broker_send,
+        }
+    }
+
     fn get_broadcaster(&self) -> MessageBroadcasterInner {
         MessageBroadcasterInner {
             meta: self.meta(),
@@ -164,43 +196,13 @@ where
         }
     }
 
-    fn broadcast_message(&self, topic: &str, message: T) {
-        let meta = self.meta();
-        if let Ok(payload) = serde_json::to_string(&message) {
-            self.broadcast_envelope(FfiEnvelope {
-                sender_id: meta.id.clone(),
-                topic: RString::from(topic),
-                payload: RString::from(payload),
-            });
-        }
+    fn broadcast_message<T: Clone + TypedMessage>(&self, topic: &str, message: T) {
+        self.get_broadcaster().broadcast_message(topic, &message);
     }
 
     fn broadcast_envelope(&self, envelope: FfiEnvelope) {
-        if let Some(ffi_core_context) = self.as_ref() {
-            unsafe {
-                (ffi_core_context.vtable.get().send_message)(ffi_core_context.core_obj, envelope);
-            }
-        }
-    }
-}
-
-pub trait MessageTopic {
-    fn topic() -> &'static str;
-}
-
-pub trait MessageTopicBroadcaster<T>: MessageBroadcaster<T>
-where
-    Self: PluginMetaGetter + AsRef<Option<FfiCoreContext>>,
-    T: Serialize + MessageTopic,
-{
-    fn broadcast_message_to_topic(&self, message: T) {
-        let meta = self.meta();
-        if let Ok(payload) = serde_json::to_string(&message) {
-            self.broadcast_envelope(FfiEnvelope {
-                sender_id: meta.id.clone(),
-                topic: RString::from(T::topic()),
-                payload: RString::from(payload),
-            });
+        if let Some(ctx) = self.as_ref() {
+            ctx.send_message(envelope);
         }
     }
 }
