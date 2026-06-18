@@ -67,6 +67,10 @@ pub trait MessageRouter {
 ///
 /// This is used by the `MessageHandler` API to extract the typed payload
 /// from an envelope after the Host has validated the `type_id`.
+///
+/// `#[repr(transparent)]` guarantees the same memory layout as `T`,
+/// allowing safe pointer casts from `*mut T` to `*mut FfiEnvelopePayload<T>`.
+#[repr(transparent)]
 #[derive(Debug, Clone)]
 pub struct FfiEnvelopePayload<T>(pub T);
 
@@ -82,6 +86,10 @@ impl<T> std::ops::DerefMut for FfiEnvelopePayload<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
+}
+
+impl<T: TypedMessage> TypedMessage for FfiEnvelopePayload<T> {
+    const TYPE_ID: u64 = T::TYPE_ID;
 }
 
 /// Trait for types that can handle a specific message type.

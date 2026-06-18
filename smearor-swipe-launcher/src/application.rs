@@ -1,6 +1,7 @@
 use crate::area::area_manager::AreaManager;
 use crate::config::launcher::SwipeLauncherConfig;
 use crate::css_provider::create_css_provider;
+use crate::json_converter::JsonConverterRegistry;
 use crate::plugin_manager::PluginManager;
 use crate::service_manager::ServiceManager;
 use crate::window::create_window;
@@ -40,6 +41,7 @@ pub struct LauncherApplication {
     pub(crate) message_sender: UnboundedSender<FfiEnvelope>,
     pub(crate) topic_rate_limiter: Arc<Mutex<HashMap<String, Instant>>>,
     pub(crate) gtk_app: Application,
+    pub(crate) json_converter_registry: Arc<JsonConverterRegistry>,
 }
 
 impl LauncherApplication {}
@@ -47,9 +49,11 @@ impl LauncherApplication {}
 impl LauncherApplication {
     pub fn new(config: SwipeLauncherConfig, gtk_app: Application) -> Self {
         let (sender, receiver) = unbounded_channel::<FfiEnvelope>();
+        let json_converter_registry = Arc::new(JsonConverterRegistry::new());
+        crate::context::initialize_global_json_converter_registry(json_converter_registry.clone()).ok();
         let plugin_manager = Arc::new(PluginManager::new(sender.clone()));
         let config_arc = Arc::new(config.clone());
-        let area_manager = Arc::new(Mutex::new(AreaManager::new(plugin_manager.clone(), config_arc)));
+        let area_manager = Arc::new(Mutex::new(AreaManager::new(plugin_manager.clone(), config_arc, json_converter_registry.clone())));
 
         LauncherApplication {
             config,
@@ -60,6 +64,7 @@ impl LauncherApplication {
             message_sender: sender,
             topic_rate_limiter: Arc::new(Mutex::new(HashMap::new())),
             gtk_app,
+            json_converter_registry,
         }
     }
 

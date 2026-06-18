@@ -39,13 +39,20 @@ impl std::fmt::Debug for MessageBrokerHandle {
 
 /// Core context passed to plugins during construction.
 ///
-/// Contains the `MessageBrokerHandle` and `PluginExecutor` needed by plugins
-/// to communicate with the Host.
+/// Contains the `MessageBrokerHandle`, `PluginExecutor`, and
+/// `register_json_converter` callback needed by plugins to communicate
+/// with the Host.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct FfiCoreContext {
     pub broker: MessageBrokerHandle,
     pub executor: PluginExecutor,
+    /// Callback to register a JSON converter in the Host's registry.
+    ///
+    /// Plugins call this during initialisation to register converters for
+    /// their message types. May be `None` if the Host does not support
+    /// JSON converter registration.
+    pub register_json_converter: Option<crate::json_converter::RegisterJsonConverterFn>,
 }
 
 /// Delegate for spawning futures on the Host's Tokio runtime.
@@ -112,6 +119,7 @@ impl std::fmt::Debug for FfiCoreContext {
         f.debug_struct("FfiCoreContext")
             .field("broker", &self.broker)
             .field("executor", &self.executor)
+            .field("register_json_converter", &"<fn>")
             .finish()
     }
 }

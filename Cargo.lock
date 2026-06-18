@@ -1609,6 +1609,7 @@ name = "smearor-app-launcher-model"
 version = "0.1.0"
 dependencies = [
     "serde",
+    "serde_json",
     "smearor-swipe-launcher-plugin-api",
     "smearor-wrot-rotation",
     "stabby",
@@ -1664,6 +1665,7 @@ name = "smearor-audio-model"
 version = "0.1.0"
 dependencies = [
     "serde",
+    "serde_json",
     "smearor-swipe-launcher-plugin-api",
     "stabby",
 ]
@@ -1797,6 +1799,7 @@ name = "smearor-mpris-model"
 version = "0.1.0"
 dependencies = [
     "serde",
+    "serde_json",
     "smearor-swipe-launcher-plugin-api",
     "stabby",
 ]
@@ -1847,6 +1850,7 @@ name = "smearor-notifications-model"
 version = "0.1.0"
 dependencies = [
     "serde",
+    "serde_json",
     "smearor-swipe-launcher-plugin-api",
     "stabby",
 ]
@@ -1923,6 +1927,7 @@ dependencies = [
 name = "smearor-swipe-launcher-plugin-api"
 version = "0.1.0"
 dependencies = [
+    "dashmap",
     "glib",
     "gtk4",
     "miette",

@@ -19,6 +19,7 @@ use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
 use smearor_model_area::AreaConfig;
 use smearor_model_area::AreaType;
+use smearor_swipe_launcher_plugin_api::JsonConverterRegistry;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tracing::debug;
@@ -48,7 +49,9 @@ pub struct AreaManager {
 
 impl AreaManager {
     /// Create a new AreaManager
-    pub fn new(plugin_manager: Arc<PluginManager>, config: Arc<SwipeLauncherConfig>) -> Self {
+    pub fn new(plugin_manager: Arc<PluginManager>, config: Arc<SwipeLauncherConfig>, json_converter_registry: Arc<JsonConverterRegistry>) -> Self {
+        smearor_model_area::register_json_converters_in_registry(&json_converter_registry);
+
         Self {
             areas: DashMap::new(),
             // area_stack: AreaStack::new(),

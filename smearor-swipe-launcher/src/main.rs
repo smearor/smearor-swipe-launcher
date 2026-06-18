@@ -6,6 +6,7 @@ mod context;
 mod css_provider;
 mod display;
 mod error;
+mod json_converter;
 mod messages;
 mod plugin;
 mod plugin_manager;

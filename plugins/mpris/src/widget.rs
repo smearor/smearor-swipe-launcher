@@ -24,6 +24,7 @@ use smearor_mpris_model::MprisCommandMessage;
 use smearor_mpris_model::MprisPlaybackStatus;
 use smearor_mpris_model::MprisStatusMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -34,6 +35,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -228,7 +230,18 @@ impl AsRef<Option<FfiCoreContext>> for MprisWidget {
     }
 }
 
-impl Plugin for MprisWidget {}
+impl Plugin for MprisWidget {
+    fn on_message(&mut self, message: *mut core::ffi::c_void) {
+        if !message.is_null() {
+            unsafe {
+                let envelope = &*(message as *mut FfiEnvelope);
+                if envelope.type_id == FfiEnvelopePayload::<MprisStatusMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<MprisStatusMessage>>::handle_envelope_message(self, envelope);
+                }
+            }
+        }
+    }
+}
 
 impl WidgetBuilder for MprisWidget {
     fn build_widget(&mut self) -> Widget {

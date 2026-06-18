@@ -21,6 +21,7 @@ use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatus;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -31,6 +32,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::PluginMetaRaw;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -128,7 +130,18 @@ impl AsRef<Option<FfiCoreContext>> for AppLauncherWidget {
     }
 }
 
-impl Plugin for AppLauncherWidget {}
+impl Plugin for AppLauncherWidget {
+    fn on_message(&mut self, message: *mut core::ffi::c_void) {
+        if !message.is_null() {
+            unsafe {
+                let envelope = &*(message as *mut FfiEnvelope);
+                if envelope.type_id == FfiEnvelopePayload::<DesktopFileStatusMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<DesktopFileStatusMessage>>::handle_envelope_message(self, envelope);
+                }
+            }
+        }
+    }
+}
 
 impl WidgetBuilder for AppLauncherWidget {
     fn build_widget(&mut self) -> Widget {

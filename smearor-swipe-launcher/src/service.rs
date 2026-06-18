@@ -40,7 +40,8 @@ impl LoadedService {
             let config_ptr = config_bytes.as_ptr() as *const i8;
             let config_len = config_bytes.len();
 
-            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current());
+            let service_id = service_entry.id.clone();
+            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current(), service_id.clone());
             let ffi_context = core_context.into_ffi_context();
 
             let ffi_context_ptr = Box::into_raw(Box::new(ffi_context)) as *mut core::ffi::c_void;

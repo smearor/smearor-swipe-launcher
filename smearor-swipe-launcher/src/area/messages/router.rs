@@ -8,22 +8,31 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageRouter;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 
 impl MessageRouter for AreaManager {
     fn route(&self, envelope: &FfiEnvelope) {
-        if AcceptTopic::<FfiEnvelopePayload<AddAreaMessage>>::accept_topic(self, envelope.topic.as_str()) {
+        if envelope.type_id == FfiEnvelopePayload::<AddAreaMessage>::TYPE_ID
+            && AcceptTopic::<FfiEnvelopePayload<AddAreaMessage>>::accept_topic(self, envelope.topic.as_str())
+        {
             MessageHandler::<FfiEnvelopePayload<AddAreaMessage>>::handle_envelope_message(self, envelope);
             return;
         }
-        if AcceptTopic::<FfiEnvelopePayload<CloseAreaMessage>>::accept_topic(self, envelope.topic.as_str()) {
+        if envelope.type_id == FfiEnvelopePayload::<CloseAreaMessage>::TYPE_ID
+            && AcceptTopic::<FfiEnvelopePayload<CloseAreaMessage>>::accept_topic(self, envelope.topic.as_str())
+        {
             MessageHandler::<FfiEnvelopePayload<CloseAreaMessage>>::handle_envelope_message(self, envelope);
             return;
         }
-        if AcceptTopic::<FfiEnvelopePayload<OpenAreaMessage>>::accept_topic(self, envelope.topic.as_str()) {
+        if envelope.type_id == FfiEnvelopePayload::<OpenAreaMessage>::TYPE_ID
+            && AcceptTopic::<FfiEnvelopePayload<OpenAreaMessage>>::accept_topic(self, envelope.topic.as_str())
+        {
             MessageHandler::<FfiEnvelopePayload<OpenAreaMessage>>::handle_envelope_message(self, envelope);
             return;
         }
-        if AcceptTopic::<FfiEnvelopePayload<RemoveAreaMessage>>::accept_topic(self, envelope.topic.as_str()) {
+        if envelope.type_id == FfiEnvelopePayload::<RemoveAreaMessage>::TYPE_ID
+            && AcceptTopic::<FfiEnvelopePayload<RemoveAreaMessage>>::accept_topic(self, envelope.topic.as_str())
+        {
             MessageHandler::<FfiEnvelopePayload<RemoveAreaMessage>>::handle_envelope_message(self, envelope);
             return;
         }

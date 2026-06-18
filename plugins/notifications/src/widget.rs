@@ -20,6 +20,7 @@ use smearor_notifications_model::NotificationCommandMessage;
 use smearor_notifications_model::NotificationInfo;
 use smearor_notifications_model::NotificationStatusMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
@@ -31,6 +32,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use tracing::debug;
 use tracing::error;
@@ -221,7 +223,18 @@ impl AsRef<Option<FfiCoreContext>> for NotificationWidget {
     }
 }
 
-impl Plugin for NotificationWidget {}
+impl Plugin for NotificationWidget {
+    fn on_message(&mut self, message: *mut core::ffi::c_void) {
+        if !message.is_null() {
+            unsafe {
+                let envelope = &*(message as *mut FfiEnvelope);
+                if envelope.type_id == FfiEnvelopePayload::<NotificationStatusMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<NotificationStatusMessage>>::handle_envelope_message(self, envelope);
+                }
+            }
+        }
+    }
+}
 
 impl WidgetBuilder for NotificationWidget {
     fn build_widget(&mut self) -> Widget {

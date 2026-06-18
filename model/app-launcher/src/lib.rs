@@ -1,5 +1,7 @@
+mod json_converters;
 mod messages;
 
+pub use json_converters::register_json_converters;
 pub use messages::command::DesktopFileCommandAction;
 pub use messages::command::DesktopFileCommandMessage;
 pub use messages::command::DesktopFileCommandMessageStabby;

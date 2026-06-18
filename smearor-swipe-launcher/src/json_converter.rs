@@ -1,0 +1,1 @@
+pub use smearor_swipe_launcher_plugin_api::JsonConverterRegistry;

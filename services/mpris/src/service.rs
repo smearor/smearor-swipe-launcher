@@ -98,6 +98,8 @@ pub struct MprisService {
 
 impl MprisService {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
+        smearor_mpris_model::register_json_converters(core_context);
+
         let mpris_config: MprisServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel::<MprisCommand>();
@@ -230,7 +232,18 @@ impl AsRef<Option<FfiCoreContext>> for MprisService {
     }
 }
 
-impl Service for MprisService {}
+impl Service for MprisService {
+    fn on_message(&mut self, message: *mut core::ffi::c_void) {
+        if !message.is_null() {
+            unsafe {
+                let envelope = &*(message as *mut FfiEnvelope);
+                if envelope.type_id == FfiEnvelopePayload::<MprisCommandMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<MprisCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+            }
+        }
+    }
+}
 
 async fn find_players(conn: &Connection) -> Result<Vec<String>, zbus::Error> {
     let dbus = zbus::fdo::DBusProxy::new(conn).await?;

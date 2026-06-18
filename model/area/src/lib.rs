@@ -1,5 +1,6 @@
 mod area_type;
 mod config;
+mod json_converters;
 mod messages;
 mod transition;
 
@@ -8,6 +9,8 @@ pub use area_type::AreaTypeStabby;
 pub use config::AreaConfig;
 pub use config::AreaConfigStabby;
 pub use config::DEFAULT_AREA_WIDTH;
+pub use json_converters::register_json_converters;
+pub use json_converters::register_json_converters_in_registry;
 pub use messages::add::AddAreaMessage;
 pub use messages::add::AddAreaMessageStabby;
 pub use messages::close::CloseAreaMessage;

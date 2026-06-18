@@ -10,6 +10,7 @@ use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
 use smearor_app_launcher_model::SmearorWindowRotationWrapper;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -20,6 +21,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::ffi::OsString;
 use std::path::Path;
 use std::process::Command;
@@ -40,6 +42,8 @@ pub struct AppLauncherService {
 
 impl AppLauncherService {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
+        smearor_app_launcher_model::register_json_converters(core_context);
+
         let app_launcher_config: AppLauncherServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         let service = AppLauncherService {
@@ -243,4 +247,15 @@ impl AsRef<Option<FfiCoreContext>> for AppLauncherService {
     }
 }
 
-impl Service for AppLauncherService {}
+impl Service for AppLauncherService {
+    fn on_message(&mut self, message: *mut core::ffi::c_void) {
+        if !message.is_null() {
+            unsafe {
+                let envelope = &*(message as *mut FfiEnvelope);
+                if envelope.type_id == FfiEnvelopePayload::<DesktopFileCommandMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<DesktopFileCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+            }
+        }
+    }
+}

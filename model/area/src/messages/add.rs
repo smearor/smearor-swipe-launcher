@@ -48,6 +48,10 @@ impl AddAreaMessage {
     }
 }
 
+impl TypedMessage for AddAreaMessage {
+    const TYPE_ID: u64 = generate_type_id("smearor_model_area::AddAreaMessage");
+}
+
 impl TypedMessage for AddAreaMessageStabby {
     const TYPE_ID: u64 = generate_type_id("smearor_model_area::AddAreaMessageStabby");
 }

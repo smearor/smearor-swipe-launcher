@@ -8,5 +8,6 @@ authors.workspace = true
 
 [dependencies]
 serde = { workspace = true }
+serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 stabby = { workspace = true }

@@ -21,6 +21,7 @@ use gtk4::prelude::*;
 use smearor_audio_model::AudioCommandMessage;
 use smearor_audio_model::AudioStatusMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -31,6 +32,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -148,7 +150,18 @@ impl AsRef<Option<FfiCoreContext>> for AudioWidget {
     }
 }
 
-impl Plugin for AudioWidget {}
+impl Plugin for AudioWidget {
+    fn on_message(&mut self, message: *mut core::ffi::c_void) {
+        if !message.is_null() {
+            unsafe {
+                let envelope = &*(message as *mut FfiEnvelope);
+                if envelope.type_id == FfiEnvelopePayload::<AudioStatusMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<AudioStatusMessage>>::handle_envelope_message(self, envelope);
+                }
+            }
+        }
+    }
+}
 
 impl WidgetBuilder for AudioWidget {
     fn build_widget(&mut self) -> Widget {

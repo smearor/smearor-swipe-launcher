@@ -7,11 +7,30 @@ use std::time::Instant;
 use tracing::trace;
 use tracing::warn;
 
+/// Attempts to convert a String payload to a typed message envelope using
+/// the JSON converter registry.
+///
+/// Generic widgets (e.g. button) send plain JSON string payloads. The Host
+/// uses the registry (populated via `register_json_converter!`) to convert
+/// those strings into typed messages based on the message topic.
+fn try_convert_string_to_typed_envelope(registry: &crate::json_converter::JsonConverterRegistry, envelope: &FfiEnvelope) -> Option<FfiEnvelope> {
+    let string_type_id = smearor_swipe_launcher_plugin_api::generate_type_id("std::string::String");
+    if envelope.type_id != string_type_id || envelope.payload.is_null() {
+        return None;
+    }
+
+    let payload_str = unsafe { (envelope.payload as *mut String).as_ref()? };
+    let topic = envelope.topic.to_string();
+    let sender_id = envelope.sender_id.to_string();
+    registry.convert(&topic, &sender_id, payload_str)
+}
+
 impl LauncherApplication {
     pub fn handle_message(&self, envelope: FfiEnvelope) {
         let sender_id = envelope.sender_id.to_string();
         let topic = envelope.topic.to_string();
 
+        println!("HOST handle_message: sender={} topic={} type_id={}", sender_id, topic, envelope.type_id);
         trace!("Event Broker: Received message from '{}' on topic '{}' (type_id={})", sender_id, topic, envelope.type_id);
 
         // Rate-limit command topics to protect the broker from burst overload.
@@ -38,6 +57,22 @@ impl LauncherApplication {
                 warn!("Broker: Dropping burst command message on topic '{}'", topic);
                 return;
             }
+        }
+
+        // Try to convert a generic JSON-string payload into a typed message
+        // for *any* topic. Plugins register their converters at load time via
+        // the FFI callback, so the Host can remain fully generic.
+        let mut envelope = envelope;
+        if let Some(converted) = try_convert_string_to_typed_envelope(&self.json_converter_registry, &envelope) {
+            // Destroy the original String payload before replacing the envelope
+            if !envelope.payload.is_null() {
+                if let Some(destroy) = envelope.destroy_payload {
+                    unsafe {
+                        (destroy)(envelope.payload);
+                    }
+                }
+            }
+            envelope = converted;
         }
 
         if topic.starts_with("area.")
@@ -81,6 +116,7 @@ impl LauncherApplication {
         }
 
         if topic.starts_with("plugins.broadcast.") {
+            println!("HOST broadcasting to all plugins");
             trace!("Broadcasting message to all loaded plugins");
             for r in self.plugin_manager.plugins.iter() {
                 let plugin = r.value();
@@ -93,14 +129,17 @@ impl LauncherApplication {
         // Routing to a specific service
         if topic.starts_with("service.") {
             let parts: Vec<&str> = topic.split('.').collect();
+            println!("HOST routing to service: parts={:?}", parts);
             if parts.len() >= 2 {
                 let target_service_id = parts[1];
-                trace!("target_service_id {target_service_id}");
+                println!("HOST target_service_id={}", target_service_id);
                 if let Some(service) = self.service_manager.services.get(target_service_id) {
-                    trace!("Route message to service {target_service_id}");
+                    println!("HOST calling service.on_message for {}", target_service_id);
                     unsafe {
                         service.on_message(envelope.clone());
                     }
+                } else {
+                    println!("HOST service {} NOT FOUND", target_service_id);
                 }
             }
             if topic.ends_with(".status") {

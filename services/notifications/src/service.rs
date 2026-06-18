@@ -210,6 +210,8 @@ pub struct NotificationService {
 
 impl NotificationService {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
+        smearor_notifications_model::register_json_converters(core_context);
+
         let notification_config: NotificationServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         let (command_sender, command_receiver) = tokio::sync::mpsc::channel::<NotificationCommand>(100);
@@ -282,6 +284,17 @@ impl AsRef<Option<FfiCoreContext>> for NotificationService {
 }
 
 impl Service for NotificationService {
+    fn on_message(&mut self, message: *mut core::ffi::c_void) {
+        if !message.is_null() {
+            unsafe {
+                let envelope = &*(message as *mut FfiEnvelope);
+                if envelope.type_id == FfiEnvelopePayload::<NotificationCommandMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<NotificationCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+            }
+        }
+    }
+
     fn start(&mut self) {
         if let Some(ctx) = &self.core_context {
             let meta = self.meta.clone();

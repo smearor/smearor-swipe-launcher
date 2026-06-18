@@ -2,19 +2,33 @@ use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageBrokerHandle;
 use smearor_swipe_launcher_plugin_api::PluginExecutor;
+use std::sync::Arc;
+use std::sync::OnceLock;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::error;
+
+use crate::json_converter::JsonConverterRegistry;
+
+static GLOBAL_JSON_CONVERTER_REGISTRY: OnceLock<Arc<JsonConverterRegistry>> = OnceLock::new();
+
+/// Initialise the global JSON converter registry used by the FFI callback.
+///
+/// Must be called before any plugins are loaded.
+pub fn initialize_global_json_converter_registry(registry: Arc<JsonConverterRegistry>) -> Result<(), Arc<JsonConverterRegistry>> {
+    GLOBAL_JSON_CONVERTER_REGISTRY.set(registry)
+}
 
 /// Simple implementation of CoreContext for plugins
 #[derive(Debug)]
 pub struct SimpleCoreContext {
     sender: UnboundedSender<FfiEnvelope>,
     handle: tokio::runtime::Handle,
+    sender_id: String,
 }
 
 impl SimpleCoreContext {
-    pub fn new(sender: UnboundedSender<FfiEnvelope>, handle: tokio::runtime::Handle) -> Self {
-        SimpleCoreContext { sender, handle }
+    pub fn new(sender: UnboundedSender<FfiEnvelope>, handle: tokio::runtime::Handle, sender_id: String) -> Self {
+        SimpleCoreContext { sender, handle, sender_id }
     }
 
     pub fn into_ffi_context(self) -> FfiCoreContext {
@@ -30,6 +44,7 @@ impl SimpleCoreContext {
                 context: context_ptr,
                 spawn: executor_spawn_wrapper,
             },
+            register_json_converter: Some(register_json_converter_wrapper),
         }
     }
 }
@@ -41,15 +56,19 @@ unsafe extern "C" fn broker_send_wrapper(
     payload: *mut core::ffi::c_void,
     destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
 ) {
-    let _ = (topic_ptr, type_id, payload, destroy_payload);
     if context.is_null() {
         return;
     }
+    let topic = if topic_ptr.is_null() {
+        String::new()
+    } else {
+        unsafe { std::ffi::CStr::from_ptr(topic_ptr).to_string_lossy().into_owned() }
+    };
     unsafe {
         let ctx = &*(context as *const SimpleCoreContext);
         let envelope = FfiEnvelope {
-            sender_id: stabby::string::String::from("host"),
-            topic: stabby::string::String::from(""),
+            sender_id: stabby::string::String::from(ctx.sender_id.clone()),
+            topic: stabby::string::String::from(topic),
             type_id,
             payload,
             destroy_payload,
@@ -66,4 +85,20 @@ unsafe extern "C" fn executor_spawn_wrapper(context: *const core::ffi::c_void, f
     }
     let ctx = unsafe { &*(context as *const SimpleCoreContext) };
     ctx.handle.spawn(future);
+}
+
+unsafe extern "C" fn register_json_converter_wrapper(
+    topic_ptr: *const u8,
+    topic_len: usize,
+    type_id: u64,
+    deserializer: smearor_swipe_launcher_plugin_api::JsonDeserializerFn,
+    destroy: smearor_swipe_launcher_plugin_api::DestroyPayloadFn,
+) {
+    if topic_ptr.is_null() {
+        return;
+    }
+    let topic = unsafe { std::str::from_utf8(std::slice::from_raw_parts(topic_ptr, topic_len)).unwrap_or("invalid-topic") };
+    if let Some(registry) = GLOBAL_JSON_CONVERTER_REGISTRY.get() {
+        registry.register(topic, type_id, deserializer, destroy);
+    }
 }
