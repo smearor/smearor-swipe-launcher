@@ -1,0 +1,378 @@
+# smearor-swipe-launcher Configuration
+
+### Define the layout order
+
+areas = ["scroll_band"]
+
+### Services to load
+
+[[services]]
+id = "app_launcher"
+path = "target/release/libsmearor_app_launcher_service.so"
+
+[[services]]
+id = "audio"
+path = "target/release/libsmearor_audio_service.so"
+
+[[services]]
+id = "mpris"
+path = "target/release/libsmearor_mpris_service.so"
+
+### Configure the app launcher service
+
+[app_launcher]
+smearor_wrot_path = "smearor-wrot"
+rotation = 90
+
+### Configure the application global settings
+
+[launcher]
+# Initial rotation in degrees (0, 90, 180, 270)
+rotation = 90
+layer = "top"
+namespace = "smearor-swipe-launcher"
+exclusive_zone = 150
+
+[layout]
+orientation = "horizontal"
+spacing = 0
+
+# Plugins in the center scroll band
+[scroll_band]
+area_type = "scroll"
+plugins = [
+    { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "video_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "music_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "web_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "audio", path = "target/release/libsmearor_audio_widget.so" },
+    { id = "mpris", path = "target/release/libsmearor_mpris_widget.so" },
+    { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "wike", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+# Plugin-specific configurations
+
+[nautilus]
+desktop_file_path = "/usr/share/applications/org.gnome.Nautilus.desktop"
+[nautilus.wrapper]
+follows_rotation = true
+
+[loupe]
+desktop_file_path = "/usr/share/applications/org.gnome.Loupe.desktop"
+[loupe.wrapper]
+follows_rotation = true
+
+[wike]
+desktop_file_path = "/usr/share/applications/com.github.hugolabe.Wike.desktop"
+[wike.wrapper]
+follows_rotation = true
+
+
+
+# Button widget configuration
+[games_menu_button]
+text = "Games"
+icon = "applications-games-symbolic"
+tooltip = "Open games menu"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "games_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "games_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+# Games submenu area configuration
+[games_area]
+area_type = "scroll"
+open_transition = "SlideUp"
+plugins = [
+    { id = "games_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "puzzle_games_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "board_games_menu_button", path = "target/release/libsmearor_button_widget.so" }
+]
+
+# Close button configuration
+[games_close_button]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close games menu"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "games_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+
+
+[puzzle_games_menu_button]
+text = "Puzzle"
+icon = "puzzle-piece-symbolic"
+tooltip = "Puzzle games"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "puzzle_games_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "puzzle_games_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[puzzle_games_area]
+area_type = "scroll"
+open_transition = "SlideLeft"
+plugins = [
+    { id = "puzzle_games_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "gnome_2048", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_mines", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+# Close button configuration
+[puzzle_games_close_button]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close puzzle games"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "puzzle_games_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+[gnome_2048]
+desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
+click_topic = "area.close"
+click_payload = { area_id = "puzzle_games_area" }
+[gnome_2048.wrapper]
+follows_rotation = true
+auto_color_mask = true
+
+[gnome_mines]
+desktop_file_path = "/usr/share/applications/org.gnome.Mines.desktop"
+[gnome_mines.wrapper]
+follows_rotation = true
+
+
+
+[board_games_menu_button]
+text = "Board"
+icon = "board-games-symbolic"
+tooltip = "Board games"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "board_games_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "board_games_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[board_games_area]
+area_type = "scroll"
+open_transition = "SlideLeft"
+plugins = [
+    { id = "board_games_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "gnome_chess", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+# Close button configuration
+[board_games_close_button]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close board games"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "board_games_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+[gnome_chess]
+desktop_file_path = "/usr/share/applications/org.gnome.Chess.desktop"
+[gnome_chess.wrapper]
+follows_rotation = true
+auto_color_mask = true
+
+
+
+[tools_menu_button]
+text = "Tools"
+icon = "applications-engineering-symbolic"
+tooltip = "Open tools menu"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "tools_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "tools_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[tools_area]
+area_type = "scroll"
+transition = "SlideLeft"
+plugins = [
+    { id = "tools_close", path = "target/release/libsmearor_button_widget.so" },
+    { id = "calculator", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "characters", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[calculator]
+desktop_file_path = "/usr/share/applications/org.gnome.Calculator.desktop"
+[calculator.wrapper]
+follows_rotation = true
+
+[characters]
+desktop_file_path = "/usr/share/applications/org.gnome.Characters.desktop"
+[characters.wrapper]
+follows_rotation = true
+
+# Close button configuration
+[tools_close]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close tools menu"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "tools_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+
+
+[video_menu_button]
+text = "Video"
+icon = "multimedia-video-player-symbolic"
+tooltip = "Video Players"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "video_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "video_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[video_area]
+area_type = "scroll"
+transition = "SlideLeft"
+plugins = [
+    { id = "video_close", path = "target/release/libsmearor_button_widget.so" },
+    { id = "totem", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[totem]
+desktop_file_path = "/usr/share/applications/org.gnome.Totem.desktop"
+[totem.wrapper]
+follows_rotation = true
+
+# Close button configuration
+[video_close]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close video menu"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "video_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+
+
+[music_menu_button]
+text = "Music"
+icon = "music-app-symbolic"
+tooltip = "Music Players"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "music_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "music_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[music_area]
+area_type = "scroll"
+transition = "SlideLeft"
+plugins = [
+    { id = "music_close", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shortwave", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "amberol", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[shortwave]
+desktop_file_path = "/usr/share/applications/de.haeckerfelix.Shortwave.desktop"
+[shortwave.wrapper]
+follows_rotation = true
+
+[amberol]
+desktop_file_path = "/usr/share/applications/io.bassi.Amberol.desktop"
+[amberol.wrapper]
+follows_rotation = true
+
+# Close button configuration
+[music_close]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close music menu"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "music_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+
+
+[web_menu_button]
+text = "Web"
+icon = "applications-internet-symbolic"
+tooltip = "Web"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "web_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "web_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[web_area]
+area_type = "scroll"
+transition = "SlideLeft"
+plugins = [
+    { id = "web_close", path = "target/release/libsmearor_button_widget.so" },
+    { id = "firefox_nightly", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "epiphany", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[firefox_nightly]
+desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
+[firefox_nightly.wrapper]
+follows_rotation = true
+
+[epiphany]
+desktop_file_path = "/usr/share/applications/org.gnome.Epiphany.desktop"
+[epiphany.wrapper]
+follows_rotation = true
+
+# Close button configuration
+[web_close]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close Web Menu"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "web_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]

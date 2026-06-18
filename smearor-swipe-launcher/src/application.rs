@@ -193,7 +193,7 @@ impl LauncherApplication {
     }
 
     pub fn run(&self) {
-        self.gtk_app.run();
+        self.gtk_app.run_with_args(&[] as &[&str]);
     }
 }
 
