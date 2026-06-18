@@ -73,8 +73,8 @@ plugins = [
     { id = "mpris", path = "target/release/libsmearor_mpris_widget.so" },
     { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "wike", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "wike", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" }
     #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
 
