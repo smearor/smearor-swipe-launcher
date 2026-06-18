@@ -216,6 +216,59 @@ first line of its own code.
 | Constructor signature grows                          | The gain (single entry point, no `init` boilerplate) outweighs the cosmetic cost.                                                                                                                                                             |
 | Spawning in `new` then failing                       | If `new` spawns a task and then returns `Err`, the Host leaks the task. **Mitigation:** do not spawn in `new`. Store the `Executor` in the struct and spawn in a dedicated `start()` method called by the Host after successful construction. |
 
+### 2.5 JSON Converter Registry
+
+While the primary message path uses zero-copy pointer passing, generic widgets (e.g. buttons) need a way to send typed messages via JSON configuration. The Host
+maintains a `JsonConverterRegistry` that maps message topics to JSON deserializers.
+
+#### Registration via FFI Callback
+
+Plugins register their message type converters during initialization via an FFI callback provided in `FfiCoreContext`:
+
+```rust
+pub type RegisterJsonConverterFn = unsafe extern "C" fn(
+    topic_ptr: *const u8,
+    topic_len: usize,
+    type_id: u64,
+    deserializer: JsonDeserializerFn,
+    destroy: DestroyPayloadFn,
+);
+```
+
+Each model crate provides a `register_json_converters(context: Option<FfiCoreContext>)` function that calls the Host callback for every message type:
+
+```rust
+pub fn register_json_converters(context: Option<FfiCoreContext>) {
+    OpenAreaMessageConverter::register_in_host(context);
+    CloseAreaMessageConverter::register_in_host(context);
+    // ... etc
+}
+```
+
+The `impl_json_convertible!` macro generates both:
+
+- `register_json_converter(registry: &JsonConverterRegistry)` — for direct Host-side registration
+- `register_in_host(context: Option<FfiCoreContext>)` — for FFI callback registration from plugins
+
+#### Host-Side Registry
+
+The Host initializes a global `JsonConverterRegistry` before loading plugins. When a message arrives with a String payload, the Host attempts conversion for *
+*any** topic (area, service, plugin, broadcast):
+
+```rust
+if let Some(converted) = registry.convert( & topic, & sender_id, json_str) {
+// Replace String envelope with typed envelope
+envelope = converted;
+}
+```
+
+This allows generic widgets to send JSON strings that get automatically converted to typed messages before routing to services or other plugins.
+
+#### Decoupling Principle
+
+The Host has **no direct dependencies** on model crates for converter registration. Each plugin (service or widget) is responsible for registering its own
+message types. The only exception is `smearor-model-area`, because `AreaManager` lives in the Host and handles area lifecycle messages directly.
+
 **Revised pattern:**
 
 ```rust
@@ -535,7 +588,11 @@ layout, while serde expects standard Rust layout. Mixing them would lead to comp
 > approach is the practical solution.
 
 - [x] Implement `host_spawn` and pass `PluginExecutor` during plugin init
-- [ ] Remove `serde_json` dependency from the Host (where only used for plugin messages)
+- [x] Add `RegisterJsonConverterFn` FFI callback to `FfiCoreContext`
+- [x] Implement `JsonConverterRegistry` with global `OnceLock` for FFI callback access
+- [x] Add `impl_json_convertible!` macro with `register_in_host` method for FFI registration
+- [x] Remove hard-coded model crate dependencies from Host
+- [x] Generalize JSON-to-typed conversion for all topics (area, service, plugin, broadcast)
 
 **Estimated effort:** Medium. The broker routing logic changes significantly.
 
@@ -590,14 +647,15 @@ For each:
 
 ## 5. Decision Summary
 
-| Aspect                | Decision                   | Rationale                                             |
-|-----------------------|----------------------------|-------------------------------------------------------|
-| FFI framework         | `stabby`                   | Native async support, modern, actively developed      |
-| Serialization         | **None**                   | Shared `model` crates allow zero-copy pointer passing |
-| Intermediary format   | Not needed                 | `postcard`/`rkyv` would be unnecessary indirection    |
-| Plugin runtime access | `PluginExecutor`           | Stable FFI delegation to Host Tokio runtime           |
-| Async I/O in plugins  | Native async               | zbus, libpulse, etc. work idiomatically               |
-| GTK bridge            | `MainContext::spawn_local` | GTK's single-threaded requirement is respected        |
+| Aspect                | Decision                   | Rationale                                                               |
+|-----------------------|----------------------------|-------------------------------------------------------------------------|
+| FFI framework         | `stabby`                   | Native async support, modern, actively developed                        |
+| Serialization         | **None**                   | Shared `model` crates allow zero-copy pointer passing                   |
+| Intermediary format   | Not needed                 | `postcard`/`rkyv` would be unnecessary indirection                      |
+| Plugin runtime access | `PluginExecutor`           | Stable FFI delegation to Host Tokio runtime                             |
+| Async I/O in plugins  | Native async               | zbus, libpulse, etc. work idiomatically                                 |
+| GTK bridge            | `MainContext::spawn_local` | GTK's single-threaded requirement is respected                          |
+| JSON conversion       | `JsonConverterRegistry`    | Plugins self-register converters via FFI callback; Host remains generic |
 
 This architecture eliminates the root causes of the current performance problems rather than treating the symptoms. Every new plugin built on this foundation
 automatically benefits from event-driven messaging, zero-copy communication, and idiomatic async I/O.

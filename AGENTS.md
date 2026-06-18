@@ -212,6 +212,16 @@
 - **No Import Grouping**: Keep imports separate and ungrouped
 - **No Import Comments**: Don't comment import statements
 - **Macro Usage**: Use `debug!` instead of `tracing::debug!` with proper imports
+- **Alphabetical Ordering**: Sort all `use` statements alphabetically within each scope
+- **Import Scope Order**: Group by source — `crate::` first, then external crates, then `std::` last
+
+### Formatting
+
+- **Use `rustfmt`**: Run `cargo fmt` before committing to ensure consistent formatting
+- **Single-line preference**: Prefer single-line style for macro invocations and function signatures when they remain readable (e.g.
+  `impl_json_convertible!(Name, Type, |json| { ... });`)
+- **No trailing commas** in single-line constructs; use trailing commas only in multi-line blocks
+- **Compact closures**: Keep closure bodies compact when they fit on one line
 
 ### Dependencies
 
