@@ -3,7 +3,7 @@ use serde_json::Value;
 
 pub const DEFAULT_WIDTH: i32 = 100;
 
-pub const DEFAULT_ICON_SIZE: i32 = 24;
+pub const DEFAULT_ICON_SIZE: i32 = 36;
 
 /// Configuration for a button widget
 #[derive(Debug, Clone, Deserialize)]
@@ -55,6 +55,9 @@ pub struct ButtonConfig {
     /// Animation type on button press (scale, fade, ripple)
     #[serde(default)]
     pub press_animation: Option<String>,
+    /// Spacing between child widgets inside the button
+    #[serde(default)]
+    pub spacing: i32,
     /// Additional CSS classes for styling
     #[serde(default)]
     pub css_classes: Vec<String>,

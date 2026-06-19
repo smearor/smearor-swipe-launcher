@@ -302,6 +302,7 @@ impl AreaManager {
 
                 let box_widget = GtkBox::builder()
                     .orientation(Orientation::Horizontal)
+                    .spacing(area_config.spacing)
                     .width_request(width)
                     .css_classes(css_classes.as_slice())
                     .build();
@@ -324,7 +325,7 @@ impl AreaManager {
                     .css_classes(css_classes.as_slice())
                     .build();
 
-                let plugin_container = GtkBox::builder().orientation(Orientation::Horizontal).spacing(10).build();
+                let plugin_container = GtkBox::builder().orientation(Orientation::Horizontal).spacing(area_config.spacing).build();
                 for class in &area_config.css_classes {
                     plugin_container.add_css_class(class);
                 }

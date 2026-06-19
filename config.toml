@@ -18,7 +18,7 @@ css_classes = ["menu-button", "glow-blue"]
 
 [defaults.close_button]
 text = ""
-icon = "window-close-symbolic"
+icon = "nf-fa-window-close"
 icon_only = true
 click_topic = "area.close"
 enabled = true
@@ -69,6 +69,7 @@ longpress_payload = { area_id = "clock_area" }
 # Plugins in the center scroll band
 [scroll_band]
 area_type = "scroll"
+spacing = 5
 plugins = [
     { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -84,6 +85,14 @@ plugins = [
     #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
 
+[mpris]
+max_width_chars = 24
+spacing = 10
+
+[audio]
+max_width_chars = 24
+spacing = 10
+
 # Plugins in the right static area
 [right_area]
 area_type = "fixed"
@@ -96,6 +105,7 @@ plugins = [
 [close_launcher]
 defaults = "close_button"
 text = "✕"
+icon = "nf-md-exit_to_app"
 tooltip = "Exit"
 click_topic = "core.close"
 click_payload = { }
@@ -137,7 +147,7 @@ follows_rotation = true
 defaults = "menu_button"
 text = "Games"
 icon = "nf-fa-gamepad"
-icon_size = 24
+icon_size = 36
 tooltip = "Games"
 css_classes = ["menu-button", "games-icon-color"]
 click_payload = { area_id = "games_area" }
@@ -163,7 +173,7 @@ click_payload = { area_id = "games_area" }
 [puzzle_games_menu_button]
 defaults = "menu_button"
 text = "Puzzle"
-icon = "nf-fa-fantasy_flight_games"
+icon = "nf-md-puzzle"
 tooltip = "Puzzle Games"
 click_payload = { area_id = "puzzle_games_area" }
 longpress_payload = { area_id = "puzzle_games_area" }
@@ -229,7 +239,7 @@ auto_color_mask = true
 defaults = "menu_button"
 text = "Tools"
 icon = "nf-fae-tools"
-icon_size = 24
+icon_size = 36
 tooltip = "Tools"
 click_payload = { area_id = "tools_area" }
 longpress_payload = { area_id = "tools_area" }
@@ -274,13 +284,45 @@ area_type = "scroll"
 transition = "SlideLeft"
 plugins = [
     { id = "video_close", path = "target/release/libsmearor_button_widget.so" },
-    { id = "totem", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "tubefeeder", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "totem", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "celluloid", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "clapper", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "camera", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
+
+[tubefeeder]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/de.schmidhuberj.tubefeeder.desktop"
+icon = "nf-fa-youtube_play"
+[tubefeeder.wrapper]
+follows_rotation = true
 
 [totem]
 defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Totem.desktop"
+icon = "nf-md-movie_open_play"
 [totem.wrapper]
+follows_rotation = true
+
+[celluloid]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/io.github.celluloid_player.Celluloid.desktop"
+icon = "nf-md-movie_open_play"
+[celluloid.wrapper]
+follows_rotation = true
+
+[clapper]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/com.github.rafostar.Clapper.desktop"
+[clapper.wrapper]
+follows_rotation = true
+
+[camera]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/io.github.cosmic_utils.camera.desktop"
+icon = "nf-md-camera" # nf-md-webcam
+[camera.wrapper]
 follows_rotation = true
 
 [video_close]
@@ -309,6 +351,7 @@ plugins = [
 [shortwave]
 defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/de.haeckerfelix.Shortwave.desktop"
+icon = "nf-md-radio"
 [shortwave.wrapper]
 follows_rotation = true
 

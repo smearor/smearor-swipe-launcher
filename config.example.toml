@@ -13,7 +13,7 @@ animations_enabled = true
 # Layout configuration
 [layout]
 orientation = "Horizontal"
-spacing = 10
+spacing = 0
 
 # Area configurations
 [left_area]

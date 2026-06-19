@@ -19,6 +19,8 @@ pub struct NotificationWidgetConfig {
     pub show_dnd_toggle: bool,
     /// Whether to show notification icons.
     pub show_icons: bool,
+    /// Spacing between child widgets inside the notifications widget.
+    pub spacing: i32,
 }
 
 impl NotificationWidgetConfig {
@@ -35,6 +37,7 @@ impl Default for NotificationWidgetConfig {
             max_visible: 3,
             show_dnd_toggle: true,
             show_icons: true,
+            spacing: 0,
         }
     }
 }

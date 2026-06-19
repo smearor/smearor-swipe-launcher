@@ -7,24 +7,25 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-stabby = { workspace = true }
 dashmap = { workspace = true }
 gtk4 = { workspace = true }
 gtk4-layer-shell = { workspace = true }
 glib = { workspace = true }
-tokio = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 clap = { workspace = true }
 libloading = { workspace = true }
-thiserror = { workspace = true }
 miette = { workspace = true }
+nerd_gtk_icons = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../plugin-api" }
 smearor-model-area = { path = "../model/area" }
 smearor-model-plugin = { path = "../model/plugin" }
 smearor-wrot-rotation = { workspace = true }
+stabby = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+tokio = { workspace = true }
 toml = { workspace = true }
 
 [build-dependencies]

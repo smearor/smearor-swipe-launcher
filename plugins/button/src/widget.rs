@@ -7,6 +7,7 @@ use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
 use gtk4::Widget;
+use gtk4::gio;
 use gtk4::prelude::*;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
@@ -20,7 +21,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
-use smearor_swipe_launcher_plugin_api::resolve_nerd_font;
+use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use tracing::debug;
 
 pub struct ButtonWidget {
@@ -74,7 +75,7 @@ impl WidgetBuilder for ButtonWidget {
 
         let button_box = gtk4::Box::builder()
             .orientation(Orientation::Vertical)
-            .spacing(30)
+            .spacing(self.config.spacing)
             .valign(Align::Center)
             .halign(Align::Center)
             .vexpand(true)
@@ -83,14 +84,18 @@ impl WidgetBuilder for ButtonWidget {
 
         if let Some(icon_name) = &self.config.icon {
             if icon_name.starts_with("nf-") {
-                if let Some(glyph) = resolve_nerd_font(icon_name) {
-                    let markup = format!(r#"<span font_desc="NerdFontsSymbolsOnly {}">{}</span>"#, self.config.icon_size, glyph);
-                    let icon_label = Label::new(None);
-                    icon_label.set_markup(&markup);
-                    for class in &self.config.css_classes {
-                        icon_label.add_css_class(class);
+                if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(icon_name) {
+                    let resource_path = format!("/com/nerd/icons/{}.svg", gtk_icon_name);
+                    if gio::resources_lookup_data(&resource_path, gio::ResourceLookupFlags::NONE).is_ok() {
+                        let icon = Image::from_resource(&resource_path);
+                        icon.set_pixel_size(self.config.icon_size);
+                        for class in &self.config.css_classes {
+                            icon.add_css_class(class);
+                        }
+                        button_box.append(&icon);
+                    } else {
+                        debug!("GResource not found for {}", resource_path);
                     }
-                    button_box.append(&icon_label);
                 }
             } else {
                 let icon = Image::from_icon_name(icon_name);

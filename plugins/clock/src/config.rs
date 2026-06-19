@@ -46,6 +46,10 @@ pub struct ClockConfig {
     /// Message payload for long-press (JSON/TOML)
     #[serde(default)]
     pub longpress_payload: Option<Value>,
+
+    /// Spacing between child widgets inside the clock widget.
+    #[serde(default)]
+    pub spacing: i32,
 }
 
 impl Default for ClockConfig {
@@ -60,6 +64,7 @@ impl Default for ClockConfig {
             click_payload: None,
             longpress_topic: None,
             longpress_payload: None,
+            spacing: 0,
         }
     }
 }

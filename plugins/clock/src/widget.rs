@@ -23,7 +23,6 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread;
 use std::time::Duration;
-use tracing::debug;
 
 pub(crate) struct ClockWidget {
     pub(crate) meta: PluginMeta,
@@ -109,7 +108,6 @@ impl WidgetBuilder for ClockWidget {
         let _ = adw::init();
         let mut status_page = StatusPage::builder().title(self.clock.get_current_time_1());
         if let Some(current_time_2) = self.clock.get_current_time_2() {
-            debug!("Current time 2: {}", current_time_2);
             status_page = status_page.description(current_time_2);
         }
         if let Some(width) = self.config.width {

@@ -12,6 +12,7 @@ use gtk4::Label;
 use gtk4::Orientation;
 use gtk4::PropagationPhase;
 use gtk4::Widget;
+use gtk4::gio;
 use gtk4::prelude::BoxExt;
 use gtk4::prelude::Cast;
 use gtk4::prelude::GestureExt;
@@ -34,6 +35,7 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::PluginMetaRaw;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
+use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tracing::debug;
@@ -71,12 +73,15 @@ impl AppLauncherWidget {
         if let Some(name) = desktop_entry.get("Desktop Entry", "Name").and_then(|names| names.first()) {
             app_name = name.clone();
         }
-        match desktop_entry.get("Desktop Entry", "Icon").and_then(|names| names.first()) {
-            Some(icon) => icon_name = icon.clone(),
-            None => {
-                // fallback
-                if icon_name.is_empty() {
-                    icon_name = "system-run".to_string();
+        if let Some(config_icon) = &config.icon {
+            icon_name = config_icon.clone();
+        } else {
+            match desktop_entry.get("Desktop Entry", "Icon").and_then(|names| names.first()) {
+                Some(icon) => icon_name = icon.clone(),
+                None => {
+                    if icon_name.is_empty() {
+                        icon_name = "system-run".to_string();
+                    }
                 }
             }
         }
@@ -149,7 +154,7 @@ impl WidgetBuilder for AppLauncherWidget {
 
         let main_box = gtk4::Box::builder()
             .orientation(Orientation::Vertical)
-            .spacing(30)
+            .spacing(self.config.spacing)
             .valign(Align::Center)
             .halign(Align::Center)
             .vexpand(true)
@@ -157,7 +162,20 @@ impl WidgetBuilder for AppLauncherWidget {
             .build();
 
         // Render Icon
-        let image = Image::from_icon_name(&self.icon_name);
+        let image = if self.icon_name.starts_with("nf-") {
+            if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(&self.icon_name) {
+                let resource_path = format!("/com/nerd/icons/{}.svg", gtk_icon_name);
+                if gio::resources_lookup_data(&resource_path, gio::ResourceLookupFlags::NONE).is_ok() {
+                    Image::from_resource(&resource_path)
+                } else {
+                    Image::from_icon_name(&self.icon_name)
+                }
+            } else {
+                Image::from_icon_name(&self.icon_name)
+            }
+        } else {
+            Image::from_icon_name(&self.icon_name)
+        };
         image.set_pixel_size(self.config.icon_size);
         main_box.append(&image);
 

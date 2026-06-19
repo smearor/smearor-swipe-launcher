@@ -56,6 +56,10 @@ pub struct AreaConfig {
     #[serde(default)]
     pub css_classes: Vec<String>,
 
+    /// Spacing between child widgets inside the area container.
+    #[serde(default = "default_spacing")]
+    pub spacing: i32,
+
     /// List of plugins to load in this area
     pub plugins: Vec<PluginEntry>,
 }
@@ -123,6 +127,7 @@ impl From<AreaConfigStabby> for AreaConfig {
             close_on_escape: value.close_on_escape,
             include: None,
             css_classes: Vec::new(),
+            spacing: default_spacing(),
             plugins: value.plugins.into_iter().map(Into::into).collect(),
         }
     }
@@ -155,6 +160,7 @@ impl Default for AreaConfig {
             close_on_escape: false,
             include: None,
             css_classes: Vec::new(),
+            spacing: default_spacing(),
             plugins: Vec::new(),
         }
     }
@@ -162,4 +168,8 @@ impl Default for AreaConfig {
 
 fn default_width() -> Option<i32> {
     Some(DEFAULT_AREA_WIDTH)
+}
+
+fn default_spacing() -> i32 {
+    0
 }

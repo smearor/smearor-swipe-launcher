@@ -167,9 +167,9 @@ impl WidgetBuilder for AudioWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
 
-        let main_box = Box::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(8)
+        let content_box = Box::builder()
+            .orientation(Orientation::Horizontal)
+            .spacing(self.config.spacing)
             .valign(Align::Center)
             .halign(Align::Center)
             .vexpand(true)
@@ -177,9 +177,27 @@ impl WidgetBuilder for AudioWidget {
             .build();
 
         let icon = Image::from_icon_name(Self::select_icon_name(0.5, false));
-        icon.set_pixel_size(32);
-        main_box.append(&icon);
+        icon.set_pixel_size(self.config.icon_size);
+        content_box.append(&icon);
         *self.icon_image.lock().unwrap() = Some(icon.clone());
+
+        let info_box = Box::builder()
+            .orientation(Orientation::Vertical)
+            .spacing(self.config.spacing)
+            .valign(Align::Center)
+            .halign(Align::Start)
+            .build();
+
+        if self.config.show_device_label {
+            let device_label = Label::builder()
+                .label("Unknown Device")
+                .ellipsize(EllipsizeMode::End)
+                .max_width_chars(self.config.max_width_chars)
+                .css_classes(["audio-device-label"])
+                .build();
+            info_box.append(&device_label);
+            *self.device_label.lock().unwrap() = Some(device_label.clone());
+        }
 
         if self.config.show_volume_bar {
             let volume_bar = LevelBar::builder()
@@ -190,26 +208,17 @@ impl WidgetBuilder for AudioWidget {
                 .height_request(8)
                 .css_classes(["audio-volume-bar"])
                 .build();
-            main_box.append(&volume_bar);
+            info_box.append(&volume_bar);
             *self.volume_bar.lock().unwrap() = Some(volume_bar.clone());
         }
 
-        if self.config.show_device_label {
-            let device_label = Label::builder()
-                .label("Unknown Device")
-                .ellipsize(EllipsizeMode::End)
-                .max_width_chars(12)
-                .css_classes(["audio-device-label"])
-                .build();
-            main_box.append(&device_label);
-            *self.device_label.lock().unwrap() = Some(device_label.clone());
-        }
+        content_box.append(&info_box);
 
         let button = Button::builder()
             .css_classes(["scroll-item", "menu-button"])
             .width_request(self.config.width)
             .height_request(self.config.height)
-            .child(&main_box)
+            .child(&content_box)
             .build();
 
         let drag_gesture = GestureDrag::new();

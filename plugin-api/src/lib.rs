@@ -45,7 +45,7 @@ pub use messages::default_destroy_payload;
 pub use meta::PluginMeta;
 pub use meta::PluginMetaGetter;
 pub use meta::PluginMetaRaw;
-pub use nerd_font::resolve as resolve_nerd_font;
+pub use nerd_font::resolve_gtk_nerd_icon;
 pub use plugin::PLUGIN_VTABLE_VERSION;
 pub use plugin::Plugin;
 pub use plugin::PluginConstructor;

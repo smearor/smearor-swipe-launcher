@@ -247,9 +247,9 @@ impl WidgetBuilder for MprisWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
 
-        let main_box = Box::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(8)
+        let content_box = Box::builder()
+            .orientation(Orientation::Horizontal)
+            .spacing(self.config.spacing)
             .valign(Align::Center)
             .halign(Align::Center)
             .vexpand(true)
@@ -258,10 +258,35 @@ impl WidgetBuilder for MprisWidget {
 
         if self.config.show_album_art {
             let album_art = Image::from_icon_name("audio-x-generic-symbolic");
-            album_art.set_pixel_size(48);
-            main_box.append(&album_art);
+            album_art.set_pixel_size(self.config.icon_size);
+            content_box.append(&album_art);
             *self.album_art.lock().unwrap() = Some(album_art.clone());
         }
+
+        let info_box = Box::builder()
+            .orientation(Orientation::Vertical)
+            .spacing(self.config.spacing)
+            .valign(Align::Center)
+            .halign(Align::Start)
+            .build();
+
+        let title_label = Label::builder()
+            .label("No Player")
+            .ellipsize(EllipsizeMode::End)
+            .max_width_chars(self.config.max_width_chars)
+            .css_classes(["mpris-title-label"])
+            .build();
+        info_box.append(&title_label);
+        *self.title_label.lock().unwrap() = Some(title_label.clone());
+
+        let artist_label = Label::builder()
+            .label("")
+            .ellipsize(EllipsizeMode::End)
+            .max_width_chars(self.config.max_width_chars)
+            .css_classes(["mpris-artist-label"])
+            .build();
+        info_box.append(&artist_label);
+        *self.artist_label.lock().unwrap() = Some(artist_label.clone());
 
         if self.config.show_progress_bar {
             let progress_bar = LevelBar::builder()
@@ -272,33 +297,17 @@ impl WidgetBuilder for MprisWidget {
                 .height_request(8)
                 .css_classes(["mpris-progress-bar"])
                 .build();
-            main_box.append(&progress_bar);
+            info_box.append(&progress_bar);
             *self.progress_bar.lock().unwrap() = Some(progress_bar.clone());
         }
 
-        let title_label = Label::builder()
-            .label("No Player")
-            .ellipsize(EllipsizeMode::End)
-            .max_width_chars(12)
-            .css_classes(["mpris-title-label"])
-            .build();
-        main_box.append(&title_label);
-        *self.title_label.lock().unwrap() = Some(title_label.clone());
-
-        let artist_label = Label::builder()
-            .label("")
-            .ellipsize(EllipsizeMode::End)
-            .max_width_chars(12)
-            .css_classes(["mpris-artist-label"])
-            .build();
-        main_box.append(&artist_label);
-        *self.artist_label.lock().unwrap() = Some(artist_label.clone());
+        content_box.append(&info_box);
 
         let button = Button::builder()
             .css_classes(["scroll-item", "menu-button"])
             .width_request(self.config.width)
             .height_request(self.config.height)
-            .child(&main_box)
+            .child(&content_box)
             .build();
 
         let drag_gesture = GestureDrag::new();

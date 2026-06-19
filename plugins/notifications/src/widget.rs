@@ -238,7 +238,7 @@ impl Plugin for NotificationWidget {
 
 impl WidgetBuilder for NotificationWidget {
     fn build_widget(&mut self) -> Widget {
-        let main_box = Box::builder().orientation(Orientation::Vertical).spacing(4).build();
+        let main_box = Box::builder().orientation(Orientation::Vertical).spacing(self.config.spacing).build();
 
         let header = Box::builder().orientation(Orientation::Horizontal).spacing(4).build();
 

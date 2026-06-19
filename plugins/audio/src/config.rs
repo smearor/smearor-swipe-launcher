@@ -7,6 +7,8 @@ pub const DEFAULT_HEIGHT: i32 = 100;
 
 pub const DEFAULT_VOLUME_STEP: f32 = 0.05;
 
+pub const DEFAULT_ICON_SIZE: i32 = 36;
+
 /// Configuration for the audio widget.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -23,6 +25,12 @@ pub struct AudioWidgetConfig {
     pub show_device_label: bool,
     /// Whether to allow volume over 100%.
     pub allow_overdrive: bool,
+    /// Spacing between child widgets inside the audio widget.
+    pub spacing: i32,
+    /// Maximum width in characters for the device label.
+    pub max_width_chars: i32,
+    /// Size of the audio icon in pixels.
+    pub icon_size: i32,
 }
 
 impl AudioWidgetConfig {
@@ -40,6 +48,9 @@ impl Default for AudioWidgetConfig {
             show_volume_bar: true,
             show_device_label: true,
             allow_overdrive: false,
+            spacing: 0,
+            max_width_chars: 24,
+            icon_size: DEFAULT_ICON_SIZE,
         }
     }
 }

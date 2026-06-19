@@ -5,7 +5,6 @@ use crate::display::AreaSize;
 use crate::instance::LauncherInstance;
 use crate::service_manager::ServiceManager;
 use gtk4::Application;
-use gtk4::IconTheme;
 use gtk4::gdk::Display;
 use gtk4::gdk::Monitor;
 use gtk4::gio;
@@ -85,6 +84,11 @@ impl LauncherHost {
                 Err(e) => {
                     error!("Failed to register gresource: {e}");
                 }
+            }
+
+            // Register Nerd Font icons as GTK GResource for native icon loading
+            if let Err(e) = nerd_gtk_icons::register_icons() {
+                error!("Failed to register nerd font icons: {e}");
             }
 
             create_css_provider();

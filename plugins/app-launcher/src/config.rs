@@ -5,12 +5,15 @@ use smearor_app_launcher_model::SmearorWindowRotationWrapper;
 
 pub const DEFAULT_WIDTH: i32 = 100;
 
-pub const DEFAULT_ICON_SIZE: i32 = 24;
+pub const DEFAULT_ICON_SIZE: i32 = 36;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppLauncherConfig {
     /// The path to the `.desktop` file.
     pub desktop_file_path: String,
+    /// Optional override for the icon name.
+    #[serde(default)]
+    pub icon: Option<String>,
     /// The smearor window rotation wrapper configuration
     pub wrapper: Option<SmearorWindowRotationWrapper>,
     /// Button width
@@ -40,6 +43,9 @@ pub struct AppLauncherConfig {
     /// Target instance for long-press message
     #[serde(default)]
     pub longpress_instance: Option<String>,
+    /// Spacing between child widgets inside the app launcher button.
+    #[serde(default)]
+    pub spacing: i32,
 }
 
 impl AppLauncherConfig {
