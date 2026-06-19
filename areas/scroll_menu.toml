@@ -1,0 +1,25 @@
+# Reusable scroll menu area template
+# Include this in any area that needs a scrollable submenu.
+#
+# Usage in config.toml:
+# [my_area]
+# include = "areas/scroll_menu.toml"
+# open_transition = "SlideUp"  # optionally override
+# plugins = [
+#     { id = "my_area_close", path = "target/release/libsmearor_button_widget.so" },
+#     { id = "my_button", path = "target/release/libsmearor_button_widget.so" }
+# ]
+#
+# [my_area_close]
+# text = ""
+# icon = "window-close-symbolic"
+# icon_only = true
+# click_topic = "area.close"
+# click_payload = { area_id = "my_area" }
+# css_classes = ["close-button"]
+
+area_type = "scroll"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
