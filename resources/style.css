@@ -1,3 +1,24 @@
+@font-face {
+    font-family: 'NerdFontsSymbolsOnly';
+    src: url("resource:///io/smearor/fonts/SymbolsNerdFont-Regular.ttf");
+}
+
+@font-face {
+    font-family: 'NerdFontsSymbolsOnlyMono';
+    src: url("resource:///io/smearor/fonts/SymbolsNerdFontMono-Regular.ttf");
+}
+
+/* CSS helper classes for using Nerd Font symbols */
+.nerd-icon {
+    font-family: 'NerdFontsSymbolsOnly';
+    font-size: 1.5em;
+}
+
+.nerd-icon-mono {
+    font-family: 'NerdFontsSymbolsOnlyMono';
+    font-size: 1.5em;
+}
+
 @keyframes longpress-fill {
     from {
         background-size: 0% 100%;

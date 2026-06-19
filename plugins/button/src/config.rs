@@ -1,9 +1,9 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-pub const DEFAULT_WIDTH: i32 = 120;
+pub const DEFAULT_WIDTH: i32 = 100;
 
-pub const DEFAULT_ICON_SIZE: i32 = 48;
+pub const DEFAULT_ICON_SIZE: i32 = 24;
 
 /// Configuration for a button widget
 #[derive(Debug, Clone, Deserialize)]

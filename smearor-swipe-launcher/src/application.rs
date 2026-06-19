@@ -77,16 +77,17 @@ impl LauncherHost {
         self.gtk_app.connect_activate(move |app| {
             trace!("GTK application activated");
 
-            create_css_provider();
-
+            // Register GResources first so CSS @font-face can resolve resource:// URLs
             match gio::resources_register_include!("compiled.gresource") {
                 Ok(_) => {
-                    IconTheme::default().add_resource_path("/io/smearor/icons");
+                    // IconTheme::default().add_resource_path("/io/smearor/icons");
                 }
                 Err(e) => {
                     error!("Failed to register gresource: {e}");
                 }
             }
+
+            create_css_provider();
 
             let instances = if let Ok(instances) = self_clone.instances.lock() {
                 instances.values().map(|i| (i.instance_id.clone(), i.build_window(app))).collect::<Vec<_>>()

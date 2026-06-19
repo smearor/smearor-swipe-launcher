@@ -136,7 +136,8 @@ follows_rotation = true
 [games_menu_button]
 defaults = "menu_button"
 text = "Games"
-icon = "applications-games-symbolic"
+icon = "nf-fa-gamepad"
+icon_size = 24
 tooltip = "Open games menu"
 click_payload = { area_id = "games_area" }
 longpress_payload = { area_id = "games_area" }
@@ -225,7 +226,8 @@ auto_color_mask = true
 [tools_menu_button]
 defaults = "menu_button"
 text = "Tools"
-icon = "applications-engineering-symbolic"
+icon = "nf-fae-tools"
+icon_size = 24
 tooltip = "Open tools menu"
 click_payload = { area_id = "tools_area" }
 longpress_payload = { area_id = "tools_area" }

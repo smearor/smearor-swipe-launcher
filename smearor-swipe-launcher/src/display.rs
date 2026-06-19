@@ -7,7 +7,7 @@ use gtk4::prelude::MonitorExt;
 use smearor_wrot_rotation::SmearorRotation;
 
 pub const DEFAULT_WIDTH: i32 = 800;
-pub const DEFAULT_HEIGHT: i32 = 120;
+pub const DEFAULT_HEIGHT: i32 = 100;
 
 #[derive(Debug, Clone, Copy)]
 pub struct AreaSize {

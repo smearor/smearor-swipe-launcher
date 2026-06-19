@@ -20,6 +20,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
+use smearor_swipe_launcher_plugin_api::resolve_nerd_font;
 use tracing::debug;
 
 pub struct ButtonWidget {
@@ -81,9 +82,18 @@ impl WidgetBuilder for ButtonWidget {
             .build();
 
         if let Some(icon_name) = &self.config.icon {
-            let icon = Image::from_icon_name(icon_name);
-            icon.set_pixel_size(self.config.icon_size);
-            button_box.append(&icon);
+            if icon_name.starts_with("nf-") {
+                if let Some(glyph) = resolve_nerd_font(icon_name) {
+                    let markup = format!(r#"<span font_desc="NerdFontsSymbolsOnly {}">{}</span>"#, self.config.icon_size, glyph);
+                    let icon_label = Label::new(None);
+                    icon_label.set_markup(&markup);
+                    button_box.append(&icon_label);
+                }
+            } else {
+                let icon = Image::from_icon_name(icon_name);
+                icon.set_pixel_size(self.config.icon_size);
+                button_box.append(&icon);
+            }
         }
 
         if !self.config.icon_only || self.config.icon.is_none() {

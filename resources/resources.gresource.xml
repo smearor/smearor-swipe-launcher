@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-    <gresource prefix="/io/smearor/icons">
-        <file preprocess="xml-stripblanks" alias="scalable/actions/puzzle-piece-symbolic.svg">puzzle-piece-symbolic.svg</file>
+    <gresource prefix="/io/smearor/fonts">
+        <file alias="SymbolsNerdFont-Regular.ttf">NerdFontsSymbolsOnly/SymbolsNerdFont-Regular.ttf</file>
+        <file alias="SymbolsNerdFontMono-Regular.ttf">NerdFontsSymbolsOnly/SymbolsNerdFontMono-Regular.ttf</file>
     </gresource>
 </gresources>

@@ -1,9 +1,9 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-pub const DEFAULT_WIDTH: i32 = 120;
+pub const DEFAULT_WIDTH: i32 = 100;
 
-pub const DEFAULT_HEIGHT: i32 = 120;
+pub const DEFAULT_HEIGHT: i32 = 100;
 
 /// Configuration for the notifications widget.
 #[derive(Debug, Clone, Deserialize)]

@@ -6,7 +6,7 @@ pub const DEFAULT_FORMAT: &str = "[hour]:[minute]:[second]";
 
 pub const DEFAULT_FORMAT_2: &str = "[day].[month].[year]";
 
-pub const DEFAULT_WIDTH: i32 = 120;
+pub const DEFAULT_WIDTH: i32 = 100;
 
 #[derive(Debug, Clone, Deserialize, TypedBuilder)]
 #[serde(default)]

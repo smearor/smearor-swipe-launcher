@@ -3,9 +3,9 @@ use serde::Serialize;
 use serde_json::Value;
 use smearor_app_launcher_model::SmearorWindowRotationWrapper;
 
-pub const DEFAULT_WIDTH: i32 = 120;
+pub const DEFAULT_WIDTH: i32 = 100;
 
-pub const DEFAULT_ICON_SIZE: i32 = 48;
+pub const DEFAULT_ICON_SIZE: i32 = 24;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppLauncherConfig {
