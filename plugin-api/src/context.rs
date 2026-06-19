@@ -26,6 +26,7 @@ pub struct MessageBrokerHandle {
         type_id: u64,
         payload: *mut core::ffi::c_void,
         destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
+        clone_payload: Option<extern "C" fn(*mut core::ffi::c_void) -> *mut core::ffi::c_void>,
     ),
 }
 
@@ -87,6 +88,7 @@ pub unsafe extern "C" fn dummy_broker_send(
     _type_id: u64,
     _payload: *mut core::ffi::c_void,
     _destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
+    _clone_payload: Option<extern "C" fn(*mut core::ffi::c_void) -> *mut core::ffi::c_void>,
 ) {
 }
 
@@ -118,6 +120,7 @@ impl FfiCoreContext {
                 envelope.type_id,
                 envelope.payload,
                 envelope.destroy_payload,
+                envelope.clone_payload,
             );
         }
         // Note: envelope.sender_id and envelope.target_instance_id are dropped here

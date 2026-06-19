@@ -30,7 +30,6 @@ impl LauncherInstance {
         let sender_id = envelope.sender_id.to_string();
         let topic = envelope.topic.to_string();
 
-        println!("HOST handle_message: sender={} topic={} type_id={}", sender_id, topic, envelope.type_id);
         trace!("Event Broker: Received message from '{}' on topic '{}' (type_id={})", sender_id, topic, envelope.type_id);
 
         // Rate-limit command topics to protect the broker from burst overload.
@@ -112,6 +111,16 @@ impl LauncherInstance {
         if topic.starts_with("plugins.broadcast.") {
             println!("HOST broadcasting to all plugins");
             trace!("Broadcasting message to all loaded plugins");
+            for r in self.plugin_manager.plugins.iter() {
+                let plugin = r.value();
+                unsafe {
+                    plugin.on_message(envelope.clone());
+                }
+            }
+        }
+
+        // Broadcast status updates (e.g. audio.status, mpris.status) to all plugins
+        if topic.ends_with(".status") {
             for r in self.plugin_manager.plugins.iter() {
                 let plugin = r.value();
                 unsafe {

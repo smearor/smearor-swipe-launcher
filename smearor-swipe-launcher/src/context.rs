@@ -61,6 +61,7 @@ unsafe extern "C" fn broker_send_wrapper(
     type_id: u64,
     payload: *mut core::ffi::c_void,
     destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
+    clone_payload: Option<extern "C" fn(*mut core::ffi::c_void) -> *mut core::ffi::c_void>,
 ) {
     if context.is_null() {
         return;
@@ -84,7 +85,7 @@ unsafe extern "C" fn broker_send_wrapper(
             type_id,
             payload,
             destroy_payload,
-            clone_payload: None,
+            clone_payload,
         };
         if let Err(e) = ctx.sender.send(envelope) {
             error!("Failed to send message to core: {}", e);
