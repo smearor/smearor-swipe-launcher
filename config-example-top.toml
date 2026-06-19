@@ -28,7 +28,7 @@ plugins = [
 [open_top_area_button]
 text = "Open Example 2 Area"
 icon = "panel-top-symbolic"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_payload = { area_id = "top_area" }
 longpress_topic = "area.close"
@@ -51,7 +51,7 @@ css_classes = ["close-button"]
 [open_bottom_area_button]
 text = "Open Example 1 Area"
 icon = "panel-bottom-symbolic"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_instance = "bottom"
 click_payload = { area_id = "bottom_area" }
@@ -65,7 +65,7 @@ css_classes = ["menu-button", "primary"]
 [open_left_area_button]
 text = "Open Example 3 Area"
 icon = "panel-left-symbolic"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_instance = "left"
 click_payload = { area_id = "left_area" }
@@ -79,7 +79,7 @@ css_classes = ["menu-button", "primary"]
 [open_right_area_button]
 text = "Open Example 4 Area"
 icon = "panel-right-symbolic"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_instance = "right"
 click_payload = { area_id = "right_area" }

@@ -114,7 +114,7 @@ follows_rotation = true
 text = "Games"
 icon = "applications-games-symbolic"
 tooltip = "Open games menu"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_payload = { area_id = "games_area" }
 longpress_topic = "area.close"
@@ -151,7 +151,7 @@ css_classes = ["close-button"]
 text = "Puzzle"
 icon = "puzzle-piece-symbolic"
 tooltip = "Puzzle games"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_payload = { area_id = "puzzle_games_area" }
 longpress_topic = "area.close"
@@ -200,7 +200,7 @@ follows_rotation = true
 text = "Board"
 icon = "board-games-symbolic"
 tooltip = "Board games"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_payload = { area_id = "board_games_area" }
 longpress_topic = "area.close"
@@ -241,7 +241,7 @@ auto_color_mask = true
 text = "Tools"
 icon = "applications-engineering-symbolic"
 tooltip = "Open tools menu"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_payload = { area_id = "tools_area" }
 longpress_topic = "area.close"
@@ -287,7 +287,7 @@ css_classes = ["close-button"]
 text = "Video"
 icon = "multimedia-video-player-symbolic"
 tooltip = "Video Players"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_payload = { area_id = "video_area" }
 longpress_topic = "area.close"
@@ -327,7 +327,7 @@ css_classes = ["close-button"]
 text = "Music"
 icon = "music-app-symbolic"
 tooltip = "Music Players"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_payload = { area_id = "music_area" }
 longpress_topic = "area.close"
@@ -373,7 +373,7 @@ css_classes = ["close-button"]
 text = "Web"
 icon = "applications-internet-symbolic"
 tooltip = "Web"
-icon_only = false
+icon_only = true
 click_topic = "area.open"
 click_payload = { area_id = "web_area" }
 longpress_topic = "area.close"
