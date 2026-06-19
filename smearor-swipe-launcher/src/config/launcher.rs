@@ -12,7 +12,6 @@ use serde_json::Value;
 use serde_json::json;
 use smearor_model_area::AreaConfig;
 use smearor_model_area::AreaType;
-use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use std::collections::HashMap;
 use tracing::warn;
@@ -33,10 +32,6 @@ pub struct SwipeLauncherConfig {
     /// Alternative layout profiles for different contexts
     #[serde(default)]
     pub profiles: Vec<LayoutProfile>,
-
-    /// Services to load
-    #[serde(default)]
-    pub services: Vec<PluginEntry>,
 
     /// Area configurations and plugin configs keyed by ID
     #[serde(flatten)]

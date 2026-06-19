@@ -58,11 +58,3 @@ show_descriptions = true
 show_percentage = true
 low_battery_threshold = 20
 
-# Services to load
-services = [
-    { id = "system-tray" }
-]
-
-# Service-specific configurations
-[system-tray]
-show_notifications = true

@@ -110,7 +110,8 @@ impl AreaManager {
 
         // Unload plugins for this area
         for plugin_entry in &managed_area.config.plugins {
-            self.plugin_manager.unload_plugin(&plugin_entry.id);
+            let namespaced_id = self.plugin_manager.namespaced_plugin_id(&plugin_entry.id);
+            self.plugin_manager.unload_plugin(&namespaced_id);
         }
 
         // Animate removal before cleanup
@@ -173,7 +174,8 @@ impl AreaManager {
 
         // Load plugins for this transient area
         for plugin_entry in &config.plugins {
-            if !self.plugin_manager.plugins.contains_key(&plugin_entry.id) {
+            let namespaced_id = self.plugin_manager.namespaced_plugin_id(&plugin_entry.id);
+            if !self.plugin_manager.plugins.contains_key(&namespaced_id) {
                 let plugin_config = self.config.plugin_config(&plugin_entry.id);
                 trace!("Loading plugin {} for transient area {}", plugin_entry.id, area_id);
                 if let Err(e) = self.plugin_manager.load_plugin(plugin_entry, plugin_config) {
@@ -237,11 +239,13 @@ impl AreaManager {
         Ok(())
     }
 
-    /// Find the overlay and widget of the area that contains a specific plugin
+    /// Find the overlay and widget of the area that contains a specific plugin.
+    /// `plugin_id` may be namespaced (`instance_id:plugin_id`); the raw ID is extracted.
     fn find_area_overlay_and_widget_containing_plugin(&self, plugin_id: &str) -> (Option<Overlay>, Option<Widget>) {
+        let raw_plugin_id = plugin_id.rsplit_once(':').map(|(_, id)| id).unwrap_or(plugin_id);
         for managed_area in &self.areas {
             // Check if this area contains the plugin (including transient areas)
-            if managed_area.config.plugins.iter().any(|p| p.id == plugin_id) {
+            if managed_area.config.plugins.iter().any(|p| p.id == raw_plugin_id) {
                 return (managed_area.overlay.clone(), Some(managed_area.widget.clone()));
             }
         }
@@ -333,7 +337,8 @@ impl AreaManager {
 
     fn add_plugins(&self, area_config: &AreaConfig, container: &GtkBox) {
         for plugin_entry in &area_config.plugins {
-            let Some(plugin) = self.plugin_manager.plugins.get(&plugin_entry.id) else {
+            let namespaced_id = self.plugin_manager.namespaced_plugin_id(&plugin_entry.id);
+            let Some(plugin) = self.plugin_manager.plugins.get(&namespaced_id) else {
                 continue;
             };
             let widget = unsafe {

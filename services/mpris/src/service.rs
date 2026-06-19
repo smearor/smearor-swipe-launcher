@@ -126,10 +126,12 @@ impl MprisService {
                 let payload_ptr = Box::into_raw(Box::new(status)) as *mut core::ffi::c_void;
                 let envelope = FfiEnvelope {
                     sender_id: stabby::string::String::from(meta_clone.id.clone()),
+                    target_instance_id: stabby::string::String::from("*"),
                     topic: stabby::string::String::from(MprisStatusMessage::topic()),
                     type_id: MprisStatusMessage::TYPE_ID,
                     payload: payload_ptr,
                     destroy_payload: Some(destroy_mpris_status),
+                    clone_payload: Some(clone_mpris_status),
                 };
                 if let Some(ctx) = &core_context_clone {
                     ctx.send_message(envelope);
@@ -532,6 +534,14 @@ async fn run_mpris_async(
         }
     }
     debug!("MPRIS Service: MPRIS async task exiting");
+}
+
+extern "C" fn clone_mpris_status(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    let status = unsafe { &*(ptr as *const MprisStatusMessage) };
+    Box::into_raw(Box::new(status.clone())) as *mut core::ffi::c_void
 }
 
 extern "C" fn destroy_mpris_status(ptr: *mut core::ffi::c_void) {

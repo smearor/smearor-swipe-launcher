@@ -41,7 +41,8 @@ impl LoadedService {
             let config_len = config_bytes.len();
 
             let service_id = service_entry.id.clone();
-            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current(), service_id.clone());
+            // Services are shared across all instances, so instance_id is always empty.
+            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current(), service_id.clone(), "");
             let ffi_context = core_context.into_ffi_context();
 
             let ffi_context_ptr = Box::into_raw(Box::new(ffi_context)) as *mut core::ffi::c_void;

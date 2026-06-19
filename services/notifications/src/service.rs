@@ -323,10 +323,12 @@ fn send_status(meta: &PluginMeta, core_context: &FfiCoreContext, status: Notific
     let payload_ptr = Box::into_raw(Box::new(status)) as *mut core::ffi::c_void;
     let envelope = FfiEnvelope {
         sender_id: stabby::string::String::from(meta.id.clone()),
+        target_instance_id: stabby::string::String::from("*"),
         topic: stabby::string::String::from(NotificationStatusMessage::topic()),
         type_id: NotificationStatusMessage::TYPE_ID,
         payload: payload_ptr,
         destroy_payload: Some(destroy_notification_status),
+        clone_payload: Some(clone_notification_status),
     };
     core_context.send_message(envelope);
 }
@@ -688,6 +690,14 @@ async fn run_notification_async(
 
     let _ = conn;
     debug!("Notification Service: notification async task exiting");
+}
+
+extern "C" fn clone_notification_status(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    let status = unsafe { &*(ptr as *const NotificationStatusMessage) };
+    Box::into_raw(Box::new(status.clone())) as *mut core::ffi::c_void
 }
 
 extern "C" fn destroy_notification_status(ptr: *mut core::ffi::c_void) {

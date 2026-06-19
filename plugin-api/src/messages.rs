@@ -49,13 +49,35 @@ pub extern "C" fn default_destroy_payload(ptr: *mut core::ffi::c_void) {
 /// The Host constructs this and passes it to plugin/service VTables.
 /// Receivers down-cast `payload` using the stable `type_id`.
 #[stabby::stabby(no_opt)]
-#[derive(Clone)]
 pub struct FfiEnvelope {
     pub sender_id: stabby::string::String,
+    pub target_instance_id: stabby::string::String,
     pub topic: stabby::string::String,
     pub type_id: u64,
     pub payload: *mut core::ffi::c_void,
     pub destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
+    pub clone_payload: Option<extern "C" fn(*mut core::ffi::c_void) -> *mut core::ffi::c_void>,
+}
+
+impl Clone for FfiEnvelope {
+    fn clone(&self) -> Self {
+        let cloned_payload = if self.payload.is_null() {
+            std::ptr::null_mut()
+        } else if let Some(clone) = self.clone_payload {
+            (clone)(self.payload)
+        } else {
+            std::ptr::null_mut()
+        };
+        FfiEnvelope {
+            sender_id: self.sender_id.clone(),
+            target_instance_id: self.target_instance_id.clone(),
+            topic: self.topic.clone(),
+            type_id: self.type_id,
+            payload: cloned_payload,
+            destroy_payload: self.destroy_payload,
+            clone_payload: self.clone_payload,
+        }
+    }
 }
 
 /// Router trait for dispatching `FfiEnvelope` to the correct handler.
@@ -132,14 +154,20 @@ impl MessageBroadcasterInner {
     /// `#[stabby::stabby]` struct. The payload is boxed and sent as a raw
     /// pointer with the correct `type_id`.
     pub fn broadcast_message<T: Clone + TypedMessage>(&self, topic: &str, payload: &T) {
+        self.broadcast_message_to_instance("", topic, payload);
+    }
+
+    pub fn broadcast_message_to_instance<T: Clone + TypedMessage>(&self, target_instance_id: &str, topic: &str, payload: &T) {
         if let Some(ctx) = &self.core_context {
             let payload_ptr = Box::into_raw(Box::new(payload.clone())) as *mut core::ffi::c_void;
             let envelope = FfiEnvelope {
                 sender_id: stabby::string::String::from(self.meta.id.clone()),
+                target_instance_id: stabby::string::String::from(target_instance_id),
                 topic: stabby::string::String::from(topic),
                 type_id: T::TYPE_ID,
                 payload: payload_ptr,
                 destroy_payload: Some(default_destroy_payload),
+                clone_payload: None,
             };
             ctx.send_message(envelope);
         }
@@ -161,10 +189,12 @@ impl MessageBroadcasterInner {
             let boxed = Box::into_raw(Box::new(payload.to_string())) as *mut core::ffi::c_void;
             let envelope = FfiEnvelope {
                 sender_id: stabby::string::String::from(self.meta.id.clone()),
+                target_instance_id: stabby::string::String::from(""),
                 topic: stabby::string::String::from(topic),
                 type_id: generate_type_id("std::string::String"),
                 payload: boxed,
                 destroy_payload: Some(default_destroy_payload),
+                clone_payload: None,
             };
             ctx.send_message(envelope);
         }

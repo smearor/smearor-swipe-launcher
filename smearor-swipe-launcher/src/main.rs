@@ -6,6 +6,7 @@ mod context;
 mod css_provider;
 mod display;
 mod error;
+mod instance;
 mod json_converter;
 mod messages;
 mod plugin;
@@ -14,7 +15,7 @@ mod service;
 mod service_manager;
 mod window;
 
-pub use application::LauncherApplication;
+pub use application::LauncherHost;
 pub use args::launcher::SwipeLauncherArguments;
 pub use config::launcher::SwipeLauncherConfig;
 pub use plugin::LoadedPlugin;
@@ -26,7 +27,6 @@ use clap::Parser;
 use gtk4::Application;
 use miette::IntoDiagnostic;
 use miette::Result;
-use std::sync::Arc;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
@@ -41,30 +41,31 @@ async fn main() -> Result<()> {
 
     tracing::subscriber::set_global_default(subscriber).into_diagnostic()?;
 
-    debug!("Starting smearor-swipe-launcher with config file: {:?}", args.config);
-
-    let config = args.load_config_from_file()?;
-    let total_plugins: usize = config
-        .areas
-        .iter()
-        .filter_map(|area_id| config.get_area_config(area_id))
-        .map(|area_config| area_config.plugins.len())
-        .sum();
-    debug!("Loaded configuration with {} plugins across {} areas", total_plugins, config.areas.len());
-
-    let initial_rotation = &config.launcher.rotation.rotation.unwrap_or_default();
-    debug!("Initial rotation: {} degrees", initial_rotation.to_degrees());
+    debug!("Starting smearor-swipe-launcher with config files: {:?}", args.config);
 
     let gtk_app = Application::builder().application_id("com.smearor.swipe-launcher").build();
 
-    let app = Arc::new(LauncherApplication::new(config.clone(), gtk_app.clone()));
-    app.load_services();
-    app.load_plugins();
+    let host = LauncherHost::new(gtk_app.clone());
+
+    // Load shared services from dedicated config
+    let services_config = args.load_services_config()?;
+    host.load_services(&services_config);
+
+    // Create one instance per config file
+    for (index, config_path) in args.config.iter().enumerate() {
+        let config = args.load_config_from_file(config_path)?;
+        let instance_id = args
+            .instance_id
+            .get(index)
+            .cloned()
+            .unwrap_or_else(|| config_path.file_stem().unwrap_or_default().to_string_lossy().to_string());
+        host.create_instance(instance_id, config);
+    }
 
     debug!("Application initialized successfully");
 
-    app.clone().build_ui(&config)?;
-    app.run();
+    host.build_ui()?;
+    host.run();
 
     Ok(())
 }

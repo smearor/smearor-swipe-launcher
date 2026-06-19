@@ -12,13 +12,15 @@ use tracing::trace;
 pub struct PluginManager {
     pub(crate) plugins: DashMap<String, LoadedPlugin>,
     pub(crate) message_sender: UnboundedSender<FfiEnvelope>,
+    pub(crate) instance_id: String,
 }
 
 impl PluginManager {
-    pub fn new(message_sender: UnboundedSender<FfiEnvelope>) -> Self {
+    pub fn new(message_sender: UnboundedSender<FfiEnvelope>, instance_id: String) -> Self {
         PluginManager {
             plugins: DashMap::new(),
             message_sender,
+            instance_id,
         }
     }
 
@@ -26,13 +28,27 @@ impl PluginManager {
         self.plugins.iter().map(|id| id.key().to_string()).collect()
     }
 
+    /// Returns the namespaced plugin ID for a raw plugin ID.
+    pub fn namespaced_plugin_id(&self, plugin_id: &str) -> String {
+        if self.instance_id.is_empty() {
+            plugin_id.to_string()
+        } else {
+            format!("{}:{}", self.instance_id, plugin_id)
+        }
+    }
+
     pub fn load_plugin(&self, plugin_entry: &PluginEntry, config: PluginConfig) -> Result<(), LauncherError> {
         trace!("Loading plugin {} from: {:?}", plugin_entry.id, plugin_entry.path);
 
-        let (actual_plugin_id, plugin) = LoadedPlugin::load(plugin_entry, &config, self.message_sender.clone())?;
+        let (plugin_id, plugin) = LoadedPlugin::load(plugin_entry, &config, self.message_sender.clone(), &self.instance_id)?;
 
-        self.plugins.insert(actual_plugin_id.clone(), plugin);
-        debug!("Successfully loaded plugin: {}", actual_plugin_id);
+        let namespaced_id = if self.instance_id.is_empty() {
+            plugin_id
+        } else {
+            format!("{}:{}", self.instance_id, plugin_id)
+        };
+        self.plugins.insert(namespaced_id.clone(), plugin);
+        debug!("Successfully loaded plugin: {}", namespaced_id);
 
         Ok(())
     }

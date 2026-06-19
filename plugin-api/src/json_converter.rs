@@ -94,10 +94,12 @@ impl JsonConverterRegistry {
 
         Some(FfiEnvelope {
             sender_id: stabby::string::String::from(sender_id),
+            target_instance_id: stabby::string::String::from(""),
             topic: stabby::string::String::from(topic),
             type_id: entry.type_id,
             payload: ptr,
             destroy_payload: Some(entry.destroy),
+            clone_payload: None,
         })
     }
 }

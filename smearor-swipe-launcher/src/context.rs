@@ -27,7 +27,12 @@ pub struct SimpleCoreContext {
 }
 
 impl SimpleCoreContext {
-    pub fn new(sender: UnboundedSender<FfiEnvelope>, handle: tokio::runtime::Handle, sender_id: String) -> Self {
+    pub fn new(sender: UnboundedSender<FfiEnvelope>, handle: tokio::runtime::Handle, plugin_id: String, instance_id: &str) -> Self {
+        let sender_id = if instance_id.is_empty() {
+            plugin_id
+        } else {
+            format!("{}:{}", instance_id, plugin_id)
+        };
         SimpleCoreContext { sender, handle, sender_id }
     }
 
@@ -52,6 +57,7 @@ impl SimpleCoreContext {
 unsafe extern "C" fn broker_send_wrapper(
     context: *const core::ffi::c_void,
     topic_ptr: *const core::ffi::c_char,
+    target_instance_id_ptr: *const core::ffi::c_char,
     type_id: u64,
     payload: *mut core::ffi::c_void,
     destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
@@ -64,14 +70,21 @@ unsafe extern "C" fn broker_send_wrapper(
     } else {
         unsafe { std::ffi::CStr::from_ptr(topic_ptr).to_string_lossy().into_owned() }
     };
+    let target_instance_id = if target_instance_id_ptr.is_null() {
+        String::new()
+    } else {
+        unsafe { std::ffi::CStr::from_ptr(target_instance_id_ptr).to_string_lossy().into_owned() }
+    };
     unsafe {
         let ctx = &*(context as *const SimpleCoreContext);
         let envelope = FfiEnvelope {
             sender_id: stabby::string::String::from(ctx.sender_id.clone()),
+            target_instance_id: stabby::string::String::from(target_instance_id),
             topic: stabby::string::String::from(topic),
             type_id,
             payload,
             destroy_payload,
+            clone_payload: None,
         };
         if let Err(e) = ctx.sender.send(envelope) {
             error!("Failed to send message to core: {}", e);

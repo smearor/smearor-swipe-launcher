@@ -24,7 +24,12 @@ pub struct LoadedPlugin {
 }
 
 impl LoadedPlugin {
-    pub fn load(plugin_entry: &PluginEntry, config: &PluginConfig, sender: UnboundedSender<FfiEnvelope>) -> Result<(String, Self), LauncherError> {
+    pub fn load(
+        plugin_entry: &PluginEntry,
+        config: &PluginConfig,
+        sender: UnboundedSender<FfiEnvelope>,
+        instance_id: &str,
+    ) -> Result<(String, Self), LauncherError> {
         unsafe {
             let path = PathBuf::from(&plugin_entry.path);
             let library = Arc::new(Library::new(&path)?);
@@ -42,7 +47,7 @@ impl LoadedPlugin {
             let config_len = config_bytes.len();
 
             let plugin_id = plugin_entry.id.clone();
-            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current(), plugin_id.clone());
+            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current(), plugin_id.clone(), instance_id);
             let ffi_context = core_context.into_ffi_context();
 
             let ffi_context_ptr = Box::into_raw(Box::new(ffi_context)) as *mut core::ffi::c_void;

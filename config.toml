@@ -4,24 +4,6 @@
 
 areas = ["left_area", "scroll_band", "right_area"]
 
-### Services to load
-
-[[services]]
-id = "app_launcher"
-path = "target/release/libsmearor_app_launcher_service.so"
-
-[[services]]
-id = "audio"
-path = "target/release/libsmearor_audio_service.so"
-
-[[services]]
-id = "mpris"
-path = "target/release/libsmearor_mpris_service.so"
-
-[[services]]
-id = "notifications"
-path = "target/release/libsmearor_notifications_service.so"
-
 ### Configure the app launcher service
 
 [app_launcher]

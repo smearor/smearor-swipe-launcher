@@ -22,6 +22,7 @@ pub struct MessageBrokerHandle {
     pub send: unsafe extern "C" fn(
         context: *const core::ffi::c_void,
         topic_ptr: *const core::ffi::c_char,
+        target_instance_id_ptr: *const core::ffi::c_char,
         type_id: u64,
         payload: *mut core::ffi::c_void,
         destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
@@ -82,6 +83,7 @@ pub struct PluginExecutor {
 pub unsafe extern "C" fn dummy_broker_send(
     _context: *const core::ffi::c_void,
     _topic_ptr: *const core::ffi::c_char,
+    _target_instance_id_ptr: *const core::ffi::c_char,
     _type_id: u64,
     _payload: *mut core::ffi::c_void,
     _destroy_payload: Option<extern "C" fn(*mut core::ffi::c_void)>,
@@ -107,10 +109,18 @@ impl FfiCoreContext {
     /// broker's raw function pointer.
     pub fn send_message(&self, envelope: FfiEnvelope) {
         let topic = std::ffi::CString::new(envelope.topic.to_string()).unwrap_or_default();
+        let target_instance_id = std::ffi::CString::new(envelope.target_instance_id.to_string()).unwrap_or_default();
         unsafe {
-            (self.broker.send)(self.broker.context, topic.as_ptr(), envelope.type_id, envelope.payload, envelope.destroy_payload);
+            (self.broker.send)(
+                self.broker.context,
+                topic.as_ptr(),
+                target_instance_id.as_ptr(),
+                envelope.type_id,
+                envelope.payload,
+                envelope.destroy_payload,
+            );
         }
-        // Note: envelope.sender_id is dropped here
+        // Note: envelope.sender_id and envelope.target_instance_id are dropped here
     }
 }
 
