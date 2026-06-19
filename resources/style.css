@@ -313,6 +313,16 @@ scrolledwindow {
     background-color: #00a1e433;
 }
 
+.menu-button.glow-blue:hover {
+    box-shadow: 0 0 15px #00a1e4cc, 0 0 30px #00a1e466;
+    transition: box-shadow 0.3s ease-in-out;
+}
+
+.menu-button.glow-blue.longpress-active {
+    box-shadow: 0 0 25px #00a1e4ff, 0 0 50px #00a1e4cc, 0 0 75px #00a1e499;
+    transition: box-shadow 0.2s ease-in-out;
+}
+
 .menu-button image {
     -gtk-icon-size: 48px;
     min-width: 48px;

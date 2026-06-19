@@ -117,7 +117,11 @@ impl WidgetBuilder for ButtonWidget {
         let long_press_instance = self.config.longpress_instance.clone();
         let long_press_gesture = GestureLongPress::new();
         let message_broadcaster = self.get_broadcaster();
+        let button_weak = button.downgrade();
         long_press_gesture.connect_pressed(move |gesture, _, _| {
+            if let Some(btn) = button_weak.upgrade() {
+                btn.add_css_class("longpress-active");
+            }
             if let (Some(topic), Some(payload)) = (long_press_topic.clone(), long_press_payload.clone()) {
                 let payload_str = payload.to_string();
                 if let Some(instance) = long_press_instance.clone() {
@@ -126,6 +130,12 @@ impl WidgetBuilder for ButtonWidget {
                     message_broadcaster.broadcast_string(&topic, &payload_str);
                 }
                 gesture.set_state(EventSequenceState::Claimed);
+            }
+        });
+        let button_weak = button.downgrade();
+        long_press_gesture.connect_cancelled(move |_gesture| {
+            if let Some(btn) = button_weak.upgrade() {
+                btn.remove_css_class("longpress-active");
             }
         });
         button.add_controller(long_press_gesture);

@@ -17,7 +17,7 @@ rotation = 0
 rotation = 0
 layer = "top"
 namespace = "smearor-swipe-launcher"
-#exclusive_zone = 100
+exclusive_zone = 150
 
 [layout]
 orientation = "horizontal"
@@ -65,7 +65,7 @@ plugins = [
 area_type = "fixed"
 width = 200
 plugins = [
-    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so" },
+    #    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so" },
     { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
 ]
 
@@ -87,11 +87,13 @@ desktop_file_path = "/usr/share/applications/nonexistent.desktop"
 
 [nautilus]
 desktop_file_path = "/usr/share/applications/org.gnome.Nautilus.desktop"
+icon_only = true
 [nautilus.wrapper]
 follows_rotation = true
 
 [loupe]
 desktop_file_path = "/usr/share/applications/org.gnome.Loupe.desktop"
+icon_only = true
 [loupe.wrapper]
 follows_rotation = true
 #auto_color_mask = true
@@ -101,6 +103,7 @@ follows_rotation = true
 
 [wike]
 desktop_file_path = "/usr/share/applications/com.github.hugolabe.Wike.desktop"
+icon_only = true
 [wike.wrapper]
 follows_rotation = true
 
@@ -121,7 +124,7 @@ longpress_topic = "area.close"
 longpress_payload = { area_id = "games_area" }
 enabled = true
 active = false
-css_classes = ["menu-button", "primary"]
+css_classes = ["menu-button", "glow-blue"]
 
 # Games submenu area configuration
 [games_area]
@@ -158,7 +161,7 @@ longpress_topic = "area.close"
 longpress_payload = { area_id = "puzzle_games_area" }
 enabled = true
 active = false
-css_classes = ["menu-button", "primary"]
+css_classes = ["menu-button", "glow-blue"]
 
 [puzzle_games_area]
 area_type = "scroll"
@@ -207,7 +210,7 @@ longpress_topic = "area.close"
 longpress_payload = { area_id = "board_games_area" }
 enabled = true
 active = false
-css_classes = ["menu-button", "primary"]
+css_classes = ["menu-button", "glow-blue"]
 
 [board_games_area]
 area_type = "scroll"
@@ -248,7 +251,7 @@ longpress_topic = "area.close"
 longpress_payload = { area_id = "tools_area" }
 enabled = true
 active = false
-css_classes = ["menu-button", "primary"]
+css_classes = ["menu-button", "glow-blue"]
 
 [tools_area]
 area_type = "scroll"
@@ -261,11 +264,13 @@ plugins = [
 
 [calculator]
 desktop_file_path = "/usr/share/applications/org.gnome.Calculator.desktop"
+icon_only = true
 [calculator.wrapper]
 follows_rotation = true
 
 [characters]
 desktop_file_path = "/usr/share/applications/org.gnome.Characters.desktop"
+icon_only = true
 [characters.wrapper]
 follows_rotation = true
 
@@ -294,7 +299,7 @@ longpress_topic = "area.close"
 longpress_payload = { area_id = "video_area" }
 enabled = true
 active = false
-css_classes = ["menu-button", "primary"]
+css_classes = ["menu-button", "glow-blue"]
 
 [video_area]
 area_type = "scroll"
@@ -306,6 +311,7 @@ plugins = [
 
 [totem]
 desktop_file_path = "/usr/share/applications/org.gnome.Totem.desktop"
+icon_only = true
 [totem.wrapper]
 follows_rotation = true
 
@@ -334,7 +340,7 @@ longpress_topic = "area.close"
 longpress_payload = { area_id = "music_area" }
 enabled = true
 active = false
-css_classes = ["menu-button", "primary"]
+css_classes = ["menu-button", "glow-blue"]
 
 [music_area]
 area_type = "scroll"
@@ -347,11 +353,13 @@ plugins = [
 
 [shortwave]
 desktop_file_path = "/usr/share/applications/de.haeckerfelix.Shortwave.desktop"
+icon_only = true
 [shortwave.wrapper]
 follows_rotation = true
 
 [amberol]
 desktop_file_path = "/usr/share/applications/io.bassi.Amberol.desktop"
+icon_only = true
 [amberol.wrapper]
 follows_rotation = true
 
@@ -380,7 +388,7 @@ longpress_topic = "area.close"
 longpress_payload = { area_id = "web_area" }
 enabled = true
 active = false
-css_classes = ["menu-button", "primary"]
+css_classes = ["menu-button", "glow-blue"]
 
 [web_area]
 area_type = "scroll"
@@ -393,11 +401,13 @@ plugins = [
 
 [firefox_nightly]
 desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
+icon_only = true
 [firefox_nightly.wrapper]
 follows_rotation = true
 
 [epiphany]
 desktop_file_path = "/usr/share/applications/org.gnome.Epiphany.desktop"
+icon_only = true
 [epiphany.wrapper]
 follows_rotation = true
 
@@ -440,11 +450,13 @@ css_classes = ["close-button"]
 
 [clocks]
 desktop_file_path = "/usr/share/applications/org.gnome.clocks.desktop"
+icon_only = true
 [clocks.wrapper]
 follows_rotation = true
 
 [calendar]
 desktop_file_path = "/usr/share/applications/org.gnome.Calendar.desktop"
+icon_only = true
 [calendar.wrapper]
 follows_rotation = true
 
