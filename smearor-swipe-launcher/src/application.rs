@@ -1,10 +1,13 @@
 use crate::config::launcher::SwipeLauncherConfig;
 use crate::config::services::ServicesConfig;
 use crate::css_provider::create_css_provider;
+use crate::display::AreaSize;
 use crate::instance::LauncherInstance;
 use crate::service_manager::ServiceManager;
 use gtk4::Application;
 use gtk4::IconTheme;
+use gtk4::gdk::Display;
+use gtk4::gdk::Monitor;
 use gtk4::gio;
 use gtk4::glib::MainContext;
 use gtk4::prelude::*;
@@ -67,6 +70,8 @@ impl LauncherHost {
     }
 
     pub fn build_ui(&self) -> miette::Result<()> {
+        self.calculate_coordinated_sizes();
+
         let self_clone = self.clone();
 
         self.gtk_app.connect_activate(move |app| {
@@ -110,6 +115,56 @@ impl LauncherHost {
         self.start_broker_loop()?;
 
         Ok(())
+    }
+
+    /// Calculate coordinated window sizes for instances on the same monitor.
+    ///
+    /// Long-side launchers (0° / 180°) take full monitor width and have priority.
+    /// Short-side launchers (90° / 270°) shrink their height so they do not
+    /// overlap into the reserved space of long-side launchers.
+    pub fn calculate_coordinated_sizes(&self) {
+        let Some(display) = Display::default() else {
+            return;
+        };
+        let monitors = display.monitors();
+        let Some(monitor) = monitors.item(0).and_then(|m| m.downcast::<Monitor>().ok()) else {
+            return;
+        };
+        let geometry = monitor.geometry();
+        let monitor_height = geometry.height();
+
+        let Ok(instances) = self.instances.lock() else {
+            return;
+        };
+
+        // Sum exclusive-zone heights of all long-side launchers on this monitor.
+        let mut long_side_height_sum = 0_i32;
+        for instance in instances.values() {
+            let rotation = instance.config.launcher.rotation.rotation().to_degrees();
+            let is_long_side = (rotation - 0.0).abs() < 0.1 || (rotation - 180.0).abs() < 0.1;
+            if is_long_side {
+                let height = instance.config.launcher.layer.exclusive_zone().unwrap_or(150);
+                long_side_height_sum += height;
+            }
+        }
+
+        // Adjust short-side launchers so they avoid the reserved bands.
+        for instance in instances.values() {
+            let rotation = instance.config.launcher.rotation.rotation().to_degrees();
+            let is_short_side = (rotation - 90.0).abs() < 0.1 || (rotation - 270.0).abs() < 0.1;
+            if is_short_side {
+                let default_size = instance.config.launcher.layer.exclusive_zone().unwrap_or(150);
+                let adjusted_height = (monitor_height - long_side_height_sum).max(default_size);
+                let coordinated_size = AreaSize::new(default_size, adjusted_height);
+                if let Ok(mut size) = instance.coordinated_size.lock() {
+                    *size = Some(coordinated_size);
+                }
+                debug!(
+                    "Instance {} short-side coordinated size: {}x{}",
+                    instance.instance_id, coordinated_size.width, coordinated_size.height
+                );
+            }
+        }
     }
 
     fn start_broker_loop(&self) -> miette::Result<()> {

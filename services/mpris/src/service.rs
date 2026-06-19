@@ -22,8 +22,6 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::Service;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 use tracing::debug;

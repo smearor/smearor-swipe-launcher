@@ -1,5 +1,6 @@
 use crate::area::area_manager::AreaManager;
 use crate::config::launcher::SwipeLauncherConfig;
+use crate::display::AreaSize;
 use crate::json_converter::JsonConverterRegistry;
 use crate::plugin_manager::PluginManager;
 use crate::window::create_window;
@@ -34,6 +35,7 @@ pub struct LauncherInstance {
     pub(crate) json_converter_registry: Arc<JsonConverterRegistry>,
     pub(crate) window: Mutex<Option<ApplicationWindow>>,
     pub(crate) instance_id: String,
+    pub(crate) coordinated_size: Mutex<Option<AreaSize>>,
 }
 
 impl LauncherInstance {
@@ -51,6 +53,7 @@ impl LauncherInstance {
             json_converter_registry,
             window: Mutex::new(None),
             instance_id,
+            coordinated_size: Mutex::new(None),
         }
     }
 
@@ -76,7 +79,8 @@ impl LauncherInstance {
         let rotation = config.launcher.rotation.clone();
         let layout_config = config.layout.clone();
 
-        let window = create_window(app, &launcher_config);
+        let coordinated_size = self.coordinated_size.lock().ok().and_then(|g| *g);
+        let window = create_window(app, &launcher_config, coordinated_size);
 
         let rotation_widget = RotationWidget::new(rotation.rotation());
         rotation_widget.set_animation_speed(rotation.animation_speed());

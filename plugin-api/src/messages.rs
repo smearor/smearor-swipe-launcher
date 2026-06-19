@@ -185,11 +185,15 @@ impl MessageBroadcasterInner {
     /// Used by generic widgets (e.g. button, clock) that read topic/payload
     /// from config and do not have a typed message struct.
     pub fn broadcast_string(&self, topic: &str, payload: &str) {
+        self.broadcast_string_to_instance("", topic, payload);
+    }
+
+    pub fn broadcast_string_to_instance(&self, target_instance_id: &str, topic: &str, payload: &str) {
         if let Some(ctx) = &self.core_context {
             let boxed = Box::into_raw(Box::new(payload.to_string())) as *mut core::ffi::c_void;
             let envelope = FfiEnvelope {
                 sender_id: stabby::string::String::from(self.meta.id.clone()),
-                target_instance_id: stabby::string::String::from(""),
+                target_instance_id: stabby::string::String::from(target_instance_id),
                 topic: stabby::string::String::from(topic),
                 type_id: generate_type_id("std::string::String"),
                 payload: boxed,

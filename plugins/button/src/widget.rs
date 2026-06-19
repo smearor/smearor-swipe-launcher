@@ -99,22 +99,32 @@ impl WidgetBuilder for ButtonWidget {
 
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
+        let click_instance = self.config.click_instance.clone();
         let message_broadcaster = self.get_broadcaster();
         button.connect_clicked(move |_| {
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
                 let payload_str = payload.to_string();
-                message_broadcaster.broadcast_string(&topic, &payload_str);
+                if let Some(instance) = click_instance.clone() {
+                    message_broadcaster.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                } else {
+                    message_broadcaster.broadcast_string(&topic, &payload_str);
+                }
             }
         });
 
         let long_press_topic = self.config.longpress_topic.clone();
         let long_press_payload = self.config.longpress_payload.clone();
+        let long_press_instance = self.config.longpress_instance.clone();
         let long_press_gesture = GestureLongPress::new();
         let message_broadcaster = self.get_broadcaster();
         long_press_gesture.connect_pressed(move |gesture, _, _| {
             if let (Some(topic), Some(payload)) = (long_press_topic.clone(), long_press_payload.clone()) {
                 let payload_str = payload.to_string();
-                message_broadcaster.broadcast_string(&topic, &payload_str);
+                if let Some(instance) = long_press_instance.clone() {
+                    message_broadcaster.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                } else {
+                    message_broadcaster.broadcast_string(&topic, &payload_str);
+                }
                 gesture.set_state(EventSequenceState::Claimed);
             }
         });

@@ -1,0 +1,91 @@
+areas = ["bottom"]
+
+[launcher]
+rotation = 0
+layer = "top"
+namespace = "smearor-swipe-launcher"
+
+[layout]
+orientation = "horizontal"
+spacing = 0
+
+[bottom]
+area_type = "scroll"
+plugins = [
+    { id = "open_bottom_area_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "open_top_area_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "open_left_area_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "open_right_area_button", path = "target/release/libsmearor_button_widget.so" },
+]
+
+[bottom_area]
+area_type = "scroll"
+open_transition = "SlideUp"
+plugins = [
+    { id = "close_bottom_area_button", path = "target/release/libsmearor_button_widget.so" }
+]
+
+[open_bottom_area_button]
+text = "Open Example 1 Area"
+icon = "panel-bottom-symbolic"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "bottom_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "bottom_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[close_bottom_area_button]
+text = "✕"
+icon = "window-close-symbolic"
+tooltip = "Close Example 1 Area"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "bottom_area" }
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+[open_top_area_button]
+text = "Open Example 2 Area"
+icon = "panel-top-symbolic"
+icon_only = false
+click_topic = "area.open"
+click_instance = "top"
+click_payload = { area_id = "top_area" }
+longpress_topic = "area.close"
+longpress_instance = "top"
+longpress_payload = { area_id = "top_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[open_left_area_button]
+text = "Open Example 3 Area"
+icon = "panel-left-symbolic"
+icon_only = false
+click_topic = "area.open"
+click_instance = "left"
+click_payload = { area_id = "left_area" }
+longpress_topic = "area.close"
+longpress_instance = "left"
+longpress_payload = { area_id = "left_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]
+
+[open_right_area_button]
+text = "Open Example 4 Area"
+icon = "panel-right-symbolic"
+icon_only = false
+click_topic = "area.open"
+click_instance = "right"
+click_payload = { area_id = "right_area" }
+longpress_topic = "area.close"
+longpress_instance = "right"
+longpress_payload = { area_id = "right_area" }
+enabled = true
+active = false
+css_classes = ["menu-button", "primary"]

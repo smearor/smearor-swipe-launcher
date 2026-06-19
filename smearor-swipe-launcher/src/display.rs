@@ -7,11 +7,18 @@ use gtk4::prelude::MonitorExt;
 use smearor_wrot_rotation::SmearorRotation;
 
 pub const DEFAULT_WIDTH: i32 = 1024;
-pub const DEFAULT_HEIGHT: i32 = 200;
+pub const DEFAULT_HEIGHT: i32 = 150;
 
+#[derive(Debug, Clone, Copy)]
 pub struct AreaSize {
     pub width: i32,
     pub height: i32,
+}
+
+impl AreaSize {
+    pub fn new(width: i32, height: i32) -> Self {
+        AreaSize { width, height }
+    }
 }
 
 impl Default for AreaSize {
@@ -23,7 +30,7 @@ impl Default for AreaSize {
     }
 }
 
-pub fn calculate_area_size(rotation: SmearorRotation, height: i32) -> AreaSize {
+pub fn calculate_area_size(rotation: SmearorRotation, default_size: i32) -> AreaSize {
     let Some(display) = Display::default() else {
         return Default::default();
     };
@@ -39,16 +46,11 @@ pub fn calculate_area_size(rotation: SmearorRotation, height: i32) -> AreaSize {
     let is_horizontal = (rotation - 0.0).abs() < 0.1 || (rotation - 180.0).abs() < 0.1;
     let is_vertical = (rotation - 90.0).abs() < 0.1 || (rotation - 270.0).abs() < 0.1;
 
-    let mut width = DEFAULT_WIDTH;
-    let mut height = height;
-
     if is_horizontal {
-        width = screen_width;
-        // height = height;
+        AreaSize::new(screen_width, default_size)
     } else if is_vertical {
-        width = height;
-        height = screen_height;
+        AreaSize::new(default_size, screen_height)
+    } else {
+        AreaSize::default()
     }
-
-    AreaSize { width, height }
 }

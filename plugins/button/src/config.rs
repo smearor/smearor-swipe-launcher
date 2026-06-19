@@ -31,12 +31,18 @@ pub struct ButtonConfig {
     /// Message payload for single-click (JSON/TOML)
     #[serde(default)]
     pub click_payload: Option<Value>,
+    /// Target instance for single-click message
+    #[serde(default)]
+    pub click_instance: Option<String>,
     /// Message topic for long-press
     #[serde(default)]
     pub longpress_topic: Option<String>,
     /// Message payload for long-press (JSON/TOML)
     #[serde(default)]
     pub longpress_payload: Option<Value>,
+    /// Target instance for long-press message
+    #[serde(default)]
+    pub longpress_instance: Option<String>,
     /// Keyboard shortcut (e.g., "Ctrl+G", "Alt+F1")
     #[serde(default)]
     pub shortcut: Option<String>,

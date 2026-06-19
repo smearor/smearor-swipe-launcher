@@ -20,6 +20,15 @@ pub struct LayerConfigFile {
     pub(crate) exclusive_zone: Option<i32>,
 }
 
+impl LayerConfigFile {
+    pub fn exclusive_zone(&self) -> Option<i32> {
+        match &self.layer {
+            Some(_) => self.exclusive_zone,
+            None => None,
+        }
+    }
+}
+
 impl MergeWithArguments<LayerArguments> for LayerConfigFile {
     fn merge_with_arguments(self, args: &LayerArguments) -> Self {
         let mut config = self;

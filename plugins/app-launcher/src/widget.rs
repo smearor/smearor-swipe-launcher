@@ -206,6 +206,7 @@ impl WidgetBuilder for AppLauncherWidget {
         let message_broadcaster_desktop_file_command = self.get_broadcaster();
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
+        let click_instance = self.config.click_instance.clone();
         let message_broadcaster_generic = self.get_broadcaster();
         click_gesture.connect_released(move |gesture, _n_clicks, _, _| {
             if let Some(seq) = gesture.current_sequence() {
@@ -218,7 +219,11 @@ impl WidgetBuilder for AppLauncherWidget {
                 .broadcast_message_to_topic(DesktopFileCommandMessage::exec(&desktop_file_inner, wrapper_config_inner.clone()));
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
                 let payload_str = payload.to_string();
-                message_broadcaster_generic.broadcast_string(&topic, &payload_str);
+                if let Some(instance) = click_instance.clone() {
+                    message_broadcaster_generic.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                } else {
+                    message_broadcaster_generic.broadcast_string(&topic, &payload_str);
+                }
             }
             gesture.set_state(EventSequenceState::Claimed);
         });
@@ -234,13 +239,18 @@ impl WidgetBuilder for AppLauncherWidget {
         let message_broadcaster_desktop_file_command = self.get_broadcaster();
         let long_press_topic = self.config.longpress_topic.clone();
         let long_press_payload = self.config.longpress_payload.clone();
+        let long_press_instance = self.config.longpress_instance.clone();
         let message_broadcaster_generic = self.get_broadcaster();
         longpress_gesture.connect_pressed(move |gesture, _n_clicks, _| {
             message_broadcaster_desktop_file_command
                 .broadcast_message_to_topic(DesktopFileCommandMessage::terminate(&desktop_file_inner, wrapper_config_inner.clone()));
             if let (Some(topic), Some(payload)) = (long_press_topic.clone(), long_press_payload.clone()) {
                 let payload_str = payload.to_string();
-                message_broadcaster_generic.broadcast_string(&topic, &payload_str);
+                if let Some(instance) = long_press_instance.clone() {
+                    message_broadcaster_generic.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                } else {
+                    message_broadcaster_generic.broadcast_string(&topic, &payload_str);
+                }
                 gesture.set_state(EventSequenceState::Claimed);
             }
             gesture.set_state(EventSequenceState::Claimed);
