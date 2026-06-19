@@ -7,7 +7,7 @@ use serde::Serialize;
 use smearor_model_plugin::PluginEntry;
 use smearor_model_plugin::PluginEntryStabby;
 
-pub const DEFAULT_AREA_WIDTH: i32 = 200;
+pub const DEFAULT_AREA_WIDTH: i32 = 120;
 
 /// Configuration for a single area in the layout
 #[derive(Debug, Clone, Serialize, Deserialize)]
