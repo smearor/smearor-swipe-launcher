@@ -48,6 +48,10 @@ pub struct AreaConfig {
     #[serde(default)]
     pub close_on_escape: bool,
 
+    /// Path to an included area configuration file (relative to the main config)
+    #[serde(default)]
+    pub include: Option<String>,
+
     /// List of plugins to load in this area
     pub plugins: Vec<PluginEntry>,
 }
@@ -112,6 +116,7 @@ impl From<AreaConfigStabby> for AreaConfig {
             },
             auto_close: value.auto_close,
             close_on_escape: value.close_on_escape,
+            include: None,
             plugins: value.plugins.into_iter().map(Into::into).collect(),
         }
     }
@@ -142,6 +147,7 @@ impl Default for AreaConfig {
             close_transition: None,
             auto_close: false,
             close_on_escape: false,
+            include: None,
             plugins: Vec::new(),
         }
     }

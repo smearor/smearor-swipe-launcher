@@ -37,7 +37,14 @@ pub struct SwipeLauncherArguments {
 impl SwipeLauncherArguments {
     pub fn load_config_from_file(&self, config_path: &PathBuf) -> Result<SwipeLauncherConfig> {
         let config_content = std::fs::read_to_string(config_path).into_diagnostic()?;
-        let config: SwipeLauncherConfig = toml::from_str(&config_content).into_diagnostic()?;
+        let mut config: SwipeLauncherConfig = toml::from_str(&config_content).into_diagnostic()?;
+
+        // Resolve global defaults for plugin configs (layered: hard-coded → global → instance)
+        config.resolve_defaults();
+
+        // Resolve area includes (external TOML files referenced by area configs)
+        config.resolve_includes(config_path).map_err(|e| miette::miette!("{e}"))?;
+
         let total_plugins: usize = config
             .areas
             .iter()

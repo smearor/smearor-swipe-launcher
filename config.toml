@@ -4,6 +4,30 @@
 
 areas = ["left_area", "scroll_band", "right_area"]
 
+# Global default templates for plugin configs.
+# Individual plugins reference a template with: defaults = "template_name"
+# Instance-specific values always override the template values.
+
+[defaults.menu_button]
+icon_only = true
+click_topic = "area.open"
+longpress_topic = "area.close"
+enabled = true
+active = false
+css_classes = ["menu-button", "glow-blue"]
+
+[defaults.close_button]
+text = ""
+icon = "window-close-symbolic"
+icon_only = true
+click_topic = "area.close"
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+[defaults.app_launcher]
+icon_only = true
+
 ### Configure the app launcher service
 
 [app_launcher]
@@ -70,15 +94,11 @@ plugins = [
 ]
 
 [close_launcher]
+defaults = "close_button"
 text = "✕"
-icon = "window-close-symbolic"
 tooltip = "Exit Launcher"
-icon_only = true
 click_topic = "core.close"
 click_payload = { }
-enabled = true
-active = false
-css_classes = ["close-button"]
 
 # Plugin-specific configurations
 
@@ -86,14 +106,14 @@ css_classes = ["close-button"]
 desktop_file_path = "/usr/share/applications/nonexistent.desktop"
 
 [nautilus]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Nautilus.desktop"
-icon_only = true
 [nautilus.wrapper]
 follows_rotation = true
 
 [loupe]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Loupe.desktop"
-icon_only = true
 [loupe.wrapper]
 follows_rotation = true
 #auto_color_mask = true
@@ -102,8 +122,8 @@ follows_rotation = true
 #namespace = "gnome-mines"
 
 [wike]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/com.github.hugolabe.Wike.desktop"
-icon_only = true
 [wike.wrapper]
 follows_rotation = true
 
@@ -114,21 +134,16 @@ follows_rotation = true
 
 # Button widget configuration
 [games_menu_button]
+defaults = "menu_button"
 text = "Games"
 icon = "applications-games-symbolic"
 tooltip = "Open games menu"
-icon_only = true
-click_topic = "area.open"
 click_payload = { area_id = "games_area" }
-longpress_topic = "area.close"
 longpress_payload = { area_id = "games_area" }
-enabled = true
-active = false
-css_classes = ["menu-button", "glow-blue"]
 
 # Games submenu area configuration
 [games_area]
-area_type = "scroll"
+include = "areas/scroll_menu.toml"
 open_transition = "SlideUp"
 plugins = [
     { id = "games_close_button", path = "target/release/libsmearor_button_widget.so" },
@@ -136,55 +151,34 @@ plugins = [
     { id = "board_games_menu_button", path = "target/release/libsmearor_button_widget.so" }
 ]
 
-# Close button configuration
 [games_close_button]
-text = "✕"
-icon = "window-close-symbolic"
-tooltip = "Close games menu"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "games_area" }
-enabled = true
-active = false
-css_classes = ["close-button"]
 
 
 
 [puzzle_games_menu_button]
+defaults = "menu_button"
 text = "Puzzle"
 icon = "puzzle-piece-symbolic"
 tooltip = "Puzzle games"
-icon_only = true
-click_topic = "area.open"
 click_payload = { area_id = "puzzle_games_area" }
-longpress_topic = "area.close"
 longpress_payload = { area_id = "puzzle_games_area" }
-enabled = true
-active = false
-css_classes = ["menu-button", "glow-blue"]
 
 [puzzle_games_area]
-area_type = "scroll"
-open_transition = "SlideLeft"
+include = "areas/scroll_menu.toml"
 plugins = [
     { id = "puzzle_games_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "gnome_2048", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "gnome_mines", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
 
-# Close button configuration
 [puzzle_games_close_button]
-text = "✕"
-icon = "window-close-symbolic"
-tooltip = "Close puzzle games"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "puzzle_games_area" }
-enabled = true
-active = false
-css_classes = ["close-button"]
 
 [gnome_2048]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
 click_topic = "area.close"
 click_payload = { area_id = "puzzle_games_area" }
@@ -193,6 +187,7 @@ follows_rotation = true
 auto_color_mask = true
 
 [gnome_mines]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Mines.desktop"
 [gnome_mines.wrapper]
 follows_rotation = true
@@ -200,39 +195,26 @@ follows_rotation = true
 
 
 [board_games_menu_button]
+defaults = "menu_button"
 text = "Board"
 icon = "board-games-symbolic"
 tooltip = "Board games"
-icon_only = true
-click_topic = "area.open"
 click_payload = { area_id = "board_games_area" }
-longpress_topic = "area.close"
 longpress_payload = { area_id = "board_games_area" }
-enabled = true
-active = false
-css_classes = ["menu-button", "glow-blue"]
 
 [board_games_area]
-area_type = "scroll"
-open_transition = "SlideLeft"
+include = "areas/scroll_menu.toml"
 plugins = [
     { id = "board_games_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "gnome_chess", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
 
-# Close button configuration
 [board_games_close_button]
-text = "✕"
-icon = "window-close-symbolic"
-tooltip = "Close board games"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "board_games_area" }
-enabled = true
-active = false
-css_classes = ["close-button"]
 
 [gnome_chess]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Chess.desktop"
 [gnome_chess.wrapper]
 follows_rotation = true
@@ -241,17 +223,12 @@ auto_color_mask = true
 
 
 [tools_menu_button]
+defaults = "menu_button"
 text = "Tools"
 icon = "applications-engineering-symbolic"
 tooltip = "Open tools menu"
-icon_only = true
-click_topic = "area.open"
 click_payload = { area_id = "tools_area" }
-longpress_topic = "area.close"
 longpress_payload = { area_id = "tools_area" }
-enabled = true
-active = false
-css_classes = ["menu-button", "glow-blue"]
 
 [tools_area]
 area_type = "scroll"
@@ -263,43 +240,30 @@ plugins = [
 ]
 
 [calculator]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Calculator.desktop"
-icon_only = true
 [calculator.wrapper]
 follows_rotation = true
 
 [characters]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Characters.desktop"
-icon_only = true
 [characters.wrapper]
 follows_rotation = true
 
-# Close button configuration
 [tools_close]
-text = "✕"
-icon = "window-close-symbolic"
-tooltip = "Close tools menu"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "tools_area" }
-enabled = true
-active = false
-css_classes = ["close-button"]
 
 
 
 [video_menu_button]
+defaults = "menu_button"
 text = "Video"
 icon = "multimedia-video-player-symbolic"
 tooltip = "Video Players"
-icon_only = true
-click_topic = "area.open"
 click_payload = { area_id = "video_area" }
-longpress_topic = "area.close"
 longpress_payload = { area_id = "video_area" }
-enabled = true
-active = false
-css_classes = ["menu-button", "glow-blue"]
 
 [video_area]
 area_type = "scroll"
@@ -310,37 +274,24 @@ plugins = [
 ]
 
 [totem]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Totem.desktop"
-icon_only = true
 [totem.wrapper]
 follows_rotation = true
 
-# Close button configuration
 [video_close]
-text = "✕"
-icon = "window-close-symbolic"
-tooltip = "Close video menu"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "video_area" }
-enabled = true
-active = false
-css_classes = ["close-button"]
 
 
 
 [music_menu_button]
+defaults = "menu_button"
 text = "Music"
 icon = "music-app-symbolic"
 tooltip = "Music Players"
-icon_only = true
-click_topic = "area.open"
 click_payload = { area_id = "music_area" }
-longpress_topic = "area.close"
 longpress_payload = { area_id = "music_area" }
-enabled = true
-active = false
-css_classes = ["menu-button", "glow-blue"]
 
 [music_area]
 area_type = "scroll"
@@ -352,43 +303,30 @@ plugins = [
 ]
 
 [shortwave]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/de.haeckerfelix.Shortwave.desktop"
-icon_only = true
 [shortwave.wrapper]
 follows_rotation = true
 
 [amberol]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/io.bassi.Amberol.desktop"
-icon_only = true
 [amberol.wrapper]
 follows_rotation = true
 
-# Close button configuration
 [music_close]
-text = "✕"
-icon = "window-close-symbolic"
-tooltip = "Close music menu"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "music_area" }
-enabled = true
-active = false
-css_classes = ["close-button"]
 
 
 
 [web_menu_button]
+defaults = "menu_button"
 text = "Web"
 icon = "applications-internet-symbolic"
 tooltip = "Web"
-icon_only = true
-click_topic = "area.open"
 click_payload = { area_id = "web_area" }
-longpress_topic = "area.close"
 longpress_payload = { area_id = "web_area" }
-enabled = true
-active = false
-css_classes = ["menu-button", "glow-blue"]
 
 [web_area]
 area_type = "scroll"
@@ -400,28 +338,20 @@ plugins = [
 ]
 
 [firefox_nightly]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/firefox-nightly.desktop"
-icon_only = true
 [firefox_nightly.wrapper]
 follows_rotation = true
 
 [epiphany]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Epiphany.desktop"
-icon_only = true
 [epiphany.wrapper]
 follows_rotation = true
 
-# Close button configuration
 [web_close]
-text = "✕"
-icon = "window-close-symbolic"
-tooltip = "Close Web Menu"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "web_area" }
-enabled = true
-active = false
-css_classes = ["close-button"]
 
 
 
@@ -436,27 +366,19 @@ plugins = [
     { id = "clock_widget_time", path = "target/release/libsmearor_clock_widget.so" }
 ]
 
-# Close button configuration
 [clock_close]
-text = "✕"
-icon = "window-close-symbolic"
-tooltip = "Close clock menu"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "clock_area" }
-enabled = true
-active = false
-css_classes = ["close-button"]
 
 [clocks]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.clocks.desktop"
-icon_only = true
 [clocks.wrapper]
 follows_rotation = true
 
 [calendar]
+defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Calendar.desktop"
-icon_only = true
 [calendar.wrapper]
 follows_rotation = true
 
