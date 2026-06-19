@@ -19,6 +19,14 @@
     font-size: 1.5em;
 }
 
+.games-icon-color .nerd-icon {
+    color: #dc0073;
+}
+
+.games-area-bg {
+    background-color: #dc007377;
+}
+
 @keyframes longpress-fill {
     from {
         background-size: 0% 100%;
@@ -326,8 +334,7 @@ scrolledwindow {
 }
 
 .menu-button {
-    background-color: rgba(0.0, 0.0, 0.0, 0.5);
-    /*background-color: transparent;*/
+    background-color: transparent;
 }
 
 .menu-button:hover {

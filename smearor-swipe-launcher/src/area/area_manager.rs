@@ -298,6 +298,7 @@ impl AreaManager {
                 let width = area_config.width.unwrap_or(200);
                 let mut css_classes = vec!["static-area"];
                 css_classes.push(area_config.open_transition.css_class());
+                css_classes.extend(area_config.css_classes.iter().map(String::as_str));
 
                 let box_widget = GtkBox::builder()
                     .orientation(Orientation::Horizontal)
@@ -313,6 +314,7 @@ impl AreaManager {
             AreaType::Scroll => {
                 let mut css_classes = vec!["scroll-area"];
                 css_classes.push(area_config.open_transition.css_class());
+                css_classes.extend(area_config.css_classes.iter().map(String::as_str));
 
                 let scrolled_window = ScrolledWindow::builder()
                     .hscrollbar_policy(PolicyType::External)
@@ -323,6 +325,9 @@ impl AreaManager {
                     .build();
 
                 let plugin_container = GtkBox::builder().orientation(Orientation::Horizontal).spacing(10).build();
+                for class in &area_config.css_classes {
+                    plugin_container.add_css_class(class);
+                }
                 self.add_plugins(area_config, &plugin_container);
 
                 // TODO: Apply drag gesture for scrolling

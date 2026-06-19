@@ -52,6 +52,10 @@ pub struct AreaConfig {
     #[serde(default)]
     pub include: Option<String>,
 
+    /// Additional CSS classes for styling the area container
+    #[serde(default)]
+    pub css_classes: Vec<String>,
+
     /// List of plugins to load in this area
     pub plugins: Vec<PluginEntry>,
 }
@@ -85,6 +89,7 @@ impl From<AreaConfig> for AreaConfigStabby {
             auto_close: value.auto_close,
             close_on_escape: value.close_on_escape,
             plugins: value.plugins.into_iter().map(Into::into).collect(),
+            // css_classes intentionally omitted from stabby (not needed over FFI)
         }
     }
 }
@@ -117,6 +122,7 @@ impl From<AreaConfigStabby> for AreaConfig {
             auto_close: value.auto_close,
             close_on_escape: value.close_on_escape,
             include: None,
+            css_classes: Vec::new(),
             plugins: value.plugins.into_iter().map(Into::into).collect(),
         }
     }
@@ -148,6 +154,7 @@ impl Default for AreaConfig {
             auto_close: false,
             close_on_escape: false,
             include: None,
+            css_classes: Vec::new(),
             plugins: Vec::new(),
         }
     }

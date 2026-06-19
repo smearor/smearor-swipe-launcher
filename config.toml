@@ -52,7 +52,7 @@ spacing = 0
 
 [left_area]
 area_type = "fixed"
-width = 200
+width = 300
 plugins = [
     { id = "clock_widget", path = "target/release/libsmearor_clock_widget.so" }
 ]
@@ -87,7 +87,7 @@ plugins = [
 # Plugins in the right static area
 [right_area]
 area_type = "fixed"
-width = 200
+width = 300
 plugins = [
     #    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so" },
     { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
@@ -96,7 +96,7 @@ plugins = [
 [close_launcher]
 defaults = "close_button"
 text = "✕"
-tooltip = "Exit Launcher"
+tooltip = "Exit"
 click_topic = "core.close"
 click_payload = { }
 
@@ -138,7 +138,8 @@ defaults = "menu_button"
 text = "Games"
 icon = "nf-fa-gamepad"
 icon_size = 24
-tooltip = "Open games menu"
+tooltip = "Games"
+css_classes = ["menu-button", "games-icon-color"]
 click_payload = { area_id = "games_area" }
 longpress_payload = { area_id = "games_area" }
 
@@ -146,6 +147,7 @@ longpress_payload = { area_id = "games_area" }
 [games_area]
 include = "areas/scroll_menu.toml"
 open_transition = "SlideUp"
+css_classes = ["games-area-bg"]
 plugins = [
     { id = "games_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "puzzle_games_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -161,8 +163,8 @@ click_payload = { area_id = "games_area" }
 [puzzle_games_menu_button]
 defaults = "menu_button"
 text = "Puzzle"
-icon = "puzzle-piece-symbolic"
-tooltip = "Puzzle games"
+icon = "nf-fa-fantasy_flight_games"
+tooltip = "Puzzle Games"
 click_payload = { area_id = "puzzle_games_area" }
 longpress_payload = { area_id = "puzzle_games_area" }
 
@@ -198,8 +200,8 @@ follows_rotation = true
 [board_games_menu_button]
 defaults = "menu_button"
 text = "Board"
-icon = "board-games-symbolic"
-tooltip = "Board games"
+icon = "nf-fa-chess_board"
+tooltip = "Board Games"
 click_payload = { area_id = "board_games_area" }
 longpress_payload = { area_id = "board_games_area" }
 
@@ -228,7 +230,7 @@ defaults = "menu_button"
 text = "Tools"
 icon = "nf-fae-tools"
 icon_size = 24
-tooltip = "Open tools menu"
+tooltip = "Tools"
 click_payload = { area_id = "tools_area" }
 longpress_payload = { area_id = "tools_area" }
 
@@ -263,7 +265,7 @@ click_payload = { area_id = "tools_area" }
 defaults = "menu_button"
 text = "Video"
 icon = "multimedia-video-player-symbolic"
-tooltip = "Video Players"
+tooltip = "Video"
 click_payload = { area_id = "video_area" }
 longpress_payload = { area_id = "video_area" }
 
@@ -291,7 +293,7 @@ click_payload = { area_id = "video_area" }
 defaults = "menu_button"
 text = "Music"
 icon = "music-app-symbolic"
-tooltip = "Music Players"
+tooltip = "Music"
 click_payload = { area_id = "music_area" }
 longpress_payload = { area_id = "music_area" }
 

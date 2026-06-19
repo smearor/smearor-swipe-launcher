@@ -87,6 +87,9 @@ impl WidgetBuilder for ButtonWidget {
                     let markup = format!(r#"<span font_desc="NerdFontsSymbolsOnly {}">{}</span>"#, self.config.icon_size, glyph);
                     let icon_label = Label::new(None);
                     icon_label.set_markup(&markup);
+                    for class in &self.config.css_classes {
+                        icon_label.add_css_class(class);
+                    }
                     button_box.append(&icon_label);
                 }
             } else {
@@ -101,11 +104,17 @@ impl WidgetBuilder for ButtonWidget {
             button_box.append(&label);
         }
 
+        let mut css_classes = vec!["scroll-item", "menu-button"];
+        css_classes.extend(self.config.css_classes.iter().map(String::as_str));
         let button = Button::builder()
-            .css_classes(["scroll-item", "menu-button"])
+            .css_classes(css_classes.as_slice())
             .width_request(self.config.width)
             .child(&button_box)
             .build();
+
+        if let Some(tooltip) = &self.config.tooltip {
+            button.set_tooltip_text(Some(tooltip));
+        }
 
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
