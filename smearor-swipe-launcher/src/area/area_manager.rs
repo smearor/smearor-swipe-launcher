@@ -9,6 +9,7 @@ use crate::area::layout_transition::LayoutTransition;
 use crate::area::managed_area::ManagedArea;
 use crate::plugin_manager::PluginManager;
 use dashmap::DashMap;
+use gtk4::Align;
 use gtk4::Box as GtkBox;
 use gtk4::Orientation;
 use gtk4::Overlay;
@@ -17,6 +18,7 @@ use gtk4::ScrolledWindow;
 use gtk4::Widget;
 use gtk4::glib::translate::FromGlibPtrFull;
 use gtk4::prelude::*;
+use smearor_model_area::AreaAlign;
 use smearor_model_area::AreaConfig;
 use smearor_model_area::AreaType;
 use smearor_swipe_launcher_plugin_api::JsonConverterRegistry;
@@ -302,11 +304,21 @@ impl AreaManager {
 
                 let box_widget = GtkBox::builder()
                     .orientation(Orientation::Horizontal)
-                    .spacing(area_config.spacing)
                     .width_request(width)
                     .css_classes(css_classes.as_slice())
                     .build();
-                self.add_plugins(area_config, &box_widget);
+
+                let inner = GtkBox::builder()
+                    .orientation(Orientation::Horizontal)
+                    .spacing(area_config.spacing)
+                    .halign(match area_config.align {
+                        AreaAlign::Left => Align::Start,
+                        AreaAlign::Center => Align::Center,
+                        AreaAlign::Right => Align::End,
+                    })
+                    .build();
+                box_widget.append(&inner);
+                self.add_plugins(area_config, &inner);
 
                 // self.apply_transition_animation(box_widget.upcast_ref(), &area_config.open_transition);
 
@@ -329,7 +341,23 @@ impl AreaManager {
                 for class in &area_config.css_classes {
                     plugin_container.add_css_class(class);
                 }
-                self.add_plugins(area_config, &plugin_container);
+                match area_config.align {
+                    AreaAlign::Left => {
+                        self.add_plugins(area_config, &plugin_container);
+                    }
+                    AreaAlign::Center => {
+                        let left_spacer = GtkBox::builder().hexpand(true).build();
+                        plugin_container.append(&left_spacer);
+                        self.add_plugins(area_config, &plugin_container);
+                        let right_spacer = GtkBox::builder().hexpand(true).build();
+                        plugin_container.append(&right_spacer);
+                    }
+                    AreaAlign::Right => {
+                        let left_spacer = GtkBox::builder().hexpand(true).build();
+                        plugin_container.append(&left_spacer);
+                        self.add_plugins(area_config, &plugin_container);
+                    }
+                }
 
                 // TODO: Apply drag gesture for scrolling
 

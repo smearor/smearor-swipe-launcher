@@ -52,7 +52,8 @@ spacing = 0
 
 [left_area]
 area_type = "fixed"
-width = 300
+width = 200
+align = "right"
 plugins = [
     { id = "clock_widget", path = "target/release/libsmearor_clock_widget.so" }
 ]
@@ -69,7 +70,8 @@ longpress_payload = { area_id = "clock_area" }
 # Plugins in the center scroll band
 [scroll_band]
 area_type = "scroll"
-spacing = 5
+spacing = 0
+align = "center"
 plugins = [
     { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -96,7 +98,8 @@ spacing = 10
 # Plugins in the right static area
 [right_area]
 area_type = "fixed"
-width = 300
+width = 200
+align = "left"
 plugins = [
     #    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so" },
     { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }

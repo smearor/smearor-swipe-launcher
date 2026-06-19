@@ -9,6 +9,19 @@ use smearor_model_plugin::PluginEntryStabby;
 
 pub const DEFAULT_AREA_WIDTH: i32 = 100;
 
+/// Horizontal alignment of plugins within an area.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AreaAlign {
+    /// Align plugins to the left (default).
+    #[default]
+    Left,
+    /// Center plugins horizontally.
+    Center,
+    /// Align plugins to the right.
+    Right,
+}
+
 /// Configuration for a single area in the layout
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AreaConfig {
@@ -59,6 +72,10 @@ pub struct AreaConfig {
     /// Spacing between child widgets inside the area container.
     #[serde(default = "default_spacing")]
     pub spacing: i32,
+
+    /// Horizontal alignment of plugins within the area.
+    #[serde(default)]
+    pub align: AreaAlign,
 
     /// List of plugins to load in this area
     pub plugins: Vec<PluginEntry>,
@@ -128,6 +145,7 @@ impl From<AreaConfigStabby> for AreaConfig {
             include: None,
             css_classes: Vec::new(),
             spacing: default_spacing(),
+            align: AreaAlign::Left,
             plugins: value.plugins.into_iter().map(Into::into).collect(),
         }
     }
@@ -161,6 +179,7 @@ impl Default for AreaConfig {
             include: None,
             css_classes: Vec::new(),
             spacing: default_spacing(),
+            align: AreaAlign::Left,
             plugins: Vec::new(),
         }
     }

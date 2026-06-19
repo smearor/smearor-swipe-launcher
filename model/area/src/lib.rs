@@ -6,6 +6,7 @@ mod transition;
 
 pub use area_type::AreaType;
 pub use area_type::AreaTypeStabby;
+pub use config::AreaAlign;
 pub use config::AreaConfig;
 pub use config::AreaConfigStabby;
 pub use config::DEFAULT_AREA_WIDTH;
