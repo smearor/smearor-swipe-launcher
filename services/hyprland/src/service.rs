@@ -1,6 +1,7 @@
 use crate::config::HyprlandServiceConfig;
 use hyprland::dispatch::Dispatch;
 use hyprland::dispatch::DispatchType;
+use hyprland::dispatch::FirstEmpty;
 use smearor_hyprland_model::ExecDispatchMessage;
 use smearor_hyprland_model::HyprlandDirection;
 use smearor_hyprland_model::HyprlandDispatchActionKind;
@@ -25,7 +26,6 @@ use smearor_swipe_launcher_plugin_api::Service;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use stabby::option::Option as StabbyOption;
 use std::env;
-use std::env::VarError;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -239,7 +239,11 @@ async fn handle_workspace(payload: WorkspaceDispatchMessage) -> hyprland::Result
             Dispatch::call_async(DispatchType::Workspace(hyprland::dispatch::WorkspaceIdentifierWithSpecial::Previous)).await
         }
         HyprlandWorkspaceIdentifierKind::Empty => {
-            Dispatch::call_async(DispatchType::Workspace(hyprland::dispatch::WorkspaceIdentifierWithSpecial::Empty)).await
+            Dispatch::call_async(DispatchType::Workspace(hyprland::dispatch::WorkspaceIdentifierWithSpecial::Empty(FirstEmpty {
+                on_monitor: false,
+                next: false,
+            })))
+            .await
         }
         HyprlandWorkspaceIdentifierKind::Name => {
             let opt: Option<stabby::string::String> = payload.identifier.name.into();
