@@ -46,9 +46,55 @@ model/hyprland/
     lib.rs
     messages/
       mod.rs
-      ctl.rs          # All ctl command message types
-      dispatch.rs     # All dispatch message types
-      shared.rs       # Shared enums and identifiers
+      command/
+        mod.rs
+        kill.rs                  # KillCommandMessage
+        notify.rs                # NotifyCommandMessage
+        output_create.rs         # OutputCreateCommandMessage
+        output_remove.rs         # OutputRemoveCommandMessage
+        plugin_load.rs           # PluginLoadCommandMessage
+        plugin_unload.rs         # PluginUnloadCommandMessage
+        reload.rs                # ReloadCommandMessage
+        set_cursor.rs            # SetCursorCommandMessage
+        set_error.rs             # SetErrorCommandMessage
+        set_prop.rs              # SetPropCommandMessage
+        switch_xkb_layout.rs     # SwitchXkbLayoutCommandMessage
+      dispatch/
+        mod.rs
+        custom.rs                # CustomDispatchMessage
+        set_cursor.rs            # SetCursorDispatchMessage
+        exec.rs                  # ExecDispatchMessage
+        pass.rs                  # PassDispatchMessage
+        global.rs                # GlobalDispatchMessage
+        kill_active_window.rs    # KillActiveWindowDispatchMessage
+        close_window.rs          # CloseWindowDispatchMessage
+        workspace.rs             # WorkspaceDispatchMessage
+        move_to_workspace.rs     # MoveToWorkspaceDispatchMessage
+        ...                      # One file per remaining dispatch type
+      shared/
+        mod.rs
+        direction.rs             # HyprlandDirection
+        corner.rs                # HyprlandCorner
+        fullscreen_type.rs       # HyprlandFullscreenType
+        cycle_direction.rs       # HyprlandCycleDirection
+        window_switch_direction.rs # HyprlandWindowSwitchDirection
+        lock_type.rs             # HyprlandLockType
+        swap_with_master_param.rs # HyprlandSwapWithMasterParam
+        focus_master_param.rs    # HyprlandFocusMasterParam
+        workspace_options.rs     # HyprlandWorkspaceOptions
+        position.rs              # HyprlandPosition
+        notify_icon.rs           # HyprlandNotifyIcon
+        output_backend.rs        # HyprlandOutputBackend
+        window_identifier.rs       # HyprlandWindowIdentifier
+        workspace_identifier.rs    # HyprlandWorkspaceIdentifier
+        workspace_identifier_with_special.rs # HyprlandWorkspaceIdentifierWithSpecial
+        monitor_identifier.rs    # HyprlandMonitorIdentifier
+        window_move.rs           # HyprlandWindowMove
+        switch_xkb_layout_cmd.rs # HyprlandSwitchXkbLayoutCmd
+        prop_type.rs             # HyprlandPropType
+        color.rs                 # HyprlandColor
+      dispatch_action.rs         # HyprlandDispatchAction
+      dispatch_message.rs        # HyprlandDispatchMessage
 
 services/hyprland/
   Cargo.toml
@@ -67,9 +113,9 @@ conversions.
 
 ---
 
-### 3.1 Shared Enums & Identifiers (`messages/shared.rs`)
+### 3.1 Shared Enums & Identifiers (`messages/shared/`)
 
-These mirror the supporting types from `hyprland::dispatch` and `hyprland::ctl`.
+Each shared enum or struct lives in its own file under `messages/shared/`, following `AGENTS.md`. The `messages/shared/mod.rs` re-exports all of them.
 
 | Rust Type                                | `#[stabby::stabby]` | Source                                                      |
 |------------------------------------------|---------------------|-------------------------------------------------------------|
@@ -96,9 +142,9 @@ These mirror the supporting types from `hyprland::dispatch` and `hyprland::ctl`.
 
 ---
 
-### 3.2 CTL Command Messages (`messages/ctl.rs`)
+### 3.2 CTL Command Messages (`messages/command/`)
 
-One message struct per `hyprland::ctl` sub-module command. Topic: `service.hyprland.ctl`.
+One message struct per `hyprland::ctl` sub-module command, each in its own file under `messages/command/`. Topic: `service.hyprland.ctl`.
 
 | Message Type                    | Topic                  | Maps To                                  |
 |---------------------------------|------------------------|------------------------------------------|
@@ -118,9 +164,9 @@ Each struct carries `#[stabby::stabby(no_opt)]` and contains the fields required
 
 ---
 
-### 3.3 Dispatch Messages (`messages/dispatch.rs`)
+### 3.3 Dispatch Messages (`messages/dispatch/`)
 
-One message struct per `DispatchType` variant. Topic: `service.hyprland.dispatch`.
+One message struct per `DispatchType` variant, each in its own file under `messages/dispatch/`. Topic: `service.hyprland.dispatch`.
 
 | Message Type                                        | Maps To `DispatchType`                                                      |
 |-----------------------------------------------------|-----------------------------------------------------------------------------|
@@ -188,9 +234,32 @@ One message struct per `DispatchType` variant. Topic: `service.hyprland.dispatch
 
 ---
 
-### 3.4 Unified Dispatch Action Enum
+### 3.4 Unified Dispatch Action Enum (`messages/dispatch_action.rs`)
 
-To allow a single message handler to route all dispatch commands, a unified enum wraps every dispatch message.
+To allow a single message handler to route all dispatch commands, a unified enum wraps every dispatch message. It lives in its own file, while the envelope
+struct lives in `messages/dispatch_message.rs`.
+
+#### Model Crate `lib.rs`
+
+```rust
+pub mod messages;
+
+pub use messages::command::*;
+pub use messages::dispatch::*;
+pub use messages::dispatch_action::HyprlandDispatchAction;
+pub use messages::dispatch_message::HyprlandDispatchMessage;
+pub use messages::shared::*;
+```
+
+#### `messages/mod.rs`
+
+```rust
+pub mod command;
+pub mod dispatch;
+pub mod dispatch_action;
+pub mod dispatch_message;
+pub mod shared;
+```
 
 ```rust
 /// Unified enum for all Hyprland dispatch commands.
@@ -502,7 +571,7 @@ fn convert_direction(direction: HyprlandDirection) -> hyprland::dispatch::Direct
 fn convert_window_identifier(id: HyprlandWindowIdentifier) -> hyprland::dispatch::WindowIdentifier<'static> {
     match id {
         HyprlandWindowIdentifier::Address(addr) => {
-            hyprland::dispatch::WindowIdentifier::Address(addr.to_string().into())
+            hyprland::dispatch::WindowIdentifier::Address(hyprland::shared::Address::new(addr.to_string()))
         }
         HyprlandWindowIdentifier::ClassRegularExpression(regex) => {
             hyprland::dispatch::WindowIdentifier::ClassRegularExpression(regex.leak())
@@ -749,6 +818,111 @@ fn on_tap(&self) {
 
 ---
 
+## 10. Lifetime Handling & Avoiding String Leaks
+
+### 10.1 The Problem
+
+Many `hyprland` crate types carry a lifetime parameter (`DispatchType<'a>`, `WindowIdentifier<'a>`, etc.) and store string slices (`&'a str`). The stabby model
+uses owned `stabby::string::String` values. Converting an owned string to a `&'a str` with `'static` lifetime requires either:
+
+- Leaking the string with `String::leak()` (permanent memory leak).
+- Keeping the owned string alive in the same scope where the `DispatchType` is used.
+
+### 10.2 Why `leak()` Is Used in the Concept
+
+The helper functions in Section 6 return `hyprland` types with `'static` lifetime:
+
+```rust
+fn convert_workspace_identifier(...) -> hyprland::dispatch::WorkspaceIdentifierWithSpecial<'static>
+```
+
+Because the returned value must outlive the function, the only way to attach a `&str` to it is `String::leak()`. Every call that carries a `Name`, `Title`,
+`ClassRegularExpression`, or `Special` workspace name leaks memory permanently.
+
+### 10.3 The Better Approach: In-Scope Owned Strings
+
+`leak()` is **not required** if the owned string is kept alive in the same scope where the dispatch call happens. The dispatch call is short-lived, so a local
+`String` is sufficient:
+
+```rust
+async fn handle_exec(payload: ExecDispatchMessage) {
+    let command = payload.command.to_string();
+    if let Err(error) = Dispatch::call(DispatchType::Exec(&command)).await {
+        tracing::error!("Hyprland exec failed: {error}");
+    }
+}
+
+async fn handle_workspace(payload: WorkspaceDispatchMessage) {
+    match payload.identifier {
+        HyprlandWorkspaceIdentifierWithSpecial::Name(name) => {
+            let name_string = name.to_string();
+            let identifier = hyprland::dispatch::WorkspaceIdentifierWithSpecial::Name(&name_string);
+            if let Err(error) = Dispatch::call(DispatchType::Workspace(identifier)).await {
+                tracing::error!("Hyprland workspace failed: {error}");
+            }
+        }
+        HyprlandWorkspaceIdentifierWithSpecial::Id(id) => {
+            let identifier = hyprland::dispatch::WorkspaceIdentifierWithSpecial::Id(id);
+            if let Err(error) = Dispatch::call(DispatchType::Workspace(identifier)).await {
+                tracing::error!("Hyprland workspace failed: {error}");
+            }
+        }
+        // ... handle remaining variants without leaking
+    }
+}
+```
+
+### 10.4 Limitations of In-Scope Strings
+
+This approach works only when the `DispatchType` and the owned string live in the same scope. It breaks when helper functions try to return a constructed
+`DispatchType<'static>` to a caller, because the borrowed string would drop before the caller uses it.
+
+Therefore, the service should **not** use generic helper functions that return `DispatchType<'static>` or `WindowIdentifier<'static>`. Instead, each handler
+should construct the `hyprland` type directly inside its own scope.
+
+### 10.5 Recommended Pattern
+
+Replace the generic `convert_*` helpers with **per-handler conversion logic**:
+
+```rust
+async fn handle_close_window(payload: CloseWindowDispatchMessage) {
+    match payload.window {
+        HyprlandWindowIdentifier::Address(addr) => {
+            let address = hyprland::shared::Address::new(addr.to_string());
+            let id = hyprland::dispatch::WindowIdentifier::Address(address);
+            let _ = Dispatch::call(DispatchType::CloseWindow(id)).await;
+        }
+        HyprlandWindowIdentifier::ClassRegularExpression(regex) => {
+            let regex_string = regex.to_string();
+            let id = hyprland::dispatch::WindowIdentifier::ClassRegularExpression(&regex_string);
+            let _ = Dispatch::call(DispatchType::CloseWindow(id)).await;
+        }
+        HyprlandWindowIdentifier::Title(title) => {
+            let title_string = title.to_string();
+            let id = hyprland::dispatch::WindowIdentifier::Title(&title_string);
+            let _ = Dispatch::call(DispatchType::CloseWindow(id)).await;
+        }
+        HyprlandWindowIdentifier::ProcessId(pid) => {
+            let id = hyprland::dispatch::WindowIdentifier::ProcessId(pid);
+            let _ = Dispatch::call(DispatchType::CloseWindow(id)).await;
+        }
+    }
+}
+```
+
+### 10.6 When `leak()` Is Acceptable
+
+If the helper-function style is strongly preferred for readability, `leak()` is technically safe but should be documented as a deliberate trade-off. It is
+acceptable only for commands that are sent very infrequently (e.g., configuration reload, one-time output creation). It must be avoided for high-frequency
+commands like workspace switching, window focus, or cursor movement.
+
+### 10.7 Alternative: String-Based Command Builder
+
+As a last resort, the service could bypass the typed `hyprland` API and send raw `hyprctl` strings over the Hyprland socket. This avoids all lifetime issues but
+sacrifices compile-time safety and type checking. It is not recommended as the primary implementation strategy.
+
+---
+
 ## 9. Summary
 
 This concept defines:
@@ -763,3 +937,6 @@ This concept defines:
     - `HyprlandService` singleton using `tokio::sync::mpsc` for async command processing.
     - A single async dispatch loop that maps every model message to the corresponding `hyprland` crate API call.
     - Full trait implementations per `AGENTS.md` (`MessageHandler`, `MessageBroadcaster`, `PluginMetaGetter`, `AsRef<Option<FfiCoreContext>>`, `Service`).
+
+- **Lifetime handling**: The initial conversion helpers use `String::leak()`, which leaks memory. The recommended approach is to construct `hyprland` types
+  inside each handler with locally owned `String` values, keeping the borrow inside the same scope as the dispatch call.
