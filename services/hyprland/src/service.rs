@@ -122,7 +122,7 @@ fn ensure_hyprland_instance_signature() {
 
     if signatures.len() == 1 {
         let signature = signatures.into_iter().next().expect("one signature");
-        debug!("HYPRLAND_INSTANCE_SIGNATURE not set, using detected signature: {signature}");
+        error!("HYPRLAND_INSTANCE_SIGNATURE not set, using detected signature: {signature}");
         unsafe {
             env::set_var("HYPRLAND_INSTANCE_SIGNATURE", signature);
         }
