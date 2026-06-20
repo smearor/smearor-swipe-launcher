@@ -41,4 +41,16 @@ impl Clock {
         let format_desc = parse(format).unwrap_or_else(|_| parse(default_format).unwrap());
         timezone.format(&format_desc).unwrap_or_else(|_| "Invalid Format".to_string())
     }
+
+    pub(crate) fn get_hour(&self) -> u8 {
+        self.get_timezone().hour()
+    }
+
+    pub(crate) fn get_minute(&self) -> u8 {
+        self.get_timezone().minute()
+    }
+
+    pub(crate) fn get_second(&self) -> u8 {
+        self.get_timezone().second()
+    }
 }

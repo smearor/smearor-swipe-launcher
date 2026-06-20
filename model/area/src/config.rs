@@ -10,11 +10,10 @@ use smearor_model_plugin::PluginEntryStabby;
 pub const DEFAULT_AREA_WIDTH: i32 = 100;
 
 /// Horizontal alignment of plugins within an area.
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AreaAlign {
-    /// Align plugins to the left (default).
-    #[default]
+    /// Align plugins to the left.
     Left,
     /// Center plugins horizontally.
     Center,
@@ -74,8 +73,9 @@ pub struct AreaConfig {
     pub spacing: i32,
 
     /// Horizontal alignment of plugins within the area.
+    /// If not set, defaults to `Center` for scroll areas and `Left` for fixed areas.
     #[serde(default)]
-    pub align: AreaAlign,
+    pub align: Option<AreaAlign>,
 
     /// List of plugins to load in this area
     pub plugins: Vec<PluginEntry>,
@@ -145,7 +145,7 @@ impl From<AreaConfigStabby> for AreaConfig {
             include: None,
             css_classes: Vec::new(),
             spacing: default_spacing(),
-            align: AreaAlign::Left,
+            align: None,
             plugins: value.plugins.into_iter().map(Into::into).collect(),
         }
     }
@@ -161,6 +161,16 @@ impl AreaConfig {
 
     pub fn plugin_ids(&self) -> Vec<String> {
         self.plugins.iter().map(|p| p.id.clone()).collect()
+    }
+
+    /// Returns the effective horizontal alignment.
+    /// Uses the configured value if set, otherwise defaults to
+    /// `Center` for scroll areas and `Left` for fixed areas.
+    pub fn effective_align(&self) -> AreaAlign {
+        self.align.clone().unwrap_or_else(|| match self.area_type {
+            AreaType::Scroll => AreaAlign::Center,
+            AreaType::Fixed => AreaAlign::Left,
+        })
     }
 }
 
@@ -179,7 +189,7 @@ impl Default for AreaConfig {
             include: None,
             css_classes: Vec::new(),
             spacing: default_spacing(),
-            align: AreaAlign::Left,
+            align: None,
             plugins: Vec::new(),
         }
     }

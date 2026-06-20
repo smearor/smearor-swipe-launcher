@@ -18,7 +18,7 @@ css_classes = ["menu-button", "glow-blue"]
 
 [defaults.close_button]
 text = ""
-icon = "nf-fa-window-close"
+icon = "nf-md-undo"
 icon_only = true
 click_topic = "area.close"
 enabled = true
@@ -71,7 +71,6 @@ longpress_payload = { area_id = "clock_area" }
 [scroll_band]
 area_type = "scroll"
 spacing = 0
-align = "center"
 plugins = [
     { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -411,9 +410,7 @@ transition = "SlideLeft"
 plugins = [
     { id = "clock_close", path = "target/release/libsmearor_button_widget.so" },
     { id = "clocks", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "calendar", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "clock_widget_date", path = "target/release/libsmearor_clock_widget.so" },
-    { id = "clock_widget_time", path = "target/release/libsmearor_clock_widget.so" }
+    { id = "calendar", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
 
 [clock_close]
@@ -431,11 +428,3 @@ defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Calendar.desktop"
 [calendar.wrapper]
 follows_rotation = true
-
-[clock_widget_date]
-format = "[year]-[month]-[day]"
-timezone = "UTC"
-
-[clock_widget_time]
-format = "[hour]:[minute]:[second]"
-timezone = "UTC"

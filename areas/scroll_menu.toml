@@ -19,6 +19,7 @@
 # css_classes = ["close-button"]
 
 area_type = "scroll"
+align = "center"
 open_transition = "SlideLeft"
 close_transition = "SlideRight"
 auto_close = false

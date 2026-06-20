@@ -246,6 +246,9 @@ impl SwipeLauncherConfig {
             "close_transition",
             "auto_close",
             "close_on_escape",
+            "align",
+            "css_classes",
+            "spacing",
             "plugins",
             "include",
         ];

@@ -1,11 +1,13 @@
 use crate::clock::Clock;
 use crate::config::ClockConfig;
-use adw::StatusPage;
-use adw::prelude::Cast;
+use gtk4::Box as GtkBox;
 use gtk4::GestureClick;
+use gtk4::Label;
+use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::WidgetExt;
+use gtk4::prelude::*;
 use serde_json;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
@@ -24,13 +26,27 @@ use std::sync::RwLock;
 use std::thread;
 use std::time::Duration;
 
+#[derive(Clone)]
+pub(crate) struct CyberLabels {
+    hour_prev: Label,
+    hour_curr: Label,
+    hour_next: Label,
+    min_prev: Label,
+    min_curr: Label,
+    min_next: Label,
+    sec_prev: Label,
+    sec_curr: Label,
+    sec_next: Label,
+    date_label: Option<Label>,
+}
+
 pub(crate) struct ClockWidget {
     pub(crate) meta: PluginMeta,
     pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) config: ClockConfig,
     pub(crate) clock: Arc<Clock>,
-    pub(crate) status_page: Arc<RwLock<Option<StatusPage>>>,
-    pub(crate) time_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<String>>,
+    pub(crate) labels: Arc<RwLock<Option<CyberLabels>>>,
+    pub(crate) time_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<()>>,
 }
 
 impl ClockWidget {
@@ -42,20 +58,64 @@ impl ClockWidget {
             core_context,
             config: clock_config.clone(),
             clock: Arc::new(Clock::new(clock_config)),
-            status_page: Arc::new(RwLock::new(None)),
+            labels: Arc::new(RwLock::new(None)),
             time_receiver: None,
         })
     }
 
+    fn create_time_column(css_prefix: &str) -> (GtkBox, (Label, Label, Label)) {
+        let col_box = GtkBox::builder().orientation(Orientation::Vertical).spacing(2).build();
+
+        let lbl_prev = Label::builder().css_classes([format!("cyber-clock-{}-prev", css_prefix)]).build();
+        let lbl_curr = Label::builder().css_classes([format!("cyber-clock-{}-curr", css_prefix)]).build();
+        let lbl_next = Label::builder().css_classes([format!("cyber-clock-{}-next", css_prefix)]).build();
+
+        col_box.append(&lbl_prev);
+        col_box.append(&lbl_curr);
+        col_box.append(&lbl_next);
+
+        (col_box, (lbl_prev, lbl_curr, lbl_next))
+    }
+
+    fn create_divider() -> Label {
+        Label::builder()
+            .label(":")
+            .valign(gtk4::Align::Center)
+            .css_classes(["cyber-clock-divider".to_string()])
+            .build()
+    }
+
+    fn update_labels(labels: &CyberLabels, clock: &Clock) {
+        let h = clock.get_hour() as i32;
+        let m = clock.get_minute() as i32;
+        let s = clock.get_second() as i32;
+
+        labels.hour_prev.set_text(&format!("{:02}", (h - 1 + 24) % 24));
+        labels.hour_curr.set_text(&format!("{:02}", h));
+        labels.hour_next.set_text(&format!("{:02}", (h + 1) % 24));
+
+        labels.min_prev.set_text(&format!("{:02}", (m - 1 + 60) % 60));
+        labels.min_curr.set_text(&format!("{:02}", m));
+        labels.min_next.set_text(&format!("{:02}", (m + 1) % 60));
+
+        labels.sec_prev.set_text(&format!("{:02}", (s - 1 + 60) % 60));
+        labels.sec_curr.set_text(&format!("{:02}", s));
+        labels.sec_next.set_text(&format!("{:02}", (s + 1) % 60));
+
+        if let Some(ref date_label) = labels.date_label {
+            if let Some(date_str) = clock.get_current_time_2() {
+                date_label.set_text(&date_str);
+            }
+        }
+    }
+
     pub(crate) fn start_time_update(&mut self) {
-        let (time_sender, time_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
+        let (time_sender, time_receiver) = tokio::sync::mpsc::unbounded_channel::<()>();
         self.time_receiver = Some(time_receiver);
 
-        let clock = self.clock.clone();
         thread::spawn(move || {
             loop {
-                let time_str = clock.get_current_time_1();
-                if time_sender.send(time_str).is_err() {
+                if time_sender.send(()).is_err() {
                     break;
                 }
                 thread::sleep(Duration::from_secs(1));
@@ -63,12 +123,13 @@ impl ClockWidget {
         });
 
         if let Some(mut rx) = self.time_receiver.take() {
-            let status_page = self.status_page.clone();
+            let labels = self.labels.clone();
+            let clock = self.clock.clone();
             MainContext::default().spawn_local(async move {
-                while let Some(time_str) = rx.recv().await {
-                    if let Ok(page_guard) = status_page.read() {
-                        if let Some(page) = page_guard.as_ref() {
-                            page.set_title(&time_str);
+                while rx.recv().await.is_some() {
+                    if let Ok(guard) = labels.read() {
+                        if let Some(ref lbls) = guard.as_ref() {
+                            Self::update_labels(lbls, &clock);
                         }
                     }
                 }
@@ -105,17 +166,54 @@ impl Plugin for ClockWidget {}
 
 impl WidgetBuilder for ClockWidget {
     fn build_widget(&mut self) -> Widget {
-        let _ = adw::init();
-        let mut status_page = StatusPage::builder().title(self.clock.get_current_time_1());
-        if let Some(current_time_2) = self.clock.get_current_time_2() {
-            status_page = status_page.description(current_time_2);
-        }
+        let outer_box = GtkBox::builder()
+            .orientation(Orientation::Vertical)
+            .spacing(4)
+            .css_classes(["cyber-clock-main".to_string()])
+            .build();
+
+        let time_box = GtkBox::builder().orientation(Orientation::Horizontal).spacing(self.config.spacing).build();
+
         if let Some(width) = self.config.width {
-            status_page = status_page.width_request(width);
+            outer_box.set_width_request(width);
         }
 
-        let status_page = status_page.build();
-        status_page.add_css_class("smart-desk-clock");
+        let (box_hour, hour_labels) = Self::create_time_column("hour");
+        let (box_min, min_labels) = Self::create_time_column("minute");
+        let (box_sec, sec_labels) = Self::create_time_column("second");
+
+        let divider1 = Self::create_divider();
+        let divider2 = Self::create_divider();
+
+        time_box.append(&box_hour);
+        time_box.append(&divider1);
+        time_box.append(&box_min);
+        time_box.append(&divider2);
+        time_box.append(&box_sec);
+
+        outer_box.append(&time_box);
+
+        let mut date_label: Option<Label> = None;
+        if self.config.format_2.is_some() {
+            let date = Label::builder().css_classes(["cyber-clock-date".to_string()]).build();
+            outer_box.append(&date);
+            date_label = Some(date);
+        }
+
+        let labels = CyberLabels {
+            hour_prev: hour_labels.0,
+            hour_curr: hour_labels.1,
+            hour_next: hour_labels.2,
+            min_prev: min_labels.0,
+            min_curr: min_labels.1,
+            min_next: min_labels.2,
+            sec_prev: sec_labels.0,
+            sec_curr: sec_labels.1,
+            sec_next: sec_labels.2,
+            date_label,
+        };
+
+        Self::update_labels(&labels, &self.clock);
 
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
@@ -127,10 +225,10 @@ impl WidgetBuilder for ClockWidget {
                 message_broadcaster.broadcast_string(&topic, &payload_str);
             }
         });
-        status_page.add_controller(gesture);
+        outer_box.add_controller(gesture);
 
-        *self.status_page.write().unwrap() = Some(status_page.clone());
+        *self.labels.write().unwrap() = Some(labels);
         self.start_time_update();
-        status_page.upcast::<Widget>()
+        outer_box.upcast::<Widget>()
     }
 }

@@ -311,7 +311,7 @@ impl AreaManager {
                 let inner = GtkBox::builder()
                     .orientation(Orientation::Horizontal)
                     .spacing(area_config.spacing)
-                    .halign(match area_config.align {
+                    .halign(match area_config.effective_align() {
                         AreaAlign::Left => Align::Start,
                         AreaAlign::Center => Align::Center,
                         AreaAlign::Right => Align::End,
@@ -341,7 +341,7 @@ impl AreaManager {
                 for class in &area_config.css_classes {
                     plugin_container.add_css_class(class);
                 }
-                match area_config.align {
+                match area_config.effective_align() {
                     AreaAlign::Left => {
                         self.add_plugins(area_config, &plugin_container);
                     }

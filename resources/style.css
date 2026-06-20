@@ -24,8 +24,9 @@
 }
 
 .games-area-bg {
-    background: rgba(255, 255, 255, 0.1);
-    /*background-color: #dc007377;*/
+    background: rgba(0, 0, 0, 0.1);
+    border: 1px solid #dc007333;
+    /*background-color: #dc007333;*/
 }
 
 @keyframes longpress-fill {
@@ -375,3 +376,87 @@ scrolledwindow {
     background-color: transparent;
 }
 
+
+/* Hauptcontainer */
+.cyber-clock-main {
+    padding: 8px 12px;
+}
+
+/* Trennpunkte */
+.cyber-clock-divider {
+    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
+    font-size: 28px;
+    font-weight: bold;
+    color: #44aaff;
+    text-shadow: 0 0 8px rgba(68, 170, 255, 0.8);
+}
+
+/* Vorherige / nächste Zahlen (gedimmt) */
+.cyber-clock-hour-prev,
+.cyber-clock-hour-next,
+.cyber-clock-minute-prev,
+.cyber-clock-minute-next,
+.cyber-clock-second-prev,
+.cyber-clock-second-next {
+    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
+    font-size: 14px;
+    color: #55aaff;
+    opacity: 0.65;
+    transition: opacity 0.4s ease, text-shadow 0.4s ease;
+}
+
+/* Aktuelle Zahlen (hell leuchtend) */
+.cyber-clock-hour-curr,
+.cyber-clock-minute-curr,
+.cyber-clock-second-curr {
+    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
+    font-size: 32px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 0 4px #ffffff,
+    0 0 10px #00aaff,
+    0 0 20px #00aaff,
+    0 0 40px rgba(0, 170, 255, 0.4);
+    transition: text-shadow 0.3s ease;
+}
+
+/* Pulsierender Glow fuer die Sekunden */
+.cyber-clock-second-curr {
+    animation: cyber-pulse 2s ease-in-out infinite;
+}
+
+@keyframes cyber-pulse {
+    0%, 100% {
+        text-shadow: 0 0 4px #ffffff,
+        0 0 10px #00aaff,
+        0 0 20px #00aaff,
+        0 0 40px rgba(0, 170, 255, 0.4);
+    }
+    50% {
+        text-shadow: 0 0 4px #ffffff,
+        0 0 14px #00aaff,
+        0 0 30px #00aaff,
+        0 0 60px rgba(0, 170, 255, 0.7);
+    }
+}
+
+/* Hover-Effekt: aktuelle Zahlen flackern auf */
+.cyber-clock-main:hover .cyber-clock-hour-curr,
+.cyber-clock-main:hover .cyber-clock-minute-curr,
+.cyber-clock-main:hover .cyber-clock-second-curr {
+    text-shadow: 0 0 4px #ffffff,
+    0 0 16px #00aaff,
+    0 0 40px #00aaff,
+    0 0 80px rgba(0, 170, 255, 0.8);
+}
+
+/* Datum unter der Uhr */
+.cyber-clock-date {
+    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: #88ccff;
+    text-shadow: 0 0 4px rgba(136, 204, 255, 0.5);
+    opacity: 0.8;
+    transition: opacity 0.4s ease;
+}
