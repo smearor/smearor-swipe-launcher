@@ -24,6 +24,8 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::Service;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use stabby::option::Option as StabbyOption;
+use std::env;
+use std::fs;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;
@@ -93,7 +95,42 @@ impl HyprlandService {
     }
 }
 
+/// Ensures the Hyprland socket can be found by the `hyprland` crate.
+///
+/// The crate reads `HYPRLAND_INSTANCE_SIGNATURE` to build the socket path.
+/// If the variable is missing, this function tries to find a single Hyprland
+/// instance in `/tmp/hypr` and sets the variable accordingly.
+fn ensure_hyprland_instance_signature() {
+    if env::var("HYPRLAND_INSTANCE_SIGNATURE").is_ok() {
+        return;
+    }
+
+    let Ok(entries) = fs::read_dir("/tmp/hypr") else {
+        return;
+    };
+
+    let mut signatures: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        if let Ok(metadata) = entry.metadata() {
+            if metadata.is_dir() {
+                if let Ok(name) = entry.file_name().into_string() {
+                    signatures.push(name);
+                }
+            }
+        }
+    }
+
+    if signatures.len() == 1 {
+        let signature = signatures.into_iter().next().expect("one signature");
+        debug!("HYPRLAND_INSTANCE_SIGNATURE not set, using detected signature: {signature}");
+        unsafe {
+            env::set_var("HYPRLAND_INSTANCE_SIGNATURE", signature);
+        }
+    }
+}
+
 async fn handle_dispatch(message: HyprlandDispatchMessage) {
+    ensure_hyprland_instance_signature();
     let result = match message.kind {
         HyprlandDispatchActionKind::Exec => {
             let opt = message.exec.match_owned(|value| Some(value.into()), || None);
