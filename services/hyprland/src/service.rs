@@ -25,6 +25,7 @@ use smearor_swipe_launcher_plugin_api::Service;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use stabby::option::Option as StabbyOption;
 use std::env;
+use std::env::VarError;
 use std::fs;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -101,7 +102,8 @@ impl HyprlandService {
 /// If the variable is missing, this function tries to find a single Hyprland
 /// instance in `/tmp/hypr` and sets the variable accordingly.
 fn ensure_hyprland_instance_signature() {
-    if env::var("HYPRLAND_INSTANCE_SIGNATURE").is_ok() {
+    if let Ok(instance_signature) = env::var("HYPRLAND_INSTANCE_SIGNATURE") {
+        error!("Found HYPRLAND_INSTANCE_SIGNATURE: '{instance_signature}'");
         return;
     }
 
