@@ -102,6 +102,7 @@ impl HyprlandService {
 /// If the variable is missing, this function tries to find a single Hyprland
 /// instance in `/tmp/hypr` and sets the variable accordingly.
 fn ensure_hyprland_instance_signature() {
+    error!("x");
     if let Ok(instance_signature) = env::var("HYPRLAND_INSTANCE_SIGNATURE") {
         error!("Found HYPRLAND_INSTANCE_SIGNATURE: '{instance_signature}'");
         return;
@@ -122,11 +123,18 @@ fn ensure_hyprland_instance_signature() {
         }
     }
 
-    if signatures.len() == 1 {
-        let signature = signatures.into_iter().next().expect("one signature");
-        error!("HYPRLAND_INSTANCE_SIGNATURE not set, using detected signature: {signature}");
-        unsafe {
-            env::set_var("HYPRLAND_INSTANCE_SIGNATURE", signature);
+    if signatures.len() > 1 {
+        error!("Multiple HYPRLAND_INSTANCE_SIGNATUREs found.")
+    }
+    match signatures.first() {
+        None => {
+            error!("No HYPRLAND_INSTANCE_SIGNATURE found.")
+        }
+        Some(signature) => {
+            error!("HYPRLAND_INSTANCE_SIGNATURE not set, using detected signature: {signature}");
+            unsafe {
+                env::set_var("HYPRLAND_INSTANCE_SIGNATURE", signature);
+            }
         }
     }
 }
