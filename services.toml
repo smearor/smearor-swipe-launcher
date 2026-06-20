@@ -17,6 +17,10 @@ path = "target/release/libsmearor_mpris_service.so"
 id = "notifications"
 path = "target/release/libsmearor_notifications_service.so"
 
+[[services]]
+id = "hyprland"
+path = "target/release/libsmearor_hyprland_service.so"
+
 # Service-specific configurations
 [app_launcher]
 smearor_wrot_path = "smearor-wrot"

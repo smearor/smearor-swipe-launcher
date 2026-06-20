@@ -72,6 +72,7 @@ longpress_payload = { area_id = "clock_area" }
 area_type = "scroll"
 spacing = 0
 plugins = [
+    { id = "previous_workspace", path = "target/release/libsmearor_button_widget.so" },
     { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "video_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -82,9 +83,28 @@ plugins = [
     { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "wike", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
     #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
+
+[previous_workspace]
+defaults = "menu_button"
+text = "Previous Workspace"
+icon = "nf-md-skip_previous"
+icon_size = 36
+tooltip = "Previous Workspace"
+click_topic = "service.hyprland.dispatch"
+click_payload = { identifier = { kind = "Relative", id = -1 } }
+
+[next_workspace]
+defaults = "menu_button"
+text = "Next Workspace"
+icon = "nf-md-skip_next"
+icon_size = 36
+tooltip = "Next Workspace"
+click_topic = "service.hyprland.dispatch"
+click_payload = { identifier = { kind = "Relative", id = 1 } }
 
 [mpris]
 max_width_chars = 24

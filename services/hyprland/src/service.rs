@@ -2,21 +2,15 @@ use crate::config::HyprlandServiceConfig;
 use hyprland::dispatch::Dispatch;
 use hyprland::dispatch::DispatchType;
 use smearor_hyprland_model::ExecDispatchMessage;
-use smearor_hyprland_model::ExecDispatchMessageStabby;
 use smearor_hyprland_model::HyprlandDirection;
 use smearor_hyprland_model::HyprlandDispatchActionKind;
 use smearor_hyprland_model::HyprlandDispatchMessage;
 use smearor_hyprland_model::HyprlandFullscreenType;
 use smearor_hyprland_model::HyprlandWorkspaceIdentifierKind;
-use smearor_hyprland_model::HyprlandWorkspaceIdentifierWithSpecial;
 use smearor_hyprland_model::KillActiveWindowDispatchMessage;
-use smearor_hyprland_model::KillActiveWindowDispatchMessageStabby;
 use smearor_hyprland_model::MoveFocusDispatchMessage;
-use smearor_hyprland_model::MoveFocusDispatchMessageStabby;
 use smearor_hyprland_model::ToggleFullscreenDispatchMessage;
-use smearor_hyprland_model::ToggleFullscreenDispatchMessageStabby;
 use smearor_hyprland_model::WorkspaceDispatchMessage;
-use smearor_hyprland_model::WorkspaceDispatchMessageStabby;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
@@ -53,6 +47,8 @@ pub struct HyprlandService {
 
 impl HyprlandService {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
+        smearor_hyprland_model::register_json_converters(core_context);
+
         let service_config: HyprlandServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|error| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, error.to_string().into()))?;
 
