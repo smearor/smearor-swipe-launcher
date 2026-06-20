@@ -26,6 +26,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use stabby::option::Option as StabbyOption;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tracing::debug;
 use tracing::error;
 
 /// Internal union of all command types the service handles.
@@ -140,6 +141,10 @@ async fn handle_toggle_fullscreen(payload: ToggleFullscreenDispatchMessage) -> h
 }
 
 async fn handle_workspace(payload: WorkspaceDispatchMessage) -> hyprland::Result<()> {
+    debug!(
+        "Hyprland service: dispatching workspace change: kind={:?}, id={}",
+        payload.identifier.kind, payload.identifier.id
+    );
     match payload.identifier.kind {
         HyprlandWorkspaceIdentifierKind::Id => {
             Dispatch::call_async(DispatchType::Workspace(hyprland::dispatch::WorkspaceIdentifierWithSpecial::Id(payload.identifier.id))).await
@@ -211,6 +216,7 @@ impl MessageHandler<FfiEnvelopePayload<HyprlandDispatchMessage>> for HyprlandSer
 
 impl MessageHandler<FfiEnvelopePayload<WorkspaceDispatchMessage>> for HyprlandService {
     fn handle_message(&self, message: FfiEnvelopePayload<WorkspaceDispatchMessage>, _sender_id: &str) {
+        debug!("Hyprland service: queueing workspace dispatch for {:?}", message.0.identifier);
         let dispatch_message = HyprlandDispatchMessage {
             kind: HyprlandDispatchActionKind::Workspace,
             exec: StabbyOption::None(),
@@ -300,6 +306,7 @@ impl Service for HyprlandService {
         }
         unsafe {
             let envelope = &*(message as *mut FfiEnvelope);
+            debug!("Hyprland service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
             match envelope.type_id {
                 id if id == FfiEnvelopePayload::<HyprlandDispatchMessage>::TYPE_ID => {
                     MessageHandler::<FfiEnvelopePayload<HyprlandDispatchMessage>>::handle_envelope_message(self, envelope);
