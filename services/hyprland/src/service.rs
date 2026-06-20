@@ -27,6 +27,7 @@ use stabby::option::Option as StabbyOption;
 use std::env;
 use std::env::VarError;
 use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;
@@ -101,37 +102,60 @@ impl HyprlandService {
 /// The crate reads `HYPRLAND_INSTANCE_SIGNATURE` to build the socket path.
 /// If the variable is missing, this function tries to find a single Hyprland
 /// instance in `/tmp/hypr` and sets the variable accordingly.
-fn ensure_hyprland_instance_signature() {
-    error!("x");
+pub fn ensure_hyprland_instance_signature() {
     if let Ok(instance_signature) = env::var("HYPRLAND_INSTANCE_SIGNATURE") {
-        error!("Found HYPRLAND_INSTANCE_SIGNATURE: '{instance_signature}'");
+        // Wenn bereits gesetzt, ist nichts zu tun
         return;
     }
 
-    let Ok(entries) = fs::read_dir("/tmp/hypr") else {
-        return;
+    // 1. Dynamisch das XDG_RUNTIME_DIR ermitteln, Fallback auf /run/user/1000
+    let runtime_dir = env::var("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/run/user/1000"));
+
+    let hypr_dir = runtime_dir.join("hypr");
+
+    // 2. Prüfen, ob das Verzeichnis überhaupt existiert
+    let entries = match fs::read_dir(&hypr_dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            error!("Could not read Hyprland runtime directory '{:?}': {}", hypr_dir, e);
+            return;
+        }
     };
 
     let mut signatures: Vec<String> = Vec::new();
+
+    // 3. Verzeichnisstrukturen durchsuchen
     for entry in entries.flatten() {
         if let Ok(metadata) = entry.metadata() {
             if metadata.is_dir() {
                 if let Ok(name) = entry.file_name().into_string() {
-                    signatures.push(name);
+                    // Ignoriere eventuelle versteckte Ordner oder Standard-Muster, falls nötig.
+                    // Hyprland-Signaturen beginnen typischerweise mit einem Unterstrich (z.B. _1718873425_123)
+                    if name.starts_with('_') {
+                        signatures.push(name);
+                    }
                 }
             }
         }
     }
 
+    // 4. Auswertung der gefundenen Signaturen
     if signatures.len() > 1 {
-        error!("Multiple HYPRLAND_INSTANCE_SIGNATUREs found.")
+        error!("Multiple HYPRLAND_INSTANCE_SIGNATUREs found in {:?}: {:?}", hypr_dir, signatures);
     }
+
     match signatures.first() {
         None => {
-            error!("No HYPRLAND_INSTANCE_SIGNATURE found.")
+            error!("No HYPRLAND_INSTANCE_SIGNATURE found in {:?}", hypr_dir);
         }
         Some(signature) => {
             error!("HYPRLAND_INSTANCE_SIGNATURE not set, using detected signature: {signature}");
+
+            // env::set_var ist ab Rust 1.80 als unsafe markiert, wenn Multithreading im Spiel ist,
+            // da es im Prozess-Environment zu Datenrennen führen kann. Da wir dies aber direkt beim
+            // App-Start (hoffenlich vor dem Spawnen von Tokio/Std-Threads) machen, ist es sicher.
             unsafe {
                 env::set_var("HYPRLAND_INSTANCE_SIGNATURE", signature);
             }
