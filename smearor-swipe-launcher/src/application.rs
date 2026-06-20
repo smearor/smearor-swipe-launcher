@@ -1,8 +1,12 @@
 use crate::config::launcher::SwipeLauncherConfig;
 use crate::config::services::ServicesConfig;
+use crate::context::GLOBAL_JSON_CONVERTER_REGISTRY;
+use crate::context::initialize_global_json_converter_registry;
 use crate::css_provider::create_css_provider;
 use crate::display::AreaSize;
 use crate::instance::LauncherInstance;
+use crate::json_converter::JsonConverterRegistry;
+use crate::messages::try_convert_string_to_typed_envelope;
 use crate::service_manager::ServiceManager;
 use gtk4::Application;
 use gtk4::gdk::Display;
@@ -38,6 +42,8 @@ impl LauncherHost {
     pub fn new(gtk_app: Application) -> Self {
         let (broker_sender, broker_receiver) = unbounded_channel::<FfiEnvelope>();
         let service_manager = Arc::new(ServiceManager::new(broker_sender.clone()));
+        let global_json_converter_registry = Arc::new(JsonConverterRegistry::new());
+        let _ = initialize_global_json_converter_registry(global_json_converter_registry);
 
         LauncherHost {
             gtk_app,
@@ -194,6 +200,22 @@ impl LauncherHost {
     fn route_message(&self, envelope: FfiEnvelope) {
         let mut target = envelope.target_instance_id.to_string();
         let topic = envelope.topic.to_string();
+
+        // Try to convert a generic JSON-string payload into a typed message.
+        // Services and instances share the same global registry.
+        let mut envelope = envelope;
+        if let Some(registry) = GLOBAL_JSON_CONVERTER_REGISTRY.get() {
+            if let Some(converted) = try_convert_string_to_typed_envelope(registry, &envelope) {
+                if !envelope.payload.is_null() {
+                    if let Some(destroy) = envelope.destroy_payload {
+                        unsafe {
+                            (destroy)(envelope.payload);
+                        }
+                    }
+                }
+                envelope = converted;
+            }
+        }
 
         // Service commands are routed to the shared ServiceManager
         if topic.starts_with("service.") && !topic.ends_with(".status") {

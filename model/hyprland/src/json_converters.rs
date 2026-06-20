@@ -1,4 +1,6 @@
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::JsonConverterRegistry;
+use smearor_swipe_launcher_plugin_api::JsonConvertible;
 use stabby::option::Option as StabbyOption;
 
 use crate::ExecDispatchMessage;
@@ -126,12 +128,32 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(HyprlandDispatchMessag
     } else {
         StabbyOption::None()
     };
+    let move_focus = if kind == HyprlandDispatchActionKind::MoveFocus {
+        json.get("direction")
+            .map(|value| crate::MoveFocusDispatchMessageStabby {
+                direction: parse_direction(value),
+            })
+            .map(StabbyOption::Some)
+            .unwrap_or(StabbyOption::None())
+    } else {
+        StabbyOption::None()
+    };
+    let toggle_fullscreen = if kind == HyprlandDispatchActionKind::ToggleFullscreen {
+        json.get("fullscreen_type")
+            .map(|value| crate::ToggleFullscreenDispatchMessageStabby {
+                fullscreen_type: parse_fullscreen_type(value),
+            })
+            .map(StabbyOption::Some)
+            .unwrap_or(StabbyOption::None())
+    } else {
+        StabbyOption::None()
+    };
     HyprlandDispatchMessage {
         kind,
         exec,
         kill_active_window: StabbyOption::None(),
-        move_focus: StabbyOption::None(),
-        toggle_fullscreen: StabbyOption::None(),
+        move_focus,
+        toggle_fullscreen,
         workspace,
     }
 });
@@ -140,10 +162,12 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(HyprlandDispatchMessag
 ///
 /// Call this once during plugin initialisation.
 pub fn register_json_converters(context: Option<FfiCoreContext>) {
-    WorkspaceDispatchMessageConverter::register_in_host(context);
-    ExecDispatchMessageConverter::register_in_host(context);
-    KillActiveWindowDispatchMessageConverter::register_in_host(context);
-    MoveFocusDispatchMessageConverter::register_in_host(context);
-    ToggleFullscreenDispatchMessageConverter::register_in_host(context);
     HyprlandDispatchMessageConverter::register_in_host(context);
+}
+
+/// Register all JSON converter implementations for Hyprland messages directly in a registry.
+///
+/// Call this once during host application startup (e.g. inside `AreaManager::new`).
+pub fn register_json_converters_in_registry(registry: &JsonConverterRegistry) {
+    HyprlandDispatchMessageConverter::register_json_converter(registry);
 }

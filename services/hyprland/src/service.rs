@@ -28,6 +28,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
+use tracing::warn;
 
 /// Internal union of all command types the service handles.
 pub enum HyprlandCommand {
@@ -48,7 +49,12 @@ pub struct HyprlandService {
 
 impl HyprlandService {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
+        debug!(
+            "Hyprland service: registering JSON converters, core_context is {}",
+            if core_context.is_some() { "Some" } else { "None" }
+        );
         smearor_hyprland_model::register_json_converters(core_context);
+        debug!("Hyprland service: JSON converters registered");
 
         let service_config: HyprlandServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|error| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, error.to_string().into()))?;
@@ -309,24 +315,32 @@ impl Service for HyprlandService {
             debug!("Hyprland service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
             match envelope.type_id {
                 id if id == FfiEnvelopePayload::<HyprlandDispatchMessage>::TYPE_ID => {
+                    debug!("HyprlandDispatchMessage");
                     MessageHandler::<FfiEnvelopePayload<HyprlandDispatchMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<WorkspaceDispatchMessage>::TYPE_ID => {
+                    debug!("WorkspaceDispatchMessage");
                     MessageHandler::<FfiEnvelopePayload<WorkspaceDispatchMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<ExecDispatchMessage>::TYPE_ID => {
+                    debug!("ExecDispatchMessage");
                     MessageHandler::<FfiEnvelopePayload<ExecDispatchMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<KillActiveWindowDispatchMessage>::TYPE_ID => {
+                    debug!("KillActiveWindowDispatchMessage");
                     MessageHandler::<FfiEnvelopePayload<KillActiveWindowDispatchMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<MoveFocusDispatchMessage>::TYPE_ID => {
+                    debug!("MoveFocusDispatchMessage");
                     MessageHandler::<FfiEnvelopePayload<MoveFocusDispatchMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<ToggleFullscreenDispatchMessage>::TYPE_ID => {
+                    debug!("ToggleFullscreenDispatchMessage");
                     MessageHandler::<FfiEnvelopePayload<ToggleFullscreenDispatchMessage>>::handle_envelope_message(self, envelope);
                 }
-                _ => {}
+                _ => {
+                    warn!("Unknown message type");
+                }
             }
         }
     }

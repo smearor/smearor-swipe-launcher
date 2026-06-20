@@ -13,7 +13,7 @@ use tracing::warn;
 /// Generic widgets (e.g. button) send plain JSON string payloads. The Host
 /// uses the registry (populated via `register_json_converter!`) to convert
 /// those strings into typed messages based on the message topic.
-fn try_convert_string_to_typed_envelope(registry: &crate::json_converter::JsonConverterRegistry, envelope: &FfiEnvelope) -> Option<FfiEnvelope> {
+pub fn try_convert_string_to_typed_envelope(registry: &crate::json_converter::JsonConverterRegistry, envelope: &FfiEnvelope) -> Option<FfiEnvelope> {
     let string_type_id = smearor_swipe_launcher_plugin_api::generate_type_id("std::string::String");
     if envelope.type_id != string_type_id || envelope.payload.is_null() {
         return None;
@@ -56,22 +56,6 @@ impl LauncherInstance {
                 warn!("Broker: Dropping burst command message on topic '{}'", topic);
                 return;
             }
-        }
-
-        // Try to convert a generic JSON-string payload into a typed message
-        // for *any* topic. Plugins register their converters at load time via
-        // the FFI callback, so the Host can remain fully generic.
-        let mut envelope = envelope;
-        if let Some(converted) = try_convert_string_to_typed_envelope(&self.json_converter_registry, &envelope) {
-            // Destroy the original String payload before replacing the envelope
-            if !envelope.payload.is_null() {
-                if let Some(destroy) = envelope.destroy_payload {
-                    unsafe {
-                        (destroy)(envelope.payload);
-                    }
-                }
-            }
-            envelope = converted;
         }
 
         if topic.starts_with("area.")

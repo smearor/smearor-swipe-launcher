@@ -95,7 +95,7 @@ icon = "nf-md-skip_previous"
 icon_size = 36
 tooltip = "Previous Workspace"
 click_topic = "service.hyprland.dispatch"
-click_payload = { identifier = { kind = "Relative", id = -1 } }
+click_payload = { kind = "Workspace", identifier = { kind = "Relative", id = -1 } }
 
 [next_workspace]
 defaults = "menu_button"
@@ -104,7 +104,7 @@ icon = "nf-md-skip_next"
 icon_size = 36
 tooltip = "Next Workspace"
 click_topic = "service.hyprland.dispatch"
-click_payload = { identifier = { kind = "Relative", id = 1 } }
+click_payload = { kind = "Workspace", identifier = { kind = "Relative", id = 1 } }
 
 [mpris]
 max_width_chars = 24

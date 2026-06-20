@@ -9,7 +9,7 @@ use tracing::error;
 
 use crate::json_converter::JsonConverterRegistry;
 
-static GLOBAL_JSON_CONVERTER_REGISTRY: OnceLock<Arc<JsonConverterRegistry>> = OnceLock::new();
+pub static GLOBAL_JSON_CONVERTER_REGISTRY: OnceLock<Arc<JsonConverterRegistry>> = OnceLock::new();
 
 /// Initialise the global JSON converter registry used by the FFI callback.
 ///
