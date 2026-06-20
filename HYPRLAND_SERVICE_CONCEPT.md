@@ -347,7 +347,18 @@ pub struct HyprlandDispatchMessage {
 use hyprland::dispatch::Dispatch;
 use hyprland::ctl::*;
 use smearor_hyprland_model::*;
-use smearor_swipe_launcher_plugin_api::*;
+use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
+use smearor_swipe_launcher_plugin_api::MessageHandler;
+use smearor_swipe_launcher_plugin_api::PluginConfig;
+use smearor_swipe_launcher_plugin_api::PluginConstructionError;
+use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
+use smearor_swipe_launcher_plugin_api::PluginMeta;
+use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
+use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use tokio::sync::mpsc;
 
 pub struct HyprlandService {
@@ -375,12 +386,21 @@ pub enum HyprlandCommand {
 
 ### 4.2 Service Construction
 
+The service constructor follows the pattern from the existing `app-launcher` service: it spawns a dedicated OS thread with a single-threaded Tokio runtime for
+async command handling.
+
 ```rust
 impl HyprlandService {
     pub(crate) fn new(
         config: PluginConfig,
         core_context: Option<FfiCoreContext>,
     ) -> Result<Self, PluginConstructionErrorWrapper> {
+        let _service_config: HyprlandServiceConfig = serde_json::from_value(config.config.clone())
+            .map_err(|e| PluginConstructionErrorWrapper::new(
+                PluginConstructionError::FailedToParseWidgetConfig,
+                e.to_string().into(),
+            ))?;
+
         let (command_sender, mut command_receiver) =
             tokio::sync::mpsc::unbounded_channel::<HyprlandCommand>();
 
@@ -390,10 +410,18 @@ impl HyprlandService {
             command_sender,
         };
 
-        service.executor.spawn("hyprland_service", move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
+        std::thread::spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread()
                 .enable_all()
-                .build()?;
+                .build()
+            {
+                Ok(rt) => rt,
+                Err(error) => {
+                    tracing::error!("Hyprland Service: failed to create tokio runtime: {error}");
+                    return;
+                }
+            };
+
             rt.block_on(async move {
                 while let Some(command) = command_receiver.recv().await {
                     match command {
@@ -406,12 +434,37 @@ impl HyprlandService {
                         HyprlandCommand::CtlNotify(message) => {
                             handle_ctl_notify(message).await;
                         }
-                        // ... etc
+                        HyprlandCommand::CtlOutputCreate(message) => {
+                            handle_ctl_output_create(message).await;
+                        }
+                        HyprlandCommand::CtlOutputRemove(message) => {
+                            handle_ctl_output_remove(message).await;
+                        }
+                        HyprlandCommand::CtlPluginLoad(message) => {
+                            handle_ctl_plugin_load(message).await;
+                        }
+                        HyprlandCommand::CtlPluginUnload(message) => {
+                            handle_ctl_plugin_unload(message).await;
+                        }
+                        HyprlandCommand::CtlReload(message) => {
+                            handle_ctl_reload(message).await;
+                        }
+                        HyprlandCommand::CtlSetCursor(message) => {
+                            handle_ctl_set_cursor(message).await;
+                        }
+                        HyprlandCommand::CtlSetError(message) => {
+                            handle_ctl_set_error(message).await;
+                        }
+                        HyprlandCommand::CtlSetProp(message) => {
+                            handle_ctl_set_prop(message).await;
+                        }
+                        HyprlandCommand::CtlSwitchXkbLayout(message) => {
+                            handle_ctl_switch_xkb_layout(message).await;
+                        }
                     }
                 }
-                Ok(())
-            })
-        })?;
+            });
+        });
 
         Ok(service)
     }
@@ -481,7 +534,65 @@ impl MessageHandler<FfiEnvelopePayload<KillCommandMessage>> for HyprlandService 
     }
 }
 
-// ... additional MessageHandler impls for each ctl command type
+impl MessageHandler<FfiEnvelopePayload<NotifyCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<NotifyCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlNotify(message.into_inner()));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<OutputCreateCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<OutputCreateCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlOutputCreate(message.into_inner()));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<OutputRemoveCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<OutputRemoveCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlOutputRemove(message.into_inner()));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<PluginLoadCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<PluginLoadCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlPluginLoad(message.into_inner()));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<PluginUnloadCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<PluginUnloadCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlPluginUnload(message.into_inner()));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<ReloadCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<ReloadCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlReload(message.into_inner()));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<SetCursorCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<SetCursorCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlSetCursor(message.into_inner()));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<SetErrorCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<SetErrorCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlSetError(message.into_inner()));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<SetPropCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<SetPropCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlSetProp(message.into_inner()));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<SwitchXkbLayoutCommandMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<SwitchXkbLayoutCommandMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::CtlSwitchXkbLayout(message.into_inner()));
+    }
+}
 
 impl MessageBroadcaster for HyprlandService {}
 impl PluginMetaGetter for HyprlandService {
@@ -508,18 +619,53 @@ impl Service for HyprlandService {
                 id if id == FfiEnvelopePayload::<KillCommandMessage>::TYPE_ID => {
                     MessageHandler::<FfiEnvelopePayload<KillCommandMessage>>::handle_envelope_message(self, envelope);
                 }
+                id if id == FfiEnvelopePayload::<NotifyCommandMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<NotifyCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<OutputCreateCommandMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<OutputCreateCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<OutputRemoveCommandMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<OutputRemoveCommandMessage>>::handle_envelope_message(self, envelope);
+                }
                 id if id == FfiEnvelopePayload::<PluginLoadCommandMessage>::TYPE_ID => {
                     MessageHandler::<FfiEnvelopePayload<PluginLoadCommandMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<PluginUnloadCommandMessage>::TYPE_ID => {
                     MessageHandler::<FfiEnvelopePayload<PluginUnloadCommandMessage>>::handle_envelope_message(self, envelope);
                 }
-                // ... route all other ctl message type_ids
+                id if id == FfiEnvelopePayload::<ReloadCommandMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<ReloadCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<SetCursorCommandMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<SetCursorCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<SetErrorCommandMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<SetErrorCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<SetPropCommandMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<SetPropCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<SwitchXkbLayoutCommandMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<SwitchXkbLayoutCommandMessage>>::handle_envelope_message(self, envelope);
+                }
                 _ => {}
             }
         }
     }
 }
+```
+
+### 4.6 Service Crate `lib.rs`
+
+```rust
+pub mod config;
+pub mod service;
+
+use crate::service::HyprlandService;
+use smearor_swipe_launcher_plugin_api::service_plugin;
+
+service_plugin!(HyprlandService);
 ```
 
 ---
@@ -548,6 +694,47 @@ impl HyprlandServiceConfig {
 [services.hyprland]
 path = "target/debug/libhyprland_service.so"
 ```
+
+### 5.3 Workspace Cargo.toml Integration
+
+Add the two new crates to the workspace root `Cargo.toml`:
+
+```toml
+[workspace]
+members = [
+    # ... existing members
+    "model/hyprland",
+    "services/hyprland",
+]
+```
+
+Add `hyprland` to the shared workspace dependencies so the version is managed centrally:
+
+```toml
+[workspace.dependencies]
+hyprland = "0.3.13"
+```
+
+The service crate then references it via `workspace = true`:
+
+```toml
+[dependencies]
+hyprland = { workspace = true }
+```
+
+### 5.4 Minimum Viable Scope for the First Step
+
+The first implementation goal is a simple workspace switch from a button widget. Therefore, the initial service only needs to handle a small subset of dispatch
+commands. The recommended first slice is:
+
+- `WorkspaceDispatchMessage` (workspace switch)
+- `ExecDispatchMessage` (fallback for arbitrary commands)
+- `KillActiveWindowDispatchMessage` (close active window)
+- `MoveFocusDispatchMessage` (focus change)
+- `ToggleFullscreenDispatchMessage` (fullscreen toggle)
+
+All other 57 dispatch types and all 11 CTL commands can be left as `todo!()` or omitted in the first iteration. They can be added incrementally once the basic
+command flow is proven.
 
 ---
 
