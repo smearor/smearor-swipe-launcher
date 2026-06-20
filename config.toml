@@ -73,6 +73,9 @@ area_type = "scroll"
 spacing = 0
 plugins = [
     { id = "previous_workspace", path = "target/release/libsmearor_button_widget.so" },
+    { id = "toggle_floating", path = "target/release/libsmearor_button_widget.so" },
+    { id = "close_active_window", path = "target/release/libsmearor_button_widget.so" },
+    { id = "toggle_fullscreen", path = "target/release/libsmearor_button_widget.so" },
     { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "video_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -96,6 +99,8 @@ icon_size = 36
 tooltip = "Previous Workspace"
 click_topic = "service.hyprland.dispatch"
 click_payload = { kind = "Workspace", identifier = { kind = "Relative", id = -1 } }
+longpress_topic = "service.hyprland.dispatch"
+longpress_payload = { kind = "MoveToWorkspace", identifier = { kind = "RelativeOpen", id = -1 } }
 
 [next_workspace]
 defaults = "menu_button"
@@ -105,6 +110,37 @@ icon_size = 36
 tooltip = "Next Workspace"
 click_topic = "service.hyprland.dispatch"
 click_payload = { kind = "Workspace", identifier = { kind = "Relative", id = 1 } }
+longpress_topic = "service.hyprland.dispatch"
+longpress_payload = { kind = "MoveToWorkspace", identifier = { kind = "RelativeOpen", id = 1 } }
+
+[toggle_floating]
+defaults = "menu_button"
+text = "Toggle Floating"
+icon = "nf-md-window_restore"
+icon_size = 36
+tooltip = "Toggle Floating"
+click_topic = "service.hyprland.dispatch"
+click_payload = { kind = "ToggleFloating" }
+
+[close_active_window]
+defaults = "menu_button"
+text = "Close"
+icon = "nf-md-window_close"
+icon_size = 36
+tooltip = "Close Active Window"
+click_topic = "service.hyprland.dispatch"
+click_payload = { kind = "KillActiveWindow" }
+
+[toggle_fullscreen]
+defaults = "menu_button"
+text = "Fullscreen"
+icon = "nf-md-fullscreen"
+icon_size = 36
+tooltip = "Toggle Fullscreen"
+click_topic = "service.hyprland.dispatch"
+click_payload = { kind = "ToggleFullscreen", fullscreen_type = "Maximize" }
+longpress_topic = "service.hyprland.dispatch"
+longpress_payload = { kind = "ToggleFullscreen", fullscreen_type = "Real" }
 
 [mpris]
 max_width_chars = 24

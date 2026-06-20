@@ -1,6 +1,8 @@
 pub mod exec;
 pub mod kill_active_window;
 pub mod move_focus;
+pub mod move_to_workspace;
+pub mod toggle_floating;
 pub mod toggle_fullscreen;
 pub mod workspace;
 
@@ -10,6 +12,10 @@ pub use kill_active_window::KillActiveWindowDispatchMessage;
 pub use kill_active_window::KillActiveWindowDispatchMessageStabby;
 pub use move_focus::MoveFocusDispatchMessage;
 pub use move_focus::MoveFocusDispatchMessageStabby;
+pub use move_to_workspace::MoveToWorkspaceDispatchMessage;
+pub use move_to_workspace::MoveToWorkspaceDispatchMessageStabby;
+pub use toggle_floating::ToggleFloatingDispatchMessage;
+pub use toggle_floating::ToggleFloatingDispatchMessageStabby;
 pub use toggle_fullscreen::ToggleFullscreenDispatchMessage;
 pub use toggle_fullscreen::ToggleFullscreenDispatchMessageStabby;
 pub use workspace::TOPIC_DISPATCH;

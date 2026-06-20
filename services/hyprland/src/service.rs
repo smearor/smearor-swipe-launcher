@@ -10,6 +10,8 @@ use smearor_hyprland_model::HyprlandFullscreenType;
 use smearor_hyprland_model::HyprlandWorkspaceIdentifierKind;
 use smearor_hyprland_model::KillActiveWindowDispatchMessage;
 use smearor_hyprland_model::MoveFocusDispatchMessage;
+use smearor_hyprland_model::MoveToWorkspaceDispatchMessage;
+use smearor_hyprland_model::ToggleFloatingDispatchMessage;
 use smearor_hyprland_model::ToggleFullscreenDispatchMessage;
 use smearor_hyprland_model::WorkspaceDispatchMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
@@ -169,6 +171,20 @@ async fn handle_dispatch(message: HyprlandDispatchMessage) {
                 None => Ok(()),
             }
         }
+        HyprlandDispatchActionKind::MoveToWorkspace => {
+            let opt = message.move_to_workspace.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_move_to_workspace(payload).await,
+                None => Ok(()),
+            }
+        }
+        HyprlandDispatchActionKind::ToggleFloating => {
+            let opt: Option<ToggleFloatingDispatchMessage> = message.toggle_floating.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(_payload) => handle_toggle_floating().await,
+                None => Ok(()),
+            }
+        }
         HyprlandDispatchActionKind::ToggleFullscreen => {
             let opt = message.toggle_fullscreen.match_owned(|value| Some(value.into()), || None);
             match opt {
@@ -198,6 +214,80 @@ async fn handle_exec(payload: ExecDispatchMessage) -> hyprland::Result<()> {
 async fn handle_move_focus(payload: MoveFocusDispatchMessage) -> hyprland::Result<()> {
     let direction = convert_direction(payload.direction);
     Dispatch::call_async(DispatchType::MoveFocus(direction)).await
+}
+
+async fn handle_move_to_workspace(payload: MoveToWorkspaceDispatchMessage) -> hyprland::Result<()> {
+    debug!(
+        "Hyprland service: dispatching move to workspace: kind={:?}, id={}",
+        payload.identifier.kind, payload.identifier.id
+    );
+    match payload.identifier.kind {
+        HyprlandWorkspaceIdentifierKind::Id => {
+            Dispatch::call_async(DispatchType::MoveToWorkspace(
+                hyprland::dispatch::WorkspaceIdentifierWithSpecial::Id(payload.identifier.id),
+                None,
+            ))
+            .await
+        }
+        HyprlandWorkspaceIdentifierKind::Relative => {
+            Dispatch::call_async(DispatchType::MoveToWorkspace(
+                hyprland::dispatch::WorkspaceIdentifierWithSpecial::Relative(payload.identifier.id),
+                None,
+            ))
+            .await
+        }
+        HyprlandWorkspaceIdentifierKind::RelativeMonitor => {
+            Dispatch::call_async(DispatchType::MoveToWorkspace(
+                hyprland::dispatch::WorkspaceIdentifierWithSpecial::RelativeMonitor(payload.identifier.id),
+                None,
+            ))
+            .await
+        }
+        HyprlandWorkspaceIdentifierKind::RelativeMonitorIncludingEmpty => {
+            Dispatch::call_async(DispatchType::MoveToWorkspace(
+                hyprland::dispatch::WorkspaceIdentifierWithSpecial::RelativeMonitorIncludingEmpty(payload.identifier.id),
+                None,
+            ))
+            .await
+        }
+        HyprlandWorkspaceIdentifierKind::RelativeOpen => {
+            Dispatch::call_async(DispatchType::MoveToWorkspace(
+                hyprland::dispatch::WorkspaceIdentifierWithSpecial::RelativeOpen(payload.identifier.id),
+                None,
+            ))
+            .await
+        }
+        HyprlandWorkspaceIdentifierKind::Previous => {
+            Dispatch::call_async(DispatchType::MoveToWorkspace(hyprland::dispatch::WorkspaceIdentifierWithSpecial::Previous, None)).await
+        }
+        HyprlandWorkspaceIdentifierKind::Empty => {
+            Dispatch::call_async(DispatchType::MoveToWorkspace(
+                hyprland::dispatch::WorkspaceIdentifierWithSpecial::Empty(FirstEmpty {
+                    on_monitor: false,
+                    next: false,
+                }),
+                None,
+            ))
+            .await
+        }
+        HyprlandWorkspaceIdentifierKind::Name => {
+            let opt: Option<stabby::string::String> = payload.identifier.name.into();
+            let name_string = opt.map(|name| name.to_string());
+            let name_ref = name_string.as_ref().map(|name| name.as_str()).unwrap_or("");
+            Dispatch::call_async(DispatchType::MoveToWorkspace(hyprland::dispatch::WorkspaceIdentifierWithSpecial::Name(name_ref), None)).await
+        }
+        HyprlandWorkspaceIdentifierKind::Special => {
+            let opt: Option<stabby::string::String> = payload.identifier.special_name.into();
+            let name_string = opt.map(|name| name.to_string());
+            let name_ref = name_string.as_ref().map(|name| name.as_str());
+            Dispatch::call_async(DispatchType::MoveToWorkspace(hyprland::dispatch::WorkspaceIdentifierWithSpecial::Special(name_ref), None)).await
+        }
+    }
+}
+
+async fn handle_toggle_floating() -> hyprland::Result<()> {
+    debug!("Hyprland service: dispatching toggle floating");
+    Dispatch::call_async(DispatchType::ToggleFloating(None)).await
 }
 
 async fn handle_toggle_fullscreen(payload: ToggleFullscreenDispatchMessage) -> hyprland::Result<()> {
@@ -291,6 +381,8 @@ impl MessageHandler<FfiEnvelopePayload<WorkspaceDispatchMessage>> for HyprlandSe
             exec: StabbyOption::None(),
             kill_active_window: StabbyOption::None(),
             move_focus: StabbyOption::None(),
+            move_to_workspace: StabbyOption::None(),
+            toggle_floating: StabbyOption::None(),
             toggle_fullscreen: StabbyOption::None(),
             workspace: StabbyOption::Some(message.0.into()),
         };
@@ -305,6 +397,8 @@ impl MessageHandler<FfiEnvelopePayload<ExecDispatchMessage>> for HyprlandService
             exec: StabbyOption::Some(message.0.into()),
             kill_active_window: StabbyOption::None(),
             move_focus: StabbyOption::None(),
+            move_to_workspace: StabbyOption::None(),
+            toggle_floating: StabbyOption::None(),
             toggle_fullscreen: StabbyOption::None(),
             workspace: StabbyOption::None(),
         };
@@ -319,6 +413,8 @@ impl MessageHandler<FfiEnvelopePayload<KillActiveWindowDispatchMessage>> for Hyp
             exec: StabbyOption::None(),
             kill_active_window: StabbyOption::Some(message.0.into()),
             move_focus: StabbyOption::None(),
+            move_to_workspace: StabbyOption::None(),
+            toggle_floating: StabbyOption::None(),
             toggle_fullscreen: StabbyOption::None(),
             workspace: StabbyOption::None(),
         };
@@ -333,6 +429,8 @@ impl MessageHandler<FfiEnvelopePayload<MoveFocusDispatchMessage>> for HyprlandSe
             exec: StabbyOption::None(),
             kill_active_window: StabbyOption::None(),
             move_focus: StabbyOption::Some(message.0.into()),
+            move_to_workspace: StabbyOption::None(),
+            toggle_floating: StabbyOption::None(),
             toggle_fullscreen: StabbyOption::None(),
             workspace: StabbyOption::None(),
         };
@@ -347,6 +445,8 @@ impl MessageHandler<FfiEnvelopePayload<ToggleFullscreenDispatchMessage>> for Hyp
             exec: StabbyOption::None(),
             kill_active_window: StabbyOption::None(),
             move_focus: StabbyOption::None(),
+            move_to_workspace: StabbyOption::None(),
+            toggle_floating: StabbyOption::None(),
             toggle_fullscreen: StabbyOption::Some(message.0.into()),
             workspace: StabbyOption::None(),
         };

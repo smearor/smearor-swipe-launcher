@@ -11,6 +11,8 @@ use crate::HyprlandWorkspaceIdentifierKind;
 use crate::HyprlandWorkspaceIdentifierWithSpecial;
 use crate::KillActiveWindowDispatchMessage;
 use crate::MoveFocusDispatchMessage;
+use crate::MoveToWorkspaceDispatchMessage;
+use crate::ToggleFloatingDispatchMessage;
 use crate::ToggleFullscreenDispatchMessage;
 use crate::WorkspaceDispatchMessage;
 
@@ -88,6 +90,20 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(MoveFocusDispatchMessa
 });
 
 smearor_swipe_launcher_plugin_api::impl_json_convertible!(
+    MoveToWorkspaceDispatchMessageConverter,
+    MoveToWorkspaceDispatchMessage,
+    |json: serde_json::Value| {
+        MoveToWorkspaceDispatchMessage {
+            identifier: parse_workspace_identifier(json.get("identifier").unwrap_or(&serde_json::Value::Null)),
+        }
+    }
+);
+
+smearor_swipe_launcher_plugin_api::impl_json_convertible!(ToggleFloatingDispatchMessageConverter, ToggleFloatingDispatchMessage, |_json: serde_json::Value| {
+    ToggleFloatingDispatchMessage
+});
+
+smearor_swipe_launcher_plugin_api::impl_json_convertible!(
     ToggleFullscreenDispatchMessageConverter,
     ToggleFullscreenDispatchMessage,
     |json: serde_json::Value| {
@@ -103,6 +119,8 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(HyprlandDispatchMessag
     let kind = match json.get("kind").and_then(|v| v.as_str()) {
         Some("KillActiveWindow") => HyprlandDispatchActionKind::KillActiveWindow,
         Some("MoveFocus") => HyprlandDispatchActionKind::MoveFocus,
+        Some("MoveToWorkspace") => HyprlandDispatchActionKind::MoveToWorkspace,
+        Some("ToggleFloating") => HyprlandDispatchActionKind::ToggleFloating,
         Some("ToggleFullscreen") => HyprlandDispatchActionKind::ToggleFullscreen,
         Some("Workspace") => HyprlandDispatchActionKind::Workspace,
         _ => HyprlandDispatchActionKind::Exec,
@@ -138,6 +156,21 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(HyprlandDispatchMessag
     } else {
         StabbyOption::None()
     };
+    let move_to_workspace = if kind == HyprlandDispatchActionKind::MoveToWorkspace {
+        json.get("identifier")
+            .map(|value| crate::MoveToWorkspaceDispatchMessageStabby {
+                identifier: parse_workspace_identifier(value),
+            })
+            .map(StabbyOption::Some)
+            .unwrap_or(StabbyOption::None())
+    } else {
+        StabbyOption::None()
+    };
+    let toggle_floating = if kind == HyprlandDispatchActionKind::ToggleFloating {
+        StabbyOption::Some(crate::ToggleFloatingDispatchMessageStabby)
+    } else {
+        StabbyOption::None()
+    };
     let toggle_fullscreen = if kind == HyprlandDispatchActionKind::ToggleFullscreen {
         json.get("fullscreen_type")
             .map(|value| crate::ToggleFullscreenDispatchMessageStabby {
@@ -153,6 +186,8 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(HyprlandDispatchMessag
         exec,
         kill_active_window: StabbyOption::None(),
         move_focus,
+        move_to_workspace,
+        toggle_floating,
         toggle_fullscreen,
         workspace,
     }

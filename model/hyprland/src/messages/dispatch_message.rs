@@ -1,6 +1,8 @@
 use crate::messages::dispatch::ExecDispatchMessageStabby;
 use crate::messages::dispatch::KillActiveWindowDispatchMessageStabby;
 use crate::messages::dispatch::MoveFocusDispatchMessageStabby;
+use crate::messages::dispatch::MoveToWorkspaceDispatchMessageStabby;
+use crate::messages::dispatch::ToggleFloatingDispatchMessageStabby;
 use crate::messages::dispatch::ToggleFullscreenDispatchMessageStabby;
 use crate::messages::dispatch::WorkspaceDispatchMessageStabby;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
@@ -19,6 +21,8 @@ pub enum HyprlandDispatchActionKind {
     Exec,
     KillActiveWindow,
     MoveFocus,
+    MoveToWorkspace,
+    ToggleFloating,
     ToggleFullscreen,
     Workspace,
 }
@@ -31,6 +35,8 @@ pub struct HyprlandDispatchMessage {
     pub exec: stabby::option::Option<ExecDispatchMessageStabby>,
     pub kill_active_window: stabby::option::Option<KillActiveWindowDispatchMessageStabby>,
     pub move_focus: stabby::option::Option<MoveFocusDispatchMessageStabby>,
+    pub move_to_workspace: stabby::option::Option<MoveToWorkspaceDispatchMessageStabby>,
+    pub toggle_floating: stabby::option::Option<ToggleFloatingDispatchMessageStabby>,
     pub toggle_fullscreen: stabby::option::Option<ToggleFullscreenDispatchMessageStabby>,
     pub workspace: stabby::option::Option<WorkspaceDispatchMessageStabby>,
 }
