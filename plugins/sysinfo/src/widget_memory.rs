@@ -5,7 +5,7 @@ use crate::shared::format_bytes;
 use crate::shared::gauge_color;
 use crate::shared::update_value_label;
 use crate::shared::value_class;
-use glib::object::Cast;
+use gtk4::Align;
 use gtk4::Box as GtkBox;
 use gtk4::DrawingArea;
 use gtk4::Label;
@@ -158,6 +158,7 @@ impl WidgetBuilder for MemoryWidget {
         let mut details_label = None;
         if self.config.show_used_bytes || self.config.show_available_bytes {
             let label = Label::builder().css_classes(["sysinfo-details".to_string()]).build();
+            label.set_halign(Align::Center);
             container.append(&label);
             details_label = Some(label);
         }
@@ -182,6 +183,6 @@ impl WidgetBuilder for MemoryWidget {
         *self.value_label.borrow_mut() = percentage_widget.value_label;
         *self.details_label.borrow_mut() = details_label;
 
-        container.upcast::<Widget>()
+        percentage_widget.outer_widget
     }
 }

@@ -1,14 +1,25 @@
+use crate::config::BarOrientation;
+use crate::config::DisplayMode;
+use crate::config::PercentageWidgetConfig;
+use crate::config::UptimeDisplayMode;
 use crate::config::UptimeWidgetConfig;
 use crate::shared::build_icon_image;
+use crate::shared::build_percentage_widget;
+use crate::shared::draw_gauge;
 use crate::shared::format_duration;
+use crate::shared::format_duration_with_format;
+use crate::shared::gauge_color;
 use glib::object::Cast;
 use gtk4::Box as GtkBox;
+use gtk4::DrawingArea;
 use gtk4::Image;
 use gtk4::Label;
+use gtk4::LevelBar;
 use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
+use gtk4::prelude::DrawingAreaExtManual;
 use gtk4::prelude::WidgetExt;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
@@ -32,10 +43,13 @@ pub struct UptimeWidget {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
     pub config: UptimeWidgetConfig,
+    pub current_value: Rc<RefCell<f32>>,
     pub container: Rc<RefCell<Option<GtkBox>>>,
     pub uptime_label: Rc<RefCell<Option<Label>>>,
     pub load_label: Rc<RefCell<Option<Label>>>,
     pub icon_image: Rc<RefCell<Option<Image>>>,
+    pub bar: Rc<RefCell<Option<LevelBar>>>,
+    pub gauge: Rc<RefCell<Option<DrawingArea>>>,
 }
 
 impl UptimeWidget {
@@ -47,14 +61,44 @@ impl UptimeWidget {
             meta: PluginMeta::try_from(&config)?,
             core_context,
             config: widget_config,
+            current_value: Rc::new(RefCell::new(0.0)),
             container: Rc::new(RefCell::new(None)),
             uptime_label: Rc::new(RefCell::new(None)),
             load_label: Rc::new(RefCell::new(None)),
             icon_image: Rc::new(RefCell::new(None)),
+            bar: Rc::new(RefCell::new(None)),
+            gauge: Rc::new(RefCell::new(None)),
         })
     }
 
     fn update_ui(&self, message: &UptimeStatusMessage) {
+        if self.config.display_mode == UptimeDisplayMode::Gauge {
+            self.update_gauge_ui(message);
+        } else {
+            self.update_info_ui(message);
+        }
+    }
+
+    fn update_gauge_ui(&self, message: &UptimeStatusMessage) {
+        let uptime_seconds = message.uptime_seconds;
+        let value = ((uptime_seconds % 86400) as f32 / 86400.0) * 100.0;
+        *self.current_value.borrow_mut() = value;
+
+        let uptime_label = self.uptime_label.clone();
+        let gauge = self.gauge.clone();
+        let config = self.config.clone();
+
+        MainContext::default().spawn_local(async move {
+            if let Some(ref label) = *uptime_label.borrow() {
+                label.set_text(&format_duration_with_format(uptime_seconds, &config.value_format));
+            }
+            if let Some(ref gauge_widget) = *gauge.borrow() {
+                gauge_widget.queue_draw();
+            }
+        });
+    }
+
+    fn update_info_ui(&self, message: &UptimeStatusMessage) {
         let uptime_label = self.uptime_label.clone();
         let load_label = self.load_label.clone();
         let config = self.config.clone();
@@ -126,6 +170,10 @@ impl Plugin for UptimeWidget {
 
 impl WidgetBuilder for UptimeWidget {
     fn build_widget(&mut self) -> Widget {
+        if self.config.display_mode == UptimeDisplayMode::Gauge {
+            return self.build_gauge_widget();
+        }
+
         let container = GtkBox::builder()
             .orientation(Orientation::Horizontal)
             .spacing(4)
@@ -171,5 +219,46 @@ impl WidgetBuilder for UptimeWidget {
         *self.icon_image.borrow_mut() = icon_image;
 
         container.upcast::<Widget>()
+    }
+}
+
+impl UptimeWidget {
+    fn build_gauge_widget(&mut self) -> Widget {
+        let percentage_config = PercentageWidgetConfig {
+            display_mode: DisplayMode::Gauge,
+            bar_orientation: BarOrientation::Horizontal,
+            show_value: true,
+            show_icon: self.config.show_icon,
+            width: 120,
+            height: 40,
+            icon: self.config.icon.clone(),
+            icon_size: self.config.icon_size,
+            value_format: String::from("{value}"),
+            warning_threshold: 70.0,
+            critical_threshold: 90.0,
+        };
+
+        let percentage_widget = build_percentage_widget(&percentage_config);
+        let container = percentage_widget.container;
+
+        if let Some(ref gauge_widget) = percentage_widget.gauge {
+            let current_value = self.current_value.clone();
+            gauge_widget.set_draw_func(move |_area, context, width, height| {
+                let value = *current_value.borrow();
+                draw_gauge(context, width, height, value, gauge_color(value, 70.0, 90.0));
+            });
+        }
+
+        if let Some(ref label) = percentage_widget.value_label {
+            label.add_css_class("sysinfo-normal");
+        }
+
+        *self.container.borrow_mut() = Some(container.clone());
+        *self.bar.borrow_mut() = percentage_widget.bar;
+        *self.gauge.borrow_mut() = percentage_widget.gauge.clone();
+        *self.uptime_label.borrow_mut() = percentage_widget.value_label;
+        *self.icon_image.borrow_mut() = percentage_widget.icon_image;
+
+        percentage_widget.outer_widget
     }
 }

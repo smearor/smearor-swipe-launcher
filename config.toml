@@ -543,22 +543,29 @@ widget = "disks"
 max_mount_points = 3
 include_mount_points = ["/"]
 show_throughput = true
-display_mode = "RootOnly"
+#display_mode = "RootOnly"
+display_mode = "Gauge"  # Shows a circular gauge for the first matching mount point
 icon = "nf-md-harddisk"
 
 [network_widget]
 widget = "network"
+display_mode = "Gauge"
 show_received = true
 show_transmitted = true
+# Maximum bandwidth in bytes per second (50 Mbit down / 16 Mbit up)
+max_download = 6250000
+max_upload = 2000000
 icon = "nf-md-network"
 
 
 [uptime_widget]
 widget = "uptime"
+display_mode = "Gauge"
+value_format = "{hours}:{minutes}h"
 show_uptime = true
-show_load_average_1_minute = true
-show_load_average_5_minute = true
-show_load_average_15_minute = true
+show_load_average_1_minute = false
+show_load_average_5_minute = false
+show_load_average_15_minute = false
 icon = "nf-md-clock_start"
 
 

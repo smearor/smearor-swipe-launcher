@@ -36,6 +36,8 @@ pub enum DiskDisplayMode {
     RootOnly,
     /// Show a list of configured mount points.
     List,
+    /// Show a circular gauge for the first configured mount point.
+    Gauge,
 }
 
 /// Configuration shared by percentage-based widgets.
@@ -199,14 +201,32 @@ impl Default for DisksWidgetConfig {
     }
 }
 
+/// Display mode for the network widget.
+#[repr(u8)]
+#[stabby::stabby]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+pub enum NetworkDisplayMode {
+    /// Show textual up/down values.
+    #[default]
+    Info,
+    /// Show a circular gauge with two semicircles for up/down.
+    Gauge,
+}
+
 /// Configuration for the network widget.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default)]
 pub struct NetworkWidgetConfig {
+    /// Visual display mode.
+    pub display_mode: NetworkDisplayMode,
     /// Whether to show received bytes per second.
     pub show_received: bool,
     /// Whether to show transmitted bytes per second.
     pub show_transmitted: bool,
+    /// Maximum expected received bytes per second for the gauge (0 means auto).
+    pub max_download: f64,
+    /// Maximum expected transmitted bytes per second for the gauge (0 means auto).
+    pub max_upload: f64,
     /// Whether to show a small sparkline history.
     pub show_history: bool,
     /// Number of history samples to keep.
@@ -222,8 +242,11 @@ pub struct NetworkWidgetConfig {
 impl Default for NetworkWidgetConfig {
     fn default() -> Self {
         Self {
+            display_mode: NetworkDisplayMode::Info,
             show_received: true,
             show_transmitted: true,
+            max_download: 0.0,
+            max_upload: 0.0,
             show_history: false,
             history_length: 30,
             show_icon: true,
@@ -233,10 +256,26 @@ impl Default for NetworkWidgetConfig {
     }
 }
 
+/// Display mode for the uptime widget.
+#[repr(u8)]
+#[stabby::stabby]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+pub enum UptimeDisplayMode {
+    /// Show textual uptime and load average.
+    #[default]
+    Info,
+    /// Show a circular gauge with the uptime in the center.
+    Gauge,
+}
+
 /// Configuration for the uptime widget.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default)]
 pub struct UptimeWidgetConfig {
+    /// Visual display mode.
+    pub display_mode: UptimeDisplayMode,
+    /// Format string for the uptime label.
+    pub value_format: String,
     /// Whether to show the uptime as a human-readable duration.
     pub show_uptime: bool,
     /// Whether to show the 1-minute load average.
@@ -256,6 +295,8 @@ pub struct UptimeWidgetConfig {
 impl Default for UptimeWidgetConfig {
     fn default() -> Self {
         Self {
+            display_mode: UptimeDisplayMode::Info,
+            value_format: String::from("{value}"),
             show_uptime: true,
             show_load_average_1_minute: true,
             show_load_average_5_minute: true,

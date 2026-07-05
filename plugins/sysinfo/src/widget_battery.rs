@@ -4,7 +4,7 @@ use crate::shared::draw_gauge;
 use crate::shared::gauge_color;
 use crate::shared::update_value_label;
 use crate::shared::value_class;
-use glib::object::Cast;
+use gtk4::Align;
 use gtk4::Box as GtkBox;
 use gtk4::DrawingArea;
 use gtk4::Label;
@@ -161,6 +161,7 @@ impl WidgetBuilder for BatteryWidget {
         let mut status_label = None;
         if self.config.show_status_text {
             let label = Label::builder().css_classes(["sysinfo-status".to_string()]).build();
+            label.set_halign(Align::Center);
             container.append(&label);
             status_label = Some(label);
         }
@@ -185,6 +186,6 @@ impl WidgetBuilder for BatteryWidget {
         *self.value_label.borrow_mut() = percentage_widget.value_label;
         *self.status_label.borrow_mut() = status_label;
 
-        container.upcast::<Widget>()
+        percentage_widget.outer_widget
     }
 }

@@ -4,7 +4,7 @@ use crate::shared::draw_gauge;
 use crate::shared::gauge_color;
 use crate::shared::update_value_label;
 use crate::shared::value_class;
-use glib::object::Cast;
+use gtk4::Align;
 use gtk4::Box as GtkBox;
 use gtk4::DrawingArea;
 use gtk4::Label;
@@ -154,6 +154,7 @@ impl WidgetBuilder for CpuWidget {
         let mut temperature_label = None;
         if self.config.show_temperature {
             let temp_label = Label::builder().css_classes(["sysinfo-temperature".to_string()]).build();
+            temp_label.set_halign(Align::Center);
             container.append(&temp_label);
             temperature_label = Some(temp_label);
         }
@@ -178,6 +179,6 @@ impl WidgetBuilder for CpuWidget {
         *self.value_label.borrow_mut() = percentage_widget.value_label;
         *self.temperature_label.borrow_mut() = temperature_label;
 
-        container.upcast::<Widget>()
+        percentage_widget.outer_widget
     }
 }

@@ -1,9 +1,18 @@
+use crate::config::BarOrientation;
 use crate::config::DiskDisplayMode;
 use crate::config::DisksWidgetConfig;
+use crate::config::DisplayMode;
+use crate::config::PercentageWidgetConfig;
 use crate::shared::build_icon_image;
+use crate::shared::build_percentage_widget;
+use crate::shared::draw_gauge;
 use crate::shared::format_bytes;
+use crate::shared::gauge_color;
+use crate::shared::update_value_label;
+use crate::shared::value_class;
 use glib::object::Cast;
 use gtk4::Box as GtkBox;
+use gtk4::DrawingArea;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::LevelBar;
@@ -11,6 +20,7 @@ use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
+use gtk4::prelude::DrawingAreaExtManual;
 use gtk4::prelude::WidgetExt;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
@@ -34,10 +44,14 @@ pub struct DisksWidget {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
     pub config: DisksWidgetConfig,
+    pub current_value: Rc<RefCell<f32>>,
     pub container: Rc<RefCell<Option<GtkBox>>>,
     pub content_area: Rc<RefCell<Option<GtkBox>>>,
     pub throughput_label: Rc<RefCell<Option<Label>>>,
     pub icon_image: Rc<RefCell<Option<Image>>>,
+    pub value_label: Rc<RefCell<Option<Label>>>,
+    pub bar: Rc<RefCell<Option<LevelBar>>>,
+    pub gauge: Rc<RefCell<Option<DrawingArea>>>,
 }
 
 impl DisksWidget {
@@ -49,14 +63,74 @@ impl DisksWidget {
             meta: PluginMeta::try_from(&config)?,
             core_context,
             config: widget_config,
+            current_value: Rc::new(RefCell::new(0.0)),
             container: Rc::new(RefCell::new(None)),
             content_area: Rc::new(RefCell::new(None)),
             throughput_label: Rc::new(RefCell::new(None)),
             icon_image: Rc::new(RefCell::new(None)),
+            value_label: Rc::new(RefCell::new(None)),
+            bar: Rc::new(RefCell::new(None)),
+            gauge: Rc::new(RefCell::new(None)),
         })
     }
 
+    fn first_mount_usage(message: &DisksStatusMessage, config: &DisksWidgetConfig) -> Option<f32> {
+        for mount in message.mounts.iter() {
+            let mount_point = mount.mount_point.to_string();
+            if !config.include_mount_points.is_empty() && !config.include_mount_points.contains(&mount_point) {
+                continue;
+            }
+            if config.display_mode == DiskDisplayMode::RootOnly && mount_point != "/" {
+                continue;
+            }
+            return Some(mount.usage);
+        }
+        None
+    }
+
     fn update_ui(&self, message: &DisksStatusMessage) {
+        if self.config.display_mode == DiskDisplayMode::Gauge {
+            self.update_gauge_ui(message);
+        } else {
+            self.update_list_ui(message);
+        }
+    }
+
+    fn update_gauge_ui(&self, message: &DisksStatusMessage) {
+        let usage = Self::first_mount_usage(message, &self.config).unwrap_or(0.0);
+        *self.current_value.borrow_mut() = usage;
+        let value_label = self.value_label.clone();
+        let bar = self.bar.clone();
+        let gauge = self.gauge.clone();
+        let css_class = value_class(usage, 80.0, 95.0);
+
+        MainContext::default().spawn_local(async move {
+            if let Some(ref label) = *value_label.borrow() {
+                update_value_label(label, "{value:.0}%", usage, "");
+                let classes = label.css_classes();
+                let classes: Vec<String> = classes
+                    .iter()
+                    .map(|c| c.to_string())
+                    .filter(|c| c != "sysinfo-value" && c != "sysinfo-normal" && c != "sysinfo-warning" && c != "sysinfo-critical")
+                    .collect();
+                let mut new_classes = classes;
+                new_classes.push(css_class.to_string());
+                label.set_css_classes(&new_classes.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+            }
+            if let Some(ref bar_widget) = *bar.borrow() {
+                bar_widget.set_value(usage as f64);
+                bar_widget.remove_css_class("sysinfo-normal");
+                bar_widget.remove_css_class("sysinfo-warning");
+                bar_widget.remove_css_class("sysinfo-critical");
+                bar_widget.add_css_class(css_class);
+            }
+            if let Some(ref gauge_widget) = *gauge.borrow() {
+                gauge_widget.queue_draw();
+            }
+        });
+    }
+
+    fn update_list_ui(&self, message: &DisksStatusMessage) {
         let content_area = self.content_area.clone();
         let throughput_label = self.throughput_label.clone();
         let config = self.config.clone();
@@ -164,6 +238,10 @@ impl Plugin for DisksWidget {
 
 impl WidgetBuilder for DisksWidget {
     fn build_widget(&mut self) -> Widget {
+        if self.config.display_mode == DiskDisplayMode::Gauge {
+            return self.build_gauge_widget();
+        }
+
         let container = GtkBox::builder()
             .orientation(Orientation::Horizontal)
             .spacing(4)
@@ -199,5 +277,46 @@ impl WidgetBuilder for DisksWidget {
         *self.icon_image.borrow_mut() = icon_image;
 
         container.upcast::<Widget>()
+    }
+}
+
+impl DisksWidget {
+    fn build_gauge_widget(&mut self) -> Widget {
+        let percentage_config = PercentageWidgetConfig {
+            display_mode: DisplayMode::Gauge,
+            bar_orientation: BarOrientation::Horizontal,
+            show_value: true,
+            show_icon: self.config.show_icon,
+            width: 120,
+            height: 40,
+            icon: self.config.icon.clone(),
+            icon_size: self.config.icon_size,
+            value_format: String::from("{value:.0}%"),
+            warning_threshold: 80.0,
+            critical_threshold: 95.0,
+        };
+
+        let percentage_widget = build_percentage_widget(&percentage_config);
+        let container = percentage_widget.container;
+
+        if let Some(ref gauge_widget) = percentage_widget.gauge {
+            let current_value = self.current_value.clone();
+            gauge_widget.set_draw_func(move |_area, context, width, height| {
+                let value = *current_value.borrow();
+                draw_gauge(context, width, height, value, gauge_color(value, 80.0, 95.0));
+            });
+        }
+
+        if let Some(ref label) = percentage_widget.value_label {
+            label.add_css_class("sysinfo-normal");
+        }
+
+        *self.container.borrow_mut() = Some(container.clone());
+        *self.bar.borrow_mut() = percentage_widget.bar;
+        *self.gauge.borrow_mut() = percentage_widget.gauge.clone();
+        *self.value_label.borrow_mut() = percentage_widget.value_label;
+        *self.icon_image.borrow_mut() = percentage_widget.icon_image;
+
+        percentage_widget.outer_widget
     }
 }

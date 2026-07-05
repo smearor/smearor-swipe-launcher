@@ -1,14 +1,21 @@
+use crate::config::NetworkDisplayMode;
 use crate::config::NetworkWidgetConfig;
+use crate::shared::build_gauge_container;
 use crate::shared::build_icon_image;
+use crate::shared::draw_network_gauge;
 use crate::shared::format_bytes;
+use crate::shared::gauge_color;
 use glib::object::Cast;
+use gtk4::Align;
 use gtk4::Box as GtkBox;
+use gtk4::DrawingArea;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
+use gtk4::prelude::DrawingAreaExtManual;
 use gtk4::prelude::WidgetExt;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
@@ -32,10 +39,13 @@ pub struct NetworkWidget {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
     pub config: NetworkWidgetConfig,
+    pub current_download: Rc<RefCell<f32>>,
+    pub current_upload: Rc<RefCell<f32>>,
     pub container: Rc<RefCell<Option<GtkBox>>>,
     pub received_label: Rc<RefCell<Option<Label>>>,
     pub transmitted_label: Rc<RefCell<Option<Label>>>,
     pub icon_image: Rc<RefCell<Option<Image>>>,
+    pub gauge: Rc<RefCell<Option<DrawingArea>>>,
 }
 
 impl NetworkWidget {
@@ -47,17 +57,35 @@ impl NetworkWidget {
             meta: PluginMeta::try_from(&config)?,
             core_context,
             config: widget_config,
+            current_download: Rc::new(RefCell::new(0.0)),
+            current_upload: Rc::new(RefCell::new(0.0)),
             container: Rc::new(RefCell::new(None)),
             received_label: Rc::new(RefCell::new(None)),
             transmitted_label: Rc::new(RefCell::new(None)),
             icon_image: Rc::new(RefCell::new(None)),
+            gauge: Rc::new(RefCell::new(None)),
         })
     }
 
     fn update_ui(&self, message: &NetworkStatusMessage) {
         let received_label = self.received_label.clone();
         let transmitted_label = self.transmitted_label.clone();
+        let gauge = self.gauge.clone();
         let config = self.config.clone();
+
+        let download_pct = if config.max_download > 0.0 {
+            (message.received_bytes_per_second as f64 / config.max_download * 100.0).min(100.0) as f32
+        } else {
+            0.0
+        };
+        let upload_pct = if config.max_upload > 0.0 {
+            (message.transmitted_bytes_per_second as f64 / config.max_upload * 100.0).min(100.0) as f32
+        } else {
+            0.0
+        };
+
+        *self.current_download.borrow_mut() = download_pct;
+        *self.current_upload.borrow_mut() = upload_pct;
 
         let message_inner = message.clone();
         MainContext::default().spawn_local(async move {
@@ -74,6 +102,9 @@ impl NetworkWidget {
                 } else {
                     label.set_text("");
                 }
+            }
+            if let Some(ref gauge_widget) = *gauge.borrow() {
+                gauge_widget.queue_draw();
             }
         });
     }
@@ -120,6 +151,10 @@ impl Plugin for NetworkWidget {
 
 impl WidgetBuilder for NetworkWidget {
     fn build_widget(&mut self) -> Widget {
+        if self.config.display_mode == NetworkDisplayMode::Gauge {
+            return self.build_gauge_widget();
+        }
+
         let container = GtkBox::builder()
             .orientation(Orientation::Horizontal)
             .spacing(4)
@@ -159,5 +194,68 @@ impl WidgetBuilder for NetworkWidget {
         *self.icon_image.borrow_mut() = icon_image;
 
         container.upcast::<Widget>()
+    }
+}
+
+impl NetworkWidget {
+    fn build_gauge_widget(&mut self) -> Widget {
+        let gauge_widget = build_gauge_container(120, "sysinfo-gauge");
+        let content_box = gauge_widget.content_box;
+
+        let mut icon_image = None;
+        if self.config.show_icon {
+            if let Some(ref icon) = self.config.icon {
+                let image = build_icon_image(icon, self.config.icon_size);
+                image.add_css_class("sysinfo-icon");
+                content_box.append(&image);
+                icon_image = Some(image);
+            }
+        }
+
+        let mut received_label = None;
+        let mut transmitted_label = None;
+
+        if self.config.show_received {
+            let label = Label::builder()
+                .css_classes(["sysinfo-details".to_string()])
+                .label("down: 0 B/s")
+                .halign(Align::Center)
+                .build();
+            content_box.append(&label);
+            received_label = Some(label);
+        }
+        if self.config.show_transmitted {
+            let label = Label::builder()
+                .css_classes(["sysinfo-details".to_string()])
+                .label("up: 0 B/s")
+                .halign(Align::Center)
+                .build();
+            content_box.append(&label);
+            transmitted_label = Some(label);
+        }
+
+        let drawing_area = gauge_widget.drawing_area;
+        let current_download = self.current_download.clone();
+        let current_upload = self.current_upload.clone();
+        drawing_area.set_draw_func(move |_area, context, width, height| {
+            let download_value = *current_download.borrow();
+            let upload_value = *current_upload.borrow();
+            draw_network_gauge(
+                context,
+                width,
+                height,
+                download_value,
+                upload_value,
+                gauge_color(download_value, 70.0, 90.0),
+                gauge_color(upload_value, 70.0, 90.0),
+            );
+        });
+
+        *self.received_label.borrow_mut() = received_label;
+        *self.transmitted_label.borrow_mut() = transmitted_label;
+        *self.icon_image.borrow_mut() = icon_image;
+        *self.gauge.borrow_mut() = Some(drawing_area);
+
+        gauge_widget.outer_widget
     }
 }
