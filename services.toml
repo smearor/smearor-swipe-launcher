@@ -24,6 +24,16 @@ path = "target/release/libsmearor_hyprland_service.so"
 [[services]]
 id = "sysinfo"
 path = "target/release/libsmearor_sysinfo_service.so"
+cpu_temperature_source = "hwmon"
+
+[[services]]
+id = "http"
+path = "target/release/libsmearor_http_service.so"
+
+[http]
+allowed_urls = ["192.168.178.*", "https://api.open-meteo.com/*", "https://api.sunrise-sunset.org/*"]
+default_timeout_ms = 10000
+max_response_bytes = 1048576
 
 # Service-specific configurations
 [app_launcher]

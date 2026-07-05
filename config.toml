@@ -103,6 +103,9 @@ plugins = [
     { id = "network_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "network" },
     { id = "uptime_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "uptime" },
     { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_rgbw_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" },
     #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
 
@@ -567,6 +570,34 @@ show_load_average_1_minute = false
 show_load_average_5_minute = false
 show_load_average_15_minute = false
 icon = "nf-md-clock_start"
+
+
+[shelly_light_button]
+text = "Light"
+icon = "nf-md-ceiling_light_multiple"
+icon_only = true
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.71/relay/0?turn=on", response_topic = "service.http.response.shelly.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.71/relay/0?turn=off", response_topic = "service.http.response.shelly.light" }
+
+[shelly_rgbw_button]
+text = "RGBW"
+icon = "nf-md-led_strip"
+icon_only = true
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.rgbw" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=off", response_topic = "service.http.response.shelly.rgbw" }
+
+[shelly_fan_button]
+text = "Fan"
+icon = "nf-md-fan"
+icon_only = true
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=on", response_topic = "service.http.response.shelly.fan" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=off", response_topic = "service.http.response.shelly.fan" }
 
 
 # Sample button widget with dynamic label (button-side handling to be solved later)

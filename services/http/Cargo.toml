@@ -1,0 +1,25 @@
+[package]
+name = "smearor-http-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+miette = { workspace = true }
+paste = { workspace = true }
+regex = "1.11"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+smearor-http-model = { path = "../../model/http" }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+stabby = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
