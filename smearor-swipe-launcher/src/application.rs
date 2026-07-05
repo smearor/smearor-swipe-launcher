@@ -8,6 +8,7 @@ use crate::instance::LauncherInstance;
 use crate::json_converter::JsonConverterRegistry;
 use crate::messages::try_convert_string_to_typed_envelope;
 use crate::service_manager::ServiceManager;
+use async_channel::unbounded;
 use gtk4::Application;
 use gtk4::gdk::Display;
 use gtk4::gdk::Monitor;
@@ -186,9 +187,21 @@ impl LauncherHost {
             return Err(miette::miette!("Broker receiver already taken"));
         };
 
-        let self_clone = self.clone();
-        MainContext::default().spawn_local(async move {
+        let (async_sender, async_receiver) = unbounded::<FfiEnvelope>();
+        let main_context = MainContext::default();
+
+        tokio::spawn(async move {
             while let Some(envelope) = receiver.recv().await {
+                if async_sender.try_send(envelope).is_err() {
+                    break;
+                }
+            }
+            error!("Central broker receive loop exited");
+        });
+
+        let self_clone = self.clone();
+        main_context.spawn_local(async move {
+            while let Ok(envelope) = async_receiver.recv().await {
                 self_clone.route_message(envelope);
             }
             error!("Central broker receive loop exited");

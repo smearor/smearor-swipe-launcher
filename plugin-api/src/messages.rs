@@ -66,6 +66,12 @@ pub struct FfiEnvelope {
     pub clone_payload: Option<extern "C" fn(*mut core::ffi::c_void) -> *mut core::ffi::c_void>,
 }
 
+/// SAFETY: `FfiEnvelope` only carries a raw pointer to an ABI-stable shared
+/// message allocated on the heap. The actual message types are `Send`, and the
+/// lifetime is managed by the `destroy_payload` / `clone_payload` function pointers
+/// registered by the sender. Moving the envelope between threads is therefore safe.
+unsafe impl Send for FfiEnvelope {}
+
 impl Clone for FfiEnvelope {
     fn clone(&self) -> Self {
         let cloned_payload = if self.payload.is_null() {

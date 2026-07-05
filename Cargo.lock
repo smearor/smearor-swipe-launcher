@@ -2104,6 +2104,7 @@ dependencies = [
 name = "smearor-swipe-launcher"
 version = "0.1.0"
 dependencies = [
+    "async-channel",
     "clap",
     "dashmap",
     "glib",
