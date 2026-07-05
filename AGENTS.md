@@ -135,6 +135,18 @@
 - Use `cargo-audit` for security checks
 - Use `cargo-deny` for dependency checking
 
+### IDE and MCP Server Workflow
+
+- **Prefer MCP server tools over terminal commands**: The MCP server build tools are the preferred way to build and verify the project instead of running
+  `cargo` directly in the terminal.
+- **Use the built-in Edit tool for file changes**: Use the provided Edit tool for editing and creating files within the project directory. Using `sed` or other
+  shell tools to modify files is forbidden.
+- **Use the MCP Index server for code understanding**: Use the MCP Index server to explore code structure, dependencies, and relationships across the project.
+- **Use the MCP Debugger server for testing and log analysis**: Use the MCP debugger and run configuration tools to run tests, launch debug sessions, and
+  evaluate debug logs independently.
+- **Prefer MCP Server Tools over terminal commands**: When both an MCP server tool and a terminal command are available, prefer the MCP server tool for safer
+  and more integrated operations.
+
 ### Git Workflow
 
 - Write clear, descriptive commit messages

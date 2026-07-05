@@ -2141,6 +2141,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "smearor-sysinfo-model"
+version = "0.1.0"
+dependencies = [
+    "serde",
+    "serde_json",
+    "smearor-swipe-launcher-plugin-api",
+    "stabby",
+]
+
+[[package]]
+name = "smearor-sysinfo-service"
+version = "0.1.0"
+dependencies = [
+    "glib",
+    "miette",
+    "nix",
+    "paste",
+    "serde",
+    "serde_json",
+    "smearor-swipe-launcher-plugin-api",
+    "smearor-sysinfo-model",
+    "stabby",
+    "thiserror",
+    "tokio",
+    "tracing",
+    "tracing-subscriber",
+]
+
+[[package]]
+name = "smearor-sysinfo-widget"
+version = "0.1.0"
+dependencies = [
+    "glib",
+    "gtk4",
+    "libadwaita",
+    "miette",
+    "paste",
+    "serde",
+    "serde_json",
+    "smearor-swipe-launcher-plugin-api",
+    "smearor-sysinfo-model",
+    "stabby",
+    "thiserror",
+    "tokio",
+    "tracing",
+    "tracing-subscriber",
+    "typed-builder",
+]
+
+[[package]]
 name = "smearor-wrot-rotation"
 version = "0.1.0"
 source = "git+https://github.com/smearor/smearor-wrot-rotation.git#db1e7d0f0c2a97f406958af3c650c72317335af7"

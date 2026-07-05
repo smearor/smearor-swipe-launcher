@@ -1,0 +1,101 @@
+faf_version: '4.0 '
+project:
+  name: smearor-swipe-launcher
+  main_language: Rust
+  description: Wayland touch-optimized app launcher with ABI-stable plugin architecture
+  version: 0.1.0
+  status: "Active Development"
+  repository: https://github.com/aschaeffer/smearor-swipe-launcher
+  license: MIT
+  authors:
+    - aschaeffer
+  keywords:
+    - wayland
+    - gtk4
+    - launcher
+    - touch
+    - plugin
+    - ffi
+    - layer-shell
+  directories:
+    src: src
+    services: services
+    plugins: plugins
+    model: model
+    resources: resources
+    crates:
+      core: "src/"
+      abi_stable_interface: "plugins/"
+  maintainers:
+    - aschaeffer
+  documentation: README.md
+  security_policy: "SECURITY.md"
+  targets:
+    - x86_64-unknown-linux-gnu
+  build_system: cargo
+  contribution_guide: CONTRIBUTING.md
+  changelog: CHANGELOG.md
+  metrics:
+    target_test_coverage: ">= 80%"
+    line_count_estimate: "2000-5000"
+  ci_cd:
+    platform: "GitHub Actions"
+    config_file: ".github/workflows/ci.yml"
+instant_context:
+  tech_stack: "Rust, GTK4, gtk4-layer-shell, Tokio, Stabby FFI"
+  what_building: "An ABI-stable, plugin-driven Wayland desktop component using GTK4 and Layer-Shell, separating UI presentation from async background services via a custom layout engine."
+  key_files:
+    - Cargo.toml
+    - README.md
+    - config.toml
+    - services.toml
+  commands:
+    test: "cargo test --workspace"
+    build: "cargo build --release"
+    lint: "cargo clippy --all-targets --all-features -- -D warnings"
+    format: "cargo fmt --all -- --check"
+  setup: "sudo apt-get install -y libgtk-4-dev libadwaita-1-dev && cargo build"
+  usage: "Run the binary within a compatible Wayland compositor session (e.g., Sway, Hyprland, GNOME Wayland)"
+  dependencies:
+    - "gtk4 (>= 0.7)"
+    - "gtk4-layer-shell (>= 0.2)"
+    - "tokio (features: ['full'])"
+    - "stabby (ABI-stable FFI)"
+    - "thiserror"
+    - "miette"
+  entry_point: src/main.rs
+stack:
+  backend: Rust
+  ui_toolkit: GTK4
+  window_management: Layer-Shell
+  build_tool: cargo
+  testing: "cargo test"
+  tooling:
+    linter: clippy
+    formatter: rustfmt
+    audit: cargo-audit
+  async_runtime: tokio
+  ffi: stabby
+  package_manager: cargo
+  error_handling: thiserror, miette
+human_context:
+  vision: >
+    A touch-optimized, rotatable app launcher (ribbon) that sits on the screen edge
+    (bottom, left, top, right). Uses swipe gestures to navigate apps and sub-menus.
+  architecture: >
+    Plugin-based architecture with a flexible layout system defined in TOML.
+    Supports "Fixed" and "Scroll" areas with various transitions (Fade, Slide, etc.).
+    Widgets/Plugins are dynamically loaded into these areas.
+  key_concepts:
+    - AreaManager: Manages dynamic area lifecycle and nesting.
+    - PluginManager: Handles the loading and execution of widgets/plugins.
+    - LayerShell: Enables Wayland-specific window positioning and behavior.
+  development_notes: >
+    Uses stabby for ABI-stable FFI, tokio for async runtime, and GTK4 for UI.
+    Follows strict clean code principles with one struct per file and clear module separation.
+  challenges: >
+    Managing ABI stability across plugin boundaries, handling GTK4 threading requirements,
+    coordinating async tokio tasks with GTK's main loop.
+  future_plans: >
+    Add more widget types, improve gesture recognition, support multiple display configurations,
+    enhance plugin system with hot-reloading capabilities.

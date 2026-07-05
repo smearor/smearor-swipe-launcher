@@ -21,7 +21,21 @@ path = "target/release/libsmearor_notifications_service.so"
 id = "hyprland"
 path = "target/release/libsmearor_hyprland_service.so"
 
+[[services]]
+id = "sysinfo"
+path = "target/release/libsmearor_sysinfo_service.so"
+
 # Service-specific configurations
 [app_launcher]
 smearor_wrot_path = "smearor-wrot"
 rotation = 0
+
+[sysinfo]
+update_interval_ms = 5000
+enable_cpu_temperature = true
+# Supported sources: "thermal_zone" (default), "hwmon", or an absolute path like
+# "/sys/class/hwmon/hwmon0/temp1_input".
+# cpu_temperature_source = "hwmon"
+enable_battery = true
+enable_disks = true
+enable_network = true

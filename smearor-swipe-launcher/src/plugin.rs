@@ -41,6 +41,9 @@ impl LoadedPlugin {
 
             let mut config_ext = config.config.clone();
             config_ext["id"] = Value::String(plugin_entry.id.clone());
+            if let Some(widget) = &plugin_entry.widget {
+                config_ext["widget"] = Value::String(widget.clone());
+            }
             let config_json = serde_json::to_string(&config_ext)?;
             let config_bytes = config_json.as_bytes();
             let config_ptr = config_bytes.as_ptr() as *const i8;

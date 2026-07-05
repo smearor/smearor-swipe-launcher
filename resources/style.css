@@ -460,3 +460,42 @@ scrolledwindow {
     opacity: 0.8;
     transition: opacity 0.4s ease;
 }
+
+/* Sysinfo widgets */
+.sysinfo-icon {
+    font-family: 'NerdFontsSymbolsOnly';
+    font-size: 1.5em;
+    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+}
+
+.sysinfo-value {
+    font-weight: bold;
+}
+
+.sysinfo-normal {
+    color: #04e762;
+}
+
+.sysinfo-warning {
+    color: #f5b700;
+}
+
+.sysinfo-critical {
+    color: #dc0073;
+}
+
+.sysinfo-bar trough {
+    background-color: #2a2a2a;
+}
+
+.sysinfo-bar trough > fill {
+    background-color: #04e762;
+}
+
+.sysinfo-bar.sysinfo-warning trough > fill {
+    background-color: #f5b700;
+}
+
+.sysinfo-bar.sysinfo-critical trough > fill {
+    background-color: #dc0073;
+}

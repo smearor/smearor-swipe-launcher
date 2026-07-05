@@ -34,6 +34,15 @@ icon_only = true
 smearor_wrot_path = "smearor-wrot"
 rotation = 0
 
+#### Configure the sysinfo service
+#
+#[sysinfo]
+#update_interval_ms = 1000
+#enable_cpu_temperature = true
+#enable_battery = true
+#enable_disks = true
+#enable_network = true
+
 ### Configure the application global settings
 
 [launcher]
@@ -87,6 +96,12 @@ plugins = [
     { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "wike", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "cpu_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "cpu" },
+    { id = "memory_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "memory" },
+    { id = "battery_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "battery" },
+    { id = "disks_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "disks" },
+    { id = "network_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "network" },
+    { id = "uptime_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "uptime" },
     { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
     #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
@@ -484,3 +499,78 @@ defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.Calendar.desktop"
 [calendar.wrapper]
 follows_rotation = true
+
+[cpu_widget]
+widget = "cpu"
+display_mode = "Gauge"
+bar_orientation = "Horizontal"
+show_value = true
+show_icon = true
+show_temperature = true
+icon = "nf-md-cpu_64_bit"
+value_format = "{cpu_usage:.0}%"
+warning_threshold = 70.0
+critical_threshold = 90.0
+
+[memory_widget]
+widget = "memory"
+display_mode = "Gauge"
+#display_mode = "Bar"
+bar_orientation = "Vertical"
+show_value = true
+show_icon = true
+show_used_bytes = true
+show_available_bytes = false
+icon = "nf-md-memory"
+value_format = "{memory_usage:.0}%"
+warning_threshold = 75.0
+critical_threshold = 90.0
+
+[battery_widget]
+widget = "battery"
+display_mode = "Gauge"
+#display_mode = "Bar"
+show_value = true
+show_icon = true
+show_status_text = true
+icon = "nf-md-battery"
+value_format = "{level:.0}%"
+warning_threshold = 20.0
+critical_threshold = 10.0
+
+[disks_widget]
+widget = "disks"
+max_mount_points = 3
+include_mount_points = ["/"]
+show_throughput = true
+display_mode = "RootOnly"
+icon = "nf-md-harddisk"
+
+[network_widget]
+widget = "network"
+show_received = true
+show_transmitted = true
+icon = "nf-md-network"
+
+
+[uptime_widget]
+widget = "uptime"
+show_uptime = true
+show_load_average_1_minute = true
+show_load_average_5_minute = true
+show_load_average_15_minute = true
+icon = "nf-md-clock_start"
+
+
+# Sample button widget with dynamic label (button-side handling to be solved later)
+# [scroll_band.plugins]
+# { id = "sysinfo_button", path = "target/release/libsmearor_button_widget.so" }
+
+# [sysinfo_button]
+# icon = "nf-fae-chip"
+# icon_only = false
+# label_topic = "service.sysinfo.cpu.status"
+# label_format = "CPU {cpu_usage:.1}%"
+# label_fallback = "loading..."
+# click_topic = "area.open"
+# click_payload = { area_id = "sysinfo_area" }

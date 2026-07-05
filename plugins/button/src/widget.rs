@@ -28,6 +28,7 @@ pub struct ButtonWidget {
     pub(crate) meta: PluginMeta,
     pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) config: ButtonConfig,
+    pub(crate) label_widget: std::cell::RefCell<Option<Label>>,
 }
 
 impl ButtonWidget {
@@ -39,21 +40,99 @@ impl ButtonWidget {
         let config = ButtonConfig::parse(&config.config)
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         debug!("ButtonWidget button config: {config:?}");
-        Ok(Self { meta, core_context, config })
+        Ok(Self {
+            meta,
+            core_context,
+            config,
+            label_widget: std::cell::RefCell::new(None),
+        })
+    }
+
+    fn update_label_from_message(&self, payload: &str) {
+        let format = self.config.label_format.clone();
+        let label_weak = self.label_widget.borrow().as_ref().map(|label| label.downgrade());
+
+        let payload_inner = payload.to_owned();
+        glib::MainContext::default().spawn_local(async move {
+            if let Some(label) = label_weak.and_then(|weak| weak.upgrade()) {
+                let text = if let Some(format) = format {
+                    let json: serde_json::Value = match serde_json::from_str(&payload_inner) {
+                        Ok(value) => value,
+                        Err(_) => {
+                            label.set_text(&payload_inner);
+                            return;
+                        }
+                    };
+                    let mut result = format;
+                    if let Some(object) = json.as_object() {
+                        for (key, value) in object {
+                            let replacement = match value {
+                                serde_json::Value::Number(number) => {
+                                    if let Some(integer) = number.as_i64() {
+                                        format!("{}", integer)
+                                    } else if let Some(float) = number.as_f64() {
+                                        format!("{}", float)
+                                    } else {
+                                        String::new()
+                                    }
+                                }
+                                serde_json::Value::String(string) => string.clone(),
+                                _ => value.to_string(),
+                            };
+                            result = result.replace(&format!("{{{}}}", key), &replacement);
+                            if let Some(float) = value.as_f64() {
+                                result = result.replace(&format!("{{{}:.0}}", key), &format!("{:.0}", float));
+                                result = result.replace(&format!("{{{}:.1}}", key), &format!("{:.1}", float));
+                                result = result.replace(&format!("{{{}:.2}}", key), &format!("{:.2}", float));
+                            }
+                        }
+                    }
+                    result
+                } else {
+                    payload_inner.to_string()
+                };
+                label.set_text(&text);
+            }
+        });
     }
 }
 
 impl AcceptTopic<FfiEnvelope> for ButtonWidget {
-    fn accept_topic(&self, _topic: &str) -> bool {
+    fn accept_topic(&self, topic: &str) -> bool {
+        if let Some(label_topic) = &self.config.label_topic {
+            return topic == label_topic;
+        }
         false
     }
 }
 
-impl MessageHandler<FfiEnvelope> for ButtonWidget {
-    fn handle_message(&self, _message: FfiEnvelope, _sender_id: &str) {}
+impl MessageHandler<String> for ButtonWidget {
+    fn handle_message(&self, message: String, _sender_id: &str) {
+        self.update_label_from_message(&message);
+    }
 }
 
 impl MessageBroadcaster for ButtonWidget {}
+
+impl Plugin for ButtonWidget {
+    fn on_message(&mut self, message: *mut core::ffi::c_void) {
+        if message.is_null() {
+            return;
+        }
+        unsafe {
+            let envelope = &*(message as *mut FfiEnvelope);
+            if let Some(label_topic) = &self.config.label_topic {
+                if envelope.topic.to_string() == *label_topic
+                    && envelope.type_id == smearor_swipe_launcher_plugin_api::generate_type_id("std::string::String")
+                    && !envelope.payload.is_null()
+                {
+                    let payload = &*(envelope.payload as *const String);
+                    self.update_label_from_message(payload);
+                }
+            }
+        }
+    }
+}
 
 impl PluginMetaGetter for ButtonWidget {
     fn meta(&self) -> PluginMeta {
@@ -66,8 +145,6 @@ impl AsRef<Option<FfiCoreContext>> for ButtonWidget {
         &self.core_context
     }
 }
-
-impl Plugin for ButtonWidget {}
 
 impl WidgetBuilder for ButtonWidget {
     fn build_widget(&mut self) -> Widget {
@@ -105,8 +182,14 @@ impl WidgetBuilder for ButtonWidget {
         }
 
         if !self.config.icon_only || self.config.icon.is_none() {
-            let label = Label::new(Some(&self.config.text));
+            let label_text = if self.config.label_topic.is_some() {
+                self.config.label_fallback.clone().unwrap_or_else(|| self.config.text.clone())
+            } else {
+                self.config.text.clone()
+            };
+            let label = Label::new(Some(&label_text));
             button_box.append(&label);
+            *self.label_widget.borrow_mut() = Some(label);
         }
 
         let mut css_classes = vec!["scroll-item", "menu-button"];

@@ -1,4 +1,6 @@
 [workspace]
+resolver = "3"
+
 members = [
     "model/app-launcher",
     "model/area",
@@ -9,6 +11,7 @@ members = [
     "model/mpris",
     "model/notifications",
     "model/plugin",
+    "model/sysinfo",
     "plugin-api",
     "plugins/clock",
     "plugins/app-launcher",
@@ -16,14 +19,43 @@ members = [
     "plugins/button",
     "plugins/mpris",
     "plugins/notifications",
+    "plugins/sysinfo",
     "services/app-launcher",
     "services/audio",
     "services/hyprland",
     "services/mpris",
     "services/notifications",
+    "services/sysinfo",
     "smearor-swipe-launcher",
 ]
-resolver = "2"
+
+default-members = [
+    "model/app-launcher",
+    "model/area",
+    "model/audio",
+    "model/clock",
+    "model/hyprland",
+    "model/message",
+    "model/mpris",
+    "model/notifications",
+    "model/plugin",
+    "model/sysinfo",
+    "plugin-api",
+    "plugins/clock",
+    "plugins/app-launcher",
+    "plugins/audio",
+    "plugins/button",
+    "plugins/mpris",
+    "plugins/notifications",
+    "plugins/sysinfo",
+    "services/app-launcher",
+    "services/audio",
+    "services/hyprland",
+    "services/mpris",
+    "services/notifications",
+    "services/sysinfo",
+    "smearor-swipe-launcher",
+]
 
 [workspace.package]
 version = "0.1.0"

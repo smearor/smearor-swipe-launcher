@@ -32,6 +32,13 @@ impl MessageTopic for () {
     }
 }
 
+// TODO: Check if this works actually
+impl<T: MessageTopic> MessageTopic for FfiEnvelopePayload<T> {
+    fn topic() -> &'static str {
+        T::topic()
+    }
+}
+
 /// A default `extern "C"` destructor for boxed messages.
 ///
 /// Pass this as `destroy_payload` to `MessageBrokerHandle::send`

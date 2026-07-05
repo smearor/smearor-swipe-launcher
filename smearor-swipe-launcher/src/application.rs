@@ -233,7 +233,7 @@ impl LauncherHost {
         }
 
         // Broadcast to all instances (used by shared services for status updates)
-        if target == "*" {
+        if target == "*" || (target.is_empty() && topic.ends_with(".status")) {
             if let Ok(instances) = self.instances.lock() {
                 for instance in instances.values() {
                     instance.handle_message(envelope.clone());

@@ -61,6 +61,15 @@ pub struct ButtonConfig {
     /// Additional CSS classes for styling
     #[serde(default)]
     pub css_classes: Vec<String>,
+    /// Topic whose messages control the label text.
+    #[serde(default)]
+    pub label_topic: Option<String>,
+    /// Format string for the label display (JSON values via serde_json).
+    #[serde(default)]
+    pub label_format: Option<String>,
+    /// Fallback text when the topic has not yet delivered a message.
+    #[serde(default)]
+    pub label_fallback: Option<String>,
 }
 
 impl ButtonConfig {
