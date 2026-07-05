@@ -1,44 +1,48 @@
-# MCP-Server Konzept für Smearor Swipe Launcher
+# MCP Server Concept for Smearor Swipe Launcher
 
-Dieses Dokument beschreibt das Konzept für einen **MCP-Server (Model Context Protocol)**, der den *Smearor Swipe Launcher* über eine standardisierte
-Schnittstelle für externe KI-Clients verfügbar macht. Der MCP-Server läuft als integrierter Bestandteil der Launcher-Anwendung und kommuniziert ausschließlich
-über **SSE (Server-Sent Events)** mit dem MCP-Client.
-
----
-
-## 1. Ziel & Motivation
-
-Der *Smearor Swipe Launcher* verfügt über einen zentralen Event-Broker, Areas (Widgets als Fenster/Popups), Services und Widgets. Aktuell ist die Steuerung und
-Abfrage dieser Komponenten auf die interne Anwendung beschränkt. Ein MCP-Server ermöglicht es KI-Assistenten und externen Tools, den Launcher direkt zu steuern
-und Systemzustände abzufragen, ohne proprietäre Schnittstellen zu kennen.
-
-**Vorteile:**
-
-* **Standardisierte KI-Integration:** Jeder MCP-Client (z. B. Claude, Cursor, etc.) kann den Launcher steuern.
-* **Area-Automatisierung:** KI-Clients können Launcher-Areas gezielt öffnen und schließen (z. B. „Öffne das Audio-Menü").
-* **Broker-Kontrolle:** Nachrichten können auf Topics gesendet werden, um Widgets und Services auszulösen.
-* **Plugin-Tools:** Services können semantisch spezifische Tools (z. B. Lautstärke ändern) direkt über den MCP-Server bereitstellen.
-* **Status-Abfragen:** Systemwerte wie Uptime, Lautstärke oder Mediaplayer-Status können als Ressourcen abgefragt werden.
+This document describes the concept for an **MCP Server (Model Context Protocol)** that exposes the *Smearor Swipe Launcher* through a standardized interface
+for external AI clients. The MCP server runs as an integrated part of the launcher application and communicates with MCP clients exclusively via **SSE (
+Server-Sent Events)** over an **axum** web server.
 
 ---
 
-## 2. Architektur
+## 1. Goal & Motivation
 
-Der MCP-Server wird als separates Crate `mcp-server` im Workspace implementiert oder als Feature-Flag in der Hauptanwendung `smearor-swipe-launcher`aktivierbar.
-Er greift auf denselben internen Zustand zu wie die GTK-Anwendung. Der Transport erfolgt ausschließlich über **SSE (Server-Sent Events)**.
+The *Smearor Swipe Launcher* consists of a central event broker, Areas (widgets as windows/popups), services, and widgets. Currently, controlling and querying
+these components is limited to the internal application. An MCP server enables AI assistants and external tools to control the launcher directly and query
+system state without needing to know proprietary interfaces.
+
+**Benefits:**
+
+* **Standardized AI integration:** Any MCP client (e.g., Claude, Cursor, etc.) can control the launcher.
+* **Area automation:** AI clients can open and close launcher areas specifically (e.g., "Open the audio menu").
+* **Broker control:** Messages can be sent to topics to trigger widgets and services.
+* **Plugin tools:** Services can provide semantically specific tools (e.g., change volume) directly through the MCP server.
+* **State queries:** System values such as uptime, volume, or media player status can be queried as resources.
+
+---
+
+## 2. Architecture
+
+The MCP server is implemented as a separate crate `mcp-server` in the workspace or as a feature flag in the main application `smearor-swipe-launcher`. It
+accesses the same internal state as the GTK application. The transport is exclusively **SSE over an axum HTTP server**.
+
+**Process model:** The MCP server runs as a dedicated thread inside the launcher process. No separate process is required.
+
+**Permissions:** Not enforced in the MVP. All exposed tools and resources can be used without additional authorization.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     MCP CLIENT                              │
-│  (z. B. Claude Desktop, Cursor, VS Code Extension)          │
+│  (e.g., Claude Desktop, Cursor, VS Code Extension)          │
 └─────────────────────┬───────────────────────┬───────────────┘
                       │ JSON-RPC / MCP over SSE │
                       ▼                         ▼
 ┌──────────────────────────────────────────┐  ┌────────────────────────┐
-│             MCP-Server (SSE)             │  │  Resource/Tool Registry │
+│          MCP Server (axum + SSE)         │  │  Resource/Tool Registry │
 │  ┌────────────────────────────────────┐  │  │  (AreaManager +        │
-│  │   Tools: open_area, close_area,    │  │  │   Plugin-Handlers)     │
-│  │   send_message, ...                  │  │  └────────────────────────┘
+│  │   Tools: open_area, close_area,    │  │  │   Plugin handlers)     │
+│  │   send_message, ...                │  │  └────────────────────────┘
 │  └────────────────────────────────────┘  │
 └─────────────────────┬────────────────────┘
                       │
@@ -54,109 +58,111 @@ Er greift auf denselben internen Zustand zu wie die GTK-Anwendung. Der Transport
 
 ---
 
-## 3. Vorgeschlagene Tools
+## 3. Proposed Tools
 
-Tools sind vom MCP-Client aufrufbare Funktionen, die Aktionen im Launcher auslösen.
+Tools are functions callable by the MCP client that trigger actions in the launcher.
 
-### 3.1 Pflicht-Tools (ab dem MVP)
+### 3.1 Mandatory Tools (from the MVP)
 
-| Tool           | Beschreibung                                                                                          | Parameter                                                       |
-|----------------|-------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
-| `open_area`    | Öffnet eine definierte Area anhand ihrer ID.                                                          | `area_id: string`                                               |
-| `close_area`   | Schließt eine geöffnete Area.                                                                         | `area_id: string`                                               |
-| `list_areas`   | Listet alle konfigurierten Areas mit ID, Position, Aktivierungsstatus und aktueller Sichtbarkeit auf. | –                                                               |
-| `focus_area`   | Setzt den Fokus auf eine Area (z. B. für Tastatur-Navigation).                                        | `area_id: string`                                               |
-| `send_message` | Sendet eine Nachricht auf ein Topic im zentralen Broker.                                              | `topic: string`, `payload: json`, `target_instance_id?: string` |
+| Tool           | Description                                                                              | Parameters                                                      |
+|----------------|------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| `open_area`    | Opens a defined area by its ID.                                                          | `area_id: string`                                               |
+| `close_area`   | Closes a currently visible area.                                                         | `area_id: string`                                               |
+| `list_areas`   | Lists all configured areas with ID, position, activation status, and current visibility. | –                                                               |
+| `focus_area`   | Sets focus on an area (e.g., for keyboard navigation).                                   | `area_id: string`                                               |
+| `send_message` | Publishes a message to a topic on the central broker.                                    | `topic: string`, `payload: json`, `target_instance_id?: string` |
 
-### 3.2 Zusätzliche sinnvolle Tools
+### 3.2 Additional Useful Tools
 
-| Tool               | Beschreibung                                                                                    | Parameter                                             |
-|--------------------|-------------------------------------------------------------------------------------------------|-------------------------------------------------------|
-| `toggle_area`      | Wechselt den Sichtbarkeitsstatus einer Area.                                                    | `area_id: string`                                     |
-| `reload_config`    | Lädt die Konfigurationsdateien (`config.toml`, `services.toml`) neu.                            | –                                                     |
-| `get_area_config`  | Gibt die Konfiguration einer Area als JSON zurück.                                              | `area_id: string`                                     |
-| `send_action`      | Sendet eine typisierte Action an ein Widget oder einen Service (z. B. `AppLaunch`, `VolumeUp`). | `plugin_id: string`, `action: string`, `params: json` |
-| `trigger_widget`   | Löst das primäre Interaktionsereignis eines Widgets aus (z. B. Tap).                            | `widget_id: string`, `event: string`                  |
-| `set_global_theme` | Wechselt das globale CSS-Theme (z. B. hell/dunkel).                                             | `theme: string`                                       |
-| `play_sound`       | Spielt ein konfiguriertes Systemgeräusch ab.                                                    | `sound_id: string`                                    |
+| Tool               | Description                                                                  | Parameters                                            |
+|--------------------|------------------------------------------------------------------------------|-------------------------------------------------------|
+| `toggle_area`      | Toggles the visibility state of an area.                                     | `area_id: string`                                     |
+| `reload_config`    | Reloads the configuration files (`config.toml`, `services.toml`).            | –                                                     |
+| `get_area_config`  | Returns the configuration of an area as JSON.                                | `area_id: string`                                     |
+| `send_action`      | Sends a typed action to a widget or service (e.g., `AppLaunch`, `VolumeUp`). | `plugin_id: string`, `action: string`, `params: json` |
+| `trigger_widget`   | Triggers the primary interaction event of a widget (e.g., tap).              | `widget_id: string`, `event: string`                  |
+| `set_global_theme` | Switches the global CSS theme (e.g., light/dark).                            | `theme: string`                                       |
+| `play_sound`       | Plays a configured system sound.                                             | `sound_id: string`                                    |
 
-### 3.3 Plugin-bereitgestellte Tools
+### 3.3 Plugin-Provided Tools
 
-Neben generischen Core-Tools können Service-Plugins über die **Plugin-Tool-Registry** eigene, semantisch typisierte Tools registrieren. Der MCP-Server fragt
-diese Registry ab und stellt die Tools dynamisch bereit.
+In addition to generic core tools, service plugins can register their own, semantically typed tools via the **Plugin-Tool-Registry**. The MCP server queries
+this registry and exposes the tools dynamically.
 
-**Beispiel Audio-Service (basiert auf `PulseCommand`):**
+**Example: Audio Service (based on `PulseCommand`):**
 
-| Tool                           | Beschreibung                                               | Parameter                 |
-|--------------------------------|------------------------------------------------------------|---------------------------|
-| `plugin.audio.volume_up`       | Erhöht die Lautstärke um einen konfigurierten Schritt.     | –                         |
-| `plugin.audio.volume_down`     | Verringert die Lautstärke um einen konfigurierten Schritt. | –                         |
-| `plugin.audio.set_volume`      | Setzt die Lautstärke auf einen absoluten Wert.             | `volume: f32` (0.0 – 1.0) |
-| `plugin.audio.toggle_mute`     | Wechselt den Mute-Status.                                  | –                         |
-| `plugin.audio.mute`            | Stummschaltung aktivieren.                                 | –                         |
-| `plugin.audio.unmute`          | Stummschaltung aufheben.                                   | –                         |
-| `plugin.audio.next_device`     | Nächstes Audio-Gerät auswählen.                            | –                         |
-| `plugin.audio.previous_device` | Vorheriges Audio-Gerät auswählen.                          | –                         |
-| `plugin.audio.refresh_status`  | Status manuell neu einlesen.                               | –                         |
+| Tool                           | Description                            | Parameters                |
+|--------------------------------|----------------------------------------|---------------------------|
+| `plugin.audio.volume_up`       | Increases volume by a configured step. | –                         |
+| `plugin.audio.volume_down`     | Decreases volume by a configured step. | –                         |
+| `plugin.audio.set_volume`      | Sets the volume to an absolute value.  | `volume: f32` (0.0 – 1.0) |
+| `plugin.audio.toggle_mute`     | Toggles the mute state.                | –                         |
+| `plugin.audio.mute`            | Enables mute.                          | –                         |
+| `plugin.audio.unmute`          | Disables mute.                         | –                         |
+| `plugin.audio.next_device`     | Selects the next audio device.         | –                         |
+| `plugin.audio.previous_device` | Selects the previous audio device.     | –                         |
+| `plugin.audio.refresh_status`  | Manually re-reads the status.          | –                         |
 
-Weitere Plugins (z. B. `mpris`, `hyprland`) registrieren analog ihre eigenen Tools, z. B. `plugin.mpris.play_pause`, `plugin.hyprland.switch_workspace`.
-
----
-
-## 4. Vorgeschlagene Resources
-
-Ressourcen sind vom MCP-Client abfragbare Werte, die den aktuellen Zustand des Launchers oder des Systems widerspiegeln.
-
-### 4.1 Pflicht-Ressourcen (ab dem MVP)
-
-Der `AreaManager` und **jedes Service-Plugin** müssen mindestens ihre zentralen Zustandsressourcen über die Plugin-Resource-Registry registrieren. Der
-MCP-Server bietet diese Ressourcen dann dynamisch an.
-
-#### Core-Resources (AreaManager)
-
-| URI                      | Beschreibung                                                   | Format |
-|--------------------------|----------------------------------------------------------------|--------|
-| `area://list`            | Liste aller konfigurierten Areas mit Status und Position.      | JSON   |
-| `area://<area_id>/state` | Aktueller Zustand einer Area (geöffnet, fokussiert, sichtbar). | JSON   |
-| `area://current/focus`   | Aktuell fokussierte Area.                                      | JSON   |
-| `area://current/visible` | Aktuell sichtbare Area(n).                                     | JSON   |
-
-#### Service-Plugin-Resources
-
-Jedes Service-Plugin bietet eine **Snapshot-Resource** für den kompletten Status sowie, wo sinnvoll, **feingranulare Einzelresources** für häufig abgefragte
-Werte.
-
-| Service         | URI                                  | Beschreibung                                                            | Quell-Typ                        |
-|-----------------|--------------------------------------|-------------------------------------------------------------------------|----------------------------------|
-| `app_launcher`  | `plugin://app_launcher/running_apps` | Status aller überwachten `.desktop`-Dateien (läuft / gestoppt).         | `DesktopFileStatusMessageStabby` |
-| `audio`         | `plugin://audio/status`              | Kompletter Audio-Status (Lautstärke, Mute, Geräte, aktives Gerät).      | `AudioStatusMessage`             |
-| `audio`         | `plugin://audio/volume`              | Aktuelle Lautstärke (0.0 – 1.0).                                        | `AudioStatusMessage`             |
-| `audio`         | `plugin://audio/muted`               | Aktueller Mute-Status.                                                  | `AudioStatusMessage`             |
-| `audio`         | `plugin://audio/active_sink`         | Aktives Ausgabegerät mit Name, Index und Kanälen.                       | `AudioStatusMessage`             |
-| `audio`         | `plugin://audio/sinks`               | Liste aller verfügbaren Ausgabegeräte.                                  | `AudioStatusMessage`             |
-| `mpris`         | `plugin://mpris/status`              | Aktive Player, Wiedergabestatus, Metadaten, Position, Lautstärke.       | `MprisStatusMessage`             |
-| `notifications` | `plugin://notifications/status`      | Do-Not-Disturb, aktive Benachrichtigungen, ungelesene Anzahl.           | `NotificationStatusMessage`      |
-| `sysinfo`       | `plugin://sysinfo/cpu`               | CPU-Auslastung und -Temperatur.                                         | `CpuStatusMessage`               |
-| `sysinfo`       | `plugin://sysinfo/memory`            | RAM-Nutzung, gesamt, belegt, verfügbar.                                 | `MemoryStatusMessage`            |
-| `sysinfo`       | `plugin://sysinfo/battery`           | Akkuladestand und Ladezustand.                                          | `BatteryStatusMessage`           |
-| `sysinfo`       | `plugin://sysinfo/disks`             | Mountpoint-Nutzung, Lese-/Schreib-Throughput.                           | `DisksStatusMessage`             |
-| `sysinfo`       | `plugin://sysinfo/network`           | Ein-/Ausgehende Netzwerk-Throughput.                                    | `NetworkStatusMessage`           |
-| `sysinfo`       | `plugin://sysinfo/uptime`            | Uptime in Sekunden und Load-Average.                                    | `UptimeStatusMessage`            |
-| `hyprland`      | `plugin://hyprland/active_workspace` | Aktueller Workspace und Fensterliste (neu zu implementieren).           | Eigenes Status-Message           |
-| `http`          | `plugin://http/stats`                | Letzte Anfrage-Statistiken oder letzte Antwort (neu zu implementieren). | Eigenes Status-Message           |
-
-### 4.2 Zusätzliche sinnvolle Ressourcen
-
-| URI                   | Beschreibung                           | Format    |
-|-----------------------|----------------------------------------|-----------|
-| `launcher://config`   | Gesamte aktive Launcher-Konfiguration. | JSON/TOML |
-| `launcher://version`  | Version der Launcher-Anwendung.        | JSON      |
-| `network://status`    | Netzwerkstatus (verbunden, SSID, IP).  | JSON      |
-| `bluetooth://devices` | Gekoppelte Bluetooth-Geräte.           | JSON      |
+Other plugins (e.g., `mpris`, `hyprland`) register their own tools analogously, e.g., `plugin.mpris.play_pause`, `plugin.hyprland.switch_workspace`.
 
 ---
 
-## 5. Tool-Implementierungsdetails (MVP)
+## 4. Proposed Resources
+
+Resources are values queryable by the MCP client that reflect the current state of the launcher or the system.
+
+### 4.1 Mandatory Resources (from the MVP)
+
+The `AreaManager` and **every service plugin** must register at least their central state resources via the Plugin-Resource-Registry. The MCP server then offers
+these resources dynamically.
+
+#### Core Resources (AreaManager)
+
+| URI                      | Description                                            | Format |
+|--------------------------|--------------------------------------------------------|--------|
+| `area://list`            | List of all configured areas with status and position. | JSON   |
+| `area://<area_id>/state` | Current state of an area (open, focused, visible).     | JSON   |
+| `area://current/focus`   | Currently focused area.                                | JSON   |
+| `area://current/visible` | Currently visible area(s).                             | JSON   |
+
+#### Service Plugin Resources
+
+Each service plugin provides a **snapshot resource** for the complete status and, where useful, **fine-grained individual resources** for frequently queried
+values.
+
+| Service         | URI                                  | Description                                                   | Source type                      |
+|-----------------|--------------------------------------|---------------------------------------------------------------|----------------------------------|
+| `app_launcher`  | `plugin://app_launcher/running_apps` | Status of all monitored `.desktop` files (running / stopped). | `DesktopFileStatusMessageStabby` |
+| `audio`         | `plugin://audio/status`              | Complete audio status (volume, mute, devices, active device). | `AudioStatusMessage`             |
+| `audio`         | `plugin://audio/volume`              | Current volume (0.0 – 1.0).                                   | `AudioStatusMessage`             |
+| `audio`         | `plugin://audio/muted`               | Current mute status.                                          | `AudioStatusMessage`             |
+| `audio`         | `plugin://audio/active_sink`         | Active output device with name, index, and channels.          | `AudioStatusMessage`             |
+| `audio`         | `plugin://audio/sinks`               | List of all available output devices.                         | `AudioStatusMessage`             |
+| `mpris`         | `plugin://mpris/status`              | Active players, playback status, metadata, position, volume.  | `MprisStatusMessage`             |
+| `notifications` | `plugin://notifications/status`      | Do-not-disturb, active notifications, unread count.           | `NotificationStatusMessage`      |
+| `sysinfo`       | `plugin://sysinfo/cpu`               | CPU usage and temperature.                                    | `CpuStatusMessage`               |
+| `sysinfo`       | `plugin://sysinfo/memory`            | RAM usage, total, used, available.                            | `MemoryStatusMessage`            |
+| `sysinfo`       | `plugin://sysinfo/battery`           | Battery level and charging state.                             | `BatteryStatusMessage`           |
+| `sysinfo`       | `plugin://sysinfo/disks`             | Mount point usage, read/write throughput.                     | `DisksStatusMessage`             |
+| `sysinfo`       | `plugin://sysinfo/network`           | Incoming/outgoing network throughput.                         | `NetworkStatusMessage`           |
+| `sysinfo`       | `plugin://sysinfo/uptime`            | Uptime in seconds and load average.                           | `UptimeStatusMessage`            |
+| `hyprland`      | `plugin://hyprland/active_workspace` | Current workspace and window list (to be implemented).        | Custom status message            |
+| `http`          | `plugin://http/stats`                | Last request statistics or last response (to be implemented). | Custom status message            |
+
+### 4.2 Additional Useful Resources
+
+| URI                   | Description                           | Format    |
+|-----------------------|---------------------------------------|-----------|
+| `launcher://config`   | Entire active launcher configuration. | JSON/TOML |
+| `launcher://version`  | Version of the launcher application.  | JSON      |
+| `network://status`    | Network status (connected, SSID, IP). | JSON      |
+| `bluetooth://devices` | Paired Bluetooth devices.             | JSON      |
+
+`launcher://config` is provided unfiltered during discovery. Security filters are not enforced in the MVP.
+
+---
+
+## 5. Tool Implementation Details (MVP)
 
 ### 5.1 `open_area`
 
@@ -179,7 +185,7 @@ Werte.
 }
 ```
 
-Intern wird dieselbe Funktion aufgerufen wie beim Swipe-Event oder Hotkey: `AreaManager::open(area_id)`.
+Internally, the same function is called as during a swipe event or hotkey: `AreaManager::open(area_id)`.
 
 ### 5.2 `close_area`
 
@@ -202,7 +208,7 @@ Intern wird dieselbe Funktion aufgerufen wie beim Swipe-Event oder Hotkey: `Area
 }
 ```
 
-Intern: `AreaManager::close(area_id)`.
+Internally: `AreaManager::close(area_id)`.
 
 ### 5.3 `list_areas`
 
@@ -217,7 +223,7 @@ Intern: `AreaManager::close(area_id)`.
 }
 ```
 
-Intern: `AreaManager::list()` liefert die konfigurierten Areas mit ihrem aktuellen Zustand zurück.
+Internally: `AreaManager::list()` returns the configured areas with their current state.
 
 ### 5.4 `focus_area`
 
@@ -240,7 +246,7 @@ Intern: `AreaManager::list()` liefert die konfigurierten Areas mit ihrem aktuell
 }
 ```
 
-Intern: `AreaManager::focus(area_id)`.
+Internally: `AreaManager::focus(area_id)`.
 
 ### 5.5 `send_message`
 
@@ -272,17 +278,18 @@ Intern: `AreaManager::focus(area_id)`.
 }
 ```
 
-Intern wird die Nachricht in ein `FfiEnvelope`-äquivalentes internes Format umgewandelt und über `MessageBrokerHandle::send` veröffentlicht. Für JSON-Payloads
-wird die JSON-Converter-Registry des Hosts verwendet.
+`send_message` accepts **strictly standard JSON** (`serde_json`). Binary or stabby layouts are not accepted directly from the client to maintain compatibility
+with the MCP ecosystem. Inside the MCP server, the JSON payload is converted into the appropriate internal ABI-stable type using the host's JSON converter
+registry and then published via `MessageBrokerHandle::send`.
 
 ---
 
-## 6. Resource-Implementierungsdetails (MVP)
+## 6. Resource Implementation Details (MVP)
 
-### 6.1 Area-Status und Current Area
+### 6.1 Area Status and Current Area
 
-Die Ressourcen `area://list`, `area://<area_id>/state`, `area://current/focus` und `area://current/visible` werden direkt aus dem `AreaManager` gelesen. Der
-`AreaManager` registriert sie beim Start über die Plugin-Resource-Registry. Eine Area-Status-Ressource enthält mindestens:
+The resources `area://list`, `area://<area_id>/state`, `area://current/focus`, and `area://current/visible` are read directly from the `AreaManager`. The
+`AreaManager` registers them at startup via the Plugin-Resource-Registry. An area status resource contains at least:
 
 ```json
 {
@@ -294,9 +301,9 @@ Die Ressourcen `area://list`, `area://<area_id>/state`, `area://current/focus` u
 }
 ```
 
-### 6.2 Service-Plugin-Resources
+### 6.2 Service Plugin Resources
 
-Jedes Service-Plugin hält seinen aktuellen Zustand vor und registriert die dazugehörigen Ressourcen. Beispiel `plugin://sysinfo/cpu`:
+Each service plugin keeps its current state and registers the corresponding resources. Example `plugin://sysinfo/cpu`:
 
 ```
 URI: plugin://sysinfo/cpu
@@ -304,7 +311,7 @@ MIME type: application/json
 Body: { "cpu_usage": 12.5, "cpu_temperature": 45.2 }
 ```
 
-Beispiel `plugin://audio/status`:
+Example `plugin://audio/status`:
 
 ```
 URI: plugin://audio/status
@@ -316,66 +323,66 @@ Body: {
 }
 ```
 
-### 6.3 Generische Ressourcen aus Plugins
+### 6.3 Generic Resources from Plugins
 
-Damit zukünftige Plugins selbstständig Ressourcen bereitstellen können, ohne dass der MCP-Server sie explizit kennen muss, wird eine **Plugin-Resource-Registry
-** im Core eingeführt:
+To enable future plugins to provide resources independently without the MCP server knowing them explicitly, a **Plugin-Resource-Registry** is introduced in the
+core:
 
 ```
 ┌─────────────────────────────────────────┐
-│            MCP-Server                   │
+│            MCP Server                   │
 │   list_resources() / read_resource()    │
 └──────────────┬──────────────────────────┘
                │
 ┌──────────────▼──────────────────────────┐
 │      Plugin Resource Registry           │
-│  (globaler Registry im Core)            │
+│  (global registry in the core)          │
 │                                         │
-│  plugin://sysinfo/cpu  -> PluginHandler   │
-│  plugin://audio/volume -> PluginHandler   │
-│  plugin://clock/time   -> PluginHandler   │
+│  plugin://sysinfo/cpu  -> PluginHandler │
+│  plugin://audio/volume -> PluginHandler │
+│  plugin://clock/time   -> PluginHandler │
 └─────────────────────────────────────────┘
 ```
 
-**Mechanismus:**
+**Mechanism:**
 
-1. Jedes Plugin (Widget oder Service) kann während der Initialisierung über einen neuen Callback im `FfiCoreContext` Ressourcen registrieren:
-    - `resource_uri: stabby::string::String` (z. B. `plugin://sysinfo/cpu`)
-    - `metadata: ResourceMetadata` (Name, Beschreibung, MIME-Type)
+1. Every plugin (widget or service) can register resources during initialization via a new callback in `FfiCoreContext`:
+    - `resource_uri: stabby::string::String` (e.g., `plugin://sysinfo/cpu`)
+    - `metadata: ResourceMetadata` (name, description, MIME type)
     - `read_fn: extern "C" fn(...) -> DynFuture<'static, stabby::string::String>`
-2. Der MCP-Server fragt die Registry beim Start ab und registriert alle URIs dynamisch beim MCP-Client.
-3. Bei `read_resource(plugin://<plugin>/<name>)` ruft der MCP-Server die zugehörige `read_fn` des Plugins auf.
-4. Das Plugin liefert JSON als `stabby::string::String` zurück; der MCP-Server leitet es unverändert an den Client weiter.
+2. The MCP server queries the registry at startup and registers all URIs dynamically with the MCP client.
+3. For `read_resource(plugin://<plugin>/<name>)`, the MCP server calls the corresponding `read_fn` of the plugin.
+4. The plugin returns JSON as a `stabby::string::String`; the MCP server forwards it unchanged to the client.
 
-Dadurch können auch später entwickelte Plugins Ressourcen bereitstellen, ohne dass der MCP-Server oder das Core-Modell angepasst werden müssen. Für
-stabby-FFI-Typen konvertiert das Plugin intern über die JSON-Converter-Registry.
+Thus, even plugins developed later can provide resources without requiring changes to the MCP server or the core model. For stabby-FFI types, the plugin
+converts internally via the JSON converter registry.
 
-**Kein Last-Value-Cache für MCP:** Da der `AreaManager` und alle Service-Plugins ihre Zustände explizit als Ressourcen bereitstellen, wird für das MCP-Interface
-**kein `topic://<topic>/last`-Resource** benötigt. Der MCP-Server liest ausschließlich über registrierte Ressourcen-Handler.
+**No last-value cache for MCP:** Because the `AreaManager` and all service plugins expose their state explicitly as resources, the MCP interface **does not need
+a `topic://<topic>/last` resource**. The MCP server reads exclusively through registered resource handlers.
 
-Der Message Broker kann weiterhin einen internen Last-Value-Cache für Widgets/Services unterhalten (Late-Subscriber-Initialisierung), aber dieser Cache ist für
-den MCP-Server nicht sichtbar und wird nicht als Resource exponiert.
+The message broker may still maintain an internal last-value cache for widgets/services (late-subscriber initialization), but this cache is not visible to the
+MCP server and is not exposed as a resource.
 
 ### 6.4 Plugin-Tool-Registry
 
-Analog zur Plugin-Resource-Registry gibt es eine **Plugin-Tool-Registry**, über die Service-Plugins eigene MCP-Tools registrieren. Der MCP-Server erweitert
-damit seine Tool-Liste dynamisch, ohne für jedes Plugin manuell Tool-Handler implementieren zu müssen.
+Analogous to the Plugin-Resource-Registry, there is a **Plugin-Tool-Registry** through which service plugins register their own MCP tools. The MCP server
+dynamically extends its tool list without having to implement tool handlers manually for each plugin.
 
-**Registrierung pro Plugin:**
+**Registration per plugin:**
 
-- `tool_id: stabby::string::String` (z. B. `plugin.audio.volume_up`)
+- `tool_id: stabby::string::String` (e.g., `plugin.audio.volume_up`)
 - `description: stabby::string::String`
-- `input_schema: stabby::string::String` (JSON-Schema für die Tool-Parameter)
+- `input_schema: stabby::string::String` (JSON schema for the tool parameters)
 - `handler: extern "C" fn(...) -> DynFuture<'static, ToolResult>`
 
-**Ablauf:**
+**Flow:**
 
-1. Der MCP-Server liest beim Start alle registrierten Tools aus der Registry.
-2. Für jedes Tool meldet er `name`, `description` und `inputSchema` dynamisch beim MCP-Client an.
-3. Bei einem Tool-Aufruf serialisiert der MCP-Server die JSON-Argumente und übergibt sie an den Plugin-Handler.
-4. Das Plugin führt die Aktion aus (z. B. `PulseCommand::VolumeUp`) und gibt ein Ergebnis oder eine Fehlermeldung zurück.
+1. The MCP server reads all registered tools from the registry at startup.
+2. For each tool, it reports `name`, `description`, and `inputSchema` dynamically to the MCP client.
+3. When a tool is called, the MCP server serializes the JSON arguments and passes them to the plugin handler.
+4. The plugin executes the action (e.g., `PulseCommand::VolumeUp`) and returns a result or an error message.
 
-**Beispiel JSON-Schema für `plugin.audio.set_volume`:**
+**Example JSON schema for `plugin.audio.set_volume`:**
 
 ```json
 {
@@ -398,10 +405,10 @@ damit seine Tool-Liste dynamisch, ohne für jedes Plugin manuell Tool-Handler im
 }
 ```
 
-**Empfohlene Kombination:**
+**Recommended combination:**
 
-- **Generische Core-Tools** (`open_area`, `close_area`, `list_areas`, `focus_area`, `send_message`) für Launcher- und Broker-Steuerung.
-- **Plugin-Tools** (`plugin.audio.*`, `plugin.mpris.*`, `plugin.hyprland.*`) für semantisch spezifische Aktionen.
+- **Generic core tools** (`open_area`, `close_area`, `list_areas`, `focus_area`, `send_message`) for launcher and broker control.
+- **Plugin tools** (`plugin.audio.*`, `plugin.mpris.*`, `plugin.hyprland.*`) for semantically specific actions.
 
 ---
 
@@ -409,73 +416,63 @@ damit seine Tool-Liste dynamisch, ohne für jedes Plugin manuell Tool-Handler im
 
 ### Phase 1: Foundation (MVP)
 
-* Crate `mcp-server` anlegen oder Feature-Flag in `smearor-swipe-launcher` einführen.
-* MCP-Transport implementieren (ausschließlich SSE gemäß MCP-Spezifikation).
-* MCP-Server als integrierter Thread im Core starten.
-* Tool-Registry mit `open_area`, `close_area`, `list_areas`, `focus_area`, `send_message`.
-* Resource-Registry mit `area://list`, `area://<id>/state`, `area://current/focus`, `area://current/visible`.
-* `AreaManager` implementiert und registriert seine Core-Resources.
-* `send_message` verarbeitet ausschließlich `serde_json`-Payloads; interne Konvertierung in stabby-FFI-Typen erfolgt im MCP-Server.
+* Create crate `mcp-server` or introduce a feature flag in `smearor-swipe-launcher`.
+* Add `axum` and SSE middleware dependencies.
+* Implement MCP transport as an axum-based SSE endpoint.
+* Start the MCP server as an integrated thread in the core.
+* Tool registry with `open_area`, `close_area`, `list_areas`, `focus_area`, `send_message`.
+* Resource registry with `area://list`, `area://<id>/state`, `area://current/focus`, `area://current/visible`.
+* `AreaManager` implements and registers its core resources.
+* `send_message` processes only `serde_json` payloads; internal conversion into stabby-FFI types happens inside the MCP server.
 
-### Phase 2: Erweiterung Tools
+### Phase 2: Tool Extensions
 
-* `toggle_area`, `reload_config`, `get_area_config` implementieren.
-* `send_action` und `trigger_widget` für direkte Widget-Steuerung.
+* Implement `toggle_area`, `reload_config`, `get_area_config`.
+* Implement `send_action` and `trigger_widget` for direct widget control.
 
-### Phase 3: Plugin-Resource-Registry, Service-Resources & Plugin-Tools
+### Phase 3: Plugin-Resource-Registry, Service Resources & Plugin Tools
 
-* Generische **Plugin-Resource-Registry** und **Plugin-Tool-Registry** im Core definieren und ins `FfiCoreContext` einbinden.
-* Folgende Service-Plugins müssen ihre Ressourcen implementieren und registrieren:
+* Define generic **Plugin-Resource-Registry** and **Plugin-Tool-Registry** in the core and bind them into `FfiCoreContext`.
+* The following service plugins must implement and register their resources:
     * `sysinfo`: `plugin://sysinfo/cpu`, `plugin://sysinfo/memory`, `plugin://sysinfo/battery`, `plugin://sysinfo/disks`, `plugin://sysinfo/network`,
       `plugin://sysinfo/uptime`
-    * `audio`: Snapshot `plugin://audio/status` sowie feingranulare Resources `plugin://audio/volume`, `plugin://audio/muted`, `plugin://audio/active_sink`,
+    * `audio`: Snapshot `plugin://audio/status` as well as fine-grained resources `plugin://audio/volume`, `plugin://audio/muted`, `plugin://audio/active_sink`,
       `plugin://audio/sinks`
-    * `mpris`: `plugin://mpris/status`
-    * `notifications`: `plugin://notifications/status`
-    * `app_launcher`: `plugin://app_launcher/running_apps`
-    * `hyprland`: `plugin://hyprland/active_workspace` (neue Status-Erfassung nötig)
-    * `http`: `plugin://http/stats` (neue Status-Erfassung nötig)
-* Folgende Service-Plugins müssen ihre Tools implementieren und registrieren:
+        * `mpris`: `plugin://mpris/status`
+        * `notifications`: `plugin://notifications/status`
+        * `app_launcher`: `plugin://app_launcher/running_apps`
+    * `hyprland`: `plugin://hyprland/active_workspace` (new status tracking needed)
+    * `http`: `plugin://http/stats` (new status tracking needed)
+* The following service plugins must implement and register their tools:
     * `audio`: `plugin.audio.volume_up`, `plugin.audio.volume_down`, `plugin.audio.set_volume`, `plugin.audio.toggle_mute`, `plugin.audio.mute`,
       `plugin.audio.unmute`, `plugin.audio.next_device`, `plugin.audio.previous_device`, `plugin.audio.refresh_status`
     * `mpris`: `plugin.mpris.play_pause`, `plugin.mpris.next`, `plugin.mpris.previous`, `plugin.mpris.stop`
-    * `hyprland`: `plugin.hyprland.switch_workspace` (neue Status-Erfassung nötig)
-* Bindung an bestehende Services: `network`, `bluetooth` (sofern vorhanden).
+    * `hyprland`: `plugin.hyprland.switch_workspace` (new status tracking needed)
+* Bind existing services: `network`, `bluetooth` (if available).
 
-### Phase 4: Erweiterung des Protokolls
+### Phase 4: Protocol Stabilization
 
-* Stabilisierung des SSE-Transports (Wiederverbindung, Heartbeat, Multi-Client-Support).
-* Sampling/Logging-Unterstützung für MCP-Clients.
-* Authentisierung/Autorisierung, falls der Server über Netzwerk erreichbar sein soll.
+* Stabilize the SSE transport (reconnection, heartbeat, multi-client support).
+* Add sampling/logging support for MCP clients.
+* Add authentication/authorization if the server should be reachable over the network.
 
 ### Phase 5: Integration & Tests
 
-* CLI-Argument `--mcp-server` in `smearor-swipe-launcher`.
-* Unit-Tests für Tool- und Resource-Handler.
-* Manuelle Integrationstests mit Claude Desktop und anderen MCP-Clients.
+* Add CLI argument `--mcp-server` in `smearor-swipe-launcher`.
+* Unit tests for tool and resource handlers.
+* Manual integration tests with Claude Desktop and other MCP clients.
 
 ---
 
-## 8. Offene Fragen & Entscheidungen
+## 8. Dependencies
 
-1. **Transport:** Ausschließlich SSE. STDIO wird nicht unterstützt.
-2. **Prozessmodell:** Integriert als eigener Thread im Launcher-Core.
-3. **Berechtigungen:** Erst einmal ignorieren; alle Tools sind ohne zusätzliche Zustimmung nutzbar.
-4. **Payload-Typen:** `send_message` verarbeitet strikt Standard-JSON (`serde_json`). Erst im MCP-Server wird das JSON in die internen FFI-sicheren Typen
-   konvertiert und über den Broker gesendet. Binäre/stabby-Layouts werden nicht direkt vom Client akzeptiert, um die Kompatibilität mit dem MCP-Ökosystem zu
-   wahren.
-5. **Discovery:** `launcher://config` wird ungefiltert bereitgestellt. Sicherheit wird erst einmal ignoriert.
+* `axum` and `tokio` for the SSE HTTP transport.
+* MCP `rust-sdk` or a standalone JSON-RPC implementation.
+* Access to the internal `AreaManager` and `MessageBroker` of the launcher.
+* Plugin-Resource-Registry and Plugin-Tool-Registry in the core.
+* JSON converter registry for serializing stabby-FFI types to JSON.
 
 ---
 
-## 9. Abhängigkeiten
-
-* `rust-sdk` des Model Context Protocol oder eigenständige JSON-RPC-Implementierung.
-* Zugang zum internen `AreaManager` und `MessageBroker` des Launchers.
-* Plugin-Resource-Registry und Plugin-Tool-Registry im Core.
-* JSON-Converter-Registry für die Serialisierung von stabby-FFI-Typen nach JSON.
-
----
-
-*Konzept für die Bereitstellung des Smearor Swipe Launchers als MCP-Server mit Fokus auf Area-Steuerung, Broker-Nachrichten, zentraler Resource-Registry und
-Plugin-Tool-Registry.*
+*Concept for exposing the Smearor Swipe Launcher as an MCP server, focusing on area control, broker messages, central resource registry, and plugin-tool
+registry, with SSE transport powered by axum.*
