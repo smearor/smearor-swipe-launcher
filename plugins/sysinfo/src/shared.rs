@@ -126,15 +126,23 @@ pub fn build_icon_image(icon_name: &str, size: i32) -> Image {
 }
 
 /// Updates the value label using a simple placeholder replacement.
-pub fn update_value_label(label: &Label, format: &str, value: f32, extra: Option<(char, f32)>) {
+///
+/// `value` replaces the generic `{value}` placeholders. If `placeholder_name` is
+/// non-empty, placeholders using that name are also replaced so existing configs
+/// such as `{cpu_usage:.0}%` continue to work.
+pub fn update_value_label(label: &Label, format: &str, value: f32, placeholder_name: &str) {
     let mut text = format.replace("{value:.0}", &format!("{:.0}", value));
     text = text.replace("{value:.1}", &format!("{:.1}", value));
     text = text.replace("{value:.2}", &format!("{:.2}", value));
     text = text.replace("{value}", &format!("{:.1}", value));
-    if let Some((placeholder, extra_value)) = extra {
-        text = text.replace(&format!("{{{:.0}}}", placeholder), &format!("{:.0}", extra_value));
-        text = text.replace(&format!("{{{:.1}}}", placeholder), &format!("{:.1}", extra_value));
+
+    if !placeholder_name.is_empty() {
+        text = text.replace(&format!("{{{placeholder_name}:.0}}"), &format!("{:.0}", value));
+        text = text.replace(&format!("{{{placeholder_name}:.1}}"), &format!("{:.1}", value));
+        text = text.replace(&format!("{{{placeholder_name}:.2}}"), &format!("{:.2}", value));
+        text = text.replace(&format!("{{{placeholder_name}}}"), &format!("{:.1}", value));
     }
+
     label.set_text(&text);
 }
 

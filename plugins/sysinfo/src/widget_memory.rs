@@ -76,7 +76,7 @@ impl MemoryWidget {
         let message_inner = message.clone();
         MainContext::default().spawn_local(async move {
             if let Some(ref label) = *value_label.borrow() {
-                update_value_label(label, &config.percentage.value_format, memory_usage, None);
+                update_value_label(label, &config.percentage.value_format, memory_usage, "memory_usage");
                 let classes = label.css_classes();
                 let classes: Vec<String> = classes
                     .iter()

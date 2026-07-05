@@ -75,7 +75,7 @@ impl CpuWidget {
 
         MainContext::default().spawn_local(async move {
             if let Some(ref label) = *value_label.borrow() {
-                update_value_label(label, &config.percentage.value_format, cpu_usage, None);
+                update_value_label(label, &config.percentage.value_format, cpu_usage, "cpu_usage");
                 let classes = label.css_classes();
                 let classes: Vec<String> = classes
                     .iter()
@@ -98,8 +98,7 @@ impl CpuWidget {
             }
             if let Some(ref temp_label) = *temperature_label.borrow() {
                 if let Some(temperature) = cpu_temperature {
-                    let text = config.temperature_format.replace("{cpu_temperature:.0}", &format!("{:.0}", temperature));
-                    temp_label.set_text(&text);
+                    update_value_label(temp_label, &config.temperature_format, temperature, "cpu_temperature");
                 } else {
                     temp_label.set_text("");
                 }
