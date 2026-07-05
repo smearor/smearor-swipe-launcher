@@ -113,6 +113,21 @@ impl LauncherInstance {
             }
         }
 
+        // Broadcast MCP invocation requests to all plugins so the registering
+        // plugin can handle its own tools/resources.
+        if topic.starts_with("mcp.invoke.") {
+            let plugin_count = self.plugin_manager.plugins.len();
+            eprintln!("DEBUG instance.handle_message: topic={} plugin_count={}", topic, plugin_count);
+            for r in self.plugin_manager.plugins.iter() {
+                let plugin_id = r.key().to_string();
+                let plugin = r.value();
+                eprintln!("DEBUG instance.handle_message: sending mcp.invoke to plugin {}", plugin_id);
+                unsafe {
+                    plugin.on_message(envelope.clone());
+                }
+            }
+        }
+
         // Destroy the payload after all handlers have processed the message
         if !envelope.payload.is_null() {
             if let Some(destroy) = envelope.destroy_payload {

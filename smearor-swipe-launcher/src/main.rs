@@ -8,6 +8,8 @@ mod display;
 mod error;
 mod instance;
 mod json_converter;
+mod mcp_registry;
+mod mcp_response_tracker;
 mod messages;
 mod plugin;
 mod plugin_manager;
@@ -25,11 +27,43 @@ pub use service_manager::ServiceManager;
 
 use clap::Parser;
 use gtk4::Application;
+use gtk4::glib::MainContext;
 use miette::IntoDiagnostic;
 use miette::Result;
+use smearor_mcp_server::McpCommand;
+use smearor_mcp_server::McpServer;
+use smearor_mcp_server::McpServerConfig;
+use smearor_model_mcp::InvokeResourceMessage;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::MessageTopic;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
+
+/// Destroy a typed payload that was allocated with `Box::into_raw`.
+extern "C" fn destroy_payload<T>(ptr: *mut core::ffi::c_void) {
+    if !ptr.is_null() {
+        unsafe {
+            let _ = Box::from_raw(ptr as *mut T);
+        }
+    }
+}
+
+/// Clone a typed payload for safe `FfiEnvelope` cloning across multiple
+/// broker recipients.
+extern "C" fn clone_payload<T: Clone>(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe {
+        let typed = ptr as *mut T;
+        let cloned = (*typed).clone();
+        Box::into_raw(Box::new(cloned)) as *mut core::ffi::c_void
+    }
+}
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -64,8 +98,211 @@ async fn main() -> Result<()> {
 
     debug!("Application initialized successfully");
 
+    let (mut mcp_server, mcp_receiver, mcp_notification_sender) = McpServer::new(McpServerConfig::default(), host.mcp_registry.clone());
+    mcp_server.start();
+    host.set_mcp_notification_sender(mcp_notification_sender);
+    let _mcp_server = Some(mcp_server);
+
     host.build_ui()?;
+
+    let main_context = MainContext::default();
+    let host_clone = host.clone();
+    main_context.spawn_local(async move {
+        while let Ok(command) = mcp_receiver.recv().await {
+            process_mcp_command(host_clone.clone(), command).await;
+        }
+    });
+
     host.run();
 
+    Ok(())
+}
+
+async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
+    eprintln!(
+        "DEBUG process_mcp_command: ServiceManager ptr={:p} count={}",
+        host.service_manager.as_ref(),
+        host.service_manager.services.len()
+    );
+    match command {
+        McpCommand::OpenArea { area_id, response } => {
+            let result = with_first_area_manager(&host, |area_manager| area_manager.open(&area_id).map(|_| format!("Area {} opened", area_id)));
+            let _ = response.send(result);
+        }
+        McpCommand::CloseArea { area_id, response } => {
+            let result = with_first_area_manager(&host, |area_manager| area_manager.close(&area_id).map(|_| format!("Area {} closed", area_id)));
+            let _ = response.send(result);
+        }
+        McpCommand::FocusArea { area_id, response } => {
+            let result = with_first_area_manager(&host, |area_manager| area_manager.focus(&area_id).map(|_| format!("Area {} focused", area_id)));
+            let _ = response.send(result);
+        }
+        McpCommand::ListAreas { response } => {
+            let result = with_first_area_manager(&host, |area_manager| {
+                let areas = area_manager.list_areas();
+                serde_json::to_string(&areas).map_err(|e| e.to_string())
+            });
+            let _ = response.send(result);
+        }
+        McpCommand::SendMessage {
+            topic,
+            payload,
+            target_instance_id,
+            response,
+        } => {
+            let result = send_mcp_message(&host, topic, payload, target_instance_id);
+            let _ = response.send(result);
+        }
+        McpCommand::ReadResource { uri, response } => {
+            let result = read_mcp_resource(&host, uri);
+            let _ = response.send(result);
+        }
+        McpCommand::ToggleArea { area_id, response } => {
+            let result = with_first_area_manager(&host, |area_manager| area_manager.toggle(&area_id).map(|_| format!("Area {} toggled", area_id)));
+            let _ = response.send(result);
+        }
+        McpCommand::GetAreaConfig { area_id, response } => {
+            let result = with_first_area_manager(&host, |area_manager| {
+                let config = area_manager.get_area_config(&area_id)?;
+                serde_json::to_string(&config).map_err(|e| e.to_string())
+            });
+            let _ = response.send(result);
+        }
+        McpCommand::InvokePluginTool {
+            name,
+            plugin_id: _plugin_id,
+            correlation_id,
+            arguments,
+            response,
+        } => {
+            let receiver = host.mcp_response_tracker.register(correlation_id.clone());
+            let send_result = invoke_plugin_tool(&host, &name, &correlation_id, &arguments);
+            if send_result.is_ok() {
+                let response_result = match tokio::time::timeout(tokio::time::Duration::from_secs(5), receiver).await {
+                    Ok(Ok(result)) => result,
+                    Ok(Err(_)) => Err("Plugin tool invocation dropped".to_string()),
+                    Err(_) => Err("Plugin tool invocation timed out".to_string()),
+                };
+                let _ = response.send(response_result);
+            } else {
+                let _ = response.send(send_result.map(|_| String::new()));
+            }
+        }
+        McpCommand::InvokePluginResource {
+            uri,
+            plugin_id: _plugin_id,
+            correlation_id,
+            response,
+        } => {
+            let receiver = host.mcp_response_tracker.register(correlation_id.clone());
+            let send_result = invoke_plugin_resource(&host, &uri, &correlation_id);
+            if send_result.is_ok() {
+                let response_result = match tokio::time::timeout(tokio::time::Duration::from_secs(5), receiver).await {
+                    Ok(Ok(result)) => {
+                        host.broadcast_resource_updated(&uri);
+                        result
+                    }
+                    Ok(Err(_)) => Err("Plugin resource read dropped".to_string()),
+                    Err(_) => Err("Plugin resource read timed out".to_string()),
+                };
+                let _ = response.send(response_result);
+            } else {
+                let _ = response.send(send_result.map(|_| String::new()));
+            }
+        }
+    }
+}
+
+fn with_first_area_manager<F, T>(host: &LauncherHost, callback: F) -> Result<T, String>
+where
+    F: FnOnce(&crate::area::area_manager::AreaManager) -> Result<T, String>,
+{
+    let instances = host.instances.lock().map_err(|_| "Failed to lock instances")?;
+    let first_instance = instances.values().next().ok_or("No launcher instance available")?;
+    let area_manager = first_instance.area_manager.lock().map_err(|_| "Failed to lock area manager")?;
+    callback(&area_manager)
+}
+
+fn send_mcp_message(host: &LauncherHost, topic: String, payload: serde_json::Value, target_instance_id: Option<String>) -> Result<String, String> {
+    let payload_json = payload.to_string();
+    let payload_ptr = Box::into_raw(Box::new(payload_json)) as *mut core::ffi::c_void;
+    let envelope = smearor_swipe_launcher_plugin_api::FfiEnvelope {
+        sender_id: stabby::string::String::from("mcp-server"),
+        target_instance_id: stabby::string::String::from(target_instance_id.unwrap_or_default()),
+        topic: stabby::string::String::from(topic),
+        type_id: smearor_swipe_launcher_plugin_api::generate_type_id("std::string::String"),
+        payload: payload_ptr,
+        destroy_payload: Some(default_destroy_payload),
+        clone_payload: None,
+    };
+    host.broker_sender.send(envelope).map_err(|e| format!("Failed to send message: {}", e))?;
+    Ok("Message sent".to_string())
+}
+
+fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String> {
+    let result = if uri == "area://list" {
+        with_first_area_manager(host, |area_manager| {
+            let areas = area_manager.list_areas();
+            serde_json::to_string(&areas).map_err(|e| e.to_string())
+        })
+    } else if uri.starts_with("area://") && uri.ends_with("/state") {
+        let area_id = uri.trim_start_matches("area://").trim_end_matches("/state");
+        with_first_area_manager(host, |area_manager| {
+            let areas = area_manager.list_areas();
+            let area = areas.into_iter().find(|a| a.area_id == area_id).ok_or(format!("Area {} not found", area_id))?;
+            serde_json::to_string(&area).map_err(|e| e.to_string())
+        })
+    } else {
+        Err(format!("Resource {} not implemented", uri))
+    };
+    if result.is_ok() {
+        host.broadcast_resource_updated(&uri);
+    }
+    result
+}
+
+fn invoke_plugin_tool(host: &LauncherHost, name: &str, correlation_id: &str, arguments: &serde_json::Value) -> Result<(), String> {
+    eprintln!(
+        "DEBUG invoke_plugin_tool: ServiceManager ptr={:p} count={}",
+        host.service_manager.as_ref(),
+        host.service_manager.services.len()
+    );
+    let message = InvokeToolMessage::new(name, correlation_id, &arguments.to_string());
+    let payload_ptr = Box::into_raw(Box::new(message)) as *mut core::ffi::c_void;
+    let envelope = FfiEnvelope {
+        sender_id: stabby::string::String::from("mcp-server"),
+        target_instance_id: stabby::string::String::from("*"),
+        topic: stabby::string::String::from(InvokeToolMessage::topic()),
+        type_id: InvokeToolMessage::TYPE_ID,
+        payload: payload_ptr,
+        destroy_payload: Some(destroy_payload::<InvokeToolMessage>),
+        clone_payload: Some(clone_payload::<InvokeToolMessage>),
+    };
+    host.broker_sender
+        .send(envelope)
+        .map_err(|e| format!("Failed to send plugin tool invocation: {}", e))?;
+    Ok(())
+}
+
+fn invoke_plugin_resource(host: &LauncherHost, uri: &str, correlation_id: &str) -> Result<(), String> {
+    eprintln!(
+        "DEBUG invoke_plugin_resource: ServiceManager ptr={:p} count={}",
+        host.service_manager.as_ref(),
+        host.service_manager.services.len()
+    );
+    let message = InvokeResourceMessage::new(uri, correlation_id);
+    let payload_ptr = Box::into_raw(Box::new(message)) as *mut core::ffi::c_void;
+    let envelope = FfiEnvelope {
+        sender_id: stabby::string::String::from("mcp-server"),
+        target_instance_id: stabby::string::String::from("*"),
+        topic: stabby::string::String::from(InvokeResourceMessage::topic()),
+        type_id: InvokeResourceMessage::TYPE_ID,
+        payload: payload_ptr,
+        destroy_payload: Some(destroy_payload::<InvokeResourceMessage>),
+        clone_payload: Some(clone_payload::<InvokeResourceMessage>),
+    };
+    host.broker_sender
+        .send(envelope)
+        .map_err(|e| format!("Failed to send plugin resource read: {}", e))?;
     Ok(())
 }

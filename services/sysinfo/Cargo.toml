@@ -17,6 +17,7 @@ nix = { version = "0.29", features = ["fs"] }
 paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+smearor-model-mcp = { path = "../../model/mcp" }
 smearor-sysinfo-model = { path = "../../model/sysinfo" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 thiserror = { workspace = true }

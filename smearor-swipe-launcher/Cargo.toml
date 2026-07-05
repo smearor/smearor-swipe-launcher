@@ -18,9 +18,11 @@ miette = { workspace = true }
 nerd_gtk_icons = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-smearor-swipe-launcher-plugin-api = { path = "../plugin-api" }
+smearor-mcp-server = { path = "../mcp-server" }
 smearor-model-area = { path = "../model/area" }
+smearor-model-mcp = { path = "../model/mcp" }
 smearor-model-plugin = { path = "../model/plugin" }
+smearor-swipe-launcher-plugin-api = { path = "../plugin-api" }
 smearor-wrot-rotation = { workspace = true }
 stabby = { workspace = true }
 thiserror = { workspace = true }

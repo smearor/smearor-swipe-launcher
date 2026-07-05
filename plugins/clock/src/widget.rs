@@ -9,9 +9,16 @@ use gtk4::glib::MainContext;
 use gtk4::prelude::WidgetExt;
 use gtk4::prelude::*;
 use serde_json;
+use smearor_model_mcp::InvokeResourceMessage;
+use smearor_model_mcp::InvokeResourceResponse;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::InvokeToolResponse;
+use smearor_model_mcp::RegisterResourceMessage;
+use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::Plugin;
@@ -20,6 +27,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -53,14 +61,31 @@ impl ClockWidget {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
         let clock_config: ClockConfig = serde_json::from_value(config.config.clone())
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
-        Ok(ClockWidget {
+        let widget = ClockWidget {
             meta: PluginMeta::try_from(&config)?,
             core_context,
             config: clock_config.clone(),
             clock: Arc::new(Clock::new(clock_config)),
             labels: Arc::new(RwLock::new(None)),
             time_receiver: None,
-        })
+        };
+        widget.register_mcp_capabilities();
+        Ok(widget)
+    }
+
+    fn register_mcp_capabilities(&self) {
+        let tool = RegisterToolMessage::new(
+            "get_current_time",
+            "Returns the current local time as a formatted string.",
+            r#"{ "type": "object", "properties": {} }"#,
+        );
+        let broadcaster = self.get_broadcaster();
+        broadcaster.broadcast_message_to_topic(tool);
+        // self.broadcast_message_to_topic(tool);
+
+        let resource = RegisterResourceMessage::new("clock://time", "current_time", "Current time formatted by the clock widget.", "text/plain");
+        broadcaster.broadcast_message_to_topic(resource);
+        // self.broadcast_message_to_topic(resource);
     }
 
     fn create_time_column(css_prefix: &str) -> (GtkBox, (Label, Label, Label)) {
@@ -142,6 +167,39 @@ impl MessageHandler<FfiEnvelope> for ClockWidget {
     fn handle_message(&self, _message: FfiEnvelope, _sender_id: &str) {}
 }
 
+impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for ClockWidget {
+    fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, _sender_id: &str) {
+        eprintln!("DEBUG clock: handle_message name={}", message.0.name);
+        if message.0.name.to_string() != "get_current_time" {
+            return;
+        }
+        let response = if let Some(time_str) = self.clock.get_current_time_2() {
+            eprintln!("DEBUG clock: get_current_time responding with {}", time_str);
+            InvokeToolResponse::success(&message.0.correlation_id.to_string(), &time_str)
+        } else {
+            eprintln!("DEBUG clock: get_current_time format_2 not ready");
+            InvokeToolResponse::error(&message.0.correlation_id.to_string(), "Clock not ready")
+        };
+        let broadcaster = self.get_broadcaster();
+        broadcaster.broadcast_message_to_topic(response);
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for ClockWidget {
+    fn handle_message(&self, message: FfiEnvelopePayload<InvokeResourceMessage>, _sender_id: &str) {
+        if message.0.uri.to_string() != "clock://time" {
+            return;
+        }
+        let response = if let Some(time_str) = self.clock.get_current_time_2() {
+            InvokeResourceResponse::success(&message.0.correlation_id.to_string(), &time_str)
+        } else {
+            InvokeResourceResponse::error(&message.0.correlation_id.to_string(), "Clock not ready")
+        };
+        let broadcaster = self.get_broadcaster();
+        broadcaster.broadcast_message_to_topic(response);
+    }
+}
+
 impl AcceptTopic<FfiEnvelope> for ClockWidget {
     fn accept_topic(&self, _topic: &str) -> bool {
         false
@@ -162,7 +220,20 @@ impl AsRef<Option<FfiCoreContext>> for ClockWidget {
     }
 }
 
-impl Plugin for ClockWidget {}
+impl Plugin for ClockWidget {
+    fn on_message(&mut self, message: *mut core::ffi::c_void) {
+        if !message.is_null() {
+            unsafe {
+                let envelope = &*(message as *mut FfiEnvelope);
+                if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
+                }
+            }
+        }
+    }
+}
 
 impl WidgetBuilder for ClockWidget {
     fn build_widget(&mut self) -> Widget {

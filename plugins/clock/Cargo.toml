@@ -18,6 +18,7 @@ miette = { workspace = true }
 paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+smearor-model-mcp = { path = "../../model/mcp" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 smearor-clock-model = { path = "../../model/clock" }
 thiserror = { workspace = true }

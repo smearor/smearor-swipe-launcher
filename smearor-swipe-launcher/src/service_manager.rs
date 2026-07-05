@@ -55,3 +55,9 @@ impl ServiceManager {
         }
     }
 }
+
+impl Drop for ServiceManager {
+    fn drop(&mut self) {
+        self.unload_services();
+    }
+}

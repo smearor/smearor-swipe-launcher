@@ -8,11 +8,13 @@ members = [
     "model/clock",
     "model/hyprland",
     "model/http",
+    "model/mcp",
     "model/message",
     "model/mpris",
     "model/notifications",
     "model/plugin",
     "model/sysinfo",
+    "mcp-server",
     "plugin-api",
     "plugins/clock",
     "plugins/app-launcher",
@@ -38,11 +40,13 @@ default-members = [
     "model/clock",
     "model/hyprland",
     "model/http",
+    "model/mcp",
     "model/message",
     "model/mpris",
     "model/notifications",
     "model/plugin",
     "model/sysinfo",
+    "mcp-server",
     "plugin-api",
     "plugins/clock",
     "plugins/app-launcher",
@@ -64,12 +68,16 @@ default-members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.92"
 license = "MIT"
 authors = ["Andreas Schaeffer"]
 
 [workspace.dependencies]
 stabby = { version = "72.1", features = ["libloading"] }
+axum = { version = "0.8", features = ["tokio"] }
+tower = { version = "0.5", default-features = false }
+tower-http = { version = "0.6", default-features = false, features = ["cors"] }
+async-stream = "0.3"
 adw = { package = "libadwaita", version = "0.9.1" }
 clap = { version = "4.5", features = ["derive"] }
 async-channel = "2.5"
@@ -97,6 +105,7 @@ tokio = { version = "1.42", features = ["full"] }
 toml = "1.1.2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.23", features = ["v4"] }
 typed-builder = "0.23.2"
 which = "8.0"
 zbus = "5"

@@ -136,9 +136,18 @@ pub trait MessageHandler<T: Clone> {
     /// Convenience method called by the Host router.
     fn handle_envelope_message(&self, envelope: &FfiEnvelope) {
         let sender_id = envelope.sender_id.to_string();
+        eprintln!(
+            "DEBUG handle_envelope_message: topic={} type_id={} payload_null={}",
+            envelope.topic,
+            envelope.type_id,
+            envelope.payload.is_null()
+        );
         if !envelope.payload.is_null() {
             unsafe {
-                if let Some(payload) = (envelope.payload as *mut T).as_ref() {
+                let payload = (envelope.payload as *mut T).as_ref();
+                eprintln!("DEBUG handle_envelope_message: payload as_ref is_none={}", payload.is_none());
+                if let Some(payload) = payload {
+                    eprintln!("DEBUG handle_envelope_message: calling handle_message");
                     self.handle_message(payload.clone(), &sender_id);
                 }
             }

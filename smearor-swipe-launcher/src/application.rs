@@ -6,6 +6,8 @@ use crate::css_provider::create_css_provider;
 use crate::display::AreaSize;
 use crate::instance::LauncherInstance;
 use crate::json_converter::JsonConverterRegistry;
+use crate::mcp_registry::McpRegistry;
+use crate::mcp_response_tracker::McpResponseTracker;
 use crate::messages::try_convert_string_to_typed_envelope;
 use crate::service_manager::ServiceManager;
 use async_channel::unbounded;
@@ -15,10 +17,18 @@ use gtk4::gdk::Monitor;
 use gtk4::gio;
 use gtk4::glib::MainContext;
 use gtk4::prelude::*;
+use serde_json;
+use smearor_model_mcp::InvokeResourceResponse;
+use smearor_model_mcp::InvokeToolResponse;
+use smearor_model_mcp::RegisterResourceMessage;
+use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::MessageHandler;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
+use tokio::sync::broadcast;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
@@ -37,6 +47,9 @@ pub struct LauncherHost {
     pub(crate) broker_sender: UnboundedSender<FfiEnvelope>,
     pub(crate) broker_receiver: Arc<Mutex<Option<UnboundedReceiver<FfiEnvelope>>>>,
     pub(crate) instances: Arc<Mutex<HashMap<String, LauncherInstance>>>,
+    pub(crate) mcp_registry: McpRegistry,
+    pub(crate) mcp_response_tracker: McpResponseTracker,
+    pub(crate) mcp_notification_sender: Arc<Mutex<Option<broadcast::Sender<String>>>>,
 }
 
 impl LauncherHost {
@@ -52,7 +65,43 @@ impl LauncherHost {
             broker_sender,
             broker_receiver: Arc::new(Mutex::new(Some(broker_receiver))),
             instances: Arc::new(Mutex::new(HashMap::new())),
+            mcp_registry: McpRegistry::new(),
+            mcp_response_tracker: McpResponseTracker::new(),
+            mcp_notification_sender: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn set_mcp_notification_sender(&self, sender: broadcast::Sender<String>) {
+        if let Ok(mut guard) = self.mcp_notification_sender.lock() {
+            *guard = Some(sender);
+        }
+    }
+
+    fn broadcast_mcp_notification(&self, method: &str, params: serde_json::Value) {
+        let Ok(guard) = self.mcp_notification_sender.lock() else {
+            return;
+        };
+        let Some(sender) = guard.as_ref() else {
+            return;
+        };
+        let payload = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params
+        });
+        let message = match serde_json::to_string(&payload) {
+            Ok(message) => message,
+            Err(e) => {
+                error!("Failed to serialize MCP notification: {}", e);
+                return;
+            }
+        };
+        let _ = sender.send(message);
+    }
+
+    /// Notify all connected SSE clients that a resource's content may have changed.
+    pub fn broadcast_resource_updated(&self, uri: &str) {
+        self.broadcast_mcp_notification("notifications/resources/updated", serde_json::json!({ "uri": uri }));
     }
 
     pub fn create_instance(&self, instance_id: String, config: SwipeLauncherConfig) {
@@ -213,6 +262,47 @@ impl LauncherHost {
     fn route_message(&self, envelope: FfiEnvelope) {
         let mut target = envelope.target_instance_id.to_string();
         let topic = envelope.topic.to_string();
+        eprintln!(
+            "DEBUG route_message: topic={} target={} ServiceManager ptr={:p} count={}",
+            topic,
+            target,
+            self.service_manager.as_ref(),
+            self.service_manager.services.len()
+        );
+
+        // Global MCP registration messages are routed to the shared registry.
+        if topic == smearor_model_mcp::TOPIC_MCP_REGISTER_TOOL {
+            MessageHandler::<FfiEnvelopePayload<RegisterToolMessage>>::handle_envelope_message(&self.mcp_registry, &envelope);
+            self.broadcast_mcp_notification("notifications/tools/list_changed", serde_json::Value::Null);
+            return;
+        }
+        if topic == smearor_model_mcp::TOPIC_MCP_REGISTER_RESOURCE {
+            MessageHandler::<FfiEnvelopePayload<RegisterResourceMessage>>::handle_envelope_message(&self.mcp_registry, &envelope);
+            self.broadcast_mcp_notification("notifications/resources/list_changed", serde_json::Value::Null);
+            return;
+        }
+
+        // Global MCP invocation responses complete the pending response trackers.
+        if topic == smearor_model_mcp::TOPIC_MCP_TOOL_RESPONSE {
+            let response = unsafe { &*(envelope.payload as *const InvokeToolResponse) };
+            let result = if response.error.is_empty() {
+                Ok(response.result.to_string())
+            } else {
+                Err(response.error.to_string())
+            };
+            self.mcp_response_tracker.resolve(&response.correlation_id.to_string(), result);
+            return;
+        }
+        if topic == smearor_model_mcp::TOPIC_MCP_RESOURCE_RESPONSE {
+            let response = unsafe { &*(envelope.payload as *const InvokeResourceResponse) };
+            let result = if response.error.is_empty() {
+                Ok(response.contents.to_string())
+            } else {
+                Err(response.error.to_string())
+            };
+            self.mcp_response_tracker.resolve(&response.correlation_id.to_string(), result);
+            return;
+        }
 
         // Try to convert a generic JSON-string payload into a typed message.
         // Services and instances share the same global registry.
@@ -243,6 +333,31 @@ impl LauncherHost {
                 }
             }
             return;
+        }
+
+        // MCP invocation requests must also reach shared services (e.g. sysinfo)
+        // that register tools and resources. Plugins inside instances get the same
+        // message via the broadcast below.
+        if topic.starts_with("mcp.invoke.") {
+            let service_count = self.service_manager.services.len();
+            let service_ids: Vec<String> = self.service_manager.services.iter().map(|s| s.key().to_string()).collect();
+            eprintln!(
+                "DEBUG: routing mcp.invoke topic={} ServiceManager ptr={:p} count={} ids={:?}",
+                topic,
+                self.service_manager.as_ref(),
+                service_count,
+                service_ids
+            );
+            for service_id in service_ids {
+                if let Some(service) = self.service_manager.services.get(&service_id) {
+                    eprintln!("DEBUG: sending mcp.invoke to service {}", service_id);
+                    unsafe {
+                        service.on_message(envelope.clone());
+                    }
+                } else {
+                    eprintln!("DEBUG: service {} disappeared after listing", service_id);
+                }
+            }
         }
 
         // Broadcast to all instances (used by shared services for status updates)
@@ -311,6 +426,8 @@ impl LauncherHost {
 
 impl Drop for LauncherHost {
     fn drop(&mut self) {
-        self.service_manager.unload_services();
+        // Service cleanup is handled by ServiceManager's own Drop when the
+        // last Arc reference is released. Clones of LauncherHost must not
+        // unload services while other clones are still using them.
     }
 }

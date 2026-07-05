@@ -29,6 +29,17 @@ use tracing::error;
 use tracing::trace;
 use tracing::warn;
 
+/// Snapshot of an area's current state for external consumers such as the
+/// MCP server.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AreaInfo {
+    pub area_id: String,
+    pub visible: bool,
+    pub focused: bool,
+    pub position: String,
+    pub active: bool,
+}
+
 /// Manages dynamic area operations at runtime
 pub struct AreaManager {
     /// Currently managed areas keyed by ID
@@ -419,6 +430,69 @@ impl AreaManager {
     /// Check if an area exists
     pub fn has_area(&self, area_id: &str) -> bool {
         self.areas.contains_key(area_id)
+    }
+
+    /// Show the area widget.
+    pub fn open(&self, area_id: &str) -> Result<(), String> {
+        let Some(area) = self.areas.get(area_id) else {
+            return Err(format!("Area {} not found", area_id));
+        };
+        area.widget.set_visible(true);
+        debug!("Opened area {}", area_id);
+        Ok(())
+    }
+
+    /// Hide the area widget.
+    pub fn close(&self, area_id: &str) -> Result<(), String> {
+        let Some(area) = self.areas.get(area_id) else {
+            return Err(format!("Area {} not found", area_id));
+        };
+        area.widget.set_visible(false);
+        debug!("Closed area {}", area_id);
+        Ok(())
+    }
+
+    /// Move keyboard focus to the area widget.
+    pub fn focus(&self, area_id: &str) -> Result<(), String> {
+        let Some(area) = self.areas.get(area_id) else {
+            return Err(format!("Area {} not found", area_id));
+        };
+        area.widget.grab_focus();
+        debug!("Focused area {}", area_id);
+        Ok(())
+    }
+
+    /// List all managed areas with their current state.
+    pub fn list_areas(&self) -> Vec<AreaInfo> {
+        self.areas
+            .iter()
+            .map(|area| AreaInfo {
+                area_id: area.key().clone(),
+                visible: area.widget.is_visible(),
+                focused: area.widget.has_focus(),
+                position: format!("{:?}", area.config.effective_align()),
+                active: true,
+            })
+            .collect()
+    }
+
+    /// Toggle the visibility of an area.
+    pub fn toggle(&self, area_id: &str) -> Result<(), String> {
+        let Some(area) = self.areas.get(area_id) else {
+            return Err(format!("Area {} not found", area_id));
+        };
+        let visible = area.widget.is_visible();
+        area.widget.set_visible(!visible);
+        debug!("Toggled area {} to visible={}", area_id, !visible);
+        Ok(())
+    }
+
+    /// Return the configuration of a managed area.
+    pub fn get_area_config(&self, area_id: &str) -> Result<AreaConfig, String> {
+        let Some(area) = self.areas.get(area_id) else {
+            return Err(format!("Area {} not found", area_id));
+        };
+        Ok(area.config.clone())
     }
 
     pub fn set_main_container(&self, main_container: gtk4::Box) -> Result<(), MainContainerInitializationError> {
