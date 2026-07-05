@@ -239,20 +239,20 @@ macro_rules! widget_plugin {
 /// use smearor_swipe_launcher_plugin_api::widget_factory_plugin;
 ///
 /// widget_factory_plugin! {
-///     "cpu" => CpuWidget,
-///     "memory" => MemoryWidget,
+///     "cpu" => cpu_widget => CpuWidget,
+///     "memory" => memory_widget => MemoryWidget,
 /// };
 /// ```
 #[macro_export]
 macro_rules! widget_factory_plugin {
     (
         $(
-            $name:literal => $widget_type:ty
+            $name:literal => $widget_ident:ident => $widget_type:ty
         ),+ $(,)?
     ) => {
         paste::paste! {
             $(
-                unsafe extern "C" fn [<destroy_ $widget_type:snake>](instance: *mut core::ffi::c_void) {
+                unsafe extern "C" fn [<destroy_ $widget_ident>](instance: *mut core::ffi::c_void) {
                     if !instance.is_null() {
                         unsafe {
                             let _ = Box::from_raw(instance as *mut $widget_type);
@@ -260,7 +260,7 @@ macro_rules! widget_factory_plugin {
                     }
                 }
 
-                unsafe extern "C" fn [<build_widget_ $widget_type:snake>](
+                unsafe extern "C" fn [<build_widget_ $widget_ident>](
                     instance: *mut core::ffi::c_void,
                 ) -> $crate::FfiWidget {
                     if instance.is_null() {
@@ -274,7 +274,7 @@ macro_rules! widget_factory_plugin {
                     result.unwrap_or($crate::FfiWidget::null())
                 }
 
-                unsafe extern "C" fn [<on_message_ $widget_type:snake>](
+                unsafe extern "C" fn [<on_message_ $widget_ident>](
                     instance: *mut core::ffi::c_void,
                     message: *mut core::ffi::c_void,
                 ) {
@@ -285,7 +285,7 @@ macro_rules! widget_factory_plugin {
                     <$widget_type as $crate::Plugin>::on_message(widget, message);
                 }
 
-                unsafe extern "C" fn [<start_ $widget_type:snake>](instance: *mut core::ffi::c_void) {
+                unsafe extern "C" fn [<start_ $widget_ident>](instance: *mut core::ffi::c_void) {
                     if instance.is_null() {
                         return;
                     }
@@ -293,11 +293,11 @@ macro_rules! widget_factory_plugin {
                     <$widget_type as $crate::Plugin>::start(widget);
                 }
 
-                static [<VTABLE_ $widget_type:snake>]: $crate::PluginVTable = $crate::PluginVTable {
-                    destroy: [<destroy_ $widget_type:snake>],
-                    build_widget: [<build_widget_ $widget_type:snake>],
-                    on_message: [<on_message_ $widget_type:snake>],
-                    start: [<start_ $widget_type:snake>],
+                static [<VTABLE_ $widget_ident>]: $crate::PluginVTable = $crate::PluginVTable {
+                    destroy: [<destroy_ $widget_ident>],
+                    build_widget: [<build_widget_ $widget_ident>],
+                    on_message: [<on_message_ $widget_ident>],
+                    start: [<start_ $widget_ident>],
                 };
             )+
 
@@ -340,7 +340,7 @@ macro_rules! widget_factory_plugin {
                                 Ok(widget) => {
                                     let container = $crate::PluginContainer {
                                         instance: Box::into_raw(Box::new(widget)) as *mut core::ffi::c_void,
-                                        vtable: & [<VTABLE_ $widget_type:snake>],
+                                        vtable: & [<VTABLE_ $widget_ident>],
                                         vtable_version: $crate::PLUGIN_VTABLE_VERSION,
                                     };
                                     stabby::result::Result::Ok(

@@ -16,10 +16,10 @@ use crate::widget_uptime::UptimeWidget;
 use smearor_swipe_launcher_plugin_api::widget_factory_plugin;
 
 widget_factory_plugin! {
-    "cpu" => CpuWidget,
-    "memory" => MemoryWidget,
-    "battery" => BatteryWidget,
-    "disks" => DisksWidget,
-    "network" => NetworkWidget,
-    "uptime" => UptimeWidget,
+    "cpu" => cpu_widget => CpuWidget,
+    "memory" => memory_widget => MemoryWidget,
+    "battery" => battery_widget => BatteryWidget,
+    "disks" => disks_widget => DisksWidget,
+    "network" => network_widget => NetworkWidget,
+    "uptime" => uptime_widget => UptimeWidget,
 }

@@ -582,12 +582,12 @@ All widgets are registered in a single factory in `plugins/sysinfo/src/lib.rs`:
 
 ```rust
 widget_factory_plugin! {
-    "cpu" => CpuWidget,
-    "memory" => MemoryWidget,
-    "battery" => BatteryWidget,
-    "disks" => DisksWidget,
-    "network" => NetworkWidget,
-    "uptime" => UptimeWidget,
+    "cpu" => cpu_widget => CpuWidget,
+    "memory" => memory_widget => MemoryWidget,
+    "battery" => battery_widget => BatteryWidget,
+    "disks" => disks_widget => DisksWidget,
+    "network" => network_widget => NetworkWidget,
+    "uptime" => uptime_widget => UptimeWidget,
 }
 ```
 
