@@ -264,11 +264,23 @@ async fn send_command_and_wait(sender: Sender<McpCommand>, command: McpCommand) 
         .try_send(command)
         .map_err(|e| format!("Failed to send command to launcher core: {}", e))?;
 
-    match tokio::time::timeout(tokio::time::Duration::from_secs(5), response_rx).await {
+    match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
         Ok(Ok(Ok(result))) => Ok(Value::String(result)),
         Ok(Ok(Err(e))) => Err(e),
         Ok(Err(_)) => Err("Launcher core dropped the response channel".to_string()),
         Err(_) => Err("Tool invocation timed out".to_string()),
+    }
+}
+
+/// Invoke a core tool by name and return the result as a string for the SDK
+/// ServerHandler. Returns Ok(text) on success or Err(message) on failure.
+pub async fn invoke_tool_sdk(tools: &[ToolDefinition], sender: Sender<McpCommand>, name: &str, params: Option<&Value>) -> Result<String, String> {
+    let Some(tool) = tools.iter().find(|t| t.name == name) else {
+        return Err(format!("Tool {} not found", name));
+    };
+    match (tool.handler)(sender, params).await {
+        Ok(result) => Ok(result.to_string()),
+        Err(message) => Err(message),
     }
 }
 

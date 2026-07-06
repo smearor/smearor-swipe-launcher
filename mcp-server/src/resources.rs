@@ -25,22 +25,13 @@ pub struct ResourceDefinition {
 
 /// Build the list of core resources available from the MVP.
 pub fn core_resources() -> Vec<ResourceDefinition> {
-    vec![
-        ResourceDefinition {
-            uri: "area://list".to_string(),
-            name: "area_list".to_string(),
-            description: "List of all configured areas with status and position.".to_string(),
-            mime_type: "application/json".to_string(),
-            handler: Box::new(|sender, _uri| Box::pin(async move { read_resource(sender, "area://list".to_string()).await })),
-        },
-        ResourceDefinition {
-            uri: "area://<area_id>/state".to_string(),
-            name: "area_state".to_string(),
-            description: "Current state of an area (open, focused, visible).".to_string(),
-            mime_type: "application/json".to_string(),
-            handler: Box::new(|sender, uri| Box::pin(async move { read_resource(sender, uri).await })),
-        },
-    ]
+    vec![ResourceDefinition {
+        uri: "area://list".to_string(),
+        name: "area_list".to_string(),
+        description: "List of all configured areas with status and position.".to_string(),
+        mime_type: "application/json".to_string(),
+        handler: Box::new(|sender, _uri| Box::pin(async move { read_resource(sender, "area://list".to_string()).await })),
+    }]
 }
 
 /// Read a resource by sending the request to the launcher core.
@@ -49,16 +40,29 @@ async fn read_resource(sender: Sender<McpCommand>, uri: String) -> Result<String
     sender
         .try_send(McpCommand::ReadResource { uri, response: response_tx })
         .map_err(|e| format!("Failed to send resource read command: {}", e))?;
-    match tokio::time::timeout(tokio::time::Duration::from_secs(5), response_rx).await {
+    match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
         Ok(Ok(result)) => result,
         Ok(Err(_)) => Err("Launcher core dropped the response channel".to_string()),
         Err(_) => Err("Resource read timed out".to_string()),
     }
 }
 
+/// Read a core resource by URI and return (contents, mime_type) for the SDK
+/// ServerHandler. Returns Err(message) on failure.
+pub async fn read_resource_sdk(resources: &[ResourceDefinition], sender: Sender<McpCommand>, uri: &str) -> Result<(String, String), String> {
+    let Some(resource) = resources.iter().find(|r| r.uri == uri) else {
+        return Err(format!("Resource {} not found", uri));
+    };
+    let mime_type = resource.mime_type.clone();
+    match (resource.handler)(sender, uri.to_string()).await {
+        Ok(contents) => Ok((contents, mime_type)),
+        Err(message) => Err(message),
+    }
+}
+
 /// Read a resource by URI and return a JSON-RPC response.
 pub async fn read_resource_response(resources: &[ResourceDefinition], sender: Sender<McpCommand>, id: Option<Value>, uri: String) -> JsonRpcResponse {
-    let Some(resource) = resources.iter().find(|r| uri == r.uri || r.uri.contains("<area_id>")) else {
+    let Some(resource) = resources.iter().find(|r| uri == r.uri) else {
         return JsonRpcResponse::error(id, JSONRPC_INVALID_PARAMS, format!("Resource {} not found", uri), None);
     };
 

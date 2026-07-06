@@ -126,7 +126,7 @@ impl SysinfoService {
         }
 
         let tool = RegisterToolMessage::new(
-            "sysinfo.refresh",
+            "sysinfo_refresh",
             "Force an immediate refresh of all sysinfo metrics.",
             r#"{ "type": "object", "properties": {} }"#,
         );
@@ -137,7 +137,7 @@ impl SysinfoService {
         let payload_ptr = Box::into_raw(Box::new(message.clone())) as *mut core::ffi::c_void;
         let sender_id_string = sender_id.to_string();
         let topic = message.topic();
-        eprintln!("DEBUG sysinfo: send_response topic={} to sender_id={}", topic, sender_id);
+        debug!("sysinfo: send_response topic={} to sender_id={}", topic, sender_id);
         let envelope = FfiEnvelope {
             sender_id: stabby::string::String::from(self.meta.id.clone()),
             target_instance_id: stabby::string::String::from(sender_id_string.as_str()),
@@ -148,10 +148,10 @@ impl SysinfoService {
             clone_payload: Some(clone_payload::<T>),
         };
         if let Some(context) = &self.core_context {
-            eprintln!("DEBUG sysinfo: calling context.send_message");
+            debug!("sysinfo: calling context.send_message");
             context.send_message(envelope);
         } else {
-            eprintln!("DEBUG sysinfo: no core_context, cannot send response");
+            debug!("sysinfo: no core_context, cannot send response");
         }
     }
 }
@@ -169,22 +169,22 @@ impl MessageHandler<FfiEnvelopePayload<SysinfoCommandMessage>> for SysinfoServic
 
 impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for SysinfoService {
     fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, sender_id: &str) {
-        eprintln!("DEBUG sysinfo: InvokeToolMessage handler name={} sender_id={}", message.0.name, sender_id);
-        if message.0.name.to_string() != "sysinfo.refresh" {
-            eprintln!("DEBUG sysinfo: InvokeToolMessage not sysinfo.refresh, ignoring");
+        debug!("sysinfo: InvokeToolMessage handler name={} sender_id={}", message.0.name, sender_id);
+        if message.0.name.to_string() != "sysinfo_refresh" {
+            debug!("sysinfo: InvokeToolMessage not sysinfo_refresh, ignoring");
             return;
         }
         let _ = self.command_sender.send(SysinfoCommandAction::Refresh);
         let correlation_id = message.0.correlation_id.to_string();
         let response = InvokeToolResponse::success(&correlation_id, "Refresh triggered");
-        eprintln!("DEBUG sysinfo: sending InvokeToolResponse correlation_id={}", correlation_id);
+        debug!("sysinfo: sending InvokeToolResponse correlation_id={}", correlation_id);
         self.send_response(response, sender_id);
     }
 }
 
 impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for SysinfoService {
     fn handle_message(&self, message: FfiEnvelopePayload<InvokeResourceMessage>, sender_id: &str) {
-        eprintln!("DEBUG sysinfo: InvokeResourceMessage handler uri={} sender_id={}", message.0.uri, sender_id);
+        debug!("sysinfo: InvokeResourceMessage handler uri={} sender_id={}", message.0.uri, sender_id);
         let uri = message.0.uri.to_string();
         let correlation_id = message.0.correlation_id.to_string();
         let state = match self.latest_state.read() {
@@ -200,7 +200,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for SysinfoServic
             Ok(contents) => InvokeResourceResponse::success(&correlation_id, &contents),
             Err(error) => InvokeResourceResponse::error(&correlation_id, &error),
         };
-        eprintln!("DEBUG sysinfo: sending InvokeResourceResponse correlation_id={} uri={}", correlation_id, uri);
+        debug!("sysinfo: sending InvokeResourceResponse correlation_id={} uri={}", correlation_id, uri);
         self.send_response(response, sender_id);
     }
 }
@@ -231,20 +231,20 @@ impl Service for SysinfoService {
         if !message.is_null() {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
-                eprintln!("DEBUG sysinfo: on_message topic={} type_id={}", envelope.topic, envelope.type_id);
-                eprintln!("DEBUG sysinfo: expecting tool type_id={}", FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID);
-                eprintln!("DEBUG sysinfo: expecting resource type_id={}", FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID);
+                debug!("sysinfo: on_message topic={} type_id={}", envelope.topic, envelope.type_id);
+                debug!("sysinfo: expecting tool type_id={}", FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID);
+                debug!("sysinfo: expecting resource type_id={}", FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID);
                 if envelope.type_id == FfiEnvelopePayload::<SysinfoCommandMessage>::TYPE_ID {
-                    eprintln!("DEBUG sysinfo: handling command message");
+                    debug!("sysinfo: handling command message");
                     MessageHandler::<FfiEnvelopePayload<SysinfoCommandMessage>>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
-                    eprintln!("DEBUG sysinfo: handling invoke tool message");
+                    debug!("sysinfo: handling invoke tool message");
                     MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
-                    eprintln!("DEBUG sysinfo: handling invoke resource message");
+                    debug!("sysinfo: handling invoke resource message");
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
                 } else {
-                    eprintln!("DEBUG sysinfo: unknown type_id");
+                    debug!("sysinfo: unknown type_id");
                 }
             }
         }

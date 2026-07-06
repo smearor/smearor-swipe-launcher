@@ -1,36 +1,43 @@
 //! MCP server for the Smearor Swipe Launcher.
 //!
-//! Exposes launcher control and state through the Model Context Protocol over
-//! an axum-based SSE transport. The server is designed to run as a dedicated
-//! task inside the launcher process and communicates with the core through a
-//! command channel.
+//! Exposes launcher control and state through the Model Context Protocol using
+//! the `rust-mcp-sdk` and `rust-mcp-axum` crates for robust protocol handling
+//! with Streamable HTTP and SSE transport support.
 
 use async_channel::Sender;
-use axum::Router;
-use axum::extract::OriginalUri;
-use axum::extract::Request;
-use axum::extract::State;
-use axum::middleware;
-use axum::middleware::Next;
-use axum::response::IntoResponse;
-use axum::response::Response;
-use axum::response::sse::Event;
-use axum::response::sse::Sse;
-use axum::routing::get;
-use axum::routing::post;
-use futures_util::Stream;
+use async_trait::async_trait;
+use rust_mcp_axum::AxumServerOptions;
+use rust_mcp_axum::create_axum_server;
+use rust_mcp_sdk::ToMcpServerHandler;
+use rust_mcp_sdk::mcp_server::ServerHandler;
+use rust_mcp_sdk::schema::CallToolRequestParams;
+use rust_mcp_sdk::schema::CallToolResult;
+use rust_mcp_sdk::schema::Implementation;
+use rust_mcp_sdk::schema::InitializeRequestParams;
+use rust_mcp_sdk::schema::InitializeResult;
+use rust_mcp_sdk::schema::ListPromptsResult;
+use rust_mcp_sdk::schema::ListResourceTemplatesResult;
+use rust_mcp_sdk::schema::ListResourcesResult;
+use rust_mcp_sdk::schema::ListToolsResult;
+use rust_mcp_sdk::schema::ReadResourceContent;
+use rust_mcp_sdk::schema::ReadResourceRequestParams;
+use rust_mcp_sdk::schema::ReadResourceResult;
+use rust_mcp_sdk::schema::Resource;
+use rust_mcp_sdk::schema::Result as McpResult;
+use rust_mcp_sdk::schema::RpcError;
+use rust_mcp_sdk::schema::ServerCapabilities;
+use rust_mcp_sdk::schema::ServerCapabilitiesResources;
+use rust_mcp_sdk::schema::ServerCapabilitiesTools;
+use rust_mcp_sdk::schema::TextContent;
+use rust_mcp_sdk::schema::TextResourceContents;
+use rust_mcp_sdk::schema::Tool;
+use rust_mcp_sdk::schema::ToolInputSchema;
+use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use smearor_model_mcp::McpRegistry;
-use std::collections::HashMap;
-use std::convert::Infallible;
-use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use tokio::sync::broadcast;
 use tokio::sync::oneshot;
-use tower_http::cors::CorsLayer;
-use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -60,78 +67,21 @@ impl Default for McpServerConfig {
     }
 }
 
-/// Shared state of the running MCP server.
-#[derive(Clone)]
+/// Shared state used by the ServerHandler to process MCP requests.
+/// This bridges the SDK's handler trait with the existing McpCommand channel
+/// system for communication with the launcher core.
 pub struct McpServerState {
     /// Channel used by tool/resource handlers to request actions from the
     /// launcher core.
-    command_sender: Sender<McpCommand>,
+    pub command_sender: Sender<McpCommand>,
     /// Registered core tools.
-    tools: Arc<Vec<tools::ToolDefinition>>,
+    pub tools: Vec<tools::ToolDefinition>,
     /// Registered core resources.
-    resources: Arc<Vec<resources::ResourceDefinition>>,
+    pub resources: Vec<resources::ResourceDefinition>,
     /// Dynamic registry populated by plugins.
-    plugin_registry: McpRegistry,
+    pub plugin_registry: McpRegistry,
     /// Monotonic counter for MCP invocation correlation IDs.
-    correlation_counter: Arc<AtomicU64>,
-    /// Optional bearer token required for all HTTP requests.
-    auth_token: Option<String>,
-    /// Sender used by the launcher core to push JSON-RPC notifications to
-    /// all connected SSE clients.
-    notification_sender: broadcast::Sender<String>,
-    /// Manages per-session channels for routing JSON-RPC responses to the
-    /// SSE client that issued the request.
-    session_manager: SessionManager,
-}
-
-/// Routes JSON-RPC responses to a specific SSE session.
-#[derive(Clone)]
-pub struct SessionManager {
-    sessions: Arc<Mutex<HashMap<String, broadcast::Sender<String>>>>,
-}
-
-impl SessionManager {
-    /// Create a new empty session manager.
-    pub fn new() -> Self {
-        Self {
-            sessions: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    /// Create a new session, returning its ID and the receiver for that session.
-    pub fn create_session(&self) -> (String, broadcast::Receiver<String>) {
-        let session_id = uuid::Uuid::new_v4().to_string();
-        let (sender, receiver) = broadcast::channel::<String>(16);
-        self.sessions
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(session_id.clone(), sender);
-        (session_id, receiver)
-    }
-
-    /// Send a message to a specific session. If the session does not exist,
-    /// the message is silently dropped.
-    pub fn send_to_session(&self, session_id: &str, message: String) {
-        if let Some(sender) = self.sessions.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).get(session_id) {
-            let _ = sender.send(message);
-        }
-    }
-
-    /// Remove a session from the manager.
-    pub fn remove_session(&self, session_id: &str) {
-        self.sessions.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).remove(session_id);
-    }
-
-    /// Check whether a session is currently registered.
-    pub fn has_session(&self, session_id: &str) -> bool {
-        self.sessions.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).contains_key(session_id)
-    }
-}
-
-impl Default for SessionManager {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub correlation_counter: AtomicU64,
 }
 
 /// Commands sent from the MCP server to the launcher core.
@@ -197,84 +147,96 @@ pub struct McpServer {
     config: McpServerConfig,
     command_sender: Sender<McpCommand>,
     plugin_registry: McpRegistry,
-    auth_token: Option<String>,
-    /// Channel used by the launcher core to push notifications to connected
-    /// SSE clients.
-    notification_sender: broadcast::Sender<String>,
-    shutdown_sender: Option<oneshot::Sender<()>>,
     task_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl McpServer {
     /// Create a new MCP server and the receiver that the launcher core will
     /// use to consume commands.
-    pub fn new(config: McpServerConfig, plugin_registry: McpRegistry) -> (Self, async_channel::Receiver<McpCommand>, broadcast::Sender<String>) {
+    pub fn new(config: McpServerConfig, plugin_registry: McpRegistry) -> (Self, async_channel::Receiver<McpCommand>) {
         let (command_sender, receiver) = async_channel::unbounded::<McpCommand>();
-        let (notification_sender, _) = broadcast::channel::<String>(16);
-        let auth_token = config.auth_token.clone();
         let server = Self {
             config,
             command_sender,
             plugin_registry,
-            auth_token,
-            notification_sender: notification_sender.clone(),
-            shutdown_sender: None,
             task_handle: None,
         };
-        (server, receiver, notification_sender)
+        (server, receiver)
     }
 
-    /// Start the axum HTTP server in a spawned tokio task.
-    ///
-    /// The server keeps running until [`McpServer::stop`] is called.
+    /// Start the MCP server using rust-mcp-axum's AxumServer in a spawned
+    /// tokio task. The server supports both Streamable HTTP and SSE transports.
     pub fn start(&mut self) {
         if self.task_handle.is_some() {
             warn!("MCP server already running");
             return;
         }
 
-        let (shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
-        self.shutdown_sender = Some(shutdown_sender);
-
-        let state = McpServerState {
+        let state = Arc::new(McpServerState {
             command_sender: self.command_sender.clone(),
-            tools: Arc::new(tools::core_tools()),
-            resources: Arc::new(resources::core_resources()),
+            tools: tools::core_tools(),
+            resources: resources::core_resources(),
             plugin_registry: self.plugin_registry.clone(),
-            correlation_counter: Arc::new(AtomicU64::new(1)),
-            auth_token: self.auth_token.clone(),
-            notification_sender: self.notification_sender.clone(),
-            session_manager: SessionManager::new(),
+            correlation_counter: AtomicU64::new(1),
+        });
+
+        let handler = SwipeLauncherHandler {
+            state,
+            server_details: Self::initialize_result(),
         };
 
-        let bind_addr = self.bind_addr();
-        let handle = tokio::spawn(run_server(bind_addr, state, shutdown_receiver));
+        let server_options = AxumServerOptions {
+            host: self.config.bind_address.clone(),
+            port: self.config.port,
+            sse_support: true,
+            enable_json_response: Some(true),
+            ..Default::default()
+        };
+
+        let handler_arc = handler.to_mcp_server_handler();
+        let server = create_axum_server(Self::initialize_result(), handler_arc, server_options);
+
+        info!("MCP server starting on {}:{}", self.config.bind_address, self.config.port);
+        let handle = tokio::spawn(async move {
+            if let Err(e) = server.start().await {
+                error!("MCP server error: {:?}", e);
+            }
+        });
         self.task_handle = Some(handle);
-        info!("MCP server started on {}", bind_addr);
     }
 
     /// Stop the running MCP server.
     pub fn stop(&mut self) {
-        if let Some(sender) = self.shutdown_sender.take() {
-            let _ = sender.send(());
-        }
         if let Some(handle) = self.task_handle.take() {
-            tokio::spawn(async move {
-                if let Err(e) = handle.await {
-                    error!("MCP server task failed: {}", e);
-                }
-            });
+            handle.abort();
         }
         info!("MCP server stopped");
     }
 
-    fn bind_addr(&self) -> SocketAddr {
-        let addr = self
-            .config
-            .bind_address
-            .parse()
-            .unwrap_or_else(|_| std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)));
-        SocketAddr::new(addr, self.config.port)
+    /// Build the InitializeResult that advertises server capabilities.
+    fn initialize_result() -> InitializeResult {
+        InitializeResult {
+            protocol_version: "2025-11-25".to_string(),
+            capabilities: ServerCapabilities {
+                tools: Some(ServerCapabilitiesTools { list_changed: Some(true) }),
+                resources: Some(ServerCapabilitiesResources {
+                    list_changed: Some(true),
+                    subscribe: Some(true),
+                }),
+                prompts: Some(rust_mcp_sdk::schema::ServerCapabilitiesPrompts { list_changed: Some(true) }),
+                ..Default::default()
+            },
+            instructions: None,
+            meta: None,
+            server_info: Implementation {
+                name: "smearor-mcp-server".to_string(),
+                version: "0.1.0".to_string(),
+                title: None,
+                description: None,
+                icons: vec![],
+                website_url: None,
+            },
+        }
     }
 }
 
@@ -284,315 +246,265 @@ impl Drop for McpServer {
     }
 }
 
-async fn auth_middleware(State(state): State<Arc<McpServerState>>, request: Request, next: Next) -> Response {
-    if let Some(expected) = &state.auth_token {
-        let header = request.headers().get("authorization").and_then(|value| value.to_str().ok()).unwrap_or("");
-        let provided = header.strip_prefix("Bearer ").unwrap_or(header);
-        if provided != expected {
-            return (axum::http::StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
-        }
-    }
-    next.run(request).await
+/// ServerHandler implementation that bridges rust-mcp-sdk with the existing
+/// McpCommand channel system for launcher core and plugin communication.
+pub struct SwipeLauncherHandler {
+    state: Arc<McpServerState>,
+    server_details: InitializeResult,
 }
 
-async fn run_server(bind_addr: SocketAddr, state: McpServerState, shutdown_receiver: oneshot::Receiver<()>) {
-    let app = Router::new()
-        .route("/sse", get(sse_handler).post(streamable_http_handler))
-        .route("/message", post(message_handler))
-        .route("/streamable-http", post(streamable_http_handler))
-        .route("/health", get(health_handler))
-        .route_layer(middleware::from_fn_with_state(Arc::new(state.clone()), auth_middleware))
-        .layer(CorsLayer::permissive())
-        .with_state(Arc::new(state));
-
-    let listener = match tokio::net::TcpListener::bind(bind_addr).await {
-        Ok(listener) => listener,
-        Err(e) => {
-            error!("Failed to bind MCP server to {}: {}", bind_addr, e);
-            return;
-        }
-    };
-
-    let serve = axum::serve(listener, app);
-    let graceful = serve.with_graceful_shutdown(async move {
-        let _ = shutdown_receiver.await;
-        debug!("MCP server graceful shutdown triggered");
-    });
-
-    if let Err(e) = graceful.await {
-        error!("MCP server exited with error: {}", e);
-    }
-}
-
-async fn health_handler() -> &'static str {
-    "ok"
-}
-
-async fn message_handler(
-    State(state): State<Arc<McpServerState>>,
-    axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
-    OriginalUri(uri): OriginalUri,
-    body: String,
-) -> impl IntoResponse {
-    let session_id = query.get("sessionId").or_else(|| query.get("session_id")).cloned();
-    eprintln!(
-        "DEBUG message_handler: uri={} query_keys={:?} session_id={:?}",
-        uri,
-        query.keys().collect::<Vec<_>>(),
-        session_id
-    );
-
-    // SSE transport requires a valid session to route the response back. If
-    // the client provides no session ID or an unknown one, return an error
-    // immediately so the client does not wait for a response that can never
-    // arrive on the SSE stream.
-    let Some(session_id) = session_id else {
-        let response = jsonrpc::JsonRpcResponse::error(None, jsonrpc::JSONRPC_INVALID_REQUEST, "Missing sessionId query parameter".to_string(), None);
-        return (axum::http::StatusCode::BAD_REQUEST, axum::response::Json(serde_json::to_value(response).unwrap_or_default())).into_response();
-    };
-    if !state.session_manager.has_session(&session_id) {
-        let response = jsonrpc::JsonRpcResponse::error(None, jsonrpc::JSONRPC_INVALID_REQUEST, format!("Unknown session ID: {}", session_id), None);
-        return (axum::http::StatusCode::BAD_REQUEST, axum::response::Json(serde_json::to_value(response).unwrap_or_default())).into_response();
+#[async_trait]
+impl ServerHandler for SwipeLauncherHandler {
+    async fn handle_initialize_request(
+        &self,
+        _params: InitializeRequestParams,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> std::result::Result<InitializeResult, RpcError> {
+        Ok(self.server_details.clone())
     }
 
-    let request = match serde_json::from_str::<jsonrpc::JsonRpcRequest>(&body) {
-        Ok(request) => request,
-        Err(e) => {
-            let response = jsonrpc::JsonRpcResponse::error(None, jsonrpc::JSONRPC_PARSE_ERROR, format!("Parse error: {}", e), None);
-            // Legacy SSE transport: push parse errors to the requesting session.
-            state
-                .session_manager
-                .send_to_session(&session_id, serde_json::to_string(&response).unwrap_or_default());
-            return axum::http::StatusCode::ACCEPTED.into_response();
-        }
-    };
-
-    // JSON-RPC notifications carry no id. The MCP protocol uses the
-    // "notifications/" prefix for lifecycle notifications such as
-    // "notifications/initialized". Acknowledge them without a response body.
-    if request.id.is_none() {
-        return axum::http::StatusCode::ACCEPTED.into_response();
+    async fn handle_ping_request(
+        &self,
+        _params: Option<rust_mcp_sdk::schema::RequestParams>,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> std::result::Result<McpResult, RpcError> {
+        Ok(McpResult::default())
     }
 
-    let response = process_jsonrpc_request(state.clone(), request).await;
-    let response_json = serde_json::to_string(&response).unwrap_or_default();
-    state.session_manager.send_to_session(&session_id, response_json);
-    axum::http::StatusCode::ACCEPTED.into_response()
-}
-
-async fn streamable_http_handler(State(state): State<Arc<McpServerState>>, body: String) -> impl IntoResponse {
-    let request = match serde_json::from_str::<jsonrpc::JsonRpcRequest>(&body) {
-        Ok(request) => request,
-        Err(e) => {
-            let response = jsonrpc::JsonRpcResponse::error(None, jsonrpc::JSONRPC_PARSE_ERROR, format!("Parse error: {}", e), None);
-            return (axum::http::StatusCode::OK, axum::response::Json(serde_json::to_value(response).unwrap_or_default())).into_response();
+    async fn handle_list_tools_request(
+        &self,
+        _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> std::result::Result<ListToolsResult, RpcError> {
+        let state = self.state.clone();
+        let mut sdk_tools: Vec<Tool> = state
+            .tools
+            .iter()
+            .map(|t| Tool {
+                name: t.name.clone(),
+                description: Some(t.description.clone()),
+                input_schema: json_schema_to_tool_input_schema(&t.input_schema),
+                annotations: None,
+                execution: None,
+                icons: vec![],
+                meta: None,
+                output_schema: None,
+                title: None,
+            })
+            .collect();
+        for plugin_tool in state.plugin_registry.list_tools() {
+            sdk_tools.push(Tool {
+                name: plugin_tool.name.clone(),
+                description: Some(plugin_tool.description.clone()),
+                input_schema: json_schema_to_tool_input_schema(&plugin_tool.input_schema),
+                annotations: None,
+                execution: None,
+                icons: vec![],
+                meta: None,
+                output_schema: None,
+                title: None,
+            });
         }
-    };
-
-    // MCP streamable-http: notifications (no id) are acknowledged with 202 Accepted.
-    if request.id.is_none() {
-        return axum::http::StatusCode::ACCEPTED.into_response();
+        Ok(ListToolsResult {
+            tools: sdk_tools,
+            next_cursor: None,
+            meta: None,
+        })
     }
 
-    let response = process_jsonrpc_request(state, request).await;
-    axum::response::Json(serde_json::to_value(response).unwrap_or_default()).into_response()
-}
+    async fn handle_call_tool_request(
+        &self,
+        params: CallToolRequestParams,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> std::result::Result<CallToolResult, CallToolError> {
+        let state = self.state.clone();
+        let name = params.name.clone();
+        let arguments = params.arguments.clone();
 
-async fn process_jsonrpc_request(state: Arc<McpServerState>, request: jsonrpc::JsonRpcRequest) -> jsonrpc::JsonRpcResponse {
-    let id = request.id.clone();
-
-    match request.method.as_str() {
-        "tools/list" => {
-            let mut tools = state
-                .tools
-                .iter()
-                .map(|t| {
-                    serde_json::json!({
-                        "name": t.name,
-                        "description": t.description,
-                        "inputSchema": t.input_schema
-                    })
-                })
-                .collect::<Vec<_>>();
-            for plugin_tool in state.plugin_registry.list_tools() {
-                tools.push(serde_json::json!({
-                    "name": plugin_tool.name,
-                    "description": plugin_tool.description,
-                    "inputSchema": plugin_tool.input_schema
-                }));
-            }
-            jsonrpc::JsonRpcResponse::success(id, serde_json::json!({ "tools": tools }))
-        }
-        "tools/call" => {
-            let params = request.params.as_ref();
-            let name = jsonrpc::get_string_param(params, "name").unwrap_or_default();
-            let arguments = jsonrpc::get_object_param(params, "arguments");
-            if let Some(plugin_tool) = state.plugin_registry.list_tools().iter().find(|t| t.name == name) {
-                let correlation_id = state.correlation_counter.fetch_add(1, Ordering::Relaxed).to_string();
-                let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
-                let _ = state.command_sender.try_send(McpCommand::InvokePluginTool {
-                    name: plugin_tool.name.clone(),
-                    plugin_id: plugin_tool.plugin_id.clone(),
-                    correlation_id: correlation_id.clone(),
-                    arguments: arguments.unwrap_or(serde_json::Value::Null),
-                    response: response_tx,
-                });
-                match tokio::time::timeout(tokio::time::Duration::from_secs(5), response_rx).await {
-                    Ok(Ok(Ok(result))) => jsonrpc::JsonRpcResponse::success(id, serde_json::json!({ "content": [{ "type": "text", "text": result }] })),
-                    Ok(Ok(Err(message))) => jsonrpc::JsonRpcResponse::error(id, jsonrpc::JSONRPC_INTERNAL_ERROR, message, None),
-                    Ok(Err(_)) => jsonrpc::JsonRpcResponse::error(id, jsonrpc::JSONRPC_INTERNAL_ERROR, "Plugin tool invocation dropped".to_string(), None),
-                    Err(_) => jsonrpc::JsonRpcResponse::error(id, jsonrpc::JSONRPC_INTERNAL_ERROR, "Plugin tool invocation timed out".to_string(), None),
+        // Check if it's a plugin tool
+        if let Some(plugin_tool) = state.plugin_registry.list_tools().iter().find(|t| t.name == name).cloned() {
+            let correlation_id = state.correlation_counter.fetch_add(1, Ordering::Relaxed).to_string();
+            let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
+            let arguments_value = arguments.map(|m| serde_json::Value::Object(m)).unwrap_or(serde_json::Value::Null);
+            let _ = state.command_sender.try_send(McpCommand::InvokePluginTool {
+                name: plugin_tool.name.clone(),
+                plugin_id: plugin_tool.plugin_id.clone(),
+                correlation_id,
+                arguments: arguments_value,
+                response: response_tx,
+            });
+            match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
+                Ok(Ok(Ok(result))) => {
+                    return Ok(CallToolResult::text_content(vec![TextContent::new(result, None, None)]));
                 }
-            } else {
-                tools::invoke_tool(&state.tools, state.command_sender.clone(), id, &name, arguments.as_ref()).await
-            }
-        }
-        "resources/list" => {
-            let mut resources = state
-                .resources
-                .iter()
-                .map(|r| {
-                    serde_json::json!({
-                        "uri": r.uri,
-                        "name": r.name,
-                        "description": r.description,
-                        "mimeType": r.mime_type
-                    })
-                })
-                .collect::<Vec<_>>();
-            for plugin_resource in state.plugin_registry.list_resources() {
-                resources.push(serde_json::json!({
-                    "uri": plugin_resource.uri,
-                    "name": plugin_resource.name,
-                    "description": plugin_resource.description,
-                    "mimeType": plugin_resource.mime_type
-                }));
-            }
-            jsonrpc::JsonRpcResponse::success(id, serde_json::json!({ "resources": resources }))
-        }
-        "resources/read" => {
-            let params = request.params.as_ref();
-            let uri = jsonrpc::get_string_param(params, "uri").unwrap_or_default();
-            if let Some(plugin_resource) = state.plugin_registry.list_resources().iter().find(|r| r.uri == uri) {
-                let correlation_id = state.correlation_counter.fetch_add(1, Ordering::Relaxed).to_string();
-                let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
-                let _ = state.command_sender.try_send(McpCommand::InvokePluginResource {
-                    uri: plugin_resource.uri.clone(),
-                    plugin_id: plugin_resource.plugin_id.clone(),
-                    correlation_id: correlation_id.clone(),
-                    response: response_tx,
-                });
-                match tokio::time::timeout(tokio::time::Duration::from_secs(5), response_rx).await {
-                    Ok(Ok(Ok(contents))) => jsonrpc::JsonRpcResponse::success(
-                        id,
-                        serde_json::json!({
-                            "contents": [{
-                                "uri": plugin_resource.uri,
-                                "mimeType": plugin_resource.mime_type,
-                                "text": contents
-                            }]
-                        }),
-                    ),
-                    Ok(Ok(Err(message))) => jsonrpc::JsonRpcResponse::error(id, jsonrpc::JSONRPC_INTERNAL_ERROR, message, None),
-                    Ok(Err(_)) => jsonrpc::JsonRpcResponse::error(id, jsonrpc::JSONRPC_INTERNAL_ERROR, "Plugin resource read dropped".to_string(), None),
-                    Err(_) => jsonrpc::JsonRpcResponse::error(id, jsonrpc::JSONRPC_INTERNAL_ERROR, "Plugin resource read timed out".to_string(), None),
+                Ok(Ok(Err(message))) => {
+                    return Ok(CallToolResult::with_error(CallToolError::from_message(message)));
                 }
-            } else {
-                resources::read_resource_response(&state.resources, state.command_sender.clone(), id, uri).await
+                Ok(Err(_)) => {
+                    return Ok(CallToolResult::with_error(CallToolError::from_message("Plugin tool invocation dropped")));
+                }
+                Err(_) => {
+                    return Ok(CallToolResult::with_error(CallToolError::from_message("Plugin tool invocation timed out")));
+                }
             }
         }
-        "initialize" => jsonrpc::JsonRpcResponse::success(
-            id,
-            serde_json::json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": { "listChanged": true },
-                    "resources": { "listChanged": true, "subscribe": true }
-                },
-                "serverInfo": { "name": "smearor-mcp-server", "version": "0.1.0" }
+
+        // Core tool
+        let arguments_value = arguments.map(serde_json::Value::Object).unwrap_or(serde_json::Value::Null);
+        let result = tools::invoke_tool_sdk(&state.tools, state.command_sender.clone(), &name, Some(&arguments_value)).await;
+        match result {
+            Ok(text) => Ok(CallToolResult::text_content(vec![TextContent::new(text, None, None)])),
+            Err(message) => Ok(CallToolResult::with_error(CallToolError::from_message(message))),
+        }
+    }
+
+    async fn handle_list_resources_request(
+        &self,
+        _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> std::result::Result<ListResourcesResult, RpcError> {
+        let state = self.state.clone();
+        let mut sdk_resources: Vec<Resource> = state
+            .resources
+            .iter()
+            .map(|r| Resource {
+                uri: r.uri.clone(),
+                name: r.name.clone(),
+                description: Some(r.description.clone()),
+                mime_type: Some(r.mime_type.clone()),
+                annotations: None,
+                icons: vec![],
+                meta: None,
+                size: None,
+                title: None,
+            })
+            .collect();
+        for plugin_resource in state.plugin_registry.list_resources() {
+            sdk_resources.push(Resource {
+                uri: plugin_resource.uri.clone(),
+                name: plugin_resource.name.clone(),
+                description: Some(plugin_resource.description.clone()),
+                mime_type: Some(plugin_resource.mime_type.clone()),
+                annotations: None,
+                icons: vec![],
+                meta: None,
+                size: None,
+                title: None,
+            });
+        }
+        Ok(ListResourcesResult {
+            resources: sdk_resources,
+            next_cursor: None,
+            meta: None,
+        })
+    }
+
+    async fn handle_list_resource_templates_request(
+        &self,
+        _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> std::result::Result<ListResourceTemplatesResult, RpcError> {
+        Ok(ListResourceTemplatesResult {
+            resource_templates: vec![],
+            next_cursor: None,
+            meta: None,
+        })
+    }
+
+    async fn handle_read_resource_request(
+        &self,
+        params: ReadResourceRequestParams,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> std::result::Result<ReadResourceResult, RpcError> {
+        let state = self.state.clone();
+        let uri = params.uri.clone();
+
+        // Check if it's a plugin resource
+        if let Some(plugin_resource) = state.plugin_registry.list_resources().iter().find(|r| r.uri == uri).cloned() {
+            let correlation_id = state.correlation_counter.fetch_add(1, Ordering::Relaxed).to_string();
+            let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
+            let _ = state.command_sender.try_send(McpCommand::InvokePluginResource {
+                uri: plugin_resource.uri.clone(),
+                plugin_id: plugin_resource.plugin_id.clone(),
+                correlation_id,
+                response: response_tx,
+            });
+            match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
+                Ok(Ok(Ok(contents))) => {
+                    return Ok(ReadResourceResult {
+                        contents: vec![ReadResourceContent::TextResourceContents(TextResourceContents {
+                            meta: None,
+                            mime_type: Some(plugin_resource.mime_type.clone()),
+                            text: contents,
+                            uri: plugin_resource.uri.clone(),
+                        })],
+                        meta: None,
+                    });
+                }
+                Ok(Ok(Err(message))) => {
+                    return Err(RpcError::internal_error().with_message(message));
+                }
+                Ok(Err(_)) => {
+                    return Err(RpcError::internal_error().with_message("Plugin resource read dropped".to_string()));
+                }
+                Err(_) => {
+                    return Err(RpcError::internal_error().with_message("Plugin resource read timed out".to_string()));
+                }
+            }
+        }
+
+        // Core resource
+        match resources::read_resource_sdk(&state.resources, state.command_sender.clone(), &uri).await {
+            Ok((contents, mime_type)) => Ok(ReadResourceResult {
+                contents: vec![ReadResourceContent::TextResourceContents(TextResourceContents {
+                    meta: None,
+                    mime_type: Some(mime_type),
+                    text: contents,
+                    uri,
+                })],
+                meta: None,
             }),
-        ),
-        "initialized" => jsonrpc::JsonRpcResponse::success(id, serde_json::Value::Null),
-        "ping" => jsonrpc::JsonRpcResponse::success(id, serde_json::Value::Null),
-        _ => jsonrpc::JsonRpcResponse::error(id, jsonrpc::JSONRPC_METHOD_NOT_FOUND, format!("Method {} not found", request.method), None),
-    }
-}
-
-async fn sse_handler(State(state): State<Arc<McpServerState>>, request: Request) -> Response {
-    eprintln!("DEBUG sse_handler: uri={} headers={:?}", request.uri(), request.headers());
-    let mut broadcast_receiver = state.notification_sender.subscribe();
-    let (session_id, mut session_receiver) = state.session_manager.create_session();
-    let session_cleanup = SessionCleanup {
-        session_manager: state.session_manager.clone(),
-        session_id: session_id.clone(),
-    };
-
-    // Use a relative endpoint URL with a session ID so the server can route
-    // JSON-RPC responses back to the exact SSE connection that sent the request.
-    let endpoint = format!("/message?sessionId={}", session_id);
-
-    let stream: std::pin::Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> = Box::pin(async_stream::stream! {
-        // Keep the cleanup guard alive for the lifetime of the stream.
-        let _cleanup = session_cleanup;
-
-        yield Ok(Event::default().event("endpoint").data(endpoint));
-
-        loop {
-            tokio::select! {
-                biased;
-                notification = session_receiver.recv() => {
-                    match notification {
-                        Ok(payload) => {
-                            yield Ok(Event::default().event("message").data(payload));
-                        }
-                        Err(broadcast::error::RecvError::Closed) => break,
-                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                    }
-                }
-                notification = broadcast_receiver.recv() => {
-                    match notification {
-                        Ok(payload) => {
-                            yield Ok(Event::default().event("message").data(payload));
-                        }
-                        Err(broadcast::error::RecvError::Closed) => break,
-                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                    }
-                }
-                _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
-                    yield Ok(Event::default().comment("keep-alive"));
-                }
-            }
+            Err(message) => Err(RpcError::internal_error().with_message(message)),
         }
+    }
+
+    async fn handle_list_prompts_request(
+        &self,
+        _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> std::result::Result<ListPromptsResult, RpcError> {
+        Ok(ListPromptsResult {
+            prompts: vec![],
+            next_cursor: None,
+            meta: None,
+        })
+    }
+}
+
+/// Convert a serde_json::Value JSON schema to the SDK's ToolInputSchema.
+/// The input schema must be a JSON object with "properties" and "required" fields.
+/// Properties are converted from serde_json::Map to BTreeMap<String, serde_json::Map>.
+fn json_schema_to_tool_input_schema(schema: &serde_json::Value) -> ToolInputSchema {
+    let properties = schema.get("properties").and_then(|p| p.as_object()).map(|map| {
+        map.iter()
+            .map(|(k, v)| {
+                let inner = match v {
+                    serde_json::Value::Object(obj) => obj.clone(),
+                    _ => {
+                        let mut m = serde_json::Map::new();
+                        m.insert("value".to_string(), v.clone());
+                        m
+                    }
+                };
+                (k.clone(), inner)
+            })
+            .collect::<std::collections::BTreeMap<String, serde_json::Map<String, serde_json::Value>>>()
     });
-
-    let sse = Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new()
-            .interval(tokio::time::Duration::from_secs(30))
-            .text("keep-alive"),
-    );
-
-    let mut response = sse.into_response();
-    let headers = response.headers_mut();
-    if let Ok(value) = "no-store".parse() {
-        headers.insert(axum::http::header::CACHE_CONTROL, value);
-    }
-    if let Ok(value) = "keep-alive".parse() {
-        headers.insert(axum::http::header::CONNECTION, value);
-    }
-    if let Ok(value) = "no".parse() {
-        headers.insert("X-Accel-Buffering", value);
-    }
-    response
-}
-
-/// Removes a session from the manager when the SSE stream ends.
-struct SessionCleanup {
-    session_manager: SessionManager,
-    session_id: String,
-}
-
-impl Drop for SessionCleanup {
-    fn drop(&mut self) {
-        self.session_manager.remove_session(&self.session_id);
-    }
+    let required = schema
+        .get("required")
+        .and_then(|r| r.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let schema_uri = schema.get("$schema").and_then(|t| t.as_str()).map(String::from);
+    ToolInputSchema::new(required, properties, schema_uri)
 }

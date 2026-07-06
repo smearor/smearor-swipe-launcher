@@ -4,6 +4,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageRouter;
 use std::time::Duration;
 use std::time::Instant;
+use tracing::debug;
 use tracing::trace;
 use tracing::warn;
 
@@ -117,11 +118,11 @@ impl LauncherInstance {
         // plugin can handle its own tools/resources.
         if topic.starts_with("mcp.invoke.") {
             let plugin_count = self.plugin_manager.plugins.len();
-            eprintln!("DEBUG instance.handle_message: topic={} plugin_count={}", topic, plugin_count);
+            debug!("instance.handle_message: topic={} plugin_count={}", topic, plugin_count);
             for r in self.plugin_manager.plugins.iter() {
                 let plugin_id = r.key().to_string();
                 let plugin = r.value();
-                eprintln!("DEBUG instance.handle_message: sending mcp.invoke to plugin {}", plugin_id);
+                debug!("instance.handle_message: sending mcp.invoke to plugin {}", plugin_id);
                 unsafe {
                     plugin.on_message(envelope.clone());
                 }

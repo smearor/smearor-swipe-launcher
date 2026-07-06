@@ -25,6 +25,7 @@ pub use plugin_manager::PluginManager;
 pub use service::LoadedService;
 pub use service_manager::ServiceManager;
 
+use crate::mcp_response_tracker::McpResponseTracker;
 use clap::Parser;
 use gtk4::Application;
 use gtk4::glib::MainContext;
@@ -39,6 +40,9 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
+use std::sync::Arc;
+use std::sync::Mutex;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
@@ -98,9 +102,8 @@ async fn main() -> Result<()> {
 
     debug!("Application initialized successfully");
 
-    let (mut mcp_server, mcp_receiver, mcp_notification_sender) = McpServer::new(McpServerConfig::default(), host.mcp_registry.clone());
+    let (mut mcp_server, mcp_receiver) = McpServer::new(McpServerConfig::default(), host.mcp_registry.clone());
     mcp_server.start();
-    host.set_mcp_notification_sender(mcp_notification_sender);
     let _mcp_server = Some(mcp_server);
 
     host.build_ui()?;
@@ -109,7 +112,15 @@ async fn main() -> Result<()> {
     let host_clone = host.clone();
     main_context.spawn_local(async move {
         while let Ok(command) = mcp_receiver.recv().await {
-            process_mcp_command(host_clone.clone(), command).await;
+            if matches!(command, McpCommand::InvokePluginTool { .. } | McpCommand::InvokePluginResource { .. }) {
+                let broker_sender = host_clone.broker_sender.clone();
+                let response_tracker = host_clone.mcp_response_tracker.clone();
+                tokio::spawn(async move {
+                    process_plugin_command(broker_sender, response_tracker, command).await;
+                });
+            } else {
+                process_mcp_command(host_clone.clone(), command).await;
+            }
         }
     });
 
@@ -119,8 +130,8 @@ async fn main() -> Result<()> {
 }
 
 async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
-    eprintln!(
-        "DEBUG process_mcp_command: ServiceManager ptr={:p} count={}",
+    debug!(
+        "process_mcp_command: ServiceManager ptr={:p} count={}",
         host.service_manager.as_ref(),
         host.service_manager.services.len()
     );
@@ -168,17 +179,27 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
             });
             let _ = response.send(result);
         }
+        _ => {
+            debug!("process_mcp_command received plugin command, ignoring (handled by process_plugin_command)");
+        }
+    }
+}
+
+/// Process plugin tool/resource invocations on a tokio task so they don't
+/// block the GLib main context. Only `Send` types are used here.
+async fn process_plugin_command(broker_sender: UnboundedSender<FfiEnvelope>, response_tracker: McpResponseTracker, command: McpCommand) {
+    match command {
         McpCommand::InvokePluginTool {
             name,
-            plugin_id: _plugin_id,
+            plugin_id: _,
             correlation_id,
             arguments,
             response,
         } => {
-            let receiver = host.mcp_response_tracker.register(correlation_id.clone());
-            let send_result = invoke_plugin_tool(&host, &name, &correlation_id, &arguments);
+            let receiver = response_tracker.register(correlation_id.clone());
+            let send_result = invoke_plugin_tool_sender(&broker_sender, &name, &correlation_id, &arguments);
             if send_result.is_ok() {
-                let response_result = match tokio::time::timeout(tokio::time::Duration::from_secs(5), receiver).await {
+                let response_result = match tokio::time::timeout(tokio::time::Duration::from_secs(10), receiver).await {
                     Ok(Ok(result)) => result,
                     Ok(Err(_)) => Err("Plugin tool invocation dropped".to_string()),
                     Err(_) => Err("Plugin tool invocation timed out".to_string()),
@@ -190,18 +211,15 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
         }
         McpCommand::InvokePluginResource {
             uri,
-            plugin_id: _plugin_id,
+            plugin_id: _,
             correlation_id,
             response,
         } => {
-            let receiver = host.mcp_response_tracker.register(correlation_id.clone());
-            let send_result = invoke_plugin_resource(&host, &uri, &correlation_id);
+            let receiver = response_tracker.register(correlation_id.clone());
+            let send_result = invoke_plugin_resource_sender(&broker_sender, &uri, &correlation_id);
             if send_result.is_ok() {
-                let response_result = match tokio::time::timeout(tokio::time::Duration::from_secs(5), receiver).await {
-                    Ok(Ok(result)) => {
-                        host.broadcast_resource_updated(&uri);
-                        result
-                    }
+                let response_result = match tokio::time::timeout(tokio::time::Duration::from_secs(10), receiver).await {
+                    Ok(Ok(result)) => result,
                     Ok(Err(_)) => Err("Plugin resource read dropped".to_string()),
                     Err(_) => Err("Plugin resource read timed out".to_string()),
                 };
@@ -209,6 +227,9 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
             } else {
                 let _ = response.send(send_result.map(|_| String::new()));
             }
+        }
+        _ => {
+            debug!("process_plugin_command received non-plugin command, ignoring");
         }
     }
 }
@@ -240,7 +261,7 @@ fn send_mcp_message(host: &LauncherHost, topic: String, payload: serde_json::Val
 }
 
 fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String> {
-    let result = if uri == "area://list" {
+    if uri == "area://list" {
         with_first_area_manager(host, |area_manager| {
             let areas = area_manager.list_areas();
             serde_json::to_string(&areas).map_err(|e| e.to_string())
@@ -254,19 +275,16 @@ fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String>
         })
     } else {
         Err(format!("Resource {} not implemented", uri))
-    };
-    if result.is_ok() {
-        host.broadcast_resource_updated(&uri);
     }
-    result
 }
 
-fn invoke_plugin_tool(host: &LauncherHost, name: &str, correlation_id: &str, arguments: &serde_json::Value) -> Result<(), String> {
-    eprintln!(
-        "DEBUG invoke_plugin_tool: ServiceManager ptr={:p} count={}",
-        host.service_manager.as_ref(),
-        host.service_manager.services.len()
-    );
+fn invoke_plugin_tool_sender(
+    broker_sender: &UnboundedSender<FfiEnvelope>,
+    name: &str,
+    correlation_id: &str,
+    arguments: &serde_json::Value,
+) -> Result<(), String> {
+    debug!("invoke_plugin_tool_sender: name={} correlation_id={}", name, correlation_id);
     let message = InvokeToolMessage::new(name, correlation_id, &arguments.to_string());
     let payload_ptr = Box::into_raw(Box::new(message)) as *mut core::ffi::c_void;
     let envelope = FfiEnvelope {
@@ -278,18 +296,14 @@ fn invoke_plugin_tool(host: &LauncherHost, name: &str, correlation_id: &str, arg
         destroy_payload: Some(destroy_payload::<InvokeToolMessage>),
         clone_payload: Some(clone_payload::<InvokeToolMessage>),
     };
-    host.broker_sender
+    broker_sender
         .send(envelope)
         .map_err(|e| format!("Failed to send plugin tool invocation: {}", e))?;
     Ok(())
 }
 
-fn invoke_plugin_resource(host: &LauncherHost, uri: &str, correlation_id: &str) -> Result<(), String> {
-    eprintln!(
-        "DEBUG invoke_plugin_resource: ServiceManager ptr={:p} count={}",
-        host.service_manager.as_ref(),
-        host.service_manager.services.len()
-    );
+fn invoke_plugin_resource_sender(broker_sender: &UnboundedSender<FfiEnvelope>, uri: &str, correlation_id: &str) -> Result<(), String> {
+    debug!("invoke_plugin_resource_sender: uri={} correlation_id={}", uri, correlation_id);
     let message = InvokeResourceMessage::new(uri, correlation_id);
     let payload_ptr = Box::into_raw(Box::new(message)) as *mut core::ffi::c_void;
     let envelope = FfiEnvelope {
@@ -301,7 +315,7 @@ fn invoke_plugin_resource(host: &LauncherHost, uri: &str, correlation_id: &str) 
         destroy_payload: Some(destroy_payload::<InvokeResourceMessage>),
         clone_payload: Some(clone_payload::<InvokeResourceMessage>),
     };
-    host.broker_sender
+    broker_sender
         .send(envelope)
         .map_err(|e| format!("Failed to send plugin resource read: {}", e))?;
     Ok(())

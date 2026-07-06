@@ -33,6 +33,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread;
 use std::time::Duration;
+use tracing::debug;
 
 #[derive(Clone)]
 pub(crate) struct CyberLabels {
@@ -169,15 +170,15 @@ impl MessageHandler<FfiEnvelope> for ClockWidget {
 
 impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for ClockWidget {
     fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, _sender_id: &str) {
-        eprintln!("DEBUG clock: handle_message name={}", message.0.name);
+        debug!("clock: handle_message name={}", message.0.name);
         if message.0.name.to_string() != "get_current_time" {
             return;
         }
         let response = if let Some(time_str) = self.clock.get_current_time_2() {
-            eprintln!("DEBUG clock: get_current_time responding with {}", time_str);
+            debug!("clock: get_current_time responding with {}", time_str);
             InvokeToolResponse::success(&message.0.correlation_id.to_string(), &time_str)
         } else {
-            eprintln!("DEBUG clock: get_current_time format_2 not ready");
+            debug!("clock: get_current_time format_2 not ready");
             InvokeToolResponse::error(&message.0.correlation_id.to_string(), "Clock not ready")
         };
         let broadcaster = self.get_broadcaster();

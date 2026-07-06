@@ -5,6 +5,7 @@ use crate::PluginMetaGetter;
 use crate::TypedMessage;
 use crate::dummy_broker_send;
 use crate::generate_type_id;
+use tracing::debug;
 
 /// Trait for messages that can be routed through the Host's message broker.
 ///
@@ -136,8 +137,8 @@ pub trait MessageHandler<T: Clone> {
     /// Convenience method called by the Host router.
     fn handle_envelope_message(&self, envelope: &FfiEnvelope) {
         let sender_id = envelope.sender_id.to_string();
-        eprintln!(
-            "DEBUG handle_envelope_message: topic={} type_id={} payload_null={}",
+        debug!(
+            "handle_envelope_message: topic={} type_id={} payload_null={}",
             envelope.topic,
             envelope.type_id,
             envelope.payload.is_null()
@@ -145,9 +146,9 @@ pub trait MessageHandler<T: Clone> {
         if !envelope.payload.is_null() {
             unsafe {
                 let payload = (envelope.payload as *mut T).as_ref();
-                eprintln!("DEBUG handle_envelope_message: payload as_ref is_none={}", payload.is_none());
+                debug!("handle_envelope_message: payload as_ref is_none={}", payload.is_none());
                 if let Some(payload) = payload {
-                    eprintln!("DEBUG handle_envelope_message: calling handle_message");
+                    debug!("handle_envelope_message: calling handle_message");
                     self.handle_message(payload.clone(), &sender_id);
                 }
             }

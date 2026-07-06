@@ -28,7 +28,6 @@ use smearor_swipe_launcher_plugin_api::MessageHandler;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use tokio::sync::broadcast;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
@@ -49,7 +48,6 @@ pub struct LauncherHost {
     pub(crate) instances: Arc<Mutex<HashMap<String, LauncherInstance>>>,
     pub(crate) mcp_registry: McpRegistry,
     pub(crate) mcp_response_tracker: McpResponseTracker,
-    pub(crate) mcp_notification_sender: Arc<Mutex<Option<broadcast::Sender<String>>>>,
 }
 
 impl LauncherHost {
@@ -67,41 +65,7 @@ impl LauncherHost {
             instances: Arc::new(Mutex::new(HashMap::new())),
             mcp_registry: McpRegistry::new(),
             mcp_response_tracker: McpResponseTracker::new(),
-            mcp_notification_sender: Arc::new(Mutex::new(None)),
         }
-    }
-
-    pub fn set_mcp_notification_sender(&self, sender: broadcast::Sender<String>) {
-        if let Ok(mut guard) = self.mcp_notification_sender.lock() {
-            *guard = Some(sender);
-        }
-    }
-
-    fn broadcast_mcp_notification(&self, method: &str, params: serde_json::Value) {
-        let Ok(guard) = self.mcp_notification_sender.lock() else {
-            return;
-        };
-        let Some(sender) = guard.as_ref() else {
-            return;
-        };
-        let payload = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params
-        });
-        let message = match serde_json::to_string(&payload) {
-            Ok(message) => message,
-            Err(e) => {
-                error!("Failed to serialize MCP notification: {}", e);
-                return;
-            }
-        };
-        let _ = sender.send(message);
-    }
-
-    /// Notify all connected SSE clients that a resource's content may have changed.
-    pub fn broadcast_resource_updated(&self, uri: &str) {
-        self.broadcast_mcp_notification("notifications/resources/updated", serde_json::json!({ "uri": uri }));
     }
 
     pub fn create_instance(&self, instance_id: String, config: SwipeLauncherConfig) {
@@ -262,8 +226,8 @@ impl LauncherHost {
     fn route_message(&self, envelope: FfiEnvelope) {
         let mut target = envelope.target_instance_id.to_string();
         let topic = envelope.topic.to_string();
-        eprintln!(
-            "DEBUG route_message: topic={} target={} ServiceManager ptr={:p} count={}",
+        debug!(
+            "route_message: topic={} target={} ServiceManager ptr={:p} count={}",
             topic,
             target,
             self.service_manager.as_ref(),
@@ -273,12 +237,12 @@ impl LauncherHost {
         // Global MCP registration messages are routed to the shared registry.
         if topic == smearor_model_mcp::TOPIC_MCP_REGISTER_TOOL {
             MessageHandler::<FfiEnvelopePayload<RegisterToolMessage>>::handle_envelope_message(&self.mcp_registry, &envelope);
-            self.broadcast_mcp_notification("notifications/tools/list_changed", serde_json::Value::Null);
+            debug!("Plugin registered a new MCP tool, list_changed notification deferred to SDK runtime");
             return;
         }
         if topic == smearor_model_mcp::TOPIC_MCP_REGISTER_RESOURCE {
             MessageHandler::<FfiEnvelopePayload<RegisterResourceMessage>>::handle_envelope_message(&self.mcp_registry, &envelope);
-            self.broadcast_mcp_notification("notifications/resources/list_changed", serde_json::Value::Null);
+            debug!("Plugin registered a new MCP resource, list_changed notification deferred to SDK runtime");
             return;
         }
 
@@ -341,8 +305,8 @@ impl LauncherHost {
         if topic.starts_with("mcp.invoke.") {
             let service_count = self.service_manager.services.len();
             let service_ids: Vec<String> = self.service_manager.services.iter().map(|s| s.key().to_string()).collect();
-            eprintln!(
-                "DEBUG: routing mcp.invoke topic={} ServiceManager ptr={:p} count={} ids={:?}",
+            debug!(
+                "routing mcp.invoke topic={} ServiceManager ptr={:p} count={} ids={:?}",
                 topic,
                 self.service_manager.as_ref(),
                 service_count,
@@ -350,12 +314,12 @@ impl LauncherHost {
             );
             for service_id in service_ids {
                 if let Some(service) = self.service_manager.services.get(&service_id) {
-                    eprintln!("DEBUG: sending mcp.invoke to service {}", service_id);
+                    debug!("sending mcp.invoke to service {}", service_id);
                     unsafe {
                         service.on_message(envelope.clone());
                     }
                 } else {
-                    eprintln!("DEBUG: service {} disappeared after listing", service_id);
+                    debug!("service {} disappeared after listing", service_id);
                 }
             }
         }
