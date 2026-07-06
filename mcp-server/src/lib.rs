@@ -96,8 +96,16 @@ pub enum McpCommand {
         area_id: String,
         response: oneshot::Sender<Result<String, String>>,
     },
-    /// List all configured areas.
+    /// List all currently managed (opened) areas.
     ListAreas { response: oneshot::Sender<Result<String, String>> },
+    /// List all configured areas (including not-yet-opened ones).
+    ListAllAreas { response: oneshot::Sender<Result<String, String>> },
+    /// Open an area as a transient overlay (like a button click).
+    OpenTransientArea {
+        area_id: String,
+        source_area_id: Option<String>,
+        response: oneshot::Sender<Result<String, String>>,
+    },
     /// Focus an area by ID.
     FocusArea {
         area_id: String,

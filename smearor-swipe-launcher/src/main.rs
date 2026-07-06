@@ -137,11 +137,35 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
     );
     match command {
         McpCommand::OpenArea { area_id, response } => {
-            let result = with_first_area_manager(&host, |area_manager| area_manager.open(&area_id).map(|_| format!("Area {} opened", area_id)));
+            let result = with_first_area_manager(&host, |area_manager| area_manager.ensure_area(&area_id).map(|_| format!("Area {} opened", area_id)));
+            let _ = response.send(result);
+        }
+        McpCommand::OpenTransientArea {
+            area_id,
+            source_area_id,
+            response,
+        } => {
+            let result = with_first_area_manager(&host, |area_manager| {
+                let area_config = area_manager
+                    .config
+                    .get_area_config(&area_id)
+                    .ok_or_else(|| format!("Area {} not found in config", area_id))?
+                    .clone();
+                let sender_id = area_manager.find_sender_id_for_transient(source_area_id.as_deref());
+                area_manager
+                    .add_transient_area(&area_id, area_config, sender_id.as_deref())
+                    .map_err(|e| format!("Failed to open transient area {}: {}", area_id, e))?;
+                Ok(format!("Transient area {} opened", area_id))
+            });
             let _ = response.send(result);
         }
         McpCommand::CloseArea { area_id, response } => {
-            let result = with_first_area_manager(&host, |area_manager| area_manager.close(&area_id).map(|_| format!("Area {} closed", area_id)));
+            let result = with_first_area_manager(&host, |area_manager| {
+                area_manager
+                    .remove_area(&area_id)
+                    .map_err(|e| format!("Failed to close area {}: {}", area_id, e))?;
+                Ok(format!("Area {} closed", area_id))
+            });
             let _ = response.send(result);
         }
         McpCommand::FocusArea { area_id, response } => {
@@ -151,6 +175,13 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
         McpCommand::ListAreas { response } => {
             let result = with_first_area_manager(&host, |area_manager| {
                 let areas = area_manager.list_areas();
+                serde_json::to_string(&areas).map_err(|e| e.to_string())
+            });
+            let _ = response.send(result);
+        }
+        McpCommand::ListAllAreas { response } => {
+            let result = with_first_area_manager(&host, |area_manager| {
+                let areas = area_manager.list_all_areas();
                 serde_json::to_string(&areas).map_err(|e| e.to_string())
             });
             let _ = response.send(result);

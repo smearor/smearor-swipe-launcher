@@ -40,6 +40,15 @@ pub struct AreaInfo {
     pub active: bool,
 }
 
+/// Information about all configured areas, including those not yet opened.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AllAreaInfo {
+    pub area_id: String,
+    pub visible: bool,
+    pub active: bool,
+    pub area_type: String,
+}
+
 /// Manages dynamic area operations at runtime
 pub struct AreaManager {
     /// Currently managed areas keyed by ID
@@ -432,6 +441,73 @@ impl AreaManager {
         self.areas.contains_key(area_id)
     }
 
+    /// Find the area that contains a button whose click_payload references
+    /// the given area_id. Returns the plugin ID of that button to use as
+    /// sender_id for transient area opening.
+    pub fn find_area_containing_area_button(&self, target_area_id: &str) -> Option<String> {
+        for managed_area in &self.areas {
+            for plugin_entry in &managed_area.config.plugins {
+                if let Some(plugin_config) = self.config.get_plugin_config(&plugin_entry.id) {
+                    if let Some(click_payload) = plugin_config.get("click_payload") {
+                        if click_payload.get("area_id").and_then(|v| v.as_str()) == Some(target_area_id) {
+                            return Some(plugin_entry.id.clone());
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Find a plugin ID to use as sender for transient area opening.
+    /// If source_area_id is provided, uses the first plugin of that area.
+    /// Otherwise, falls back to the first plugin of the first scroll area.
+    pub fn find_sender_id_for_transient(&self, source_area_id: Option<&str>) -> Option<String> {
+        if let Some(source_id) = source_area_id {
+            self.areas
+                .get(source_id)
+                .and_then(|source_area| source_area.config.plugins.first().map(|p| p.id.clone()))
+        } else {
+            self.areas
+                .iter()
+                .find(|a| a.config.area_type == AreaType::Scroll)
+                .and_then(|a| a.config.plugins.first().map(|p| p.id.clone()))
+        }
+    }
+
+    /// Show the area widget. If the area is configured but not yet loaded,
+    /// it will be added from config first.
+    pub fn ensure_area(&self, area_id: &str) -> Result<(), String> {
+        if self.areas.contains_key(area_id) {
+            let area = self.areas.get(area_id).unwrap();
+            area.widget.set_visible(true);
+            debug!("Opened existing area {}", area_id);
+            return Ok(());
+        }
+        let area_config = self
+            .config
+            .get_area_config(area_id)
+            .ok_or_else(|| format!("Area {} not found in config", area_id))?
+            .clone();
+
+        // Load plugins for this area (matching add_transient_area pattern)
+        for plugin_entry in &area_config.plugins {
+            let namespaced_id = self.plugin_manager.namespaced_plugin_id(&plugin_entry.id);
+            if !self.plugin_manager.plugins.contains_key(&namespaced_id) {
+                let plugin_config = self.config.plugin_config(&plugin_entry.id);
+                debug!("Loading plugin {} for area {}", plugin_entry.id, area_id);
+                if let Err(e) = self.plugin_manager.load_plugin(plugin_entry, plugin_config) {
+                    error!("Failed to load plugin {} for area {}: {}", plugin_entry.id, area_id, e);
+                }
+            }
+        }
+
+        self.add_area_from_config(area_id, area_config)
+            .map_err(|e| format!("Failed to add area {}: {}", area_id, e))?;
+        debug!("Added and opened area {} from config", area_id);
+        Ok(())
+    }
+
     /// Show the area widget.
     pub fn open(&self, area_id: &str) -> Result<(), String> {
         let Some(area) = self.areas.get(area_id) else {
@@ -474,6 +550,31 @@ impl AreaManager {
                 active: true,
             })
             .collect()
+    }
+
+    /// List all configured areas (including not-yet-opened ones) with their state.
+    /// Iterates over all config entries to find every area definition, not just
+    /// the ones listed in the top-level `areas` array.
+    pub fn list_all_areas(&self) -> Vec<AllAreaInfo> {
+        let mut result: Vec<AllAreaInfo> = self
+            .config
+            .entries
+            .iter()
+            .filter_map(|(area_id, entry)| match entry {
+                crate::config::area::config_entry::ConfigEntry::Area(area_config) => {
+                    let managed = self.areas.get(area_id);
+                    Some(AllAreaInfo {
+                        area_id: area_id.clone(),
+                        visible: managed.as_ref().is_some_and(|a| a.widget.is_visible()),
+                        active: managed.is_some(),
+                        area_type: format!("{:?}", area_config.area_type),
+                    })
+                }
+                crate::config::area::config_entry::ConfigEntry::Plugin(_) => None,
+            })
+            .collect();
+        result.sort_by(|a, b| a.area_id.cmp(&b.area_id));
+        result
     }
 
     /// Toggle the visibility of an area.

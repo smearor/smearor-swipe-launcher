@@ -104,6 +104,35 @@ pub fn core_tools() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: "open_transient_area".to_string(),
+            description: "Opens a Smearor area as a transient overlay on top of a source area (simulates a button click).".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "area_id": { "type": "string", "description": "Unique area identifier from config.toml" },
+                    "source_area_id": { "type": "string", "description": "ID of the managed area to use as source for the overlay. Defaults to the first scroll area." }
+                },
+                "required": ["area_id"]
+            }),
+            handler: Box::new(|sender, params| {
+                let Some(area_id) = get_string_param(params, "area_id") else {
+                    return Box::pin(async move { Err("Missing area_id".to_string()) }) as ToolFuture;
+                };
+                let source_area_id = get_optional_string_param(params, "source_area_id");
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::OpenTransientArea {
+                            area_id,
+                            source_area_id,
+                            response: oneshot::channel().0,
+                        },
+                    )
+                    .await
+                })
+            }),
+        },
+        ToolDefinition {
             name: "focus_area".to_string(),
             description: "Focuses a Smearor area for keyboard navigation.".to_string(),
             input_schema: serde_json::json!({
@@ -190,6 +219,25 @@ pub fn core_tools() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: "list_all_areas".to_string(),
+            description: "Lists all configured Smearor areas (including not-yet-opened ones) with their area IDs.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+            handler: Box::new(|sender, _params| {
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::ListAllAreas {
+                            response: oneshot::channel().0,
+                        },
+                    )
+                    .await
+                })
+            }),
+        },
+        ToolDefinition {
             name: "get_area_config".to_string(),
             description: "Returns the configuration of a Smearor area as JSON.".to_string(),
             input_schema: serde_json::json!({
@@ -231,6 +279,16 @@ async fn send_command_and_wait(sender: Sender<McpCommand>, command: McpCommand) 
             response: response_tx,
         },
         McpCommand::ListAreas { response: _ } => McpCommand::ListAreas { response: response_tx },
+        McpCommand::ListAllAreas { response: _ } => McpCommand::ListAllAreas { response: response_tx },
+        McpCommand::OpenTransientArea {
+            area_id,
+            source_area_id,
+            response: _,
+        } => McpCommand::OpenTransientArea {
+            area_id,
+            source_area_id,
+            response: response_tx,
+        },
         McpCommand::FocusArea { area_id, response: _ } => McpCommand::FocusArea {
             area_id,
             response: response_tx,
