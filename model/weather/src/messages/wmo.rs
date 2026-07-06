@@ -36,24 +36,24 @@ pub fn weather_code_description(code: u16) -> &'static str {
 /// Returns the Nerd Font icon name for a WMO weather interpretation code.
 pub fn weather_code_icon(code: u16) -> &'static str {
     match code {
-        0 => "\u{f00d}",            // nf-weather-day_sunny
-        1 => "\u{f00c}",            // nf-weather-day_sunny_overcast
-        2 => "\u{f002}",            // nf-weather-day_cloudy
-        3 => "\u{f013}",            // nf-weather-cloudy
-        45 | 48 => "\u{f014}",      // nf-weather_fog
-        51 | 56 => "\u{f017}",      // nf-weather_rain_mix
-        53 => "\u{f019}",           // nf-weather_rain
-        55 | 57 => "\u{f015}",      // nf-weather_rain_wind
-        61 | 66 => "\u{f019}",      // nf-weather_rain
-        63 => "\u{f019}",           // nf-weather_rain
-        65 | 67 => "\u{f015}",      // nf-weather_rain_wind
-        71 | 77 | 85 => "\u{f01b}", // nf-weather_snow
-        73 => "\u{f01b}",           // nf-weather_snow
-        75 | 86 => "\u{f064}",      // nf-weather_snow_wind
-        80 | 81 => "\u{f01a}",      // nf-weather_showers
+        0 => "\u{e30d}",            // nf-weather-day_sunny
+        1 => "\u{e30c}",            // nf-weather-day_sunny_overcast
+        2 => "\u{e302}",            // nf-weather-day_cloudy
+        3 => "\u{e312}",            // nf-weather-cloudy
+        45 | 48 => "\u{e313}",      // nf-weather_fog
+        51 | 56 => "\u{e316}",      // nf-weather_rain_mix
+        53 => "\u{e318}",           // nf-weather_rain
+        55 | 57 => "\u{e317}",      // nf-weather_rain_wind
+        61 | 66 => "\u{e318}",      // nf-weather_rain
+        63 => "\u{e318}",           // nf-weather_rain
+        65 | 67 => "\u{ef1d}",      // nf-weather_rain_wind
+        71 | 77 | 85 => "\u{e31a}", // nf-weather_snow
+        73 => "\u{e31a}",           // nf-weather_snow
+        75 | 86 => "\u{e35e}",      // nf-weather_snow_wind
+        80 | 81 => "\u{e319}",      // nf-weather_showers
         82 => "\u{f01a}",           // nf-weather_showers_wind
-        95 | 96 | 99 => "\u{f016}", // nf-weather_storm_showers
-        _ => "\u{f07b}",            // nf-weather-alien
+        95 | 96 | 99 => "\u{e337}", // nf-weather_storm_showers
+        _ => "\u{e36e}",            // nf-weather-alien
     }
 }
 
@@ -62,24 +62,24 @@ pub fn weather_code_icon(code: u16) -> &'static str {
 pub fn weather_code_icon_day_night(code: u16, is_day: bool) -> &'static str {
     if !is_day {
         return match code {
-            0 => "\u{f02e}",            // nf-weather-night_clear
-            1 => "\u{f083}",            // nf-weather-night_alt_clouds
-            2 => "\u{f086}",            // nf-weather-night_alt_cloudy
-            3 => "\u{f013}",            // nf-weather-cloudy
-            45 | 48 => "\u{f014}",      // nf-weather_fog
-            51 | 56 => "\u{f0b6}",      // nf-weather-night_alt_rain_mix
-            53 => "\u{f029}",           // nf-weather-night_alt_rain
-            55 | 57 => "\u{f0b6}",      // nf-weather-night_alt_rain_mix
-            61 | 66 => "\u{f029}",      // nf-weather-night_alt_rain
-            63 => "\u{f029}",           // nf-weather-night_alt_rain
-            65 | 67 => "\u{f029}",      // nf-weather-night_alt_rain
-            71 | 77 | 85 => "\u{f02a}", // nf-weather-night_alt_snow
-            73 => "\u{f02a}",           // nf-weather-night_alt_snow
-            75 | 86 => "\u{f02a}",      // nf-weather-night_alt_snow
-            80 | 81 => "\u{f037}",      // nf-weather-night_alt_showers
-            82 => "\u{f037}",           // nf-weather-night_alt_showers
-            95 | 96 | 99 => "\u{f033}", // nf-weather-night_alt_storm_showers
-            _ => "\u{f07b}",            // nf-weather-alien
+            0 => "\u{f0594}",           // nf-weather-night_clear
+            1 => "\u{f0f31}",           // nf-weather-night_alt_clouds
+            2 => "\u{f0f31}",           // nf-weather-night_alt_cloudy
+            3 => "\u{f0590}",           // nf-weather-cloudy
+            45 | 48 => "\u{f0591}",     // nf-weather_fog
+            51 | 56 => "\u{e323}",      // nf-weather-night_alt_rain_mix
+            53 => "\u{e325}",           // nf-weather-night_alt_rain
+            55 | 57 => "\u{e323}",      // nf-weather-night_alt_rain_mix
+            61 | 66 => "\u{e325}",      // nf-weather-night_alt_rain
+            63 => "\u{e325}",           // nf-weather-night_alt_rain
+            65 | 67 => "\u{e325}",      // nf-weather-night_alt_rain
+            71 | 77 | 85 => "\u{e327}", // nf-weather-night_alt_snow
+            73 => "\u{e327}",           // nf-weather-night_alt_snow
+            75 | 86 => "\u{e327}",      // nf-weather-night_alt_snow
+            80 | 81 => "\u{e326}",      // nf-weather-night_alt_showers
+            82 => "\u{e326}",           // nf-weather-night_alt_showers
+            95 | 96 | 99 => "\u{e329}", // nf-weather-night_alt_storm_showers
+            _ => "\u{e36e}",            // nf-weather-alien
         };
     }
     weather_code_icon(code)
@@ -107,11 +107,11 @@ mod tests {
 
     #[test]
     fn icon_for_clear_sky() {
-        assert_eq!(weather_code_icon(0), "\u{f00d}");
+        assert_eq!(weather_code_icon(0), "\u{e30d}");
     }
 
     #[test]
     fn icon_for_overcast() {
-        assert_eq!(weather_code_icon(3), "\u{f013}");
+        assert_eq!(weather_code_icon(3), "\u{e312}");
     }
 }

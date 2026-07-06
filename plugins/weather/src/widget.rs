@@ -232,7 +232,7 @@ fn render_view(status: &WeatherStatusMessage, view: WeatherView) -> (String, Str
                 .copied()
                 .map(|d| format!("{:.0}\u{b0}", d))
                 .unwrap_or_else(|| "".to_string());
-            ("\u{f050}".to_string(), speed, dir)
+            ("\u{f059d}".to_string(), speed, dir)
         }
         WeatherView::Humidity => {
             let humidity = status
@@ -242,7 +242,7 @@ fn render_view(status: &WeatherStatusMessage, view: WeatherView) -> (String, Str
                 .copied()
                 .map(|h| format!("{:.0}%", h))
                 .unwrap_or_else(|| "--".to_string());
-            ("\u{f07a}".to_string(), humidity, "Humidity".to_string())
+            ("\u{e373}".to_string(), humidity, "Humidity".to_string())
         }
         WeatherView::SunriseSunset => {
             let sunrise = status
@@ -253,7 +253,7 @@ fn render_view(status: &WeatherStatusMessage, view: WeatherView) -> (String, Str
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "--:--".to_string());
             let sunset = status.daily.today.sunset.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "--:--".to_string());
-            ("\u{f052}".to_string(), sunrise, format!("Sunset: {sunset}"))
+            ("\u{e34c}".to_string(), sunrise, format!("Sunset: {sunset}"))
         }
         WeatherView::AirPollution => {
             if let Some(aq) = status.air_quality.as_ref() {
@@ -264,9 +264,9 @@ fn render_view(status: &WeatherStatusMessage, view: WeatherView) -> (String, Str
                     .map(|v| format!("{:.0}", v))
                     .unwrap_or_else(|| "--".to_string());
                 let pm = aq.pm2_5.as_ref().copied().map(|v| format!("PM2.5: {:.1}", v)).unwrap_or_else(|| "".to_string());
-                ("\u{f074}".to_string(), format!("AQI: {aqi}"), pm)
+                ("\u{f0a71}".to_string(), format!("AQI: {aqi}"), pm)
             } else {
-                ("\u{f074}".to_string(), "--".to_string(), "N/A".to_string())
+                ("\u{f0a71}".to_string(), "--".to_string(), "N/A".to_string())
             }
         }
         WeatherView::Pressure => {
@@ -277,7 +277,7 @@ fn render_view(status: &WeatherStatusMessage, view: WeatherView) -> (String, Str
                 .copied()
                 .map(|p| format!("{:.0} hPa", p))
                 .unwrap_or_else(|| "--".to_string());
-            ("\u{f079}".to_string(), pressure, "Pressure".to_string())
+            ("\u{f029a}".to_string(), pressure, "Pressure".to_string())
         }
         WeatherView::UvIndex => {
             let uv = status
@@ -287,7 +287,7 @@ fn render_view(status: &WeatherStatusMessage, view: WeatherView) -> (String, Str
                 .copied()
                 .map(|v| format!("{:.1}", v))
                 .unwrap_or_else(|| "--".to_string());
-            ("\u{f056}".to_string(), uv, "UV Index".to_string())
+            ("\u{f0f37}".to_string(), uv, "UV Index".to_string())
         }
     }
 }
