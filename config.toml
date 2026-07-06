@@ -102,10 +102,11 @@ plugins = [
     { id = "disks_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "disks" },
     { id = "network_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "network" },
     { id = "uptime_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "uptime" },
-    { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
+    { id = "weather_widget", path = "target/release/libsmearor_weather_widget.so" },
     { id = "shelly_light_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_rgbw_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
     #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
 
@@ -570,6 +571,11 @@ show_load_average_1_minute = false
 show_load_average_5_minute = false
 show_load_average_15_minute = false
 icon = "nf-md-clock_start"
+
+[weather_widget]
+width = 120
+height = 80
+views = ["Current", "ForecastToday", "Wind", "Humidity"]
 
 
 [shelly_light_button]

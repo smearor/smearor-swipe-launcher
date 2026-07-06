@@ -14,6 +14,7 @@ members = [
     "model/notifications",
     "model/plugin",
     "model/sysinfo",
+    "model/weather",
     "mcp-server",
     "plugin-api",
     "plugins/clock",
@@ -23,6 +24,7 @@ members = [
     "plugins/mpris",
     "plugins/notifications",
     "plugins/sysinfo",
+    "plugins/weather",
     "services/app-launcher",
     "services/audio",
     "services/hyprland",
@@ -30,6 +32,7 @@ members = [
     "services/mpris",
     "services/notifications",
     "services/sysinfo",
+    "services/weather",
     "smearor-swipe-launcher",
 ]
 
@@ -46,6 +49,7 @@ default-members = [
     "model/notifications",
     "model/plugin",
     "model/sysinfo",
+    "model/weather",
     "mcp-server",
     "plugin-api",
     "plugins/clock",
@@ -55,6 +59,7 @@ default-members = [
     "plugins/mpris",
     "plugins/notifications",
     "plugins/sysinfo",
+    "plugins/weather",
     "services/app-launcher",
     "services/audio",
     "services/hyprland",
@@ -62,13 +67,14 @@ default-members = [
     "services/mpris",
     "services/notifications",
     "services/sysinfo",
+    "services/weather",
     "smearor-swipe-launcher",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.92"
+rust-version = "1.95"
 license = "MIT"
 authors = ["Andreas Schaeffer"]
 

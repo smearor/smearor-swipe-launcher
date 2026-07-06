@@ -30,6 +30,10 @@ cpu_temperature_source = "hwmon"
 id = "http"
 path = "target/release/libsmearor_http_service.so"
 
+[[services]]
+id = "weather"
+path = "target/release/libsmearor_weather_service.so"
+
 [http]
 allowed_urls = ["192.168.178.*", "https://api.open-meteo.com/*", "https://api.sunrise-sunset.org/*"]
 default_timeout_ms = 10000
@@ -49,3 +53,11 @@ enable_cpu_temperature = true
 enable_battery = true
 enable_disks = true
 enable_network = true
+
+[weather]
+latitude = 47.55
+longitude = 9.70
+update_interval_minutes = 30
+enable_air_quality = true
+timezone = "auto"
+forecast_days = 2

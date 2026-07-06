@@ -1,0 +1,27 @@
+[package]
+name = "smearor-weather-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+chrono = "0.4"
+openmeteo-rs = "1"
+stabby = { workspace = true }
+glib = { workspace = true }
+miette = { workspace = true }
+paste = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+smearor-model-mcp = { path = "../../model/mcp" }
+smearor-weather-model = { path = "../../model/weather" }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
