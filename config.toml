@@ -103,6 +103,7 @@ plugins = [
     { id = "network_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "network" },
     { id = "uptime_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "uptime" },
     { id = "weather_widget", path = "target/release/libsmearor_weather_widget.so" },
+    { id = "power_widget", path = "target/release/libsmearor_power_widget.so" },
     { id = "shelly_light_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_rgbw_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" },
@@ -576,6 +577,24 @@ icon = "nf-md-clock_start"
 width = 120
 height = 80
 views = ["Current", "ForecastToday", "Wind", "Humidity"]
+
+[power_widget]
+width = 200
+height = 240
+show_shutdown = true
+show_reboot = true
+show_suspend = true
+show_hibernate = true
+show_lock = true
+show_logout = true
+show_reboot_to_firmware = true
+show_inhibitor_warnings = true
+show_countdown_overlay = true
+show_scheduled_status = true
+button_size = 48
+icon_size = 24
+click_topic = "area.open"
+click_payload = { area_id = "power_area" }
 
 
 [shelly_light_button]
