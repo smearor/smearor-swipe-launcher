@@ -38,6 +38,10 @@ path = "target/release/libsmearor_weather_service.so"
 id = "power"
 path = "target/release/libsmearor_power_service.so"
 
+[[services]]
+id = "network"
+path = "target/release/libsmearor_network_service.so"
+
 [http]
 allowed_urls = ["192.168.178.*", "https://api.open-meteo.com/*", "https://api.sunrise-sunset.org/*"]
 default_timeout_ms = 10000
@@ -73,3 +77,11 @@ enable_scheduled_actions = true
 refresh_interval_seconds = 30
 lock_command = "hyprlock"
 logout_command = "hyprctl dispatch exit"
+
+[network]
+refresh_interval_seconds = 5
+enable_wifi_scan = true
+enable_vpn_management = true
+enable_throughput_monitoring = true
+throughput_sample_interval_seconds = 2
+public_ip_url = "https://api.ipify.org?format=json"

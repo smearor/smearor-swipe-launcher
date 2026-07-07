@@ -104,6 +104,7 @@ plugins = [
     { id = "uptime_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "uptime" },
     { id = "weather_widget", path = "target/release/libsmearor_weather_widget.so" },
     { id = "power_widget", path = "target/release/libsmearor_power_widget.so" },
+    { id = "network_menu_widget", path = "target/release/libsmearor_network_widget.so" },
     { id = "shelly_light_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_rgbw_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" },
@@ -595,6 +596,23 @@ button_size = 48
 icon_size = 24
 click_topic = "area.open"
 click_payload = { area_id = "power_area" }
+
+
+[network_menu_widget]
+width = 300
+height = 400
+spacing = 8
+show_status = true
+show_scan_list = true
+show_airplane_toggle = true
+show_vpn_toggles = true
+show_throughput = true
+show_qr_code = true
+button_size = 48
+icon_size = 24
+max_access_points = 10
+click_topic = "area.open"
+click_payload = { area_id = "network_area" }
 
 
 [shelly_light_button]

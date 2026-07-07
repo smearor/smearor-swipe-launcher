@@ -408,6 +408,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "bytemuck"
+version = "1.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8efb64bd706a16a1bdde310ae86b351e4d21550d98d056f22f8a7f7a2183fec"
+
+[[package]]
+name = "byteorder-lite"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
+
+[[package]]
 name = "bytes"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1679,6 +1691,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "image"
+version = "0.25.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
+dependencies = [
+    "bytemuck",
+    "byteorder-lite",
+    "moxcms",
+    "num-traits",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2028,6 +2052,16 @@ dependencies = [
     "libc",
     "wasi",
     "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "moxcms"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
+dependencies = [
+    "num-traits",
+    "pxfm",
 ]
 
 [[package]]
@@ -2396,6 +2430,21 @@ checksum = "6f42ea446cab60335f76979ec15e12619a2165b5ae2c12166bef27d283a9fadf"
 dependencies = [
     "idna",
     "psl-types",
+]
+
+[[package]]
+name = "pxfm"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
+
+[[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
+dependencies = [
+    "image",
 ]
 
 [[package]]
@@ -3428,6 +3477,60 @@ dependencies = [
     "tokio",
     "tracing",
     "tracing-subscriber",
+]
+
+[[package]]
+name = "smearor-network-model"
+version = "0.1.0"
+dependencies = [
+    "serde",
+    "serde_json",
+    "smearor-swipe-launcher-plugin-api",
+    "stabby",
+]
+
+[[package]]
+name = "smearor-network-service"
+version = "0.1.0"
+dependencies = [
+    "glib",
+    "miette",
+    "paste",
+    "serde",
+    "serde_json",
+    "smearor-http-model",
+    "smearor-model-mcp",
+    "smearor-network-model",
+    "smearor-swipe-launcher-plugin-api",
+    "stabby",
+    "thiserror",
+    "tokio",
+    "tokio-util",
+    "tracing",
+    "tracing-subscriber",
+    "typed-builder",
+    "zbus",
+]
+
+[[package]]
+name = "smearor-network-widget"
+version = "0.1.0"
+dependencies = [
+    "glib",
+    "gtk4",
+    "miette",
+    "paste",
+    "qrcode",
+    "serde",
+    "serde_json",
+    "smearor-model-mcp",
+    "smearor-network-model",
+    "smearor-swipe-launcher-plugin-api",
+    "stabby",
+    "tokio",
+    "tracing",
+    "tracing-subscriber",
+    "typed-builder",
 ]
 
 [[package]]
