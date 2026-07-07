@@ -22,15 +22,15 @@ pub struct WeatherWidgetConfig {
     #[builder(default, setter(into))]
     pub(crate) background_color: Option<String>,
 
-    /// Views to cycle through on click.
+    /// Views to cycle through on swipe up/down.
     #[builder(default)]
     pub(crate) views: Vec<WeatherView>,
 
-    /// Message topic for single-click.
+    /// Message topic for single-click action.
     #[serde(default)]
     pub click_topic: Option<String>,
 
-    /// Message payload for single-click (JSON/TOML).
+    /// Message payload for single-click action (JSON/TOML).
     #[serde(default)]
     pub click_payload: Option<Value>,
 

@@ -1,10 +1,13 @@
 use crate::config::WeatherWidgetConfig;
 use gtk4::Align;
 use gtk4::Box as GtkBox;
+use gtk4::EventSequenceState;
 use gtk4::GestureClick;
+use gtk4::GestureDrag;
 use gtk4::GestureLongPress;
 use gtk4::Label;
 use gtk4::Orientation;
+use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
@@ -115,7 +118,7 @@ impl WeatherWidget {
         });
     }
 
-    fn cycle_view(&self) {
+    fn next_view(&self) {
         let current_view = self.current_view.clone();
         let latest_status = self.latest_status.clone();
         let icon_label = self.icon_label.clone();
@@ -131,7 +134,42 @@ impl WeatherWidget {
             *idx = (*idx + 1) % views.len();
             let view = views[*idx];
             drop(idx);
-            let _ = view;
+
+            if let Some(ref status) = *latest_status.borrow() {
+                let (icon_text, temp_text, info_text) = render_view(status, view);
+                if let Some(ref label) = *icon_label.borrow() {
+                    label.set_text(&icon_text);
+                }
+                if let Some(ref label) = *temp_label.borrow() {
+                    label.set_text(&temp_text);
+                }
+                if let Some(ref label) = *info_label.borrow() {
+                    label.set_text(&info_text);
+                }
+            }
+        });
+    }
+
+    fn prev_view(&self) {
+        let current_view = self.current_view.clone();
+        let latest_status = self.latest_status.clone();
+        let icon_label = self.icon_label.clone();
+        let temp_label = self.temp_label.clone();
+        let info_label = self.info_label.clone();
+        let views = self.config.views.clone();
+
+        MainContext::default().spawn_local(async move {
+            if views.is_empty() {
+                return;
+            }
+            let mut idx = current_view.borrow_mut();
+            if *idx == 0 {
+                *idx = views.len() - 1;
+            } else {
+                *idx -= 1;
+            }
+            let view = views[*idx];
+            drop(idx);
 
             if let Some(ref status) = *latest_status.borrow() {
                 let (icon_text, temp_text, info_text) = render_view(status, view);
@@ -426,27 +464,49 @@ impl WidgetBuilder for WeatherWidget {
             latest_status: self.latest_status.clone(),
         });
 
-        let click_gesture = GestureClick::new();
-        let widget_for_click = widget_self.clone();
+        let click_gesture = GestureClick::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
         let broadcaster_for_click = message_broadcaster.clone();
-        click_gesture.connect_released(move |_gesture, _n_press, _, _| {
-            widget_for_click.cycle_view();
+        click_gesture.connect_released(move |gesture, _n_press, _x, _y| {
+            if let Some(seq) = gesture.current_sequence() {
+                let state = gesture.sequence_state(&seq);
+                if state == EventSequenceState::Claimed || state == EventSequenceState::Denied {
+                    return;
+                }
+            }
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
                 let payload_str = payload.to_string();
                 broadcaster_for_click.broadcast_string(&topic, &payload_str);
             }
+            gesture.set_state(EventSequenceState::Claimed);
         });
         outer_box.add_controller(click_gesture);
 
-        let longpress_gesture = GestureLongPress::new();
+        let drag_gesture = GestureDrag::new();
+        drag_gesture.set_propagation_phase(PropagationPhase::Capture);
+        let widget_for_drag = widget_self.clone();
+        drag_gesture.connect_drag_end(move |gesture, offset_x, offset_y| {
+            const SWIPE_THRESHOLD: f64 = 50.0;
+            if offset_y.abs() > offset_x.abs() && offset_y.abs() > SWIPE_THRESHOLD {
+                gesture.set_state(EventSequenceState::Claimed);
+                if offset_y < 0.0 {
+                    widget_for_drag.next_view();
+                } else {
+                    widget_for_drag.prev_view();
+                }
+            }
+        });
+        outer_box.add_controller(drag_gesture);
+
+        let longpress_gesture = GestureLongPress::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
         let broadcaster_for_longpress = message_broadcaster.clone();
-        longpress_gesture.connect_pressed(move |_gesture, _, _| {
+        longpress_gesture.connect_pressed(move |gesture, _x, _y| {
             if let (Some(topic), Some(payload)) = (longpress_topic.clone(), longpress_payload.clone()) {
                 let payload_str = payload.to_string();
                 broadcaster_for_longpress.broadcast_string(&topic, &payload_str);
             }
             let command = WeatherCommandMessage::refresh();
             broadcaster_for_longpress.broadcast_message_to_topic(command);
+            gesture.set_state(EventSequenceState::Claimed);
         });
         outer_box.add_controller(longpress_gesture);
 

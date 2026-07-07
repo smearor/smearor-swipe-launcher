@@ -577,7 +577,10 @@ icon = "nf-md-clock_start"
 [weather_widget]
 width = 120
 height = 80
-views = ["Current", "ForecastToday", "Wind", "Humidity"]
+# views = ["Current", "ForecastToday", "Wind", "Humidity"]
+views = ["Current", "ForecastToday", "ForecastTomorrow", "Wind", "Humidity", "SunriseSunset", "AirPollution", "Pressure", "UvIndex"]
+click_topic = "service.app_launcher.command"
+click_payload = { desktop_file = "/var/lib/flatpak/exports/share/applications/io.github.amit9838.mousam.desktop", action = "Exec" }
 
 [power_widget]
 width = 200

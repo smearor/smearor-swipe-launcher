@@ -65,7 +65,5 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(
 /// Call this once during plugin initialisation.
 pub fn register_json_converters(context: Option<FfiCoreContext>) {
     DesktopFileCommandMessageConverter::register_in_host(context);
-    DesktopFileCommandMessageStabbyConverter::register_in_host(context);
     DesktopFileStatusMessageConverter::register_in_host(context);
-    DesktopFileStatusMessageStabbyConverter::register_in_host(context);
 }
