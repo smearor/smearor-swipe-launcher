@@ -42,6 +42,10 @@ path = "target/release/libsmearor_power_service.so"
 id = "network"
 path = "target/release/libsmearor_network_service.so"
 
+[[services]]
+id = "wallpaper"
+path = "target/release/libsmearor_wallpaper_service.so"
+
 [http]
 allowed_urls = ["192.168.178.*", "https://api.open-meteo.com/*", "https://api.sunrise-sunset.org/*"]
 default_timeout_ms = 10000
@@ -89,3 +93,52 @@ enable_vpn_management = true
 enable_throughput_monitoring = true
 throughput_sample_interval_seconds = 2
 public_ip_url = "https://api.ipify.org?format=json"
+
+[wallpaper]
+default_theme = "Default Video"
+auto_start = false
+config_path = "wallpaper.toml"
+kill_grace_period_ms = 3000
+
+[[wallpaper.themes]]
+name = "Default Video"
+description = "Looping video wallpaper"
+preview_image_path = ""
+wallpaper_type = "Video"
+
+[wallpaper.themes.config.Video]
+directory = "~/Wallpapers/videos"
+outputs = ["ALL"]
+loop_playlist = true
+shuffle = false
+muted = true
+volume = 50
+speed_percentage = 100
+extra_arguments = []
+
+[[wallpaper.themes]]
+name = "Image Slideshow"
+description = "Image slideshow wallpaper"
+preview_image_path = ""
+wallpaper_type = "Image"
+
+[wallpaper.themes.config.Image]
+directory = "~/Wallpapers/images"
+outputs = ["ALL"]
+display_duration_ms = 30000
+shuffle = true
+transitions = false
+transition_effect = "fade"
+transition_duration_ms = 1000
+extra_arguments = []
+
+[[wallpaper.themes]]
+name = "smearor-wrot"
+description = "Animated wallpaper application"
+preview_image_path = ""
+wallpaper_type = "Application"
+
+[wallpaper.themes.config.Application]
+command = "smearor-wrot"
+outputs = ["ALL"]
+arguments = ["--output", "{monitor}"]
