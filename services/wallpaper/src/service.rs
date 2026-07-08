@@ -364,6 +364,32 @@ impl Service for WallpaperService {
     }
 }
 
+impl Drop for WallpaperService {
+    fn drop(&mut self) {
+        let pids: Vec<u32> = match self.state.read() {
+            Ok(s) => s.current_processes.iter().map(|p| p.process_id).collect(),
+            Err(e) => {
+                error!("Wallpaper service: state lock poisoned during drop: {e}");
+                return;
+            }
+        };
+
+        if pids.is_empty() {
+            debug!("Wallpaper service: no processes to terminate on drop");
+            return;
+        }
+
+        let unique_pids: HashSet<u32> = pids.into_iter().collect();
+        debug!("Wallpaper service: dropping, terminating {} process(es)", unique_pids.len());
+        for pid in &unique_pids {
+            if *pid > 0 {
+                let _ = kill(Pid::from_raw(*pid as i32), Signal::SIGTERM);
+                debug!("Wallpaper service: sent SIGTERM to PID {} on drop", pid);
+            }
+        }
+    }
+}
+
 async fn run_command_loop(
     config: WallpaperServiceConfig,
     mut command_receiver: tokio::sync::mpsc::UnboundedReceiver<WallpaperCommand>,
