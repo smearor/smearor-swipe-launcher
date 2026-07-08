@@ -30,6 +30,7 @@ use smearor_weather_model::WeatherStatusMessage;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tracing::debug;
+use tracing::trace;
 
 /// Latest weather state shared between the update loop and MCP handlers.
 #[derive(Clone, Default)]
@@ -296,7 +297,7 @@ async fn run_update_loop(
         }
 
         broadcast(&meta, &core_context, status_message);
-        debug!("Weather service broadcasted status");
+        trace!("Weather service broadcasted status");
     }
 }
 

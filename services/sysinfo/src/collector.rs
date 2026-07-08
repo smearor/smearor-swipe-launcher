@@ -46,34 +46,31 @@ impl Default for CollectorState {
 }
 
 /// Raw disk counters for a single device.
-struct DiskSample {
+pub(self) struct DiskSample {
     timestamp: Instant,
     read_sectors: u64,
     write_sectors: u64,
 }
 
 /// Raw network counters for all interfaces.
-struct NetworkSample {
+pub(self) struct NetworkSample {
     timestamp: Instant,
     received_bytes: u64,
     transmitted_bytes: u64,
 }
 
 /// Raw CPU tick counters.
-struct CpuSample {
+pub(self) struct CpuSample {
     idle: u64,
     total: u64,
 }
 
 /// Collects CPU metrics.
 pub async fn collect_cpu(enable_temperature: bool, temperature_source: Option<&str>, state: &mut CollectorState) -> CpuStatusMessage {
-    let usage = match read_cpu_usage(state).await {
-        Ok(value) => value,
-        Err(error) => {
-            error!("CPU collector failed: {error}");
-            0.0
-        }
-    };
+    let usage = read_cpu_usage(state).await.unwrap_or_else(|error| {
+        error!("CPU collector failed: {error}");
+        0.0
+    });
 
     let temperature = if enable_temperature {
         match read_cpu_temperature(temperature_source).await {

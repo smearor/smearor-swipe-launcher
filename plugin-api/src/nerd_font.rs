@@ -3,6 +3,8 @@
 // Maps human-readable icon names like `nf-fa-gamepad` to their Unicode
 // codepoints using the glyph list compiled into the binary.
 
+use tracing::trace;
+
 /// Resolves a CSS class name (e.g. `"nf-fa-gamepad"` or `"fa-gamepad"`)
 /// into an icon name string that `gtk4::Image::from_icon_name` understands.
 ///
@@ -25,7 +27,7 @@ pub fn resolve_gtk_nerd_icon(css_class: &str) -> Option<String> {
 
     let gtk_friendly_name = icon_name.to_lowercase().replace('_', "-");
 
-    println!("resolve_gtk_nerd_icon: input='{}' -> output='{}'", css_class, gtk_friendly_name);
+    trace!("resolve_gtk_nerd_icon: input='{}' -> output='{}'", css_class, gtk_friendly_name);
 
     Some(gtk_friendly_name)
 }

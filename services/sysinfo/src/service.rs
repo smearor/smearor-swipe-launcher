@@ -31,6 +31,7 @@ use smearor_sysinfo_model::UptimeStatusMessage;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tracing::debug;
+use tracing::trace;
 
 /// Command action for the sysinfo service.
 #[repr(u8)]
@@ -308,7 +309,7 @@ async fn run_update_loop(
         broadcast(&meta, &core_context, network);
         broadcast(&meta, &core_context, uptime);
 
-        debug!("Sysinfo service broadcasted all metrics");
+        trace!("Sysinfo service broadcasted all metrics");
     }
 }
 

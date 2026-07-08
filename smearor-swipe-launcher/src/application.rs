@@ -226,7 +226,7 @@ impl LauncherHost {
     fn route_message(&self, envelope: FfiEnvelope) {
         let mut target = envelope.target_instance_id.to_string();
         let topic = envelope.topic.to_string();
-        debug!(
+        trace!(
             "route_message: topic={} target={} ServiceManager ptr={:p} count={}",
             topic,
             target,

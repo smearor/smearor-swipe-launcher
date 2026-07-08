@@ -94,7 +94,6 @@ impl LauncherInstance {
         }
 
         if topic.starts_with("plugins.broadcast.") {
-            println!("HOST broadcasting to all plugins");
             trace!("Broadcasting message to all loaded plugins");
             for r in self.plugin_manager.plugins.iter() {
                 let plugin = r.value();
