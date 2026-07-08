@@ -28,6 +28,12 @@ pub struct DesktopFileCommandMessage {
 
     /// The action to execute on the desktop file
     pub action: DesktopFileCommandAction,
+
+    /// Whether the process should be detached (forked) from the launcher
+    pub forked: bool,
+
+    /// Whether to terminate the tracked process when the launcher exits
+    pub terminate_on_exit: bool,
 }
 
 /// ABI-stable version of `DesktopFileCommandMessage` for cross-plugin messaging.
@@ -37,6 +43,8 @@ pub struct DesktopFileCommandMessageStabby {
     pub desktop_file: stabby::string::String,
     pub wrapper: stabby::option::Option<SmearorWindowRotationWrapperStabby>,
     pub action: DesktopFileCommandAction,
+    pub forked: bool,
+    pub terminate_on_exit: bool,
 }
 
 impl From<DesktopFileCommandMessage> for DesktopFileCommandMessageStabby {
@@ -45,6 +53,8 @@ impl From<DesktopFileCommandMessage> for DesktopFileCommandMessageStabby {
             desktop_file: value.desktop_file.into(),
             wrapper: value.wrapper.map(Into::into).into(),
             action: value.action,
+            forked: value.forked,
+            terminate_on_exit: value.terminate_on_exit,
         }
     }
 }
@@ -58,29 +68,39 @@ impl From<DesktopFileCommandMessageStabby> for DesktopFileCommandMessage {
                 opt.map(Into::into)
             },
             action: value.action,
+            forked: value.forked,
+            terminate_on_exit: value.terminate_on_exit,
         }
     }
 }
 
 impl DesktopFileCommandMessage {
-    pub fn new(desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>, action: DesktopFileCommandAction) -> Self {
+    pub fn new(
+        desktop_file: &str,
+        wrapper: Option<SmearorWindowRotationWrapper>,
+        action: DesktopFileCommandAction,
+        forked: bool,
+        terminate_on_exit: bool,
+    ) -> Self {
         Self {
             desktop_file: desktop_file.to_string(),
             wrapper,
             action,
+            forked,
+            terminate_on_exit,
         }
     }
 
-    pub fn exec(desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>) -> Self {
-        Self::new(desktop_file, wrapper, DesktopFileCommandAction::Exec)
+    pub fn exec(desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>, forked: bool, terminate_on_exit: bool) -> Self {
+        Self::new(desktop_file, wrapper, DesktopFileCommandAction::Exec, forked, terminate_on_exit)
     }
 
-    pub fn exec_start(desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>) -> Self {
-        Self::new(desktop_file, wrapper, DesktopFileCommandAction::ExecStart)
+    pub fn exec_start(desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>, forked: bool, terminate_on_exit: bool) -> Self {
+        Self::new(desktop_file, wrapper, DesktopFileCommandAction::ExecStart, forked, terminate_on_exit)
     }
 
     pub fn terminate(desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>) -> Self {
-        Self::new(desktop_file, wrapper, DesktopFileCommandAction::Terminate)
+        Self::new(desktop_file, wrapper, DesktopFileCommandAction::Terminate, false, false)
     }
 }
 

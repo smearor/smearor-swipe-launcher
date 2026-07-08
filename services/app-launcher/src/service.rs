@@ -23,6 +23,7 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::Service;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::ffi::OsString;
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
@@ -33,11 +34,18 @@ use tracing::error;
 use tracing::trace;
 use which::which;
 
+/// A tracked child process with its termination policy.
+#[derive(Clone, Debug)]
+pub struct TrackedProcess {
+    pub pid: u32,
+    pub terminate_on_exit: bool,
+}
+
 pub struct AppLauncherService {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
     pub config: AppLauncherServiceConfig,
-    pub tracked_processes: Arc<DashMap<String, Vec<u32>>>,
+    pub tracked_processes: Arc<DashMap<String, Vec<TrackedProcess>>>,
 }
 
 impl AppLauncherService {
@@ -69,12 +77,12 @@ impl AppLauncherService {
                 loop {
                     interval.tick().await;
                     let mut completed_apps = Vec::new();
-                    tracked_processes_clone.retain(|desktop_file, pids| {
-                        pids.retain(|&pid| {
-                            let proc_path = format!("/proc/{}", pid);
+                    tracked_processes_clone.retain(|desktop_file, procs| {
+                        procs.retain(|tp| {
+                            let proc_path = format!("/proc/{}", tp.pid);
                             Path::new(&proc_path).exists()
                         });
-                        if pids.is_empty() {
+                        if procs.is_empty() {
                             completed_apps.push(desktop_file.clone());
                             false
                         } else {
@@ -99,8 +107,8 @@ impl AppLauncherService {
         Ok(service)
     }
 
-    fn handle_exec(&self, desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>) {
-        trace!("AppLauncher Service: Launching app: {desktop_file}");
+    fn handle_exec(&self, desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>, forked: bool, terminate_on_exit: bool) {
+        trace!("AppLauncher Service: Launching app: {desktop_file} (forked={forked})");
         trace!("Using wrapper smearor-wrot: {:?}", wrapper);
         let entry = match Entry::parse_file(desktop_file) {
             Ok(entry) => entry,
@@ -157,19 +165,42 @@ impl AppLauncherService {
             trace!("clean_args: {:?}", clean_args);
             debug!("full command: {program} {}", clean_args.join(" "));
 
-            let child = Command::new(program.clone())
-                .args(&clean_args)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn();
+            let mut cmd = Command::new(program.clone());
+            cmd.args(&clean_args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+
+            if forked {
+                // Start the process in a new session so it survives launcher exit.
+                // setsid() detaches the process from the launcher's controlling terminal
+                // and process group.
+                unsafe {
+                    cmd.pre_exec(|| {
+                        if let Err(e) = nix::unistd::setsid() {
+                            return Err(std::io::Error::from_raw_os_error(e as i32));
+                        }
+                        Ok(())
+                    });
+                }
+            }
+
+            let child = cmd.spawn();
 
             match child {
                 Ok(mut c) => {
                     let pid = c.id();
-                    debug!("AppLauncher Service: Successfully spawned {} with PID {}", program, pid);
-                    self.tracked_processes.entry(desktop_file.to_string()).or_default().push(pid);
-                    self.broadcast_message_to_topic(DesktopFileStatusMessage::running(desktop_file));
+                    debug!("AppLauncher Service: Successfully spawned {} with PID {} (forked={forked})", program, pid);
+
+                    if forked {
+                        // Forked processes are not tracked — they survive launcher exit
+                        // and cannot be terminated via long-press. A reaping thread still
+                        // runs to prevent zombies while the launcher is alive.
+                        debug!("AppLauncher Service: Process PID {} is forked/detached, not tracking", pid);
+                    } else {
+                        self.tracked_processes
+                            .entry(desktop_file.to_string())
+                            .or_default()
+                            .push(TrackedProcess { pid, terminate_on_exit });
+                        self.broadcast_message_to_topic(DesktopFileStatusMessage::running(desktop_file));
+                    }
 
                     // Spawn a reaping thread to call wait() on the child.
                     // Without this, exited children become zombies because
@@ -190,18 +221,18 @@ impl AppLauncherService {
     fn handle_terminate(&self, desktop_file: &str) {
         trace!("AppLauncher Service: Terminating app: {desktop_file}");
         if let Some(mut r) = self.tracked_processes.get_mut(desktop_file) {
-            let pids = r.value_mut();
-            for &pid in pids.iter() {
-                let proc_path = format!("/proc/{}", pid);
+            let procs = r.value_mut();
+            for tp in procs.iter() {
+                let proc_path = format!("/proc/{}", tp.pid);
                 if Path::new(&proc_path).exists() {
-                    trace!("AppLauncher Service: Sending SIGTERM to process {}", pid);
-                    let posix_pid = Pid::from_raw(pid as i32);
+                    trace!("AppLauncher Service: Sending SIGTERM to process {}", tp.pid);
+                    let posix_pid = Pid::from_raw(tp.pid as i32);
                     if let Err(e) = kill(posix_pid, Signal::SIGTERM) {
-                        error!("AppLauncher Service: Failed to kill process {}: {}", pid, e);
+                        error!("AppLauncher Service: Failed to kill process {}: {}", tp.pid, e);
                     }
                 }
             }
-            pids.clear();
+            procs.clear();
         }
         self.tracked_processes.remove(desktop_file);
         self.broadcast_message_to_topic(DesktopFileStatusMessage::stopped(desktop_file));
@@ -225,13 +256,13 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLaunch
         trace!("handle_message: {message:?}");
         match message.action {
             DesktopFileCommandAction::Exec => {
-                self.handle_exec(&message.desktop_file, message.wrapper.clone());
+                self.handle_exec(&message.desktop_file, message.wrapper.clone(), message.forked, message.terminate_on_exit);
             }
             DesktopFileCommandAction::ExecStart => {
-                self.handle_exec(&message.desktop_file, message.wrapper.clone());
+                self.handle_exec(&message.desktop_file, message.wrapper.clone(), message.forked, message.terminate_on_exit);
             }
             DesktopFileCommandAction::ExecReload => {
-                self.handle_exec(&message.desktop_file, message.wrapper.clone());
+                self.handle_exec(&message.desktop_file, message.wrapper.clone(), message.forked, message.terminate_on_exit);
             }
             DesktopFileCommandAction::Terminate => {
                 self.handle_terminate(&message.desktop_file);
@@ -263,6 +294,28 @@ impl Service for AppLauncherService {
                 let envelope = &*(message as *mut FfiEnvelope);
                 if envelope.type_id == FfiEnvelopePayload::<DesktopFileCommandMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<DesktopFileCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+            }
+        }
+    }
+}
+
+impl Drop for AppLauncherService {
+    fn drop(&mut self) {
+        debug!("AppLauncher Service: Dropping service, terminating processes with terminate_on_exit=true");
+        for entry in self.tracked_processes.iter() {
+            for tp in entry.value().iter() {
+                if tp.terminate_on_exit {
+                    let proc_path = format!("/proc/{}", tp.pid);
+                    if Path::new(&proc_path).exists() {
+                        debug!("AppLauncher Service: Sending SIGTERM to process {} on drop", tp.pid);
+                        let posix_pid = Pid::from_raw(tp.pid as i32);
+                        if let Err(e) = kill(posix_pid, Signal::SIGTERM) {
+                            error!("AppLauncher Service: Failed to kill process {} on drop: {}", tp.pid, e);
+                        }
+                    }
+                } else {
+                    debug!("AppLauncher Service: Process {} has terminate_on_exit=false, leaving running", tp.pid);
                 }
             }
         }

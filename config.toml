@@ -926,6 +926,8 @@ follows_rotation = true
 [amberol]
 defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/io.bassi.Amberol.desktop"
+forked = true
+terminate_on_exit = false
 [amberol.wrapper]
 follows_rotation = true
 
@@ -1091,7 +1093,7 @@ longpress_payload = { area_id = "power_area" }
 
 [wallpaper_widget]
 width = 120
-height = 120
+height = 100
 show_theme_name = true
 show_type_icon = true
 show_status_indicator = true
@@ -1115,8 +1117,8 @@ show_qr_code = true
 button_size = 48
 icon_size = 36
 max_access_points = 10
-click_topic = "area.open"
-click_payload = { area_id = "network_area" }
+#click_topic = "area.open"
+#click_payload = { area_id = "network_area" }
 
 
 [shelly_light_button]

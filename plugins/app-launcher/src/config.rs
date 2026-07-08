@@ -46,6 +46,14 @@ pub struct AppLauncherConfig {
     /// Spacing between child widgets inside the app launcher button.
     #[serde(default)]
     pub spacing: i32,
+    /// Whether the process should be detached (forked) from the launcher.
+    /// Forked processes survive launcher exit and cannot be terminated via long-press.
+    #[serde(default)]
+    pub forked: bool,
+    /// Whether to terminate the tracked process when the launcher exits.
+    /// Only applies to non-forked processes. Defaults to true.
+    #[serde(default = "default_terminate_on_exit")]
+    pub terminate_on_exit: bool,
 }
 
 impl AppLauncherConfig {
@@ -60,4 +68,8 @@ fn default_width() -> i32 {
 
 fn default_icon_size() -> i32 {
     DEFAULT_ICON_SIZE
+}
+
+fn default_terminate_on_exit() -> bool {
+    true
 }

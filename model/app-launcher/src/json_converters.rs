@@ -28,7 +28,9 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(DesktopFileCommandMess
     let desktop_file = json.get("desktop_file").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let wrapper: Option<SmearorWindowRotationWrapper> = json.get("wrapper").and_then(|v| serde_json::from_value(v.clone()).ok());
     let action = parse_desktop_file_command_action(json.get("action").unwrap_or(&serde_json::Value::Null));
-    DesktopFileCommandMessage::new(&desktop_file, wrapper, action)
+    let forked = json.get("forked").and_then(|v| v.as_bool()).unwrap_or(false);
+    let terminate_on_exit = json.get("terminate_on_exit").and_then(|v| v.as_bool()).unwrap_or(true);
+    DesktopFileCommandMessage::new(&desktop_file, wrapper, action, forked, terminate_on_exit)
 });
 
 smearor_swipe_launcher_plugin_api::impl_json_convertible!(
@@ -38,7 +40,9 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(
         let desktop_file = json.get("desktop_file").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let wrapper: Option<SmearorWindowRotationWrapper> = json.get("wrapper").and_then(|v| serde_json::from_value(v.clone()).ok());
         let action = parse_desktop_file_command_action(json.get("action").unwrap_or(&serde_json::Value::Null));
-        let msg = DesktopFileCommandMessage::new(&desktop_file, wrapper, action);
+        let forked = json.get("forked").and_then(|v| v.as_bool()).unwrap_or(false);
+        let terminate_on_exit = json.get("terminate_on_exit").and_then(|v| v.as_bool()).unwrap_or(true);
+        let msg = DesktopFileCommandMessage::new(&desktop_file, wrapper, action, forked, terminate_on_exit);
         msg.into()
     }
 );

@@ -221,6 +221,8 @@ impl WidgetBuilder for AppLauncherWidget {
 
         let desktop_file_inner = self.config.desktop_file_path.clone();
         let wrapper_config_inner = self.config.wrapper.clone();
+        let forked_inner = self.config.forked;
+        let terminate_on_exit_inner = self.config.terminate_on_exit;
         let message_broadcaster_desktop_file_command = self.get_broadcaster();
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
@@ -233,8 +235,12 @@ impl WidgetBuilder for AppLauncherWidget {
                     return;
                 }
             }
-            message_broadcaster_desktop_file_command
-                .broadcast_message_to_topic(DesktopFileCommandMessage::exec(&desktop_file_inner, wrapper_config_inner.clone()));
+            message_broadcaster_desktop_file_command.broadcast_message_to_topic(DesktopFileCommandMessage::exec(
+                &desktop_file_inner,
+                wrapper_config_inner.clone(),
+                forked_inner,
+                terminate_on_exit_inner,
+            ));
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
                 let payload_str = payload.to_string();
                 if let Some(instance) = click_instance.clone() {
