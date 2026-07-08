@@ -167,7 +167,10 @@ pub struct ImageConfig {
 pub struct AppConfig {
     /// Base executable command (e.g., "smearor-wrot").
     pub command: stabby::string::String,
-    /// Array of arguments passed to the command (e.g., ["--layer", "background", "--decorated", "/path/to/app"]).
+    /// Target display outputs. `["ALL"]` targets all monitors; otherwise specific names like `["DP-1", "HDMI-A-1"]`.
+    pub outputs: stabby::vec::Vec<stabby::string::String>,
+    /// Array of arguments passed to the command (e.g., ["--layer", "background", "--output", "{monitor}", "/path/to/app"]).
+    /// The placeholder `{monitor}` is replaced at runtime with each target monitor name (e.g., "DP-1"), spawning one process per output.
     pub arguments: stabby::vec::Vec<stabby::string::String>,
 }
 ```
@@ -452,32 +455,37 @@ async fn start_selected_wallpaper_theme(
     };
 
     // 3. Spawn the respective engine driver process
-    let result = match theme.wallpaper_type {
-        WallpaperType::Video => spawn_mpvpaper_video(&theme).await,
-        WallpaperType::Image => spawn_mpvpaper_image(&theme).await,
+    let monitor_pids: Vec<(u32, String)> = match theme.wallpaper_type {
+        WallpaperType::Video => spawn_mpvpaper_video(&theme)
+            .await
+            .map(|(pid, outputs)| outputs.into_iter().map(|o| (pid, o)).collect())
+            .unwrap_or_default(),
+        WallpaperType::Image => spawn_mpvpaper_image(&theme)
+            .await
+            .map(|(pid, outputs)| outputs.into_iter().map(|o| (pid, o)).collect())
+            .unwrap_or_default(),
         WallpaperType::Application => spawn_application(&theme).await,
     };
 
     // 4. Store per-monitor PIDs and set current_theme
     let mut current = state.write().await;
     current.current_processes.clear();
-    if let Some((pid, outputs)) = result {
-        for output in &outputs {
-            current.current_processes.push(MonitorProcess {
-                monitor: output.to_string(),
-                process_id: pid,
-            });
-        }
+    for (pid, monitor) in &monitor_pids {
+        current.current_processes.push(MonitorProcess {
+            monitor: monitor.clone(),
+            process_id: *pid,
+        });
     }
-    current.current_theme = Some(theme.name);
+    if !monitor_pids.is_empty() {
+        current.current_theme = Some(theme.name);
+    }
 }
 ```
 
 #### `stop_current_wallpaper_theme()`
 
-Gracefully terminates (SIGTERM) all processes listed in `current_processes`. If a process does not exit within `kill_grace_period_ms`, sends SIGKILL. Clears
-state
-variables.
+Gracefully terminates (SIGTERM) all processes listed in `current_processes`. Polls every 100ms via `kill(pid, None)` to detect early exit. If a process does
+not exit within `kill_grace_period_ms`, sends SIGKILL. Clears state variables.
 
 ```rust
 async fn stop_current_wallpaper_theme(
@@ -500,15 +508,35 @@ async fn stop_current_wallpaper_theme(
         }
     }
 
-    // Wait for grace period, then SIGKILL if still alive
+    // Poll every 100ms to check if processes have exited.
+    // This avoids waiting the full grace period when processes
+    // terminate quickly after SIGTERM, making theme switches snappier.
     if !unique_pids.is_empty() {
-        tokio::time::sleep(Duration::from_millis(kill_grace_period_ms)).await;
-        for pid in &unique_pids {
-            if *pid > 0 {
-                let _ = nix::sys::signal::kill(
-                    Pid::from_raw(*pid as i32),
-                    Signal::SIGKILL,
-                );
+        let poll_interval = Duration::from_millis(100);
+        let deadline = tokio::time::Instant::now() + Duration::from_millis(kill_grace_period_ms);
+        loop {
+            tokio::time::sleep(poll_interval).await;
+
+            // Check which PIDs are still alive (kill with signal None is a no-op
+            // that returns Err(ESRCH) if the process no longer exists).
+            let alive: Vec<u32> = unique_pids
+                .iter()
+                .copied()
+                .filter(|pid| {
+                    *pid > 0
+                        && nix::sys::signal::kill(Pid::from_raw(*pid as i32), None).is_ok()
+                })
+                .collect();
+
+            if alive.is_empty() || tokio::time::Instant::now() >= deadline {
+                // Send SIGKILL to any remaining processes
+                for pid in &alive {
+                    let _ = nix::sys::signal::kill(
+                        Pid::from_raw(*pid as i32),
+                        Signal::SIGKILL,
+                    );
+                }
+                break;
             }
         }
     }
@@ -594,16 +622,44 @@ async fn spawn_mpvpaper_image(theme: &WallpaperTheme) -> Option<(u32, Vec<String
 #### Application (`smearor-wrot` or custom)
 
 ```rust
-/// Spawns an application-based wallpaper and returns the child PID.
-async fn spawn_application(theme: &WallpaperTheme) -> Option<(u32, Vec<String>)> {
+/// Spawns an application-based wallpaper and returns per-monitor PIDs.
+/// If any argument contains the `{monitor}` placeholder, the service spawns
+/// one process per target output, replacing the placeholder with the monitor name.
+/// If no placeholder is present, a single process is spawned for all outputs.
+async fn spawn_application(theme: &WallpaperTheme) -> Vec<(u32, String)> {
     let WallpaperThemeConfig::Application(config) = &theme.config else {
-        return None;
+        return Vec::new();
     };
 
-    let args: Vec<String> = config.arguments.iter().map(|s| s.to_string()).collect();
-    // Applications manage their own output targeting via command arguments,
-    // so we return a generic monitor identifier.
-    spawn_process(&config.command, &args).map(|pid| (pid, vec!["*".to_string()]))
+    // Determine target outputs. Application themes default to ["ALL"] if no
+    // explicit outputs are configured (applications often manage their own output).
+    let outputs = resolve_outputs(&config.outputs);
+
+    let has_placeholder = config.arguments.iter().any(|a| a.contains("{monitor}"));
+
+    if !has_placeholder {
+        // No placeholder: spawn once, assign to all outputs
+        let args: Vec<String> = config.arguments.iter().map(|s| s.to_string()).collect();
+        let result = spawn_process(&config.command, &args);
+        if let Some(pid) = result {
+            return outputs.into_iter().map(|o| (pid, o)).collect();
+        }
+        return Vec::new();
+    }
+
+    // Placeholder present: spawn one process per monitor
+    let mut results = Vec::new();
+    for monitor in &outputs {
+        let args: Vec<String> = config
+            .arguments
+            .iter()
+            .map(|s| s.replace("{monitor}", monitor))
+            .collect();
+        if let Some(pid) = spawn_process(&config.command, &args) {
+            results.push((pid, monitor.clone()));
+        }
+    }
+    results
 }
 ```
 
@@ -1227,7 +1283,8 @@ wallpaper_type = "Application"
 
 [wallpaper.themes.config.Application]
 command = "smearor-wrot"
-arguments = ["--layer", "background", "--decorated", "/path/to/weather-app"]
+outputs = ["ALL"]
+arguments = ["--layer", "background", "--output", "{monitor}", "/path/to/weather-app"]
 ```
 
 ### 8.2 Widget Configuration in `config.toml`
@@ -1445,7 +1502,7 @@ built on top of already-tested foundations.
 - No `unwrap`, `expect`, or `panic` remains in the new code.
 - `rustfmt` and `clippy` are clean.
 - Process lifecycle (start, stop, restart) works reliably with per-monitor PID tracking.
-- SIGTERM is sent first, with SIGKILL fallback after the grace period.
+- SIGTERM is sent first, with 100ms polling for early exit detection and SIGKILL fallback after the grace period.
 - MCP tools return valid JSON and execute the correct actions.
 - Theme persistence survives service restarts.
 
@@ -1487,8 +1544,12 @@ Phase 5: integration and tests
 - **Layer Shell background layer:** All wallpaper types render on the `background` layer of the Wayland Layer Shell protocol, which places them behind all other
   windows and panels.
 - **Process management:** The service uses `tokio::process::Command` for spawning and `nix::sys::signal::kill` for termination. SIGTERM is sent first for
-  graceful shutdown; SIGKILL is sent after the configured grace period as a fallback. Per-monitor PIDs are tracked in `current_processes` to support
-  multi-monitor setups where different processes may run on different outputs.
+  graceful shutdown. The service polls every 100ms via `kill(pid, None)` to detect early exit, so theme switches proceed immediately once all processes
+  have terminated — without waiting the full grace period. SIGKILL is sent only if the deadline elapses. Per-monitor PIDs are tracked in `current_processes`
+  to support multi-monitor setups where different processes may run on different outputs.
+- **Application `{monitor}` placeholder:** When an `Application` theme's `arguments` contain the literal `{monitor}`, the service spawns one process per
+  target output, replacing the placeholder with each monitor name (e.g., `DP-1`, `HDMI-A-1`). This enables applications like `smearor-wrot` to render
+  fullscreen on each monitor independently. If no placeholder is present, a single process is spawned and assigned to all outputs.
 - **Gesture detection:** The widget uses `gtk4::GestureSwipe` instead of `gtk4::GestureDrag` for directional swipe detection. `GestureSwipe` provides
   `connect_swipe(velocity_x, velocity_y)` which reacts to actual swipe velocity and cleanly separates vertical from horizontal movement, avoiding false
   triggers from diagonal drags.
