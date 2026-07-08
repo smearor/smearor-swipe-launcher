@@ -97,9 +97,8 @@ plugins = [
     { id = "weather_widget", path = "target/release/libsmearor_weather_widget.so" },
     { id = "power_widget", path = "target/release/libsmearor_power_widget.so" },
     { id = "wallpaper_widget", path = "target/release/libsmearor_wallpaper_widget.so" },
-    { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
     # { id = "network_menu_widget", path = "target/release/libsmearor_network_widget.so" },
-    #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
 ]
 
 [previous_workspace]
@@ -1099,8 +1098,8 @@ show_status_indicator = true
 preview_width = 100
 preview_height = 100
 fallback_icon = "nf-md-wallpaper"
-click_topic = "area.open"
-click_payload = { area_id = "wallpaper_area" }
+#click_topic = "area.open"
+#click_payload = { area_id = "wallpaper_area" }
 
 
 [network_menu_widget]

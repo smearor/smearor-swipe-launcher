@@ -75,6 +75,8 @@ pub struct WallpaperService {
 
 impl WallpaperService {
     pub(crate) fn new(config: PluginConfig, core_context: Option<FfiCoreContext>) -> Result<Self, PluginConstructionErrorWrapper> {
+        smearor_wallpaper_model::register_json_converters(core_context);
+
         let service_config: WallpaperServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
 
@@ -85,6 +87,7 @@ impl WallpaperService {
         let config_clone = service_config.clone();
         let meta_clone = meta.clone();
         let core_context_clone = core_context;
+        let command_sender_clone = command_sender.clone();
 
         std::thread::spawn(move || {
             let runtime = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
@@ -95,7 +98,7 @@ impl WallpaperService {
                 }
             };
             runtime.block_on(async move {
-                run_command_loop(config_clone, command_receiver, meta_clone, core_context_clone, state_clone).await;
+                run_command_loop(config_clone, command_receiver, meta_clone, core_context_clone, state_clone, command_sender_clone).await;
             });
         });
 
@@ -184,48 +187,6 @@ impl WallpaperService {
         } else {
             debug!("wallpaper: no core_context, cannot send response");
         }
-    }
-
-    fn build_theme_infos(&self) -> Vec<WallpaperThemeInfo> {
-        let config_guard = self.config.read();
-        match config_guard {
-            Ok(config) => config
-                .themes
-                .iter()
-                .map(|t| WallpaperThemeInfo::new(&t.name, &t.description, &t.preview_image_path, t.wallpaper_type.clone()))
-                .collect(),
-            Err(e) => {
-                error!("Wallpaper service: config lock poisoned: {e}");
-                Vec::new()
-            }
-        }
-    }
-
-    fn build_status_message(&self) -> WallpaperStatusMessage {
-        let state_guard = self.state.read();
-        let theme_infos = self.build_theme_infos();
-        let (selected_index, current_theme, current_processes) = match state_guard {
-            Ok(s) => (s.selected_theme_index, s.current_theme.clone(), s.current_processes.clone()),
-            Err(e) => {
-                error!("Wallpaper service: state lock poisoned: {e}");
-                (0, None, Vec::new())
-            }
-        };
-        let mut msg = WallpaperStatusMessage::new(theme_infos, selected_index);
-        let current_theme_stabby: stabby::option::Option<stabby::string::String> = current_theme.map(|s| s.into()).into();
-        msg.current_theme = current_theme_stabby;
-        let mut processes = stabby::vec::Vec::with_capacity(current_processes.len());
-        for p in &current_processes {
-            processes.push(p.clone());
-        }
-        msg.current_processes = processes;
-        msg
-    }
-
-    fn broadcast_status(&self) {
-        let status = self.build_status_message();
-        self.broadcast_message_to_topic(status);
-        debug!("Wallpaper service broadcasted status");
     }
 }
 
@@ -409,13 +370,20 @@ async fn run_command_loop(
     meta: PluginMeta,
     core_context: Option<FfiCoreContext>,
     state: Arc<RwLock<WallpaperState>>,
+    command_sender: tokio::sync::mpsc::UnboundedSender<WallpaperCommand>,
 ) {
+    // Select the default theme if configured (without starting it)
+    if !config.default_theme.is_empty() {
+        select_theme(&state, &config.default_theme, &config);
+    }
+
     // Auto-start the default theme if configured
     if config.auto_start && !config.default_theme.is_empty() {
-        select_theme(&state, &config.default_theme, &config);
-        start_selected_theme(&config, &meta, &core_context, &state).await;
-        broadcast_status(&meta, &core_context, &config, &state);
+        start_selected_theme(&config, &meta, &core_context, &state, &command_sender).await;
     }
+
+    // Always broadcast initial status so widgets can render
+    broadcast_status(&meta, &core_context, &config, &state);
 
     while let Some(command) = command_receiver.recv().await {
         match command {
@@ -424,7 +392,7 @@ async fn run_command_loop(
                 broadcast_status(&meta, &core_context, &config, &state);
             }
             WallpaperCommand::StartSelected => {
-                start_selected_theme(&config, &meta, &core_context, &state).await;
+                start_selected_theme(&config, &meta, &core_context, &state, &command_sender).await;
                 broadcast_status(&meta, &core_context, &config, &state);
             }
             WallpaperCommand::StopCurrent => {
@@ -456,7 +424,13 @@ async fn run_command_loop(
     }
 }
 
-async fn start_selected_theme(config: &WallpaperServiceConfig, meta: &PluginMeta, core_context: &Option<FfiCoreContext>, state: &Arc<RwLock<WallpaperState>>) {
+async fn start_selected_theme(
+    config: &WallpaperServiceConfig,
+    meta: &PluginMeta,
+    core_context: &Option<FfiCoreContext>,
+    state: &Arc<RwLock<WallpaperState>>,
+    command_sender: &tokio::sync::mpsc::UnboundedSender<WallpaperCommand>,
+) {
     // Stop current wallpaper first
     stop_current_theme(config, meta, core_context, state).await;
 
@@ -474,7 +448,13 @@ async fn start_selected_theme(config: &WallpaperServiceConfig, meta: &PluginMeta
     };
 
     debug!("Wallpaper service: starting theme '{}'", theme.name);
-    let monitor_pids = spawn_wallpaper(theme);
+    let wayland_display = config.wayland_display.as_deref();
+    let sender = command_sender.clone();
+    let on_exit: std::sync::Arc<dyn Fn(u32) + Send + Sync> = std::sync::Arc::new(move |pid| {
+        debug!("Wallpaper service: process PID {} exited with error, sending StopCurrent", pid);
+        let _ = sender.send(WallpaperCommand::StopCurrent);
+    });
+    let monitor_pids = spawn_wallpaper(theme, wayland_display, on_exit);
 
     {
         if let Ok(mut s) = state.write() {

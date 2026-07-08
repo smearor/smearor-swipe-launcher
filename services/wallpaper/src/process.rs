@@ -33,19 +33,69 @@ fn resolve_executable(name: &str) -> String {
 }
 
 /// Spawns a process and returns its PID.
-fn spawn_process(command: &str, args: &[String]) -> Option<u32> {
+/// Captures stdout/stderr and logs them as debug output after the process exits.
+/// If the process exits with a non-zero code, calls `on_exit` so the caller can update state.
+/// Passes through Wayland-related env vars from the parent process, or uses `wayland_display` if configured.
+fn spawn_process(command: &str, args: &[String], wayland_display: Option<&str>, on_exit: Option<std::sync::Arc<dyn Fn(u32) + Send + Sync>>) -> Option<u32> {
     let resolved = resolve_executable(command);
     debug!("Spawning wallpaper process: {} {}", resolved, args.join(" "));
-    match Command::new(&resolved)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
+    let mut cmd = Command::new(&resolved);
+    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    // Explicitly pass through Wayland-related env vars from the parent process.
+    // Command::new() inherits env vars by default, but we set them explicitly
+    // to ensure they're present and to log them for debugging.
+    let wl_display = wayland_display
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("WAYLAND_DISPLAY").ok().filter(|s| !s.is_empty()));
+    if let Some(ref wl_disp) = wl_display {
+        cmd.env("WAYLAND_DISPLAY", wl_disp);
+        debug!("Wallpaper process WAYLAND_DISPLAY={}", wl_disp);
+    } else {
+        debug!("Wallpaper process: WAYLAND_DISPLAY not set in parent environment");
+    }
+    if let Ok(xdg_runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+        cmd.env("XDG_RUNTIME_DIR", &xdg_runtime_dir);
+        debug!("Wallpaper process XDG_RUNTIME_DIR={}", xdg_runtime_dir);
+    } else {
+        debug!("Wallpaper process: XDG_RUNTIME_DIR not set in parent environment");
+    }
+    if let Ok(x11_display) = std::env::var("DISPLAY") {
+        cmd.env("DISPLAY", &x11_display);
+        debug!("Wallpaper process DISPLAY={}", x11_display);
+    }
+
+    match cmd.spawn() {
         Ok(child) => {
             let pid = child.id();
             debug!("Wallpaper process spawned with PID {}", pid);
+            std::thread::spawn(move || {
+                let output = match child.wait_with_output() {
+                    Ok(output) => output,
+                    Err(e) => {
+                        debug!("Wallpaper process PID {} wait error: {}", pid, e);
+                        return;
+                    }
+                };
+                if !output.stdout.is_empty() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    debug!("Wallpaper process PID {} stdout:\n{}", pid, stdout.trim());
+                }
+                if !output.stderr.is_empty() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    debug!("Wallpaper process PID {} stderr:\n{}", pid, stderr.trim());
+                }
+                let code = output.status.code();
+                debug!("Wallpaper process PID {} exited with code: {:?}", pid, code);
+                if let Some(c) = code {
+                    if c != 0 {
+                        debug!("Wallpaper process PID {} exited with error, notifying service", pid);
+                        if let Some(callback) = on_exit {
+                            callback(pid);
+                        }
+                    }
+                }
+            });
             Some(pid)
         }
         Err(e) => {
@@ -56,36 +106,68 @@ fn spawn_process(command: &str, args: &[String]) -> Option<u32> {
 }
 
 /// Spawns a video wallpaper using `mpvpaper` and returns per-monitor PIDs.
-pub fn spawn_mpvpaper_video(theme: &WallpaperTheme) -> Vec<(u32, String)> {
+pub fn spawn_mpvpaper_video(theme: &WallpaperTheme, wayland_display: Option<&str>, on_exit: std::sync::Arc<dyn Fn(u32) + Send + Sync>) -> Vec<(u32, String)> {
     let WallpaperThemeConfig::Video(config) = &theme.config else {
         return Vec::new();
     };
     let outputs = resolve_outputs(&config.outputs);
     let mpvpaper = resolve_executable("mpvpaper");
 
-    let mut mpv_args = Vec::new();
-    mpv_args.push("--loop-playlist=inf".to_string());
+    let mut mpv_opts = Vec::new();
+    mpv_opts.push("loop-playlist=inf".to_string());
     if config.shuffle {
-        mpv_args.push("--shuffle".to_string());
+        mpv_opts.push("shuffle".to_string());
     }
     if config.muted {
-        mpv_args.push("--mute=yes".to_string());
+        mpv_opts.push("mute=yes".to_string());
     } else {
-        mpv_args.push(format!("--volume={}", config.volume));
+        mpv_opts.push(format!("volume={}", config.volume));
     }
     let speed = config.speed_percentage as f64 / 100.0;
-    mpv_args.push(format!("--speed={}", speed));
+    mpv_opts.push(format!("speed={}", speed));
     for extra in &config.extra_arguments {
-        mpv_args.push(extra.clone());
+        mpv_opts.push(extra.trim_start_matches("--").to_string());
     }
 
     let mut results = Vec::new();
     for monitor in &outputs {
-        let mut full_args = vec![monitor.clone(), mpv_args.join(" "), config.directory.clone()];
-        full_args.extend(mpv_args.iter().cloned());
-        // mpvpaper syntax: mpvpaper <output> <mpv_options> <playlist_path>
-        let args = build_mpvpaper_args(monitor, &mpv_args, &config.directory);
-        if let Some(pid) = spawn_process(&mpvpaper, &args) {
+        let args = build_mpvpaper_args(monitor, &mpv_opts, &config.directory);
+        let callback = Some(std::sync::Arc::clone(&on_exit));
+        if let Some(pid) = spawn_process(&mpvpaper, &args, wayland_display, callback) {
+            results.push((pid, monitor.clone()));
+        }
+    }
+    results
+}
+
+/// Spawns an image slideshow wallpaper using `mpvpaper` and returns per-monitor PIDs.
+pub fn spawn_mpvpaper_image(theme: &WallpaperTheme, wayland_display: Option<&str>, on_exit: std::sync::Arc<dyn Fn(u32) + Send + Sync>) -> Vec<(u32, String)> {
+    let WallpaperThemeConfig::Image(config) = &theme.config else {
+        return Vec::new();
+    };
+    let outputs = resolve_outputs(&config.outputs);
+    let mpvpaper = resolve_executable("mpvpaper");
+
+    let mut mpv_opts = Vec::new();
+    mpv_opts.push("loop-playlist=inf".to_string());
+    if config.shuffle {
+        mpv_opts.push("shuffle".to_string());
+    }
+    mpv_opts.push(format!("image-display-duration={}", config.display_duration_ms as f64 / 1000.0));
+    if config.transitions {
+        mpv_opts.push("vo=gpu".to_string());
+        mpv_opts.push(format!("glsl-shader=~~/shaders/{}.glsl", config.transition_effect));
+        mpv_opts.push(format!("transition-duration={}", config.transition_duration_ms as f64 / 1000.0));
+    }
+    for extra in &config.extra_arguments {
+        mpv_opts.push(extra.trim_start_matches("--").to_string());
+    }
+
+    let mut results = Vec::new();
+    for monitor in &outputs {
+        let args = build_mpvpaper_args(monitor, &mpv_opts, &config.directory);
+        let callback = Some(std::sync::Arc::clone(&on_exit));
+        if let Some(pid) = spawn_process(&mpvpaper, &args, wayland_display, callback) {
             results.push((pid, monitor.clone()));
         }
     }
@@ -93,54 +175,24 @@ pub fn spawn_mpvpaper_video(theme: &WallpaperTheme) -> Vec<(u32, String)> {
 }
 
 /// Builds the argument list for `mpvpaper`.
-fn build_mpvpaper_args(monitor: &str, mpv_args: &[String], path: &str) -> Vec<String> {
+/// mpvpaper syntax: `mpvpaper <output> -o "<mpv_options>" <playlist_path>`
+/// mpv options are space-separated without `--` prefix (e.g. `loop-playlist=inf mute=yes`).
+fn build_mpvpaper_args(monitor: &str, mpv_opts: &[String], path: &str) -> Vec<String> {
     let mut args = Vec::new();
     args.push(monitor.to_string());
-    if !mpv_args.is_empty() {
-        args.push(mpv_args.join(" "));
+    if !mpv_opts.is_empty() {
+        args.push("-o".to_string());
+        args.push(mpv_opts.join(" "));
     }
     args.push(path.to_string());
     args
-}
-
-/// Spawns an image slideshow wallpaper using `mpvpaper` and returns per-monitor PIDs.
-pub fn spawn_mpvpaper_image(theme: &WallpaperTheme) -> Vec<(u32, String)> {
-    let WallpaperThemeConfig::Image(config) = &theme.config else {
-        return Vec::new();
-    };
-    let outputs = resolve_outputs(&config.outputs);
-    let mpvpaper = resolve_executable("mpvpaper");
-
-    let mut mpv_args = Vec::new();
-    mpv_args.push("--loop-playlist=inf".to_string());
-    if config.shuffle {
-        mpv_args.push("--shuffle".to_string());
-    }
-    mpv_args.push(format!("--image-display-duration={}", config.display_duration_ms as f64 / 1000.0));
-    if config.transitions {
-        mpv_args.push("--vo=gpu".to_string());
-        mpv_args.push(format!("--glsl-shader=~~/shaders/{}.glsl", config.transition_effect));
-        mpv_args.push(format!("--transition-duration={}", config.transition_duration_ms as f64 / 1000.0));
-    }
-    for extra in &config.extra_arguments {
-        mpv_args.push(extra.clone());
-    }
-
-    let mut results = Vec::new();
-    for monitor in &outputs {
-        let args = build_mpvpaper_args(monitor, &mpv_args, &config.directory);
-        if let Some(pid) = spawn_process(&mpvpaper, &args) {
-            results.push((pid, monitor.clone()));
-        }
-    }
-    results
 }
 
 /// Spawns an application-based wallpaper and returns per-monitor PIDs.
 /// If any argument contains the `{monitor}` placeholder, the service spawns
 /// one process per target output, replacing the placeholder with the monitor name.
 /// If no placeholder is present, a single process is spawned for all outputs.
-pub fn spawn_application(theme: &WallpaperTheme) -> Vec<(u32, String)> {
+pub fn spawn_application(theme: &WallpaperTheme, wayland_display: Option<&str>, on_exit: std::sync::Arc<dyn Fn(u32) + Send + Sync>) -> Vec<(u32, String)> {
     let WallpaperThemeConfig::Application(config) = &theme.config else {
         return Vec::new();
     };
@@ -151,7 +203,8 @@ pub fn spawn_application(theme: &WallpaperTheme) -> Vec<(u32, String)> {
 
     if !has_placeholder {
         let args: Vec<String> = config.arguments.iter().map(|s| s.to_string()).collect();
-        if let Some(pid) = spawn_process(&config.command, &args) {
+        let callback = Some(std::sync::Arc::clone(&on_exit));
+        if let Some(pid) = spawn_process(&config.command, &args, wayland_display, callback) {
             return outputs.into_iter().map(|o| (pid, o)).collect();
         }
         return Vec::new();
@@ -160,7 +213,8 @@ pub fn spawn_application(theme: &WallpaperTheme) -> Vec<(u32, String)> {
     let mut results = Vec::new();
     for monitor in &outputs {
         let args: Vec<String> = config.arguments.iter().map(|s| s.replace("{monitor}", monitor)).collect();
-        if let Some(pid) = spawn_process(&config.command, &args) {
+        let callback = Some(std::sync::Arc::clone(&on_exit));
+        if let Some(pid) = spawn_process(&config.command, &args, wayland_display, callback) {
             results.push((pid, monitor.clone()));
         }
     }
@@ -168,11 +222,11 @@ pub fn spawn_application(theme: &WallpaperTheme) -> Vec<(u32, String)> {
 }
 
 /// Spawns the appropriate wallpaper process based on theme type.
-pub fn spawn_wallpaper(theme: &WallpaperTheme) -> Vec<(u32, String)> {
+pub fn spawn_wallpaper(theme: &WallpaperTheme, wayland_display: Option<&str>, on_exit: std::sync::Arc<dyn Fn(u32) + Send + Sync>) -> Vec<(u32, String)> {
     match theme.wallpaper_type {
-        WallpaperType::Video => spawn_mpvpaper_video(theme),
-        WallpaperType::Image => spawn_mpvpaper_image(theme),
-        WallpaperType::Application => spawn_application(theme),
+        WallpaperType::Video => spawn_mpvpaper_video(theme, wayland_display, on_exit),
+        WallpaperType::Image => spawn_mpvpaper_image(theme, wayland_display, on_exit),
+        WallpaperType::Application => spawn_application(theme, wayland_display, on_exit),
     }
 }
 

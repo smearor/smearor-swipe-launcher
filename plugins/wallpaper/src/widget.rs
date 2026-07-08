@@ -255,6 +255,7 @@ impl WidgetBuilder for WallpaperWidget {
         let broadcaster_for_click = self.get_broadcaster();
         let click_topic = self.config.click_topic.clone();
         let click_payload = self.config.click_payload.clone();
+        let click_instance = self.config.click_instance.clone();
         click_gesture.connect_released(move |gesture, _n_press, _x, _y| {
             if let Some(seq) = gesture.current_sequence() {
                 let state = gesture.sequence_state(&seq);
@@ -266,7 +267,8 @@ impl WidgetBuilder for WallpaperWidget {
             broadcaster_for_click.broadcast_message_to_topic(command);
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
                 let payload_str = payload.to_string();
-                broadcaster_for_click.broadcast_string(&topic, &payload_str);
+                let instance = click_instance.as_deref().unwrap_or("");
+                broadcaster_for_click.broadcast_string_to_instance(instance, &topic, &payload_str);
             }
             gesture.set_state(EventSequenceState::Claimed);
         });
@@ -293,12 +295,14 @@ impl WidgetBuilder for WallpaperWidget {
         let broadcaster_for_longpress = self.get_broadcaster();
         let longpress_topic = self.config.longpress_topic.clone();
         let longpress_payload = self.config.longpress_payload.clone();
+        let longpress_instance = self.config.longpress_instance.clone();
         longpress_gesture.connect_pressed(move |gesture, _x, _y| {
             let command = WallpaperCommandMessage::stop_current();
             broadcaster_for_longpress.broadcast_message_to_topic(command);
             if let (Some(topic), Some(payload)) = (longpress_topic.clone(), longpress_payload.clone()) {
                 let payload_str = payload.to_string();
-                broadcaster_for_longpress.broadcast_string(&topic, &payload_str);
+                let instance = longpress_instance.as_deref().unwrap_or("");
+                broadcaster_for_longpress.broadcast_string_to_instance(instance, &topic, &payload_str);
             }
             gesture.set_state(EventSequenceState::Claimed);
         });

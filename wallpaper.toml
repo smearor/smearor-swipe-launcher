@@ -1,0 +1,31 @@
+[[themes]]
+name = "Video Backgrounds"
+description = "Looping video wallpaper"
+preview_image_path = ""
+wallpaper_type = "Video"
+
+[themes.config.Video]
+directory = "/home/aschaeffer/Videos/Backgrounds"
+outputs = ["ALL"]
+loop_playlist = true
+shuffle = false
+muted = true
+volume = 50
+speed_percentage = 100
+extra_arguments = []
+
+[[themes]]
+name = "Image Backgrounds"
+description = "Image slideshow wallpaper"
+preview_image_path = ""
+wallpaper_type = "Image"
+
+[themes.config.Image]
+directory = "/home/aschaeffer/Bilder/Backgrounds/Tischdecke"
+outputs = ["ALL"]
+display_duration_ms = 30000
+shuffle = true
+transitions = false
+transition_effect = "fade"
+transition_duration_ms = 1000
+extra_arguments = []

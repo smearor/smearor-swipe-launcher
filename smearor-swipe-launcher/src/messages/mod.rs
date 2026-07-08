@@ -54,7 +54,7 @@ impl LauncherInstance {
                 }
             };
             if should_drop {
-                warn!("Broker: Dropping burst command message on topic '{}'", topic);
+                warn!("Broker: Dropping burst message on topic '{}'", topic);
                 return;
             }
         }

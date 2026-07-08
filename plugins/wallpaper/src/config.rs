@@ -42,6 +42,7 @@ pub struct WallpaperWidgetConfig {
 
     /// Fallback icon when no preview image is available.
     #[builder(default, setter(into))]
+    #[serde(default = "default_fallback_icon")]
     pub(crate) fallback_icon: String,
 
     /// Message topic for single-click action.
@@ -52,6 +53,10 @@ pub struct WallpaperWidgetConfig {
     #[serde(default)]
     pub click_payload: Option<Value>,
 
+    /// Target instance for single-click message
+    #[serde(default)]
+    pub click_instance: Option<String>,
+
     /// Message topic for long-press.
     #[serde(default)]
     pub longpress_topic: Option<String>,
@@ -59,6 +64,10 @@ pub struct WallpaperWidgetConfig {
     /// Message payload for long-press (JSON/TOML).
     #[serde(default)]
     pub longpress_payload: Option<Value>,
+
+    /// Target instance for long-press message
+    #[serde(default)]
+    pub longpress_instance: Option<String>,
 }
 
 impl Default for WallpaperWidgetConfig {
@@ -74,8 +83,14 @@ impl Default for WallpaperWidgetConfig {
             fallback_icon: DEFAULT_FALLBACK_ICON.to_string(),
             click_topic: None,
             click_payload: None,
+            click_instance: None,
             longpress_topic: None,
             longpress_payload: None,
+            longpress_instance: None,
         }
     }
+}
+
+fn default_fallback_icon() -> String {
+    DEFAULT_FALLBACK_ICON.to_string()
 }
