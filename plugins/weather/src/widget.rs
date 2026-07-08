@@ -42,6 +42,7 @@ use smearor_weather_model::weather_code_icon_day_night;
 use std::cell::RefCell;
 use std::rc::Rc;
 use tracing::debug;
+use tracing::trace;
 
 pub struct WeatherWidget {
     pub meta: PluginMeta,
@@ -401,7 +402,7 @@ impl Plugin for WeatherWidget {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
                 let topic = envelope.topic.to_string();
-                debug!("weather widget: on_message topic={} type_id={}", topic, envelope.type_id);
+                trace!("weather widget: on_message topic={} type_id={}", topic, envelope.type_id);
                 if envelope.type_id == WeatherStatusMessage::TYPE_ID {
                     MessageHandler::<WeatherStatusMessage>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {

@@ -12,6 +12,7 @@ use std::time::Instant;
 use tokio::fs;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 
 /// Error type for metric collection failures.
 #[derive(Debug, thiserror::Error)]
@@ -91,57 +92,42 @@ pub async fn collect_cpu(enable_temperature: bool, temperature_source: Option<&s
 
 /// Collects memory metrics.
 pub async fn collect_memory() -> MemoryStatusMessage {
-    match read_memory().await {
-        Ok(value) => value,
-        Err(error) => {
-            error!("Memory collector failed: {error}");
-            MemoryStatusMessage::default()
-        }
-    }
+    read_memory().await.unwrap_or_else(|error| {
+        error!("Memory collector failed: {error}");
+        MemoryStatusMessage::default()
+    })
 }
 
 /// Collects battery metrics.
 pub async fn collect_battery() -> BatteryStatusMessage {
-    match read_battery().await {
-        Ok(value) => value,
-        Err(error) => {
-            debug!("Battery collector failed: {error}");
-            BatteryStatusMessage::default()
-        }
-    }
+    read_battery().await.unwrap_or_else(|error| {
+        trace!("Battery collector failed: {error}");
+        BatteryStatusMessage::default()
+    })
 }
 
 /// Collects disk metrics.
 pub async fn collect_disks(state: &mut CollectorState) -> DisksStatusMessage {
-    match read_disks(state).await {
-        Ok(value) => value,
-        Err(error) => {
-            error!("Disk collector failed: {error}");
-            DisksStatusMessage::default()
-        }
-    }
+    read_disks(state).await.unwrap_or_else(|error| {
+        error!("Disk collector failed: {error}");
+        DisksStatusMessage::default()
+    })
 }
 
 /// Collects network metrics.
 pub async fn collect_network(state: &mut CollectorState) -> NetworkStatusMessage {
-    match read_network(state).await {
-        Ok(value) => value,
-        Err(error) => {
-            error!("Network collector failed: {error}");
-            NetworkStatusMessage::default()
-        }
-    }
+    read_network(state).await.unwrap_or_else(|error| {
+        error!("Network collector failed: {error}");
+        NetworkStatusMessage::default()
+    })
 }
 
 /// Collects uptime and load average metrics.
 pub async fn collect_uptime() -> UptimeStatusMessage {
-    match read_uptime().await {
-        Ok(value) => value,
-        Err(error) => {
-            error!("Uptime collector failed: {error}");
-            UptimeStatusMessage::default()
-        }
-    }
+    read_uptime().await.unwrap_or_else(|error| {
+        error!("Uptime collector failed: {error}");
+        UptimeStatusMessage::default()
+    })
 }
 
 async fn read_cpu_usage(state: &mut CollectorState) -> Result<f32, CollectorError> {
