@@ -126,7 +126,17 @@ async fn main() -> Result<()> {
 
     host.run();
 
-    Ok(())
+    // GTK has quit — explicitly clean up before process exit.
+    // The GLib spawn_local task may still hold Arc<ServiceManager> references
+    // that prevent Drop from running, and the Axum server task keeps tokio
+    // worker threads alive. We stop the MCP server and unload services
+    // explicitly, then force exit.
+    if let Some(mut server) = _mcp_server {
+        server.stop();
+    }
+    host.service_manager.unload_services();
+
+    std::process::exit(0);
 }
 
 async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
