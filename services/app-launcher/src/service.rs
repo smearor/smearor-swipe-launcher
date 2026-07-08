@@ -165,11 +165,20 @@ impl AppLauncherService {
                 .spawn();
 
             match child {
-                Ok(c) => {
+                Ok(mut c) => {
                     let pid = c.id();
                     debug!("AppLauncher Service: Successfully spawned {} with PID {}", program, pid);
                     self.tracked_processes.entry(desktop_file.to_string()).or_default().push(pid);
                     self.broadcast_message_to_topic(DesktopFileStatusMessage::running(desktop_file));
+
+                    // Spawn a reaping thread to call wait() on the child.
+                    // Without this, exited children become zombies because
+                    // nobody reaps their exit status.
+                    std::thread::spawn(move || {
+                        if let Err(e) = c.wait() {
+                            debug!("AppLauncher Service: wait error for PID {}: {}", pid, e);
+                        }
+                    });
                 }
                 Err(e) => {
                     error!("AppLauncher Service: Failed to spawn Command {}: {}", program, e);
