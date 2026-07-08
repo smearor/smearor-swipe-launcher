@@ -123,8 +123,8 @@ pub struct VideoConfig {
     pub muted: bool,
     /// Playback volume (0-100). Only relevant if audio is not muted.
     pub volume: u32,
-    /// Playback speed multiplier (e.g., 1.0 = normal, 0.5 = half speed).
-    pub speed: f32,
+    /// Playback speed as percentage (100 = normal, 50 = half speed, 200 = double speed).
+    pub speed_percentage: u32,
     /// Custom array of extra arguments passed directly to mpvpaper.
     pub extra_arguments: stabby::vec::Vec<stabby::string::String>,
 }
@@ -142,16 +142,16 @@ pub struct ImageConfig {
     pub directory: stabby::string::String,
     /// Target display outputs. `["ALL"]` targets all monitors; otherwise specific names like `["DP-1", "HDMI-A-1"]`.
     pub outputs: stabby::vec::Vec<stabby::string::String>,
-    /// Time in seconds each image is displayed before advancing.
-    pub display_duration: f32,
+    /// Time in milliseconds each image is displayed before advancing (e.g., 30000 = 30 seconds).
+    pub display_duration_ms: u32,
     /// Whether to shuffle the image order.
     pub shuffle: bool,
     /// Whether to enable transition effects between images.
     pub transitions: bool,
     /// Transition effect name (e.g., "fade", "slide"). Only used if `transitions` is true.
     pub transition_effect: stabby::string::String,
-    /// Transition duration in seconds.
-    pub transition_duration: f32,
+    /// Transition duration in milliseconds (e.g., 1500 = 1.5 seconds).
+    pub transition_duration_ms: u32,
     /// Custom array of extra arguments passed directly to mpvpaper.
     pub extra_arguments: stabby::vec::Vec<stabby::string::String>,
 }
@@ -244,17 +244,30 @@ pub struct WallpaperCommandMessage {
 }
 ```
 
-### 4.10 Status Message (Service -> Widget)
+### 4.10 Monitor Process & Status Message (Service -> Widget)
+
+When a wallpaper theme spans multiple monitors, the service tracks each monitor's process independently. This enables per-monitor process management and future
+support for running different themes on different monitors simultaneously (e.g., a video slideshow on DP-1 and an image slideshow on HDMI-A-1).
 
 ```rust
+/// Tracks the PID of a wallpaper process running on a specific monitor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[stabby::stabby]
+pub struct MonitorProcess {
+    /// Monitor name (e.g., "DP-1", "HDMI-A-1").
+    pub monitor: stabby::string::String,
+    /// PID of the wallpaper process running on this monitor (0 if none).
+    pub process_id: u32,
+}
+
 /// Complete wallpaper status message broadcast by the service.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[stabby::stabby]
 pub struct WallpaperStatusMessage {
     /// Name of the currently running theme (`None` if stopped).
     pub current_theme: stabby::option::Option<stabby::string::String>,
-    /// PID of the active wallpaper process (0 if none).
-    pub current_process_id: u32,
+    /// PIDs of active wallpaper processes per monitor (empty if none).
+    pub current_processes: stabby::vec::Vec<MonitorProcess>,
     /// Name of the theme currently staged/focused in the UI.
     pub selected_theme: stabby::option::Option<stabby::string::String>,
     /// List of all configured themes.
@@ -297,6 +310,7 @@ pub use messages::command::WallpaperCommandAction;
 pub use messages::command::WallpaperCommandMessage;
 pub use messages::image_config::ImageConfig;
 pub use messages::icon::wallpaper_type_icon;
+pub use messages::monitor_process::MonitorProcess;
 pub use messages::status::WallpaperStatusMessage;
 pub use messages::theme::WallpaperTheme;
 pub use messages::theme_config::WallpaperThemeConfig;
@@ -389,7 +403,8 @@ impl Default for WallpaperServiceConfig {
 The service maintains the following state in `WallpaperStatusMessage`:
 
 - **`current_theme`:** Name of the currently running theme (`None` if stopped).
-- **`current_process_id`:** PID of the active wallpaper process (0 if none).
+- **`current_processes`:** PIDs of active wallpaper processes per monitor (empty if none). Each entry maps a monitor name to a PID, enabling per-monitor process
+  management.
 - **`selected_theme`:** Name of the theme currently staged/focused in the UI.
 - **`themes`:** List of all configured themes.
 - **`selected_theme_index`:** Index of the selected theme in the `themes` list.
@@ -437,22 +452,31 @@ async fn start_selected_wallpaper_theme(
     };
 
     // 3. Spawn the respective engine driver process
-    let pid = match theme.wallpaper_type {
+    let result = match theme.wallpaper_type {
         WallpaperType::Video => spawn_mpvpaper_video(&theme).await,
         WallpaperType::Image => spawn_mpvpaper_image(&theme).await,
         WallpaperType::Application => spawn_application(&theme).await,
     };
 
-    // 4. Store PID and set current_theme
+    // 4. Store per-monitor PIDs and set current_theme
     let mut current = state.write().await;
-    current.current_process_id = pid.unwrap_or(0);
+    current.current_processes.clear();
+    if let Some((pid, outputs)) = result {
+        for output in &outputs {
+            current.current_processes.push(MonitorProcess {
+                monitor: output.to_string(),
+                process_id: pid,
+            });
+        }
+    }
     current.current_theme = Some(theme.name);
 }
 ```
 
 #### `stop_current_wallpaper_theme()`
 
-Gracefully terminates (SIGTERM) the process inside `current_process_id`. If the process does not exit within `kill_grace_period_ms`, sends SIGKILL. Clears state
+Gracefully terminates (SIGTERM) all processes listed in `current_processes`. If a process does not exit within `kill_grace_period_ms`, sends SIGKILL. Clears
+state
 variables.
 
 ```rust
@@ -460,28 +484,37 @@ async fn stop_current_wallpaper_theme(
     state: &Arc<RwLock<WallpaperStatusMessage>>,
     kill_grace_period_ms: u64,
 ) {
-    let pid = {
+    let pids: Vec<u32> = {
         let current = state.read().await;
-        current.current_process_id
+        current.current_processes.iter().map(|p| p.process_id).collect()
     };
 
-    if pid > 0 {
-        // Send SIGTERM
-        let _ = nix::sys::signal::kill(
-            Pid::from_raw(pid as i32),
-            Signal::SIGTERM,
-        );
+    // Send SIGTERM to all unique PIDs
+    let unique_pids: std::collections::HashSet<u32> = pids.into_iter().collect();
+    for pid in &unique_pids {
+        if *pid > 0 {
+            let _ = nix::sys::signal::kill(
+                Pid::from_raw(*pid as i32),
+                Signal::SIGTERM,
+            );
+        }
+    }
 
-        // Wait for grace period, then SIGKILL if still alive
+    // Wait for grace period, then SIGKILL if still alive
+    if !unique_pids.is_empty() {
         tokio::time::sleep(Duration::from_millis(kill_grace_period_ms)).await;
-        let _ = nix::sys::signal::kill(
-            Pid::from_raw(pid as i32),
-            Signal::SIGKILL,
-        );
+        for pid in &unique_pids {
+            if *pid > 0 {
+                let _ = nix::sys::signal::kill(
+                    Pid::from_raw(*pid as i32),
+                    Signal::SIGKILL,
+                );
+            }
+        }
     }
 
     let mut current = state.write().await;
-    current.current_process_id = 0;
+    current.current_processes.clear();
     current.current_theme = None;
 }
 ```
@@ -492,7 +525,7 @@ async fn stop_current_wallpaper_theme(
 
 ```rust
 /// Spawns mpvpaper for a video wallpaper theme and returns the child PID.
-async fn spawn_mpvpaper_video(theme: &WallpaperTheme) -> Option<u32> {
+async fn spawn_mpvpaper_video(theme: &WallpaperTheme) -> Option<(u32, Vec<String>)> {
     let WallpaperThemeConfig::Video(config) = &theme.config else {
         return None;
     };
@@ -511,7 +544,7 @@ async fn spawn_mpvpaper_video(theme: &WallpaperTheme) -> Option<u32> {
     } else {
         args.push(format!("--volume={}", config.volume));
     }
-    args.push(format!("--speed={}", config.speed));
+    args.push(format!("--speed={}", config.speed_percentage as f64 / 100.0));
 
     for extra in &config.extra_arguments {
         args.push(extra.to_string());
@@ -519,7 +552,7 @@ async fn spawn_mpvpaper_video(theme: &WallpaperTheme) -> Option<u32> {
 
     args.push(config.directory.to_string());
 
-    spawn_process("mpvpaper", &args)
+    spawn_process("mpvpaper", &args).map(|pid| (pid, outputs))
 }
 ```
 
@@ -527,7 +560,7 @@ async fn spawn_mpvpaper_video(theme: &WallpaperTheme) -> Option<u32> {
 
 ```rust
 /// Spawns mpvpaper for an image wallpaper theme and returns the child PID.
-async fn spawn_mpvpaper_image(theme: &WallpaperTheme) -> Option<u32> {
+async fn spawn_mpvpaper_image(theme: &WallpaperTheme) -> Option<(u32, Vec<String>)> {
     let WallpaperThemeConfig::Image(config) = &theme.config else {
         return None;
     };
@@ -535,8 +568,8 @@ async fn spawn_mpvpaper_image(theme: &WallpaperTheme) -> Option<u32> {
     let outputs = resolve_outputs(&config.outputs);
     let mut args = vec![outputs.join(",")];
 
-    // Image slideshow configuration
-    args.push(format!("--image-display-duration={}", config.display_duration));
+    // Image slideshow configuration (convert ms to seconds for mpvpaper)
+    args.push(format!("--image-display-duration={}", config.display_duration_ms as f64 / 1000.0));
 
     if config.shuffle {
         args.push("--shuffle".to_string());
@@ -544,7 +577,7 @@ async fn spawn_mpvpaper_image(theme: &WallpaperTheme) -> Option<u32> {
 
     if config.transitions {
         args.push(format!("--transition-effect={}", config.transition_effect));
-        args.push(format!("--transition-duration={}", config.transition_duration));
+        args.push(format!("--transition-duration={}", config.transition_duration_ms as f64 / 1000.0));
     }
 
     for extra in &config.extra_arguments {
@@ -554,7 +587,7 @@ async fn spawn_mpvpaper_image(theme: &WallpaperTheme) -> Option<u32> {
     // Use a playlist file or directory glob for images
     args.push(config.directory.to_string());
 
-    spawn_process("mpvpaper", &args)
+    spawn_process("mpvpaper", &args).map(|pid| (pid, outputs))
 }
 ```
 
@@ -562,13 +595,15 @@ async fn spawn_mpvpaper_image(theme: &WallpaperTheme) -> Option<u32> {
 
 ```rust
 /// Spawns an application-based wallpaper and returns the child PID.
-async fn spawn_application(theme: &WallpaperTheme) -> Option<u32> {
+async fn spawn_application(theme: &WallpaperTheme) -> Option<(u32, Vec<String>)> {
     let WallpaperThemeConfig::Application(config) = &theme.config else {
         return None;
     };
 
     let args: Vec<String> = config.arguments.iter().map(|s| s.to_string()).collect();
-    spawn_process(&config.command, &args)
+    // Applications manage their own output targeting via command arguments,
+    // so we return a generic monitor identifier.
+    spawn_process(&config.command, &args).map(|pid| (pid, vec!["*".to_string()]))
 }
 ```
 
@@ -578,7 +613,9 @@ async fn spawn_application(theme: &WallpaperTheme) -> Option<u32> {
 /// Resolves the outputs list. `["ALL"]` returns all connected monitor names.
 fn resolve_outputs(outputs: &[String]) -> Vec<String> {
     if outputs.iter().any(|o| o == "ALL") {
-        // Query connected outputs via wlr-randr or hyprctl monitors
+        // Query connected outputs via GNOME Mutter D-Bus DisplayConfig API
+        // (org.gnome.Mutter.DisplayConfig), or fall back to wlr-randr / hyprctl
+        // monitors on wlroots/Hyprland compositors.
         list_connected_monitors()
     } else {
         outputs.to_vec()
@@ -732,7 +769,16 @@ Example `wallpaper://status` response:
 ```json
 {
   "current_theme": "Halloween",
-  "current_process_id": 12345,
+  "current_processes": [
+    {
+      "monitor": "DP-1",
+      "process_id": 12345
+    },
+    {
+      "monitor": "HDMI-A-1",
+      "process_id": 12345
+    }
+  ],
   "selected_theme": "Halloween",
   "themes": [
     ...
@@ -953,7 +999,7 @@ The widget uses GTK4 gesture controllers for touch/mouse interactions:
 fn setup_gestures(&self, container: &gtk4::Box) {
     let press_gesture = gtk4::GestureClick::new();
     let longpress_gesture = gtk4::GestureLongPress::new();
-    let drag_gesture = gtk4::GestureDrag::new();
+    let swipe_gesture = gtk4::GestureSwipe::new();
 
     // Press: Start or restart selected theme
     {
@@ -983,10 +1029,17 @@ fn setup_gestures(&self, container: &gtk4::Box) {
     }
 
     // Swipe up/down: Select previous/next theme
+    // GestureSwipe provides connect_swipe(velocity_x, velocity_y) which reacts
+    // to the actual swipe velocity and cleanly separates vertical/horizontal direction,
+    // avoiding false triggers from diagonal drags.
     {
         let broadcaster = self.get_broadcaster();
         let status = self.current_status.clone();
-        drag_gesture.connect_drag_end(move |_, offset_x, offset_y| {
+        swipe_gesture.connect_swipe(move |_, velocity_x, velocity_y| {
+            // Only react to predominantly vertical swipes
+            if velocity_y.abs() <= velocity_x.abs() {
+                return;
+            }
             let current = status.borrow();
             if let Some(ref current_status) = *current {
                 let themes = &current_status.themes;
@@ -994,7 +1047,7 @@ fn setup_gestures(&self, container: &gtk4::Box) {
                     return;
                 }
                 let current_index = current_status.selected_theme_index;
-                let new_index = if offset_y < 0.0 {
+                let new_index = if velocity_y < 0.0 {
                     // Swipe up: previous theme
                     if current_index == 0 {
                         themes.len() - 1
@@ -1018,7 +1071,7 @@ fn setup_gestures(&self, container: &gtk4::Box) {
 
     container.add_controller(press_gesture.clone());
     container.add_controller(longpress_gesture.clone());
-    container.add_controller(drag_gesture.clone());
+    container.add_controller(swipe_gesture.clone());
 }
 ```
 
@@ -1079,7 +1132,7 @@ The widget subscribes to `service.wallpaper.status`. When a new `WallpaperStatus
 1. The message is deserialized and stored in `current_status`.
 2. The preview image is updated to reflect the `selected_theme`.
 3. The theme name label is updated.
-4. The status indicator (running/stopped) is updated based on `current_theme` and `current_process_id`.
+4. The status indicator (running/stopped) is updated based on `current_theme` and `current_processes`.
 5. All GTK updates happen via `glib::MainContext::spawn_local`.
 
 ### 6.8 Widget Layout
@@ -1147,7 +1200,7 @@ loop_playlist = true
 shuffle = true
 muted = true
 volume = 0
-speed = 1.0
+speed_percentage = 100
 extra_arguments = ["--hwdec=auto"]
 
 [[wallpaper.themes]]
@@ -1159,11 +1212,11 @@ wallpaper_type = "Image"
 [wallpaper.themes.config.Image]
 directory = "/path/to/wallpapers/nature/images"
 outputs = ["DP-1", "HDMI-A-1"]
-display_duration = 30.0
+display_duration_ms = 30000
 shuffle = true
 transitions = true
 transition_effect = "fade"
-transition_duration = 1.5
+transition_duration_ms = 1500
 extra_arguments = []
 
 [[wallpaper.themes]]
@@ -1216,7 +1269,7 @@ An AI client can add and start a Halloween theme via MCP tools:
        shuffle: true,
        muted: true,
        volume: 0,
-       speed: 1.0,
+       speed_percentage: 100,
        extra_arguments: ["--hwdec=auto"]
      }
    )
@@ -1249,6 +1302,7 @@ built on top of already-tested foundations.
     - `src/messages/theme_config.rs` -> `WallpaperThemeConfig` enum
     - `src/messages/theme.rs` -> `WallpaperTheme` struct
     - `src/messages/command.rs` -> `WallpaperCommandAction` and `WallpaperCommandMessage`
+    - `src/messages/monitor_process.rs` -> `MonitorProcess` struct
     - `src/messages/status.rs` -> `WallpaperStatusMessage` struct
     - `src/messages/icon.rs` -> `wallpaper_type_icon` mapping function
 4. Add `#[stabby::stabby]` to all FFI-relevant types.
@@ -1272,14 +1326,15 @@ built on top of already-tested foundations.
 
 **Order:**
 
-1. Create the crate `services/wallpaper` with a `Cargo.toml` that depends on the `model/wallpaper` crate, the project plugin API, `tokio`, `nix`, `tracing`, and
-   `toml`.
+1. Create the crate `services/wallpaper` with a `Cargo.toml` that depends on the `model/wallpaper` crate, the project plugin API, `tokio`, `nix`, `zbus`,
+   `tracing`, and `toml`.
 2. Create `src/config.rs` with `WallpaperServiceConfig` and its default values.
 3. Create `src/process.rs` and implement:
     - `spawn_mpvpaper_video` for video slideshow spawning.
     - `spawn_mpvpaper_image` for image slideshow spawning.
     - `spawn_application` for application-based wallpaper spawning.
-    - `resolve_outputs` for monitor name resolution.
+    - `resolve_outputs` for monitor name resolution (GNOME Mutter D-Bus, wlr-randr, hyprctl).
+    - Per-monitor PID tracking via `MonitorProcess` entries in `WallpaperStatusMessage`.
     - `spawn_process` generic helper.
 4. Create `src/service.rs` with `WallpaperService` and all required trait implementations.
 5. Implement `select_theme`, `start_selected_wallpaper_theme`, and `stop_current_wallpaper_theme`.
@@ -1297,7 +1352,7 @@ built on top of already-tested foundations.
 - Running the service broadcasts `TOPIC_STATUS` on command.
 - `select_theme` updates `selected_theme` without spawning a process.
 - `start_selected_wallpaper_theme` stops any running process and spawns the new one.
-- `stop_current_wallpaper_theme` sends SIGTERM and clears state.
+- `stop_current_wallpaper_theme` sends SIGTERM to all per-monitor PIDs and clears state.
 - MCP resources return valid JSON when queried.
 - MCP tools execute the correct actions and return results.
 - Theme persistence writes and reads themes from the config file correctly.
@@ -1316,7 +1371,7 @@ built on top of already-tested foundations.
 2. Create `src/config.rs` with `WallpaperWidgetConfig` including all display flags.
 3. Create `src/preview.rs` and implement preview image loading and fallback icon rendering.
 4. Create `src/widget.rs` with `WallpaperWidget` and all required trait implementations.
-5. Implement gesture handling:
+5. Implement gesture handling using `GestureSwipe` for directional swipes and `GestureClick`/`GestureLongPress` for press/long-press:
     - Swipe up: select previous theme (`SelectTheme`).
     - Swipe down: select next theme (`SelectTheme`).
     - Press: start or restart selected theme (`StartSelected`).
@@ -1370,7 +1425,7 @@ built on top of already-tested foundations.
 
 1. Run the application and verify that `TOPIC_STATUS` appears on the message broker.
 2. Verify the widget displays the preview image for the default selected theme.
-3. Verify swipe up/down cycles through themes without starting them.
+3. Verify swipe up/down cycles through themes without starting them (using `GestureSwipe` velocity-based detection).
 4. Verify press starts the selected wallpaper process.
 5. Verify long press stops the running wallpaper process.
 6. Verify starting a new theme while one is running stops the old process first.
@@ -1389,7 +1444,7 @@ built on top of already-tested foundations.
 - The widget renders correctly for all wallpaper types.
 - No `unwrap`, `expect`, or `panic` remains in the new code.
 - `rustfmt` and `clippy` are clean.
-- Process lifecycle (start, stop, restart) works reliably.
+- Process lifecycle (start, stop, restart) works reliably with per-monitor PID tracking.
 - SIGTERM is sent first, with SIGKILL fallback after the grace period.
 - MCP tools return valid JSON and execute the correct actions.
 - Theme persistence survives service restarts.
@@ -1432,9 +1487,14 @@ Phase 5: integration and tests
 - **Layer Shell background layer:** All wallpaper types render on the `background` layer of the Wayland Layer Shell protocol, which places them behind all other
   windows and panels.
 - **Process management:** The service uses `tokio::process::Command` for spawning and `nix::sys::signal::kill` for termination. SIGTERM is sent first for
-  graceful shutdown; SIGKILL is sent after the configured grace period as a fallback.
+  graceful shutdown; SIGKILL is sent after the configured grace period as a fallback. Per-monitor PIDs are tracked in `current_processes` to support
+  multi-monitor setups where different processes may run on different outputs.
+- **Gesture detection:** The widget uses `gtk4::GestureSwipe` instead of `gtk4::GestureDrag` for directional swipe detection. `GestureSwipe` provides
+  `connect_swipe(velocity_x, velocity_y)` which reacts to actual swipe velocity and cleanly separates vertical from horizontal movement, avoiding false
+  triggers from diagonal drags.
 - **Output resolution:** The `outputs` field in `VideoConfig` and `ImageConfig` supports `["ALL"]` to target all connected monitors. The service queries
-  connected monitors at spawn time to resolve the list.
+  connected monitors at spawn time via the GNOME Mutter D-Bus DisplayConfig API (`org.gnome.Mutter.DisplayConfig`), with fallback support for `wlr-randr`
+  (wlroots) and `hyprctl` (Hyprland) compositors.
 - **Theme persistence:** Themes added via the MCP `add_wallpaper_theme` tool are written to the configured config file (`wallpaper.toml`) so they persist across
   service restarts.
 - **No polling in the widget:** The widget updates exclusively through incoming messages. Process management only happens in the service.
@@ -1445,6 +1505,9 @@ Phase 5: integration and tests
 - **FFI string types:** All `String` and `Option<String>` fields in `#[stabby::stabby]` structs use `stabby::string::String` and
   `stabby::option::Option<stabby::string::String>` respectively, to maintain ABI stability across compiler invocations. This is consistent with the existing
   pattern in `model/power`, `model/audio`, and `model/app-launcher`.
+- **FFI integer types for floats:** To maximize FFI safety, all floating-point values are represented as integers in `#[stabby::stabby]` structs. Playback
+  speed uses `speed_percentage: u32` (100 = 1.0x), display and transition durations use milliseconds (`u32`) instead of seconds (`f32`). This avoids
+  potential ABI instability with floating-point representations across compiler invocations.
 
 ---
 
@@ -1461,12 +1524,13 @@ The proposed implementation follows the project guidelines in `AGENTS.md`:
 - **GTK updates:** The widget uses `glib::MainContext::spawn_local` for GTK updates and `tokio::sync::mpsc` for message reception.
 - **Event-driven:** The widget is updated by incoming messages, not by polling loops.
 - **FFI stability:** All FFI-relevant types in the model carry `#[stabby::stabby]`. String fields use `stabby::string::String` and optional strings use
-  `stabby::option::Option<stabby::string::String>` to maintain ABI stability across compiler invocations.
+  `stabby::option::Option<stabby::string::String>` to maintain ABI stability across compiler invocations. Floating-point values are represented as integers
+  (`speed_percentage`, `display_duration_ms`, `transition_duration_ms`) to avoid FFI representation issues.
 - **No panic:** The implementation uses `Result` and `Option` for error handling; no `unwrap()`, `expect()`, or `panic!`.
 - **Naming:** All names are descriptive and follow Rust naming conventions.
 - **Documentation:** All public structs, enums, and fields are documented in English.
 - **Formatting:** Code is formatted with `rustfmt` and checked with `clippy`.
-- **Dependencies:** The model uses `serde` and `stabby`; the service uses `tokio`, `nix`, and `tracing`; the widget uses `gtk4` and `glib`.
+- **Dependencies:** The model uses `serde` and `stabby`; the service uses `tokio`, `nix`, `zbus`, and `tracing`; the widget uses `gtk4` and `glib`.
 
 ---
 
