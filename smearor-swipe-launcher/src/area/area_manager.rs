@@ -182,6 +182,38 @@ impl AreaManager {
         Ok(())
     }
 
+    /// Remove all areas synchronously without animation.
+    ///
+    /// Called during shutdown to ensure no pending GLib timeout callbacks
+    /// (from `animate_widget_removal`) remain active when services are
+    /// unloaded and the process exits.
+    pub fn remove_all_areas_immediate(&self) {
+        debug!("Removing all areas immediately (shutdown)");
+
+        let main_container = match self.get_main_container() {
+            Ok(container) => container,
+            Err(_) => {
+                debug!("Main container not initialized, skipping area removal");
+                return;
+            }
+        };
+
+        let area_ids: Vec<String> = self.areas.iter().map(|entry| entry.key().to_string()).collect();
+        for area_id in &area_ids {
+            if let Some((_, managed_area)) = self.areas.remove(area_id) {
+                for plugin_entry in &managed_area.config.plugins {
+                    let namespaced_id = self.plugin_manager.namespaced_plugin_id(&plugin_entry.id);
+                    self.plugin_manager.unload_plugin(&namespaced_id);
+                }
+
+                if let Some(overlay) = &managed_area.overlay {
+                    main_container.remove(overlay);
+                }
+                debug!("Removed area {} immediately", area_id);
+            }
+        }
+    }
+
     /// Add a transient area with auto-close detection
     pub fn add_transient_area(&self, area_id: &str, area_config: AreaConfig, sender_id: Option<&str>) -> Result<(), AddAreaError> {
         trace!("Adding transient area {} from sender {:?}", area_id, sender_id);

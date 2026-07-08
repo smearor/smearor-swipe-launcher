@@ -302,22 +302,28 @@ impl Service for AppLauncherService {
 
 impl Drop for AppLauncherService {
     fn drop(&mut self) {
-        debug!("AppLauncher Service: Dropping service, terminating processes with terminate_on_exit=true");
-        for entry in self.tracked_processes.iter() {
-            for tp in entry.value().iter() {
-                if tp.terminate_on_exit {
-                    let proc_path = format!("/proc/{}", tp.pid);
-                    if Path::new(&proc_path).exists() {
-                        debug!("AppLauncher Service: Sending SIGTERM to process {} on drop", tp.pid);
-                        let posix_pid = Pid::from_raw(tp.pid as i32);
-                        if let Err(e) = kill(posix_pid, Signal::SIGTERM) {
-                            error!("AppLauncher Service: Failed to kill process {} on drop: {}", tp.pid, e);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            debug!("AppLauncher Service: Dropping service, terminating processes with terminate_on_exit=true");
+            for entry in self.tracked_processes.iter() {
+                for tp in entry.value().iter() {
+                    if tp.terminate_on_exit {
+                        let proc_path = format!("/proc/{}", tp.pid);
+                        if Path::new(&proc_path).exists() {
+                            debug!("AppLauncher Service: Sending SIGTERM to process {} on drop", tp.pid);
+                            let posix_pid = Pid::from_raw(tp.pid as i32);
+                            if let Err(e) = kill(posix_pid, Signal::SIGTERM) {
+                                error!("AppLauncher Service: Failed to kill process {} on drop: {}", tp.pid, e);
+                            }
                         }
+                    } else {
+                        debug!("AppLauncher Service: Process {} has terminate_on_exit=false, leaving running", tp.pid);
                     }
-                } else {
-                    debug!("AppLauncher Service: Process {} has terminate_on_exit=false, leaving running", tp.pid);
                 }
             }
+        }));
+
+        if let Err(_) = result {
+            error!("AppLauncher Service: panic during drop, processes may not have been terminated");
         }
     }
 }

@@ -134,7 +134,22 @@ async fn main() -> Result<()> {
     if let Some(mut server) = _mcp_server {
         server.stop();
     }
+
+    // Remove all areas synchronously (without animation) to ensure no
+    // pending GLib timeout callbacks remain active during service teardown.
+    if let Ok(instances) = host.instances.lock() {
+        for instance in instances.values() {
+            if let Ok(area_manager) = instance.area_manager.lock() {
+                area_manager.remove_all_areas_immediate();
+            }
+        }
+    }
+
     host.service_manager.unload_services();
+
+    // Brief grace period to let pending GLib timeouts, async tasks, and
+    // service Drop handlers fully drain before process exit.
+    std::thread::sleep(std::time::Duration::from_millis(500));
 
     std::process::exit(0);
 }
