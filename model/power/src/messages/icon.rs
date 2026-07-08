@@ -19,11 +19,11 @@ pub fn power_action_icon_unicode(action: &PowerAction) -> &'static str {
     match action {
         PowerAction::Shutdown => "\u{f0425}",
         PowerAction::Reboot => "\u{f0450}",
-        PowerAction::Suspend => "\u{f0913}",
-        PowerAction::Hibernate => "\u{f0721}",
+        PowerAction::Suspend => "\u{f04b2}",
+        PowerAction::Hibernate => "\u{f0904}",
         PowerAction::Lock => "\u{f033e}",
         PowerAction::Logout => "\u{f0343}",
-        PowerAction::RebootToFirmware => "\u{f0629}",
-        PowerAction::Cancel => "\u{f0156}",
+        PowerAction::RebootToFirmware => "\u{f110c}",
+        PowerAction::Cancel => "\u{f00d}",
     }
 }

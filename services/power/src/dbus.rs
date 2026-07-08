@@ -63,6 +63,10 @@ pub async fn refresh_inhibitors(connection: &Connection) -> Vec<InhibitorInfo> {
         Ok(proxy) => {
             let raw = proxy.list_inhibitors().await.unwrap_or_default();
             raw.into_iter()
+                .filter(|(what, _, _, _, _, _)| {
+                    let what = what.to_lowercase();
+                    what.contains("shutdown") || what.contains("reboot")
+                })
                 .map(|(what, who, why, process_name, _, _)| InhibitorInfo {
                     what: stabby::string::String::from(what),
                     who: stabby::string::String::from(who),

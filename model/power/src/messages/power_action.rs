@@ -22,3 +22,20 @@ pub enum PowerAction {
     #[default]
     Cancel,
 }
+
+impl PowerAction {
+    /// Parses a power action from a string identifier.
+    /// Returns `PowerAction::Cancel` for unknown strings.
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "shutdown" => PowerAction::Shutdown,
+            "reboot" => PowerAction::Reboot,
+            "suspend" => PowerAction::Suspend,
+            "hibernate" => PowerAction::Hibernate,
+            "lock" => PowerAction::Lock,
+            "logout" => PowerAction::Logout,
+            "reboot_to_firmware" => PowerAction::RebootToFirmware,
+            _ => PowerAction::Cancel,
+        }
+    }
+}

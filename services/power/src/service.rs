@@ -72,7 +72,7 @@ impl PowerService {
             status: PowerStatusMessage::default(),
         }));
 
-        let service = PowerService {
+        let mut service = PowerService {
             meta,
             core_context,
             config: power_config,
@@ -80,7 +80,47 @@ impl PowerService {
             command_receiver: Some(command_receiver),
             shared_state,
         };
+
+        service.spawn_async_runtime();
+
         Ok(service)
+    }
+
+    fn spawn_async_runtime(&mut self) {
+        debug!(
+            "Power Service: spawn_async_runtime called, core_context is {}",
+            if self.core_context.is_some() { "Some" } else { "None" }
+        );
+        if let Some(ctx) = &self.core_context {
+            let meta = self.meta.clone();
+            let core_context = *ctx;
+            let command_receiver = self.command_receiver.take();
+            let config = self.config.clone();
+            let shared_state = self.shared_state.clone();
+            self.register_mcp_capabilities();
+            debug!("Power Service: spawning async runtime thread");
+            std::thread::spawn(move || {
+                debug!("Power Service: async thread started, creating runtime");
+                let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                    Ok(rt) => rt,
+                    Err(e) => {
+                        error!("Power Service: failed to create tokio runtime: {e}");
+                        return;
+                    }
+                };
+                let local_set = tokio::task::LocalSet::new();
+                debug!("Power Service: runtime created, running async loop");
+                local_set.block_on(&rt, async move {
+                    if let Some(receiver) = command_receiver {
+                        run_power_async(meta, core_context, receiver, config, shared_state).await;
+                    } else {
+                        error!("Power Service: command_receiver was None in async thread");
+                    }
+                });
+            });
+        } else {
+            error!("Power Service: core_context is None, cannot spawn async runtime");
+        }
     }
 
     fn state_snapshot(&self) -> PowerStatusMessage {
@@ -146,21 +186,30 @@ impl PowerService {
 
 impl MessageHandler<FfiEnvelopePayload<PowerCommandMessage>> for PowerService {
     fn handle_message(&self, message: FfiEnvelopePayload<PowerCommandMessage>, _sender_id: &str) {
-        debug!("Power Service: received command {:?}", message.action);
+        debug!("Power Service: received command {:?} for action {:?}", message.action, message.power_action);
         match message.action {
             PowerCommandAction::Execute => {
-                let _ = self.command_sender.send(PowerCommand::Execute(message.power_action.clone()));
+                if let Err(e) = self.command_sender.send(PowerCommand::Execute(message.power_action.clone())) {
+                    debug!("Power Service: failed to send Execute command to async loop: {e}");
+                }
             }
             PowerCommandAction::Schedule => {
-                let _ = self
+                if let Err(e) = self
                     .command_sender
-                    .send(PowerCommand::Schedule(message.power_action.clone(), message.delay_minutes as u64));
+                    .send(PowerCommand::Schedule(message.power_action.clone(), message.delay_minutes as u64))
+                {
+                    debug!("Power Service: failed to send Schedule command to async loop: {e}");
+                }
             }
             PowerCommandAction::Cancel => {
-                let _ = self.command_sender.send(PowerCommand::Cancel);
+                if let Err(e) = self.command_sender.send(PowerCommand::Cancel) {
+                    debug!("Power Service: failed to send Cancel command to async loop: {e}");
+                }
             }
             PowerCommandAction::Refresh => {
-                let _ = self.command_sender.send(PowerCommand::Refresh);
+                if let Err(e) = self.command_sender.send(PowerCommand::Refresh) {
+                    debug!("Power Service: failed to send Refresh command to async loop: {e}");
+                }
             }
         }
     }
@@ -297,31 +346,6 @@ impl Service for PowerService {
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
                 }
             }
-        }
-    }
-
-    fn start(&mut self) {
-        if let Some(ctx) = &self.core_context {
-            let meta = self.meta.clone();
-            let core_context = *ctx;
-            let command_receiver = self.command_receiver.take();
-            let config = self.config.clone();
-            let shared_state = self.shared_state.clone();
-            self.register_mcp_capabilities();
-            std::thread::spawn(move || {
-                let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-                    Ok(rt) => rt,
-                    Err(e) => {
-                        error!("Power Service: failed to create tokio runtime: {e}");
-                        return;
-                    }
-                };
-                rt.block_on(async move {
-                    if let Some(receiver) = command_receiver {
-                        run_power_async(meta, core_context, receiver, config, shared_state).await;
-                    }
-                });
-            });
         }
     }
 }

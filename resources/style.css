@@ -532,3 +532,30 @@ scrolledwindow {
     color: #88ccff;
     text-shadow: 0 0 4px rgba(136, 204, 255, 0.4);
 }
+
+.menu-button .nerd-icon {
+    font-size: 1.8em;
+    color: white;
+    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+}
+
+.power-inhibitor-warning {
+    font-size: 0.8em;
+    color: #ff9900;
+    text-shadow: 0 0 4px rgba(255, 153, 0, 0.4);
+    border: 1px solid orange;
+}
+
+.power-countdown {
+    font-size: 0.9em;
+    color: #ff6600;
+    text-shadow: 0 0 4px rgba(255, 102, 0, 0.4);
+    border: 1px solid blue;
+}
+
+.power-scheduled {
+    font-size: 0.8em;
+    color: #88ccff;
+    text-shadow: 0 0 4px rgba(136, 204, 255, 0.4);
+    border: 1px solid green;
+}

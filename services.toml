@@ -75,8 +75,12 @@ countdown_seconds = 3
 enable_inhibitor_detection = true
 enable_scheduled_actions = true
 refresh_interval_seconds = 30
-lock_command = "hyprlock"
-logout_command = "hyprctl dispatch exit"
+# Hyprland:
+#lock_command = "hyprlock"
+#logout_command = "hyprctl dispatch exit"
+# GNOME
+lock_command = ""
+logout_command = ""
 
 [network]
 refresh_interval_seconds = 5

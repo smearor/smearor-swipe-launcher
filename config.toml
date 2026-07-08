@@ -34,15 +34,6 @@ icon_only = true
 smearor_wrot_path = "smearor-wrot"
 rotation = 0
 
-#### Configure the sysinfo service
-#
-#[sysinfo]
-#update_interval_ms = 1000
-#enable_cpu_temperature = true
-#enable_battery = true
-#enable_disks = true
-#enable_network = true
-
 ### Configure the application global settings
 
 [launcher]
@@ -90,25 +81,23 @@ plugins = [
     { id = "video_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "music_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "web_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sysinfo_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "smarthome_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "gnome_settings_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "system_tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "graphics_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "messenger_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "fonts_and_icons_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "astro_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "maps_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "reading_and_knowledge_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "audio", path = "target/release/libsmearor_audio_widget.so" },
     { id = "mpris", path = "target/release/libsmearor_mpris_widget.so" },
     { id = "nonexistent", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "wike", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "cpu_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "cpu" },
-    { id = "memory_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "memory" },
-    { id = "battery_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "battery" },
-    { id = "disks_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "disks" },
-    { id = "network_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "network" },
-    { id = "uptime_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "uptime" },
     { id = "weather_widget", path = "target/release/libsmearor_weather_widget.so" },
     { id = "power_widget", path = "target/release/libsmearor_power_widget.so" },
-    { id = "network_menu_widget", path = "target/release/libsmearor_network_widget.so" },
-    { id = "shelly_light_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "shelly_rgbw_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
+    # { id = "network_menu_widget", path = "target/release/libsmearor_network_widget.so" },
     #    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
 
@@ -194,32 +183,6 @@ click_payload = { }
 [nonexistent]
 desktop_file_path = "/usr/share/applications/nonexistent.desktop"
 
-[nautilus]
-defaults = "app_launcher"
-desktop_file_path = "/usr/share/applications/org.gnome.Nautilus.desktop"
-[nautilus.wrapper]
-follows_rotation = true
-
-[loupe]
-defaults = "app_launcher"
-desktop_file_path = "/usr/share/applications/org.gnome.Loupe.desktop"
-[loupe.wrapper]
-follows_rotation = true
-#auto_color_mask = true
-#rotation = 270
-#layer = "background"
-#namespace = "gnome-mines"
-
-[wike]
-defaults = "app_launcher"
-desktop_file_path = "/usr/share/applications/com.github.hugolabe.Wike.desktop"
-[wike.wrapper]
-follows_rotation = true
-
-#[gnome_settings]
-#desktop_file_path = "/usr/share/applications/org.gnome.Settings.desktop"
-
-
 
 # Button widget configuration
 [games_menu_button]
@@ -246,6 +209,545 @@ plugins = [
 [games_close_button]
 defaults = "close_button"
 click_payload = { area_id = "games_area" }
+
+
+
+[sysinfo_menu_button]
+defaults = "menu_button"
+text = "Sysinfo"
+icon = "nf-fae-chip"
+icon_size = 36
+tooltip = "System Information"
+css_classes = ["menu-button", "sysinfo-icon-color"]
+click_payload = { area_id = "sysinfo_area" }
+longpress_payload = { area_id = "sysinfo_area" }
+
+[sysinfo_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["sysinfo-area-bg"]
+plugins = [
+    { id = "sysinfo_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "cpu_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "cpu" },
+    { id = "memory_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "memory" },
+    { id = "battery_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "battery" },
+    { id = "disks_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "disks" },
+    { id = "network_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "network" },
+    { id = "uptime_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "uptime" }
+]
+
+[sysinfo_close_button]
+defaults = "close_button"
+click_payload = { area_id = "sysinfo_area" }
+
+
+
+[smarthome_menu_button]
+defaults = "menu_button"
+text = "Smarthome"
+icon = "nf-md-home_automation"
+icon_size = 36
+tooltip = "Smart Home"
+css_classes = ["menu-button", "smarthome-icon-color"]
+click_payload = { area_id = "smarthome_area" }
+longpress_payload = { area_id = "smarthome_area" }
+
+[smarthome_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["smarthome-area-bg"]
+plugins = [
+    { id = "smarthome_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_rgbw_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" }
+]
+
+[smarthome_close_button]
+defaults = "close_button"
+click_payload = { area_id = "smarthome_area" }
+
+
+
+[gnome_settings_menu_button]
+defaults = "menu_button"
+text = "Settings"
+icon = "nf-md-cog"
+icon_size = 36
+tooltip = "GNOME Settings"
+css_classes = ["menu-button", "settings-icon-color"]
+click_payload = { area_id = "gnome_settings_area" }
+longpress_payload = { area_id = "gnome_settings_area" }
+
+[gnome_settings_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["settings-area-bg"]
+plugins = [
+    { id = "gnome_settings_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "gnome_settings", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[gnome_settings_close_button]
+defaults = "close_button"
+click_payload = { area_id = "gnome_settings_area" }
+
+[gnome_settings]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Settings.desktop"
+[gnome_settings.wrapper]
+follows_rotation = true
+
+
+
+[system_tools_menu_button]
+defaults = "menu_button"
+text = "System"
+icon = "nf-md-wrench"
+icon_size = 36
+tooltip = "System Tools"
+css_classes = ["menu-button", "system-icon-color"]
+click_payload = { area_id = "system_tools_area" }
+longpress_payload = { area_id = "system_tools_area" }
+
+[system_tools_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["system-area-bg"]
+plugins = [
+    { id = "system_tools_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "alacritty", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "nautilus", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "rpi_imager", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "tecla", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "disk_utility", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "flatseal", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "firmware", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "system_monitor", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "corectrl", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "coolercontrol", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "openrgb", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "resources", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "hardinfo", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "bustle", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "sysprof", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[system_tools_close_button]
+defaults = "close_button"
+click_payload = { area_id = "system_tools_area" }
+
+[alacritty]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/Alacritty.desktop"
+[alacritty.wrapper]
+follows_rotation = true
+
+[nautilus]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Nautilus.desktop"
+[nautilus.wrapper]
+follows_rotation = true
+
+[rpi_imager]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.raspberrypi.rpi-imager.desktop"
+[rpi_imager.wrapper]
+follows_rotation = true
+
+[tecla]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Tecla.desktop"
+[tecla.wrapper]
+follows_rotation = true
+
+[disk_utility]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.DiskUtility.desktop"
+[disk_utility.wrapper]
+follows_rotation = true
+
+[flatseal]
+defaults = "app_launcher"
+desktop_file_path = "/var/lib/flatpak/exports/share/applications/com.github.tchx84.Flatseal.desktop"
+[flatseal.wrapper]
+follows_rotation = true
+
+[firmware]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Firmware.desktop"
+[firmware.wrapper]
+follows_rotation = true
+
+[system_monitor]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.SystemMonitor.desktop"
+[system_monitor.wrapper]
+follows_rotation = true
+
+[corectrl]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.corectrl.CoreCtrl.desktop"
+[corectrl.wrapper]
+follows_rotation = true
+
+[coolercontrol]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.coolercontrol.CoolerControl.desktop"
+[coolercontrol.wrapper]
+follows_rotation = true
+
+[openrgb]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.openrgb.OpenRGB.desktop"
+[openrgb.wrapper]
+follows_rotation = true
+
+[resources]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/net.nokyan.Resources.desktop"
+[resources.wrapper]
+follows_rotation = true
+
+[hardinfo]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/hardinfo2.desktop"
+[hardinfo.wrapper]
+follows_rotation = true
+
+[bustle]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.freedesktop.Bustle.desktop"
+[bustle.wrapper]
+follows_rotation = true
+
+[sysprof]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Sysprof.desktop"
+[sysprof.wrapper]
+follows_rotation = true
+
+
+
+
+[graphics_menu_button]
+defaults = "menu_button"
+text = "Graphics"
+icon = "nf-md-palette"
+icon_size = 36
+tooltip = "Graphics"
+css_classes = ["menu-button", "graphics-icon-color"]
+click_payload = { area_id = "graphics_area" }
+longpress_payload = { area_id = "graphics_area" }
+
+[graphics_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["graphics-area-bg"]
+plugins = [
+    { id = "graphics_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "camera", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gimp", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "blender", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "krita", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "inkscape", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "fraqtive", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[graphics_close_button]
+defaults = "close_button"
+click_payload = { area_id = "graphics_area" }
+
+[camera]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/io.github.cosmic_utils.camera.desktop"
+icon = "nf-md-camera"
+[camera.wrapper]
+follows_rotation = true
+
+[gimp]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/gimp.desktop"
+[gimp.wrapper]
+follows_rotation = true
+
+[blender]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/blender.desktop"
+[blender.wrapper]
+follows_rotation = true
+
+[krita]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.kde.krita.desktop"
+[krita.wrapper]
+follows_rotation = true
+
+[inkscape]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.inkscape.Inkscape.desktop"
+[inkscape.wrapper]
+follows_rotation = true
+
+[loupe]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Loupe.desktop"
+[loupe.wrapper]
+follows_rotation = true
+
+[fraqtive]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/fraqtive.desktop"
+[fraqtive.wrapper]
+follows_rotation = true
+
+
+
+[messenger_menu_button]
+defaults = "menu_button"
+text = "Messenger"
+icon = "nf-md-message"
+icon_size = 36
+tooltip = "Messenger"
+css_classes = ["menu-button", "messenger-icon-color"]
+click_payload = { area_id = "messenger_area" }
+longpress_payload = { area_id = "messenger_area" }
+
+[messenger_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["messenger-area-bg"]
+plugins = [
+    { id = "messenger_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "signal", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "discord", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[messenger_close_button]
+defaults = "close_button"
+click_payload = { area_id = "messenger_area" }
+
+[signal]
+defaults = "app_launcher"
+desktop_file_path = "/var/lib/flatpak/exports/share/applications/org.signal.Signal.desktop"
+[signal.wrapper]
+follows_rotation = true
+
+[discord]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/discord.desktop"
+[discord.wrapper]
+follows_rotation = true
+
+
+
+[fonts_and_icons_menu_button]
+defaults = "menu_button"
+text = "Fonts"
+icon = "nf-md-format_font"
+icon_size = 36
+tooltip = "Fonts and Icons"
+css_classes = ["menu-button", "fonts-icon-color"]
+click_payload = { area_id = "fonts_and_icons_area" }
+longpress_payload = { area_id = "fonts_and_icons_area" }
+
+[fonts_and_icons_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["fonts-area-bg"]
+plugins = [
+    { id = "fonts_and_icons_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "font_manager", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "font_viewer", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_font_viewer", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "characters", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "icon_library", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[fonts_and_icons_close_button]
+defaults = "close_button"
+click_payload = { area_id = "fonts_and_icons_area" }
+
+[font_manager]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/com.github.FontManager.FontManager.desktop"
+[font_manager.wrapper]
+follows_rotation = true
+
+[font_viewer]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/com.github.FontManager.FontViewer.desktop"
+[font_viewer.wrapper]
+follows_rotation = true
+
+[gnome_font_viewer]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.font-viewer.desktop"
+[gnome_font_viewer.wrapper]
+follows_rotation = true
+
+[characters]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Characters.desktop"
+[characters.wrapper]
+follows_rotation = true
+
+[icon_library]
+defaults = "app_launcher"
+desktop_file_path = "/var/lib/flatpak/exports/share/applications/org.gnome.design.IconLibrary.desktop"
+[icon_library.wrapper]
+follows_rotation = true
+
+
+
+[astro_menu_button]
+defaults = "menu_button"
+text = "Astro"
+icon = "nf-fae-planet"
+icon_size = 36
+tooltip = "Astronomy"
+css_classes = ["menu-button", "astro-icon-color"]
+click_payload = { area_id = "astro_area" }
+longpress_payload = { area_id = "astro_area" }
+
+[astro_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["astro-area-bg"]
+plugins = [
+    { id = "astro_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "gaiasky", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "kstars", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "stellarium", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[astro_close_button]
+defaults = "close_button"
+click_payload = { area_id = "astro_area" }
+
+[gaiasky]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/gaiasky.desktop"
+[gaiasky.wrapper]
+follows_rotation = true
+
+[kstars]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.kde.kstars.desktop"
+[kstars.wrapper]
+follows_rotation = true
+
+[stellarium]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.stellarium.Stellarium.desktop"
+[stellarium.wrapper]
+follows_rotation = true
+
+
+
+[maps_menu_button]
+defaults = "menu_button"
+text = "Maps"
+icon = "nf-md-map"
+icon_size = 36
+tooltip = "Maps"
+css_classes = ["menu-button", "maps-icon-color"]
+click_payload = { area_id = "maps_area" }
+longpress_payload = { area_id = "maps_area" }
+
+[maps_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["maps-area-bg"]
+plugins = [
+    { id = "maps_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "marble", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_maps", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[maps_close_button]
+defaults = "close_button"
+click_payload = { area_id = "maps_area" }
+
+[marble]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.kde.marble.desktop"
+[marble.wrapper]
+follows_rotation = true
+
+[gnome_maps]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Maps.desktop"
+[gnome_maps.wrapper]
+follows_rotation = true
+
+
+
+[reading_and_knowledge_menu_button]
+defaults = "menu_button"
+text = "Reading"
+icon = "nf-md-book_open"
+icon_size = 36
+tooltip = "Reading and Knowledge"
+css_classes = ["menu-button", "reading-icon-color"]
+click_payload = { area_id = "reading_and_knowledge_area" }
+longpress_payload = { area_id = "reading_and_knowledge_area" }
+
+[reading_and_knowledge_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["reading-area-bg"]
+plugins = [
+    { id = "reading_and_knowledge_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "foliate", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "papers", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "wike", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "xournalpp", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "newsflash", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gromit", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "wike", path = "target/release/libsmearor_app_launcher_widget.so" },
+]
+
+[reading_and_knowledge_close_button]
+defaults = "close_button"
+click_payload = { area_id = "reading_and_knowledge_area" }
+
+[foliate]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/com.github.johnfactotum.Foliate.desktop"
+[foliate.wrapper]
+follows_rotation = true
+
+[papers]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Papers.desktop"
+[papers.wrapper]
+follows_rotation = true
+
+[wike]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/com.github.hugolabe.Wike.desktop"
+[wike.wrapper]
+follows_rotation = true
+
+[xournalpp]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/com.github.xournalpp.xournalpp.desktop"
+[xournalpp.wrapper]
+follows_rotation = true
+
+[newsflash]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/io.gitlab.news_flash.NewsFlash.desktop"
+[newsflash.wrapper]
+follows_rotation = true
+
+[gromit]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/net.christianbeier.Gromit-MPX.desktop"
+[gromit.wrapper]
+follows_rotation = true
 
 
 
@@ -338,12 +840,6 @@ desktop_file_path = "/usr/share/applications/org.gnome.Calculator.desktop"
 [calculator.wrapper]
 follows_rotation = true
 
-[characters]
-defaults = "app_launcher"
-desktop_file_path = "/usr/share/applications/org.gnome.Characters.desktop"
-[characters.wrapper]
-follows_rotation = true
-
 [tools_close]
 defaults = "close_button"
 click_payload = { area_id = "tools_area" }
@@ -395,13 +891,6 @@ follows_rotation = true
 defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/com.github.rafostar.Clapper.desktop"
 [clapper.wrapper]
-follows_rotation = true
-
-[camera]
-defaults = "app_launcher"
-desktop_file_path = "/usr/share/applications/io.github.cosmic_utils.camera.desktop"
-icon = "nf-md-camera" # nf-md-webcam
-[camera.wrapper]
 follows_rotation = true
 
 [video_close]
@@ -583,22 +1072,22 @@ click_topic = "service.app_launcher.command"
 click_payload = { desktop_file = "/var/lib/flatpak/exports/share/applications/io.github.amit9838.mousam.desktop", action = "Exec" }
 
 [power_widget]
-width = 200
-height = 240
-show_shutdown = true
+width = 100
+default_action = "lock"
+show_shutdown = false
 show_reboot = true
 show_suspend = true
 show_hibernate = true
 show_lock = true
-show_logout = true
-show_reboot_to_firmware = true
-show_inhibitor_warnings = true
+show_logout = false
+show_reboot_to_firmware = false
+show_inhibitor_warnings = false
 show_countdown_overlay = true
 show_scheduled_status = true
 button_size = 48
-icon_size = 24
-click_topic = "area.open"
-click_payload = { area_id = "power_area" }
+icon_size = 36
+longpress_topic = "area.open"
+longpress_payload = { area_id = "power_area" }
 
 
 [network_menu_widget]
@@ -612,7 +1101,7 @@ show_vpn_toggles = true
 show_throughput = true
 show_qr_code = true
 button_size = 48
-icon_size = 24
+icon_size = 36
 max_access_points = 10
 click_topic = "area.open"
 click_payload = { area_id = "network_area" }
