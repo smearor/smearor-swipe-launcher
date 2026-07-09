@@ -95,50 +95,7 @@ throughput_sample_interval_seconds = 2
 public_ip_url = "https://api.ipify.org?format=json"
 
 [wallpaper]
-default_theme = "Video Backgrounds"
+default_theme = "Smearor"
 auto_start = false
 config_path = "wallpaper.toml"
 kill_grace_period_ms = 3000
-
-[[wallpaper.themes]]
-name = "Video Backgrounds"
-description = "Looping video wallpaper"
-preview_image_path = ""
-wallpaper_type = "Video"
-
-[wallpaper.themes.config.Video]
-directory = "/home/aschaeffer/Videos/Backgrounds"
-outputs = ["ALL"]
-loop_playlist = true
-shuffle = false
-muted = true
-volume = 50
-speed_percentage = 100
-extra_arguments = []
-
-[[wallpaper.themes]]
-name = "Image Backgrounds"
-description = "Image slideshow wallpaper"
-preview_image_path = ""
-wallpaper_type = "Image"
-
-[wallpaper.themes.config.Image]
-directory = "/home/aschaeffer/Bilder/Backgrounds/Tischdecke"
-outputs = ["ALL"]
-display_duration_ms = 30000
-shuffle = true
-transitions = false
-transition_effect = "fade"
-transition_duration_ms = 1000
-extra_arguments = []
-
-#[[wallpaper.themes]]
-#name = "smearor-wrot"
-#description = "Animated wallpaper application"
-#preview_image_path = ""
-#wallpaper_type = "Application"
-#
-#[wallpaper.themes.config.Application]
-#command = "smearor-wrot"
-#outputs = ["ALL"]
-#arguments = ["--output", "{monitor}"]

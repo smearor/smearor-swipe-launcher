@@ -80,6 +80,11 @@ impl WallpaperService {
         let service_config: WallpaperServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
 
+        // Load themes from the wallpaper config file (wallpaper.toml), not from services.toml.
+        // The services.toml [wallpaper] section only provides meta-config (config_path, default_theme, etc.).
+        let mut service_config = service_config;
+        service_config.themes = crate::config::load_themes(&service_config.config_path);
+
         let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel::<WallpaperCommand>();
         let meta = PluginMeta::try_from(&config)?;
         let state = Arc::new(RwLock::new(WallpaperState::default()));
@@ -271,18 +276,21 @@ impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for WallpaperServ
             };
             let config_guard = self.config.read();
             let themes: Vec<serde_json::Value> = match config_guard {
-                Ok(config) => config
-                    .themes
-                    .iter()
-                    .map(|t| {
-                        serde_json::json!({
-                            "name": t.name,
-                            "description": t.description,
-                            "preview_image_path": t.preview_image_path,
-                            "wallpaper_type": format!("{:?}", t.wallpaper_type),
+                Ok(config) => {
+                    // Reload themes from wallpaper.toml to reflect any external changes
+                    let themes = crate::config::load_themes(&config.config_path);
+                    themes
+                        .iter()
+                        .map(|t| {
+                            serde_json::json!({
+                                "name": t.name,
+                                "description": t.description,
+                                "preview_image_path": t.preview_image_path,
+                                "wallpaper_type": format!("{:?}", t.wallpaper_type),
+                            })
                         })
-                    })
-                    .collect(),
+                        .collect()
+                }
                 Err(e) => {
                     error!("Wallpaper service: config lock poisoned: {e}");
                     Vec::new()
@@ -303,18 +311,20 @@ impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for WallpaperServ
         } else if uri == "wallpaper://themes" {
             let config_guard = self.config.read();
             let themes: Vec<serde_json::Value> = match config_guard {
-                Ok(config) => config
-                    .themes
-                    .iter()
-                    .map(|t| {
-                        serde_json::json!({
-                            "name": t.name,
-                            "description": t.description,
-                            "preview_image_path": t.preview_image_path,
-                            "wallpaper_type": format!("{:?}", t.wallpaper_type),
+                Ok(config) => {
+                    let themes = crate::config::load_themes(&config.config_path);
+                    themes
+                        .iter()
+                        .map(|t| {
+                            serde_json::json!({
+                                "name": t.name,
+                                "description": t.description,
+                                "preview_image_path": t.preview_image_path,
+                                "wallpaper_type": format!("{:?}", t.wallpaper_type),
+                            })
                         })
-                    })
-                    .collect(),
+                        .collect()
+                }
                 Err(e) => {
                     error!("Wallpaper service: config lock poisoned: {e}");
                     Vec::new()
@@ -397,7 +407,7 @@ impl Drop for WallpaperService {
 }
 
 async fn run_command_loop(
-    config: WallpaperServiceConfig,
+    mut config: WallpaperServiceConfig,
     mut command_receiver: tokio::sync::mpsc::UnboundedReceiver<WallpaperCommand>,
     meta: PluginMeta,
     core_context: Option<FfiCoreContext>,
@@ -436,10 +446,12 @@ async fn run_command_loop(
             }
             WallpaperCommand::AddTheme(theme) => {
                 add_theme_to_config(&config.config_path, &theme);
+                config.themes = crate::config::load_themes(&config.config_path);
                 broadcast_status(&meta, &core_context, &config, &state);
             }
             WallpaperCommand::RemoveTheme(name) => {
                 remove_theme_from_config(&config.config_path, &name);
+                config.themes = crate::config::load_themes(&config.config_path);
                 let need_stop = {
                     if let Ok(s) = state.read() {
                         s.current_theme.as_deref() == Some(&name)

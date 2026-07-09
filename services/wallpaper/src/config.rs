@@ -1,5 +1,7 @@
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::debug;
+use tracing::warn;
 
 use smearor_wallpaper_model::WallpaperTheme;
 
@@ -8,6 +10,7 @@ use smearor_wallpaper_model::WallpaperTheme;
 #[serde(default)]
 pub struct WallpaperServiceConfig {
     /// List of all configured wallpaper themes.
+    /// Loaded from `config_path` (wallpaper.toml) at startup, not from services.toml.
     pub themes: Vec<WallpaperTheme>,
     /// Name of the default theme that the service starts with.
     pub default_theme: String,
@@ -45,4 +48,32 @@ impl Default for WallpaperServiceConfig {
 
 fn default_kill_grace_period_ms() -> u64 {
     3000
+}
+
+/// Loads themes from the wallpaper configuration file (e.g. `wallpaper.toml`).
+/// Returns an empty vector if the file cannot be read or parsed.
+pub fn load_themes(config_path: &str) -> Vec<WallpaperTheme> {
+    let path = std::path::Path::new(config_path);
+    match std::fs::read_to_string(path) {
+        Ok(content) => {
+            #[derive(Deserialize)]
+            struct ThemesFile {
+                themes: Vec<WallpaperTheme>,
+            }
+            match toml::from_str::<ThemesFile>(&content) {
+                Ok(file) => {
+                    debug!("Wallpaper config: loaded {} theme(s) from {}", file.themes.len(), config_path);
+                    file.themes
+                }
+                Err(e) => {
+                    warn!("Wallpaper config: failed to parse {}: {}", config_path, e);
+                    Vec::new()
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Wallpaper config: failed to read {}: {}", config_path, e);
+            Vec::new()
+        }
+    }
 }
