@@ -1128,14 +1128,22 @@ open_transition = "SlideUp"
 css_classes = ["network-area-bg"]
 plugins = [
     { id = "network_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "nm_connection_editor", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "etherape", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "gnome_network_displays", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "digger", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "digger", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "ping_monitor", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
 
 [network_close_button]
 defaults = "close_button"
 click_payload = { area_id = "network_area" }
+
+[nm_connection_editor]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/nm-connection-editor.desktop"
+[nm_connection_editor.wrapper]
+follows_rotation = true
 
 [etherape]
 defaults = "app_launcher"
@@ -1153,6 +1161,12 @@ follows_rotation = true
 defaults = "app_launcher"
 desktop_file_path = "/var/lib/flatpak/exports/share/applications/io.github.tobagin.digger.desktop"
 [digger.wrapper]
+follows_rotation = true
+
+[ping_monitor]
+defaults = "app_launcher"
+desktop_file_path = "/var/lib/flatpak/exports/share/applications/io.github.sigmasd.pingmonitor.desktop"
+[ping_monitor.wrapper]
 follows_rotation = true
 
 
