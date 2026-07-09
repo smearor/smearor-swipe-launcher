@@ -1129,7 +1129,8 @@ css_classes = ["network-area-bg"]
 plugins = [
     { id = "network_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "etherape", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "gnome_network_displays", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "gnome_network_displays", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "digger", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
 
 [network_close_button]
@@ -1146,6 +1147,12 @@ follows_rotation = true
 defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/org.gnome.NetworkDisplays.desktop"
 [gnome_network_displays.wrapper]
+follows_rotation = true
+
+[digger]
+defaults = "app_launcher"
+desktop_file_path = "/var/lib/flatpak/exports/share/applications/io.github.tobagin.digger.desktop"
+[digger.wrapper]
 follows_rotation = true
 
 
