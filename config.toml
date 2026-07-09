@@ -1117,8 +1117,29 @@ show_qr_code = true
 button_size = 48
 icon_size = 36
 max_access_points = 10
-#click_topic = "area.open"
-#click_payload = { area_id = "network_area" }
+longpress_topic = "area.open"
+longpress_payload = { area_id = "network_area" }
+
+
+# Network submenu area configuration
+[network_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["network-area-bg"]
+plugins = [
+    { id = "network_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "etherape", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[network_close_button]
+defaults = "close_button"
+click_payload = { area_id = "network_area" }
+
+[etherape]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/etherape.desktop"
+[etherape.wrapper]
+follows_rotation = true
 
 
 [shelly_light_button]
