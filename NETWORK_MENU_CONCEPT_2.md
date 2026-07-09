@@ -503,39 +503,52 @@ outer_box.add_controller(drag_gesture);
 
 ### 5.3a Layout Switching for QrCode View
 
-The `QrCode` view is special: instead of showing the three text labels, the widget shows a `gtk4::DrawingArea` that renders the QR code directly. The
+The `QrCode` view is special: instead of showing the icon image and text labels, the widget shows a `gtk4::DrawingArea` that renders the QR code directly. The
 `update_ui` method handles this layout switch:
 
 ```rust
 fn update_ui(&self, status: &NetworkStatusMessage) {
     let view_index = *self.current_view.borrow();
-    let view = self.config.views.get(view_index).copied().unwrap_or(NetworkView::Status);
+    let view = self.config.views.get(view_index).copied().unwrap_or(NetworkView::WifiStatus);
 
-    let icon_label = self.icon_label.clone();
+    let icon_image = self.icon_image.clone();
     let value_label = self.value_label.clone();
     let info_label = self.info_label.clone();
     let qr_area = self.qr_drawing_area.clone();
+    let config = self.config.clone();
     let status = status.clone();
 
     MainContext::default().spawn_local(async move {
         if view == NetworkView::QrCode {
-            // Show QR code DrawingArea, hide text labels
+            // Show QR code DrawingArea, hide icon image and text labels
             if let Some(ref area) = *qr_area.borrow() {
                 area.set_visible(true);
                 area.queue_draw();
             }
-            if let Some(ref label) = *icon_label.borrow() { label.set_visible(false); }
+            if let Some(ref img) = *icon_image.borrow() { img.set_visible(false); }
             if let Some(ref label) = *value_label.borrow() { label.set_visible(false); }
             if let Some(ref label) = *info_label.borrow() { label.set_visible(false); }
         } else {
-            // Show text labels, hide QR code DrawingArea
+            // Show icon image and text labels, hide QR code DrawingArea
             if let Some(ref area) = *qr_area.borrow() { area.set_visible(false); }
-            if let Some(ref label) = *icon_label.borrow() { label.set_visible(true); }
+            if let Some(ref img) = *icon_image.borrow() { img.set_visible(true); }
             if let Some(ref label) = *value_label.borrow() { label.set_visible(true); }
             if let Some(ref label) = *info_label.borrow() { label.set_visible(true); }
 
-            let (icon_text, value_text, info_text) = render_view(&status, None, None, view);
-            if let Some(ref label) = *icon_label.borrow() { label.set_text(&icon_text); }
+            let (icon_name, value_text, info_text) = render_view(&status, None, None, &config, view);
+
+            // Update icon image via resolve_gtk_nerd_icon (no set_text on Image)
+            if let Some(ref img) = *icon_image.borrow() {
+                if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(&icon_name) {
+                    let resource_path = format!("/com/nerd/icons/{}.svg", gtk_icon_name);
+                    if gio::resources_lookup_data(&resource_path, gio::ResourceLookupFlags::NONE).is_ok() {
+                        img.set_resource(Some(&resource_path));
+                    } else {
+                        img.set_from_icon_name(Some(&gtk_icon_name));
+                    }
+                }
+            }
+
             if let Some(ref label) = *value_label.borrow() { label.set_text(&value_text); }
             if let Some(ref label) = *info_label.borrow() { label.set_text(&info_text); }
         }
@@ -606,8 +619,8 @@ if iface.state == NetworkConnectionState::Connected {
 let command = NetworkCommandMessage::disconnect(iface.interface_name.to_string());
 broadcaster.broadcast_message_to_topic(command);
 } else {
-// Reconnect is handled by NetworkManager automatically when radio is enabled
-let command = NetworkCommandMessage::toggle_radio("ethernet", true);
+// Reconnect by activating the Ethernet connection profile
+let command = NetworkCommandMessage::connect(iface.interface_name.to_string());
 broadcaster.broadcast_message_to_topic(command);
 }
 }
