@@ -42,6 +42,12 @@ impl ServiceManager {
             unsafe {
                 service.destroy();
             }
+            // Prevent LoadedService::drop from running — it would unload the
+            // .so library while the service's worker thread is still executing
+            // code from it. The thread exits asynchronously after command_sender
+            // is dropped, but we have no JoinHandle to wait on. Leaking the
+            // library is safe because std::process::exit(0) follows shortly.
+            std::mem::forget(service);
             trace!("Successfully unloaded service {id}")
         }
     }

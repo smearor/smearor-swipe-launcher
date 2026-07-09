@@ -84,6 +84,15 @@ impl LauncherInstance {
         let coordinated_size = self.coordinated_size.lock().ok().and_then(|g| *g);
         let window = create_window(app, &launcher_config, coordinated_size);
 
+        let app_clone = app.clone();
+        window.connect_close_request(move |_win| {
+            let app = app_clone.clone();
+            gtk4::glib::idle_add_local_once(move || {
+                app.quit();
+            });
+            gtk4::glib::Propagation::Proceed
+        });
+
         let rotation_widget = RotationWidget::new(rotation.rotation());
         rotation_widget.set_animation_speed(rotation.animation_speed());
         rotation_widget.set_animation_overshoot(rotation.animation_overshoot());

@@ -58,6 +58,11 @@ impl PluginManager {
             unsafe {
                 plugin.destroy();
             }
+            // Prevent LoadedPlugin::drop from running — it would unload the
+            // .so library while the plugin's worker thread (e.g. clock) is
+            // still executing code from it. Leaking is safe because
+            // std::process::exit(0) follows shortly after shutdown.
+            std::mem::forget(plugin);
             trace!("Successfully unloaded plugin {id}")
         }
     }
