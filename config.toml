@@ -1128,7 +1128,8 @@ open_transition = "SlideUp"
 css_classes = ["network-area-bg"]
 plugins = [
     { id = "network_close_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "etherape", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "etherape", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_network_displays", path = "target/release/libsmearor_app_launcher_widget.so" }
 ]
 
 [network_close_button]
@@ -1139,6 +1140,12 @@ click_payload = { area_id = "network_area" }
 defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/etherape.desktop"
 [etherape.wrapper]
+follows_rotation = true
+
+[gnome_network_displays]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.NetworkDisplays.desktop"
+[gnome_network_displays.wrapper]
 follows_rotation = true
 
 
