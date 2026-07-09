@@ -5,6 +5,7 @@ use gtk4::Button;
 use gtk4::DrawingArea;
 use gtk4::Entry;
 use gtk4::GestureClick;
+use gtk4::GestureLongPress;
 use gtk4::Label;
 use gtk4::Orientation;
 use gtk4::Overlay;
@@ -355,15 +356,38 @@ impl WidgetBuilder for NetworkWidget {
 
         let click_topic = config.click_topic.clone();
         let click_payload = config.click_payload.clone();
+        let click_instance = config.click_instance.clone();
         let click_broadcaster = broadcaster.clone();
         let click_gesture = GestureClick::new();
         click_gesture.connect_released(move |_gesture, _n_press, _, _| {
             if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
                 let payload_str = payload.to_string();
-                click_broadcaster.broadcast_string(&topic, &payload_str);
+                if let Some(instance) = click_instance.clone() {
+                    click_broadcaster.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                } else {
+                    click_broadcaster.broadcast_string(&topic, &payload_str);
+                }
             }
         });
         overlay.add_controller(click_gesture);
+
+        let longpress_topic = config.longpress_topic.clone();
+        let longpress_payload = config.longpress_payload.clone();
+        let longpress_instance = config.longpress_instance.clone();
+        let longpress_broadcaster = broadcaster.clone();
+        let longpress_gesture = GestureLongPress::new();
+        longpress_gesture.connect_pressed(move |gesture, _, _| {
+            if let (Some(topic), Some(payload)) = (longpress_topic.clone(), longpress_payload.clone()) {
+                let payload_str = payload.to_string();
+                if let Some(instance) = longpress_instance.clone() {
+                    longpress_broadcaster.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                } else {
+                    longpress_broadcaster.broadcast_string(&topic, &payload_str);
+                }
+                gesture.set_state(gtk4::EventSequenceState::Claimed);
+            }
+        });
+        overlay.add_controller(longpress_gesture);
 
         *self.qr_overlay.borrow_mut() = Some(overlay.clone());
 

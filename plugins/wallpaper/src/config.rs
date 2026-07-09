@@ -2,8 +2,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use typed_builder::TypedBuilder;
 
-pub const DEFAULT_WIDTH: i32 = 120;
-pub const DEFAULT_HEIGHT: i32 = 120;
+pub const DEFAULT_WIDTH: i32 = 100;
+pub const DEFAULT_HEIGHT: i32 = 100;
 pub const DEFAULT_PREVIEW_WIDTH: i32 = 100;
 pub const DEFAULT_PREVIEW_HEIGHT: i32 = 100;
 pub const DEFAULT_FALLBACK_ICON: &str = "nf-md-wallpaper";

@@ -97,7 +97,7 @@ plugins = [
     { id = "weather_widget", path = "target/release/libsmearor_weather_widget.so" },
     { id = "power_widget", path = "target/release/libsmearor_power_widget.so" },
     { id = "wallpaper_widget", path = "target/release/libsmearor_wallpaper_widget.so" },
-    # { id = "network_menu_widget", path = "target/release/libsmearor_network_widget.so" },
+    { id = "network_menu_widget", path = "target/release/libsmearor_network_widget.so" },
     { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
 ]
 
@@ -1092,7 +1092,7 @@ longpress_topic = "area.open"
 longpress_payload = { area_id = "power_area" }
 
 [wallpaper_widget]
-width = 120
+width = 100
 height = 100
 show_theme_name = true
 show_type_icon = false
@@ -1105,8 +1105,8 @@ fallback_icon = "nf-md-wallpaper"
 
 
 [network_menu_widget]
-width = 300
-height = 400
+width = 100
+height = 100
 spacing = 8
 show_status = true
 show_scan_list = true
