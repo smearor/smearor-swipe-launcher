@@ -6,8 +6,10 @@ use gtk4::EventSequenceState;
 use gtk4::GestureClick;
 use gtk4::GestureLongPress;
 use gtk4::GestureSwipe;
+use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
+use gtk4::Overlay;
 use gtk4::Picture;
 use gtk4::PropagationPhase;
 use gtk4::Widget;
@@ -40,6 +42,7 @@ pub struct WallpaperWidget {
     pub core_context: Option<FfiCoreContext>,
     pub config: WallpaperWidgetConfig,
     pub preview_image: Rc<RefCell<Option<Picture>>>,
+    pub fallback_image: Rc<RefCell<Option<Image>>>,
     pub theme_label: Rc<RefCell<Option<Label>>>,
     pub status_label: Rc<RefCell<Option<Label>>>,
     pub latest_status: Rc<RefCell<Option<WallpaperStatusMessage>>>,
@@ -55,6 +58,7 @@ impl WallpaperWidget {
             core_context,
             config: widget_config,
             preview_image: Rc::new(RefCell::new(None)),
+            fallback_image: Rc::new(RefCell::new(None)),
             theme_label: Rc::new(RefCell::new(None)),
             status_label: Rc::new(RefCell::new(None)),
             latest_status: Rc::new(RefCell::new(None)),
@@ -64,6 +68,7 @@ impl WallpaperWidget {
 
     fn update_ui(&self, status: &WallpaperStatusMessage) {
         let preview_image = self.preview_image.clone();
+        let fallback_image = self.fallback_image.clone();
         let theme_label = self.theme_label.clone();
         let status_label = self.status_label.clone();
         let show_theme_name = self.config.show_theme_name;
@@ -75,11 +80,12 @@ impl WallpaperWidget {
         MainContext::default().spawn_local(async move {
             let theme_info: Option<WallpaperThemeInfo> = status.themes.get(status.selected_theme_index).cloned();
 
-            let (preview_path, theme_name, type_icon, status_text) = match &theme_info {
+            let (preview_path, preview_icon, theme_name, type_icon, status_text) = match &theme_info {
                 Some(theme) => {
                     let icon = wallpaper_type_icon(&theme.wallpaper_type);
                     let name: String = theme.name.to_string();
                     let preview: String = theme.preview_image_path.to_string();
+                    let p_icon: String = theme.preview_icon.to_string();
                     let is_running = status.is_running();
                     let current: String = status.current_theme.as_ref().map(|t| t.to_string()).unwrap_or_default();
                     let st = if is_running && current == name {
@@ -89,12 +95,13 @@ impl WallpaperWidget {
                     } else {
                         "\u{f0156}".to_string()
                     };
-                    (preview, name, icon.to_string(), st)
+                    (preview, p_icon, name, icon.to_string(), st)
                 }
-                None => (String::new(), "No theme".to_string(), "\u{f1c5}".to_string(), "N/A".to_string()),
+                None => (String::new(), String::new(), "No theme".to_string(), "\u{f1c5}".to_string(), "N/A".to_string()),
             };
 
-            update_preview(&preview_image, &theme_label, &preview_path, &fallback_icon);
+            let effective_fallback = if preview_icon.is_empty() { &fallback_icon } else { &preview_icon };
+            update_preview(&preview_image, &fallback_image, &preview_path, effective_fallback, &fallback_icon);
 
             if show_theme_name && let Some(ref label) = *theme_label.borrow() {
                 if show_type_icon {
@@ -195,7 +202,7 @@ impl WidgetBuilder for WallpaperWidget {
         let outer_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
             .spacing(2)
-            .css_classes(["wallpaper-widget"])
+            .css_classes(["scroll-item", "menu-button", "wallpaper-widget"])
             .halign(Align::Center)
             .valign(Align::Center)
             .build();
@@ -218,7 +225,25 @@ impl WidgetBuilder for WallpaperWidget {
         if let Some(ph) = self.config.preview_height {
             picture.set_size_request(-1, ph);
         }
-        outer_box.append(&picture);
+
+        let fallback_image = Image::builder()
+            .css_classes(["wallpaper-fallback-icon"])
+            .halign(Align::Center)
+            .valign(Align::Center)
+            .icon_size(gtk4::IconSize::Large)
+            .pixel_size(48)
+            .build();
+        if let Some(pw) = self.config.preview_width {
+            fallback_image.set_size_request(pw, -1);
+        }
+        if let Some(ph) = self.config.preview_height {
+            fallback_image.set_size_request(-1, ph);
+        }
+
+        let overlay = Overlay::builder().css_classes(["wallpaper-preview-overlay"]).build();
+        overlay.set_child(Some(&picture));
+        overlay.add_overlay(&fallback_image);
+        outer_box.append(&overlay);
 
         let theme_label = Label::builder()
             .css_classes(["wallpaper-theme-name"])
@@ -237,6 +262,7 @@ impl WidgetBuilder for WallpaperWidget {
         }
 
         *self.preview_image.borrow_mut() = Some(picture);
+        *self.fallback_image.borrow_mut() = Some(fallback_image);
         *self.theme_label.borrow_mut() = Some(theme_label);
         *self.status_label.borrow_mut() = Some(status_label);
 
@@ -245,6 +271,7 @@ impl WidgetBuilder for WallpaperWidget {
             core_context: self.core_context,
             config: self.config.clone(),
             preview_image: self.preview_image.clone(),
+            fallback_image: self.fallback_image.clone(),
             theme_label: self.theme_label.clone(),
             status_label: self.status_label.clone(),
             latest_status: self.latest_status.clone(),

@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -8,7 +10,7 @@ use crate::TOPIC_COMMAND;
 /// Actions that can be sent from the widget to the wallpaper service.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub enum WallpaperCommandAction {
     /// Select a theme by name without starting it.
     #[default]

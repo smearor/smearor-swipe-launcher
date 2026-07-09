@@ -140,7 +140,7 @@ impl WallpaperService {
         let tool_add = RegisterToolMessage::new(
             "add_wallpaper_theme",
             "Permanently appends a new wallpaper theme to the configuration store.",
-            r#"{ "type": "object", "properties": { "name": { "type": "string" }, "type": { "type": "string", "enum": ["Video", "Image", "Application"] }, "config": { "type": "object" }, "description": { "type": "string" }, "preview_image_path": { "type": "string" } }, "required": ["name", "type", "config"] }"#,
+            r#"{ "type": "object", "properties": { "name": { "type": "string" }, "type": { "type": "string", "enum": ["Video", "Image", "Application"] }, "config": { "type": "object" }, "description": { "type": "string" }, "preview_image_path": { "type": "string" }, "preview_icon": { "type": "string" } }, "required": ["name", "type", "config"] }"#,
         );
         broadcaster.broadcast_message_to_topic(tool_add);
 
@@ -286,6 +286,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for WallpaperServ
                                 "name": t.name,
                                 "description": t.description,
                                 "preview_image_path": t.preview_image_path,
+                                "preview_icon": t.preview_icon,
                                 "wallpaper_type": format!("{:?}", t.wallpaper_type),
                             })
                         })
@@ -320,6 +321,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for WallpaperServ
                                 "name": t.name,
                                 "description": t.description,
                                 "preview_image_path": t.preview_image_path,
+                                "preview_icon": t.preview_icon,
                                 "wallpaper_type": format!("{:?}", t.wallpaper_type),
                             })
                         })
@@ -632,6 +634,7 @@ fn parse_theme_from_json(args: &serde_json::Value) -> Result<WallpaperTheme, Str
     let type_str = args.get("type").and_then(|v| v.as_str()).ok_or("Missing required field: type")?;
     let description = args.get("description").and_then(|v| v.as_str()).unwrap_or("");
     let preview_image_path = args.get("preview_image_path").and_then(|v| v.as_str()).unwrap_or("");
+    let preview_icon = args.get("preview_icon").and_then(|v| v.as_str()).unwrap_or("");
     let config_json = args.get("config").ok_or("Missing required field: config")?;
 
     let wallpaper_type = match type_str {
@@ -662,6 +665,7 @@ fn parse_theme_from_json(args: &serde_json::Value) -> Result<WallpaperTheme, Str
         name: name.to_string(),
         description: description.to_string(),
         preview_image_path: preview_image_path.to_string(),
+        preview_icon: preview_icon.to_string(),
         wallpaper_type,
         config: theme_config,
     })
@@ -678,7 +682,7 @@ fn broadcast_status(meta: &PluginMeta, core_context: &Option<FfiCoreContext>, co
     let theme_infos: Vec<WallpaperThemeInfo> = config
         .themes
         .iter()
-        .map(|t| WallpaperThemeInfo::new(&t.name, &t.description, &t.preview_image_path, t.wallpaper_type.clone()))
+        .map(|t| WallpaperThemeInfo::new(&t.name, &t.description, &t.preview_image_path, &t.preview_icon, t.wallpaper_type.clone()))
         .collect();
     let mut msg = WallpaperStatusMessage::new(theme_infos, selected_index);
     let current_theme_stabby: stabby::option::Option<stabby::string::String> = current_theme.map(|name| name.into()).into();

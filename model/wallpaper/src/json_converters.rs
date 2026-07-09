@@ -29,8 +29,9 @@ fn parse_theme_info(value: &serde_json::Value) -> WallpaperThemeInfo {
     let name = value.get("name").and_then(|v| v.as_str()).unwrap_or("");
     let description = value.get("description").and_then(|v| v.as_str()).unwrap_or("");
     let preview_image_path = value.get("preview_image_path").and_then(|v| v.as_str()).unwrap_or("");
+    let preview_icon = value.get("preview_icon").and_then(|v| v.as_str()).unwrap_or("");
     let wallpaper_type = parse_wallpaper_type(value.get("wallpaper_type").unwrap_or(&serde_json::Value::Null));
-    WallpaperThemeInfo::new(name, description, preview_image_path, wallpaper_type)
+    WallpaperThemeInfo::new(name, description, preview_image_path, preview_icon, wallpaper_type)
 }
 
 fn parse_monitor_process(value: &serde_json::Value) -> MonitorProcess {

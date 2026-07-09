@@ -559,3 +559,21 @@ scrolledwindow {
     text-shadow: 0 0 4px rgba(136, 204, 255, 0.4);
     border: 1px solid green;
 }
+
+.wallpaper-widget {
+    background-color: transparent;
+}
+
+.wallpaper-widget:hover {
+    background-color: #00a1e433;
+}
+
+.wallpaper-widget .wallpaper-fallback-icon {
+    color: white;
+    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+}
+
+.wallpaper-widget .wallpaper-theme-name {
+    color: white;
+    text-shadow: 0 0 4px rgba(136, 204, 255, 0.4);
+}
