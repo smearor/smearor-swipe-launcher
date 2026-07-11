@@ -1,8 +1,13 @@
 use crate::config::HyprlandServiceConfig;
+use crate::monitor::MonitorEvent;
+use crate::monitor::spawn_monitor_listener;
+use crate::monitor::spawn_monitor_worker;
+use crate::workspace::WorkspaceEvent;
+use crate::workspace::spawn_workspace_listener;
+use crate::workspace::spawn_workspace_worker;
 use hyprland::dispatch::Dispatch;
 use hyprland::dispatch::DispatchType;
 use hyprland::dispatch::FirstEmpty;
-use hyprland::shared::HyprData;
 use smearor_hyprland_model::ExecDispatchMessage;
 use smearor_hyprland_model::HyprlandDirection;
 use smearor_hyprland_model::HyprlandDispatchActionKind;
@@ -15,12 +20,10 @@ use smearor_hyprland_model::MoveToWorkspaceDispatchMessage;
 use smearor_hyprland_model::ToggleFloatingDispatchMessage;
 use smearor_hyprland_model::ToggleFullscreenDispatchMessage;
 use smearor_hyprland_model::WorkspaceDispatchMessage;
-use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
-use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
@@ -34,7 +37,6 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
@@ -43,16 +45,6 @@ use tracing::warn;
 /// Internal union of all command types the service handles.
 pub enum HyprlandCommand {
     Dispatch(HyprlandDispatchMessage),
-}
-
-/// Internal union of all event types the service listens for from Hyprland.
-enum HyprlandEvent {
-    /// Active workspace changed on a monitor.
-    WorkspaceChanged(WorkspaceChangedEvent),
-    /// Monitor was connected.
-    MonitorAdded(String),
-    /// Monitor was disconnected.
-    MonitorRemoved(String),
 }
 
 /// Hyprland service plugin.
@@ -109,127 +101,29 @@ impl HyprlandService {
             });
         });
 
-        // Spawn event listener and event worker threads if workspace tracking is enabled
+        // Spawn workspace event listener and worker if workspace tracking is enabled
         if service.config.enable_workspace_tracking {
-            let event_core_context = service.core_context.clone();
-            let event_meta = service.meta.clone();
+            let ws_core_context = service.core_context.clone();
+            let ws_meta = service.meta.clone();
+            let enable_workspace_lifecycle = service.config.enable_workspace_lifecycle;
 
-            let (event_sender, mut event_receiver) = mpsc::unbounded_channel::<HyprlandEvent>();
+            let (ws_sender, ws_receiver) = mpsc::unbounded_channel::<WorkspaceEvent>();
+            spawn_workspace_listener(ws_sender);
+            spawn_workspace_worker(ws_receiver, ws_core_context, ws_meta, enable_workspace_lifecycle);
+        }
 
-            // Event listener thread — connects to Hyprland's event socket
-            std::thread::spawn(move || {
-                let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-                    Ok(rt) => rt,
-                    Err(error) => {
-                        error!("Hyprland Service: failed to create event listener runtime: {error}");
-                        return;
-                    }
-                };
+        // Spawn monitor event listener and worker if monitor events are enabled
+        if service.config.enable_monitor_events {
+            let mon_core_context = service.core_context.clone();
+            let mon_meta = service.meta.clone();
 
-                rt.block_on(async move {
-                    loop {
-                        let mut listener = hyprland::event_listener::EventListener::new();
-
-                        let ws_sender = event_sender.clone();
-                        listener.add_workspace_changed_handler(move |workspace_data| {
-                            let workspace_name = match &workspace_data.name {
-                                hyprland::shared::WorkspaceType::Regular(name) => name.clone(),
-                                hyprland::shared::WorkspaceType::Special(name) => name.clone().unwrap_or_default(),
-                            };
-                            let event = WorkspaceChangedEvent {
-                                workspace_name: workspace_name.into(),
-                                workspace_id: workspace_data.id,
-                                monitor_index: 0,
-                            };
-                            let _ = ws_sender.send(HyprlandEvent::WorkspaceChanged(event));
-                        });
-
-                        let mon_sender = event_sender.clone();
-                        listener.add_monitor_added_handler(move |data| {
-                            let _ = mon_sender.send(HyprlandEvent::MonitorAdded(data.name));
-                        });
-
-                        let mon_sender2 = event_sender.clone();
-                        listener.add_monitor_removed_handler(move |data| {
-                            let _ = mon_sender2.send(HyprlandEvent::MonitorRemoved(data));
-                        });
-
-                        match listener.start_listener_async().await {
-                            Ok(()) => {
-                                debug!("Hyprland event listener exited cleanly, reconnecting in 5s");
-                            }
-                            Err(error) => {
-                                error!("Hyprland event listener stopped: {error}, reconnecting in 5s");
-                            }
-                        }
-                        tokio::time::sleep(Duration::from_secs(5)).await;
-                    }
-                });
-            });
-
-            // Event worker thread — processes events and broadcasts to launcher core
-            std::thread::spawn(move || {
-                let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-                    Ok(rt) => rt,
-                    Err(error) => {
-                        error!("Hyprland Service: failed to create event worker runtime: {error}");
-                        return;
-                    }
-                };
-
-                rt.block_on(async move {
-                    while let Some(event) = event_receiver.recv().await {
-                        match event {
-                            HyprlandEvent::WorkspaceChanged(mut event) => {
-                                if let Some(monitor_index) = resolve_monitor_for_workspace(event.workspace_id).await {
-                                    event.monitor_index = monitor_index;
-                                }
-                                debug!("Workspace changed: {:?}", event);
-                                broadcast_event(&event_core_context, &event_meta, event);
-                            }
-                            HyprlandEvent::MonitorAdded(name) => {
-                                debug!("Monitor added: {}", name);
-                            }
-                            HyprlandEvent::MonitorRemoved(name) => {
-                                debug!("Monitor removed: {}", name);
-                            }
-                        }
-                    }
-                });
-            });
+            let (mon_sender, mon_receiver) = mpsc::unbounded_channel::<MonitorEvent>();
+            spawn_monitor_listener(mon_sender);
+            spawn_monitor_worker(mon_receiver, mon_core_context, mon_meta);
         }
 
         Ok(service)
     }
-}
-
-/// Query `hyprctl monitors` to find which monitor index has the given workspace active.
-async fn resolve_monitor_for_workspace(workspace_id: i32) -> Option<u32> {
-    let monitors = match hyprland::data::Monitors::get() {
-        Ok(monitors) => monitors,
-        Err(error) => {
-            warn!("Failed to query monitors for workspace {workspace_id}: {error}");
-            return None;
-        }
-    };
-    for monitor in monitors {
-        if monitor.active_workspace.id == workspace_id {
-            return Some(monitor.id as u32);
-        }
-    }
-    None
-}
-
-/// Broadcast a `WorkspaceChangedEvent` to all launcher instances via the core context.
-fn broadcast_event(core_context: &Option<FfiCoreContext>, meta: &PluginMeta, event: WorkspaceChangedEvent) {
-    let Some(ctx) = core_context else {
-        return;
-    };
-    let broadcaster = MessageBroadcasterInner {
-        meta: meta.clone(),
-        core_context: Some(ctx.clone()),
-    };
-    broadcaster.broadcast_message_to_topic(event);
 }
 
 /// Ensures the Hyprland socket can be found by the `hyprland` crate.

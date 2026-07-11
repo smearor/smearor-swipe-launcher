@@ -1,6 +1,8 @@
 use crate::instance::LauncherInstance;
 use gtk4::prelude::*;
+use smearor_model_compositor::MonitorChangedEvent;
 use smearor_model_compositor::WorkspaceChangedEvent;
+use smearor_model_compositor::WorkspaceLifecycleEvent;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageRouter;
@@ -145,7 +147,7 @@ impl LauncherInstance {
             }
         }
 
-        // Handle workspace change events from the Hyprland service.
+        // Handle workspace change events from compositor services.
         if envelope.type_id == FfiEnvelopePayload::<WorkspaceChangedEvent>::TYPE_ID {
             if !envelope.payload.is_null() {
                 let event = unsafe { &*(envelope.payload as *const WorkspaceChangedEvent) };
@@ -154,6 +156,44 @@ impl LauncherInstance {
                 self.on_workspace_changed(workspace_id, monitor_index);
             }
             // Destroy payload after handling
+            if !envelope.payload.is_null() {
+                if let Some(destroy) = envelope.destroy_payload {
+                    unsafe {
+                        (destroy)(envelope.payload);
+                    }
+                }
+            }
+            return;
+        }
+
+        // Handle monitor change events from compositor services.
+        if envelope.type_id == FfiEnvelopePayload::<MonitorChangedEvent>::TYPE_ID {
+            if !envelope.payload.is_null() {
+                let event = unsafe { &*(envelope.payload as *const MonitorChangedEvent) };
+                let monitor_index = event.monitor_index;
+                let connector_name = event.connector_name.to_string();
+                let change_type = event.change_type.clone();
+                self.on_monitor_changed(monitor_index, &connector_name, change_type);
+            }
+            if !envelope.payload.is_null() {
+                if let Some(destroy) = envelope.destroy_payload {
+                    unsafe {
+                        (destroy)(envelope.payload);
+                    }
+                }
+            }
+            return;
+        }
+
+        // Handle workspace lifecycle events from compositor services.
+        if envelope.type_id == FfiEnvelopePayload::<WorkspaceLifecycleEvent>::TYPE_ID {
+            if !envelope.payload.is_null() {
+                let event = unsafe { &*(envelope.payload as *const WorkspaceLifecycleEvent) };
+                let workspace_id = event.workspace_id;
+                let monitor_index = event.monitor_index;
+                let lifecycle_type = event.lifecycle_type.clone();
+                self.on_workspace_lifecycle(workspace_id, monitor_index, lifecycle_type);
+            }
             if !envelope.payload.is_null() {
                 if let Some(destroy) = envelope.destroy_payload {
                     unsafe {

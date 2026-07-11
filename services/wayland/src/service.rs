@@ -1,10 +1,11 @@
 use crate::config::WaylandWorkspaceServiceConfig;
+use crate::monitor::MonitorEvent;
+use crate::monitor::spawn_monitor_worker;
 use crate::workspace::WorkspaceEvent;
 use crate::workspace::run_workspace_event_loop;
-use smearor_model_compositor::WorkspaceChangedEvent;
+use crate::workspace::spawn_workspace_worker;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
-use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -14,7 +15,6 @@ use smearor_swipe_launcher_plugin_api::Service;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;
-use tracing::error;
 
 /// Wayland workspace tracking service plugin.
 ///
@@ -48,56 +48,30 @@ impl WaylandWorkspaceService {
         };
 
         if service.config.enable_workspace_tracking {
-            let event_core_context = service.core_context;
-            let event_meta = service.meta.clone();
+            let ws_core_context = service.core_context;
+            let ws_meta = service.meta.clone();
+            let mon_core_context = service.core_context;
+            let mon_meta = service.meta.clone();
 
-            let (event_sender, mut event_receiver) = mpsc::unbounded_channel::<WorkspaceEvent>();
+            let (workspace_sender, workspace_receiver) = mpsc::unbounded_channel::<WorkspaceEvent>();
+            let (monitor_sender, monitor_receiver) = mpsc::unbounded_channel::<MonitorEvent>();
 
             // Wayland event listener thread — connects to the display and
             // dispatches protocol events using the ext-workspace-unstable-v1
-            // protocol.
+            // protocol and wl_output for monitor events.
             std::thread::spawn(move || {
-                run_workspace_event_loop(event_sender);
+                run_workspace_event_loop(workspace_sender, monitor_sender);
             });
 
-            // Event worker thread — receives workspace change events from the
-            // listener and broadcasts them to the launcher core.
-            std::thread::spawn(move || {
-                let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-                    Ok(rt) => rt,
-                    Err(error) => {
-                        error!("Wayland service: failed to create event worker runtime: {error}");
-                        return;
-                    }
-                };
+            // Workspace event worker thread
+            spawn_workspace_worker(workspace_receiver, ws_core_context, ws_meta);
 
-                rt.block_on(async move {
-                    while let Some(event) = event_receiver.recv().await {
-                        match event {
-                            WorkspaceEvent::WorkspaceChanged(event) => {
-                                debug!("Broadcasting workspace changed event: {:?}", event);
-                                broadcast_event(&event_core_context, &event_meta, event);
-                            }
-                        }
-                    }
-                });
-            });
+            // Monitor event worker thread
+            spawn_monitor_worker(monitor_receiver, mon_core_context, mon_meta);
         }
 
         Ok(service)
     }
-}
-
-/// Broadcast a `WorkspaceChangedEvent` to all launcher instances via the core context.
-fn broadcast_event(core_context: &Option<FfiCoreContext>, meta: &PluginMeta, event: WorkspaceChangedEvent) {
-    let Some(ctx) = core_context else {
-        return;
-    };
-    let broadcaster = MessageBroadcasterInner {
-        meta: meta.clone(),
-        core_context: Some(*ctx),
-    };
-    broadcaster.broadcast_message_to_topic(event);
 }
 
 impl MessageBroadcaster for WaylandWorkspaceService {}

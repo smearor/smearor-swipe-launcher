@@ -13,6 +13,8 @@ use gtk4::ApplicationWindow;
 use gtk4::Box as GtkBox;
 use gtk4::Orientation;
 use gtk4::prelude::*;
+use smearor_model_compositor::MonitorChangeType;
+use smearor_model_compositor::WorkspaceLifecycleType;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_wrot_rotation::RotationWidget;
 use smearor_wrot_rotation::SmearorRotation;
@@ -173,7 +175,7 @@ impl LauncherInstance {
         }
     }
 
-    /// Handle a workspace change event from the Hyprland service.
+    /// Handle a workspace change event from a compositor service.
     ///
     /// Re-evaluates the layout profile with the new workspace ID and monitor
     /// index, then rebuilds areas if the resolved layout differs from the
@@ -185,5 +187,23 @@ impl LauncherInstance {
             self.instance_id, workspace_id, monitor_index
         );
         self.rebuild_areas(areas, entries);
+    }
+
+    /// Handle a monitor hotplug event from a compositor service.
+    ///
+    /// Re-evaluates the monitor mapping and rebuilds areas if the monitor
+    /// configuration affects this instance.
+    pub fn on_monitor_changed(&self, monitor_index: u32, connector_name: &str, change_type: MonitorChangeType) {
+        debug!("Instance {} monitor {} ({}): {:?}", self.instance_id, monitor_index, connector_name, change_type);
+        let (areas, entries) = self.config.get_layout_for_context(Some(connector_name), Some(monitor_index), None);
+        self.rebuild_areas(areas, entries);
+    }
+
+    /// Handle a workspace lifecycle event from a compositor service.
+    ///
+    /// Currently informational — future widgets may use this to display
+    /// workspace lists or update state.
+    pub fn on_workspace_lifecycle(&self, workspace_id: i32, monitor_index: u32, lifecycle_type: WorkspaceLifecycleType) {
+        debug!("Instance {} workspace {} on monitor {}: {:?}", self.instance_id, workspace_id, monitor_index, lifecycle_type);
     }
 }
