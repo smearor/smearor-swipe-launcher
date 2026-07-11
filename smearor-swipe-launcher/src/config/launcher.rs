@@ -71,16 +71,34 @@ impl SwipeLauncherConfig {
     }
 
     /// Get layout for specific context (monitor/workspace)
-    pub fn get_layout_for_context(&self, monitor: Option<&str>, workspace: Option<i32>) -> (&Vec<String>, &HashMap<String, ConfigEntry>) {
+    ///
+    /// Profiles are evaluated in declaration order. The first matching profile wins.
+    /// When no profile matches, the default layout (`self.areas` / `self.entries`) is returned.
+    pub fn get_layout_for_context(
+        &self,
+        monitor_name: Option<&str>,
+        monitor_index: Option<u32>,
+        workspace: Option<i32>,
+    ) -> (&Vec<String>, &HashMap<String, ConfigEntry>) {
         for profile in &self.profiles {
             match &profile.trigger {
+                LayoutTrigger::MonitorIndexWorkspace { monitor: mi, workspace: w } => {
+                    if Some(*mi) == monitor_index && Some(*w) == workspace {
+                        return (&profile.areas, &profile.entries);
+                    }
+                }
                 LayoutTrigger::MonitorWorkspace { monitor: m, workspace: w } => {
-                    if Some(m.as_str()) == monitor && Some(*w) == workspace {
+                    if Some(m.as_str()) == monitor_name && Some(*w) == workspace {
+                        return (&profile.areas, &profile.entries);
+                    }
+                }
+                LayoutTrigger::MonitorIndex(mi) => {
+                    if Some(*mi) == monitor_index {
                         return (&profile.areas, &profile.entries);
                     }
                 }
                 LayoutTrigger::Monitor(m) => {
-                    if Some(m.as_str()) == monitor {
+                    if Some(m.as_str()) == monitor_name {
                         return (&profile.areas, &profile.entries);
                     }
                 }

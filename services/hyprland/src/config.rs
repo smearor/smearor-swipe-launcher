@@ -3,6 +3,9 @@
 pub struct HyprlandServiceConfig {
     /// Optional path override for the Hyprland socket.
     pub socket_path: Option<String>,
+    /// Enable workspace change event tracking and broadcasting.
+    #[serde(default)]
+    pub enable_workspace_tracking: bool,
 }
 
 impl HyprlandServiceConfig {

@@ -1,0 +1,82 @@
+# Example configuration for a 3-monitor system.
+#
+# Each monitor needs its own launcher instance with its own config file.
+# Use this file as a template and create three copies:
+#
+#   config-monitor0.toml  → monitor = 0
+#   config-monitor1.toml  → monitor = 1
+#   config-monitor2.toml  → monitor = 2
+#
+# Launch with:
+#   smearor-swipe-launcher --config config-monitor0.toml --config config-monitor1.toml --config config-monitor2.toml \
+#     --instance monitor0 --instance monitor1 --instance monitor2
+
+areas = ["main"]
+
+[launcher]
+rotation = 0
+
+[launcher.layer]
+layer = "top"
+namespace = "smearor-bottom"
+exclusive_zone = 50
+monitor = 0
+
+[layout]
+orientation = "horizontal"
+spacing = 0
+
+# --- Layout profiles per monitor index ---
+
+# Layout for monitor 0 (primary): clock + app launcher + clock
+[[profiles]]
+trigger = { monitor_index = 0 }
+areas = ["left", "scroll", "right"]
+
+# Layout for monitor 1 (secondary): app launcher only
+[[profiles]]
+trigger = { monitor_index = 1 }
+areas = ["scroll"]
+
+# Layout for monitor 2 (tertiary): clock + app launcher
+[[profiles]]
+trigger = { monitor_index = 2 }
+areas = ["left", "scroll"]
+
+# --- Default areas (fallback when no profile matches) ---
+
+[main]
+area_type = "scroll"
+plugins = [
+    { id = "app_launcher_main", path = "target/release/libsmearor_app_launcher_widget.so" },
+]
+
+# --- Areas for monitor 0 profile ---
+
+[left]
+area_type = "fixed"
+width = 200
+plugins = [
+    { id = "clock_left", path = "target/release/libsmearor_clock_widget.so" },
+]
+
+[scroll]
+area_type = "scroll"
+plugins = [
+    { id = "app_launcher", path = "target/release/libsmearor_app_launcher_widget.so" },
+]
+
+[right]
+area_type = "fixed"
+width = 200
+plugins = [
+    { id = "clock_right", path = "target/release/libsmearor_clock_widget.so" },
+]
+
+# --- Plugin configs ---
+
+[clock_left]
+format = "%H:%M"
+
+[clock_right]
+format = "%H:%M"

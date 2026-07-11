@@ -1,0 +1,11 @@
+[package]
+name = "smearor-workspace-model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+stabby = { workspace = true }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }

@@ -214,6 +214,15 @@ impl AreaManager {
         }
     }
 
+    /// Remove all areas immediately without animation, unloading plugins.
+    ///
+    /// Used for runtime layout switching when the layout profile changes
+    /// (e.g. on monitor hotplug). After clearing, new areas can be added
+    /// via `add_area_from_config`.
+    pub fn clear_areas(&self) {
+        self.remove_all_areas_immediate();
+    }
+
     /// Add a transient area with auto-close detection
     pub fn add_transient_area(&self, area_id: &str, area_config: AreaConfig, sender_id: Option<&str>) -> Result<(), AddAreaError> {
         trace!("Adding transient area {} from sender {:?}", area_id, sender_id);

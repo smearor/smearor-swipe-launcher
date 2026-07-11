@@ -1,4 +1,5 @@
 use crate::area::area_manager::AreaManager;
+use crate::config::area::config_entry::ConfigEntry;
 use crate::config::launcher::SwipeLauncherConfig;
 use crate::context::GLOBAL_JSON_CONVERTER_REGISTRY;
 use crate::display::AreaSize;
@@ -61,8 +62,11 @@ impl LauncherInstance {
     }
 
     pub fn load_plugins(&self) {
-        for area_id in &self.config.areas {
-            if let Some(area_config) = self.config.get_area_config(area_id) {
+        let monitor_index = self.config.launcher.layer.monitor;
+        let (areas, entries) = self.config.get_layout_for_context(None, monitor_index, None);
+
+        for area_id in areas {
+            if let Some(ConfigEntry::Area(area_config)) = entries.get(area_id) {
                 for plugin_entry in &area_config.plugins {
                     trace!("Loading plugin {} on area {}", plugin_entry.id, area_id);
                     let plugin_config = self.config.plugin_config(&plugin_entry.id);
@@ -123,8 +127,11 @@ impl LauncherInstance {
             }
         };
 
-        for area_id in &config.areas {
-            if let Some(area_config) = config.get_area_config(area_id) {
+        let monitor_index = launcher_config.layer.monitor;
+        let (areas, entries) = config.get_layout_for_context(None, monitor_index, None);
+
+        for area_id in areas {
+            if let Some(ConfigEntry::Area(area_config)) = entries.get(area_id) {
                 let area_manager_clone = self.area_manager.clone();
                 let area_id_clone = area_id.clone();
                 let area_config_clone = area_config.clone();
@@ -143,5 +150,40 @@ impl LauncherInstance {
         window.present();
 
         Ok(window)
+    }
+
+    /// Rebuild areas from a resolved layout profile at runtime.
+    ///
+    /// Clears all existing areas (unloading their plugins) and adds new ones
+    /// from the given layout. Used when the layout profile changes due to
+    /// monitor hotplug or workspace changes.
+    pub fn rebuild_areas(&self, areas: &[String], entries: &HashMap<String, ConfigEntry>) {
+        if let Ok(area_manager) = self.area_manager.lock() {
+            area_manager.clear_areas();
+
+            for area_id in areas {
+                if let Some(ConfigEntry::Area(area_config)) = entries.get(area_id) {
+                    if let Err(error) = area_manager.add_area_from_config(area_id, area_config.clone()) {
+                        error!("Failed to add area {area_id}: {error}");
+                    } else {
+                        trace!("Successfully rebuilt area {area_id}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Handle a workspace change event from the Hyprland service.
+    ///
+    /// Re-evaluates the layout profile with the new workspace ID and monitor
+    /// index, then rebuilds areas if the resolved layout differs from the
+    /// current one.
+    pub fn on_workspace_changed(&self, workspace_id: i32, monitor_index: u32) {
+        let (areas, entries) = self.config.get_layout_for_context(None, Some(monitor_index), Some(workspace_id));
+        debug!(
+            "Instance {} re-evaluating layout for workspace {} on monitor {}",
+            self.instance_id, workspace_id, monitor_index
+        );
+        self.rebuild_areas(areas, entries);
     }
 }

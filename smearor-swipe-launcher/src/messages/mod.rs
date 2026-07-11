@@ -1,7 +1,10 @@
 use crate::instance::LauncherInstance;
 use gtk4::prelude::*;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageRouter;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_workspace_model::WorkspaceChangedEvent;
 use std::time::Duration;
 use std::time::Instant;
 use tracing::debug;
@@ -140,6 +143,25 @@ impl LauncherInstance {
                     plugin.on_message(envelope.clone());
                 }
             }
+        }
+
+        // Handle workspace change events from the Hyprland service.
+        if envelope.type_id == FfiEnvelopePayload::<WorkspaceChangedEvent>::TYPE_ID {
+            if !envelope.payload.is_null() {
+                let event = unsafe { &*(envelope.payload as *const WorkspaceChangedEvent) };
+                let workspace_id = event.workspace_id;
+                let monitor_index = event.monitor_index;
+                self.on_workspace_changed(workspace_id, monitor_index);
+            }
+            // Destroy payload after handling
+            if !envelope.payload.is_null() {
+                if let Some(destroy) = envelope.destroy_payload {
+                    unsafe {
+                        (destroy)(envelope.payload);
+                    }
+                }
+            }
+            return;
         }
 
         // Destroy the payload after all handlers have processed the message

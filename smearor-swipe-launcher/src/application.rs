@@ -25,6 +25,7 @@ use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
+use smearor_workspace_model::TOPIC_WORKSPACE_CHANGED;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -400,6 +401,16 @@ impl LauncherHost {
 
         // Broadcast to all instances (used by shared services for status updates)
         if target == "*" || (target.is_empty() && topic.ends_with(".status")) {
+            if let Ok(instances) = self.instances.lock() {
+                for instance in instances.values() {
+                    instance.handle_message(envelope.clone());
+                }
+            }
+            return;
+        }
+
+        // Broadcast workspace change events from the Hyprland service to all instances.
+        if target.is_empty() && topic == TOPIC_WORKSPACE_CHANGED {
             if let Ok(instances) = self.instances.lock() {
                 for instance in instances.values() {
                     instance.handle_message(envelope.clone());
