@@ -5,6 +5,7 @@ use gtk4::prelude::DisplayExt;
 use gtk4::prelude::ListModelExt;
 use gtk4::prelude::MonitorExt;
 use smearor_wrot_rotation::SmearorRotation;
+use tracing::warn;
 
 pub const DEFAULT_WIDTH: i32 = 800;
 pub const DEFAULT_HEIGHT: i32 = 100;
@@ -30,12 +31,43 @@ impl Default for AreaSize {
     }
 }
 
-pub fn calculate_area_size(rotation: SmearorRotation, default_size: i32) -> AreaSize {
+/// Resolves the monitor for the given index.
+/// Falls back to the primary monitor (index 0) if the index is
+/// out of bounds or no display is available.
+pub fn resolve_monitor(monitor_index: Option<u32>) -> Option<Monitor> {
+    let display = Display::default()?;
+    let monitors = display.monitors();
+    let index = monitor_index.unwrap_or(0);
+    monitors
+        .item(index)
+        .and_then(|m| m.downcast::<Monitor>().ok())
+        .or_else(|| monitors.item(0).and_then(|m| m.downcast::<Monitor>().ok()))
+}
+
+/// Validates the configured monitor index against the available monitors.
+/// Logs a warning if the index is out of bounds.
+pub fn validate_monitor_index(monitor_index: Option<u32>, instance_id: &str) {
+    let Some(index) = monitor_index else {
+        return;
+    };
     let Some(display) = Display::default() else {
-        return Default::default();
+        return;
     };
     let monitors = display.monitors();
-    let Some(monitor) = monitors.item(0).and_then(|m| m.downcast::<Monitor>().ok()) else {
+    let count = monitors.n_items();
+    if index >= count {
+        warn!(
+            "Instance '{}': monitor index {} is out of bounds ({} monitor(s) available), \
+             falling back to primary monitor",
+            instance_id, index, count
+        );
+    }
+}
+
+/// Calculates the area size based on rotation and the given monitor's geometry.
+/// Falls back to defaults if no monitor is available.
+pub fn calculate_area_size_for_monitor(rotation: SmearorRotation, default_size: i32, monitor: &Option<Monitor>) -> AreaSize {
+    let Some(monitor) = monitor else {
         return AreaSize::default();
     };
     let geometry = monitor.geometry();
@@ -53,4 +85,9 @@ pub fn calculate_area_size(rotation: SmearorRotation, default_size: i32) -> Area
     } else {
         AreaSize::default()
     }
+}
+
+pub fn calculate_area_size(rotation: SmearorRotation, default_size: i32) -> AreaSize {
+    let monitor = resolve_monitor(None);
+    calculate_area_size_for_monitor(rotation, default_size, &monitor)
 }

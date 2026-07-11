@@ -2,6 +2,7 @@ use crate::area::area_manager::AreaManager;
 use crate::config::launcher::SwipeLauncherConfig;
 use crate::context::GLOBAL_JSON_CONVERTER_REGISTRY;
 use crate::display::AreaSize;
+use crate::display::validate_monitor_index;
 use crate::json_converter::JsonConverterRegistry;
 use crate::plugin_manager::PluginManager;
 use crate::window::create_window;
@@ -80,6 +81,8 @@ impl LauncherInstance {
         let launcher_config = config.launcher.clone();
         let rotation = config.launcher.rotation.clone();
         let layout_config = config.layout.clone();
+
+        validate_monitor_index(launcher_config.layer.monitor, &self.instance_id);
 
         let coordinated_size = self.coordinated_size.lock().ok().and_then(|g| *g);
         let window = create_window(app, &launcher_config, coordinated_size);

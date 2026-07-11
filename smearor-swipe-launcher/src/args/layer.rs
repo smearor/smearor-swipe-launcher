@@ -10,4 +10,9 @@ pub struct LayerArguments {
     /// Namespace for the layer shell, used by compositors for rules.
     #[arg(short = 'n', long)]
     pub(crate) namespace: Option<String>,
+
+    /// Monitor index for the layer shell surface.
+    /// Overrides the config file value.
+    #[arg(long)]
+    pub(crate) monitor: Option<u32>,
 }

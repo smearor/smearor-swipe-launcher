@@ -1,7 +1,8 @@
 use crate::config::launcher::SwipeLauncherSettings;
 use crate::display::AreaSize;
 use crate::display::DEFAULT_HEIGHT;
-use crate::display::calculate_area_size;
+use crate::display::calculate_area_size_for_monitor;
+use crate::display::resolve_monitor;
 use gtk4::ApplicationWindow;
 use gtk4::prelude::*;
 use gtk4_layer_shell::Edge;
@@ -12,8 +13,10 @@ use smearor_wrot_rotation::SmearorRotation;
 /// If `coordinated_size` is provided, it overrides the calculated size.
 pub fn create_window(app: &gtk4::Application, config: &SwipeLauncherSettings, coordinated_size: Option<AreaSize>) -> ApplicationWindow {
     let rotation = config.rotation.rotation();
+    let monitor_index = config.layer.monitor;
+    let monitor = resolve_monitor(monitor_index);
     let height = config.layer.exclusive_zone().unwrap_or(DEFAULT_HEIGHT);
-    let area_size = coordinated_size.unwrap_or_else(|| calculate_area_size(rotation, height));
+    let area_size = coordinated_size.unwrap_or_else(|| calculate_area_size_for_monitor(rotation, height, &monitor));
 
     let window = ApplicationWindow::builder()
         .application(app)
@@ -22,6 +25,8 @@ pub fn create_window(app: &gtk4::Application, config: &SwipeLauncherSettings, co
         .build();
 
     window.init_layer_shell();
+
+    window.set_monitor(monitor.as_ref());
 
     if let Some(layer) = &config.layer.layer {
         window.set_layer(layer.clone().into());

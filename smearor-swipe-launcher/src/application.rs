@@ -15,9 +15,9 @@ use gtk4::Application;
 use gtk4::gdk::Display;
 use gtk4::gdk::Monitor;
 use gtk4::gio;
+use gtk4::gio::prelude::*;
 use gtk4::glib::MainContext;
 use gtk4::prelude::*;
-use serde_json;
 use smearor_model_mcp::InvokeResourceResponse;
 use smearor_model_mcp::InvokeToolResponse;
 use smearor_model_mcp::RegisterResourceMessage;
@@ -28,6 +28,8 @@ use smearor_swipe_launcher_plugin_api::MessageHandler;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
@@ -48,6 +50,7 @@ pub struct LauncherHost {
     pub(crate) instances: Arc<Mutex<HashMap<String, LauncherInstance>>>,
     pub(crate) mcp_registry: McpRegistry,
     pub(crate) mcp_response_tracker: McpResponseTracker,
+    pub(crate) hotplug_last_event: Arc<Mutex<Option<Instant>>>,
 }
 
 impl LauncherHost {
@@ -65,6 +68,7 @@ impl LauncherHost {
             instances: Arc::new(Mutex::new(HashMap::new())),
             mcp_registry: McpRegistry::new(),
             mcp_response_tracker: McpResponseTracker::new(),
+            hotplug_last_event: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -135,6 +139,19 @@ impl LauncherHost {
                     }
                 }
             }
+
+            // Register monitor hotplug signal handlers via GListModel
+            if let Some(display) = Display::default() {
+                let monitors_list = display.monitors();
+                let hotplug_clone = self_clone.clone();
+                monitors_list.connect_items_changed(move |_list, _position, _removed, _added| {
+                    if hotplug_clone.should_process_hotplug() {
+                        debug!("Monitor configuration changed (added/removed) — recalculating coordinated sizes");
+                        hotplug_clone.calculate_coordinated_sizes();
+                        hotplug_clone.rebuild_windows();
+                    }
+                });
+            }
         });
 
         self.start_broker_loop()?;
@@ -147,47 +164,103 @@ impl LauncherHost {
     /// Long-side launchers (0° / 180°) take full monitor width and have priority.
     /// Short-side launchers (90° / 270°) shrink their height so they do not
     /// overlap into the reserved space of long-side launchers.
+    ///
+    /// Instances are grouped by their configured monitor index so that
+    /// coordination only applies to instances sharing the same monitor.
     pub fn calculate_coordinated_sizes(&self) {
         let Some(display) = Display::default() else {
             return;
         };
         let monitors = display.monitors();
-        let Some(monitor) = monitors.item(0).and_then(|m| m.downcast::<Monitor>().ok()) else {
-            return;
-        };
-        let geometry = monitor.geometry();
-        let monitor_height = geometry.height();
 
         let Ok(instances) = self.instances.lock() else {
             return;
         };
 
-        // Sum exclusive-zone heights of all long-side launchers on this monitor.
-        let mut long_side_height_sum = 0_i32;
+        let mut monitor_groups: HashMap<u32, Vec<&LauncherInstance>> = HashMap::new();
         for instance in instances.values() {
-            let rotation = instance.config.launcher.rotation.rotation().to_degrees();
-            let is_long_side = (rotation - 0.0).abs() < 0.1 || (rotation - 180.0).abs() < 0.1;
-            if is_long_side {
-                let height = instance.config.launcher.layer.exclusive_zone().unwrap_or(150);
-                long_side_height_sum += height;
+            let monitor_index = instance.config.launcher.layer.monitor.unwrap_or(0);
+            monitor_groups.entry(monitor_index).or_default().push(instance);
+        }
+
+        for (monitor_index, group) in &monitor_groups {
+            let Some(monitor) = monitors.item(*monitor_index).and_then(|m| m.downcast::<Monitor>().ok()) else {
+                continue;
+            };
+            let geometry = monitor.geometry();
+            let monitor_height = geometry.height();
+
+            let mut long_side_height_sum = 0_i32;
+            for instance in group {
+                let rotation = instance.config.launcher.rotation.rotation().to_degrees();
+                let is_long_side = (rotation - 0.0).abs() < 0.1 || (rotation - 180.0).abs() < 0.1;
+                if is_long_side {
+                    let height = instance.config.launcher.layer.exclusive_zone().unwrap_or(150);
+                    long_side_height_sum += height;
+                }
+            }
+
+            for instance in group {
+                let rotation = instance.config.launcher.rotation.rotation().to_degrees();
+                let is_short_side = (rotation - 90.0).abs() < 0.1 || (rotation - 270.0).abs() < 0.1;
+                if is_short_side {
+                    let default_size = instance.config.launcher.layer.exclusive_zone().unwrap_or(150);
+                    let adjusted_height = (monitor_height - long_side_height_sum).max(default_size);
+                    let coordinated_size = AreaSize::new(default_size, adjusted_height);
+                    if let Ok(mut size) = instance.coordinated_size.lock() {
+                        *size = Some(coordinated_size);
+                    }
+                    debug!(
+                        "Instance {} short-side coordinated size: {}x{} (monitor {})",
+                        instance.instance_id, coordinated_size.width, coordinated_size.height, monitor_index
+                    );
+                }
+            }
+        }
+    }
+
+    /// Debounce hotplug events to avoid excessive rebuilds during display negotiation.
+    /// Returns true if the event should be processed, false if it was suppressed.
+    fn should_process_hotplug(&self) -> bool {
+        const HOTPLUG_DEBOUNCE: Duration = Duration::from_millis(500);
+        let Ok(mut last) = self.hotplug_last_event.lock() else {
+            return false;
+        };
+        let now = Instant::now();
+        if let Some(last_time) = *last {
+            if now.duration_since(last_time) < HOTPLUG_DEBOUNCE {
+                return false;
+            }
+        }
+        *last = Some(now);
+        true
+    }
+
+    /// Rebuild all launcher windows after a monitor configuration change.
+    /// Closes existing windows and re-creates them with updated monitor assignment.
+    pub fn rebuild_windows(&self) {
+        let Ok(instances) = self.instances.lock() else {
+            return;
+        };
+
+        for instance in instances.values() {
+            if let Ok(mut window_guard) = instance.window.lock() {
+                if let Some(window) = window_guard.take() {
+                    window.close();
+                }
             }
         }
 
-        // Adjust short-side launchers so they avoid the reserved bands.
         for instance in instances.values() {
-            let rotation = instance.config.launcher.rotation.rotation().to_degrees();
-            let is_short_side = (rotation - 90.0).abs() < 0.1 || (rotation - 270.0).abs() < 0.1;
-            if is_short_side {
-                let default_size = instance.config.launcher.layer.exclusive_zone().unwrap_or(150);
-                let adjusted_height = (monitor_height - long_side_height_sum).max(default_size);
-                let coordinated_size = AreaSize::new(default_size, adjusted_height);
-                if let Ok(mut size) = instance.coordinated_size.lock() {
-                    *size = Some(coordinated_size);
+            match instance.build_window(&self.gtk_app) {
+                Ok(window) => {
+                    if let Ok(mut window_guard) = instance.window.lock() {
+                        *window_guard = Some(window);
+                    }
                 }
-                debug!(
-                    "Instance {} short-side coordinated size: {}x{}",
-                    instance.instance_id, coordinated_size.width, coordinated_size.height
-                );
+                Err(error) => {
+                    error!("Failed to rebuild window for instance {}: {}", instance.instance_id, error);
+                }
             }
         }
     }

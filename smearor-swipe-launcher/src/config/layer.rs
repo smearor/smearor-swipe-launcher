@@ -18,6 +18,11 @@ pub struct LayerConfigFile {
     /// Use 0 to disable exclusive zone (overlay mode).
     #[serde(default)]
     pub(crate) exclusive_zone: Option<i32>,
+
+    /// Monitor index for the layer shell surface.
+    /// When None, the primary monitor (index 0) is used.
+    #[serde(default)]
+    pub(crate) monitor: Option<u32>,
 }
 
 impl LayerConfigFile {
@@ -37,6 +42,9 @@ impl MergeWithArguments<LayerArguments> for LayerConfigFile {
         }
         if let Some(namespace) = &args.namespace {
             config.namespace = Some(namespace.clone());
+        }
+        if let Some(monitor) = args.monitor {
+            config.monitor = Some(monitor);
         }
         config
     }
