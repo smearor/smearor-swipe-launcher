@@ -398,12 +398,246 @@ The `--monitor 2` argument overrides any `monitor` value in the config file.
 
 - **Monitor index out of bounds** — `resolve_monitor` falls back to the primary monitor (index 0). A warning is logged.
 - **Hotplugged monitors** — If a monitor is disconnected after the launcher starts, the layer-shell surface is typically moved by the compositor to the
-  remaining primary monitor. No special handling required.
+  remaining primary monitor. See Section 9 for runtime hotplug detection and handling.
 - **Single monitor setup** — `monitor = 0` (or unset) works as before. Setting `monitor = 1` on a single-monitor system falls back to index 0.
 - **Coordinated sizes across monitors** — Instances on different monitors are sized independently. The long-side/short-side coordination only applies to
   instances sharing the same monitor.
 
-## 8. Implementation Roadmap
+## 8. Monitor-Index-Validierung
+
+### 8.1 Problem
+
+Currently there is no validation of the configured monitor index at startup. An invalid configuration (e.g. `monitor = 5` on a system with only 2 monitors)
+fails silently at runtime — `resolve_monitor` falls back to the primary monitor without any user feedback.
+
+### 8.2 Requirements
+
+- Validate the monitor index against the number of available monitors at startup.
+- Log a **warning** (not an error) when the index is out of bounds, since monitors are hotplug-capable and may appear later.
+- Do not abort startup — fall back to the primary monitor as already implemented.
+
+### 8.3 Proposed Implementation
+
+Add a validation function in `display.rs`:
+
+```rust
+/// Validates the configured monitor index against the available monitors.
+/// Logs a warning if the index is out of bounds.
+pub fn validate_monitor_index(monitor_index: Option<u32>, instance_id: &str) {
+    let Some(index) = monitor_index else {
+        return;
+    };
+    let Some(display) = Display::default() else {
+        return;
+    };
+    let monitors = display.monitors();
+    let count = monitors.n_items();
+    if index >= count {
+        warn!(
+            "Instance '{}': monitor index {} is out of bounds ({} monitor(s) available), \
+             falling back to primary monitor",
+            instance_id,
+            index,
+            count
+        );
+    }
+}
+```
+
+Call this during `LauncherHost::create_instance` or `LauncherInstance::build_window`:
+
+```rust
+// instance.rs — in build_window, before create_window
+validate_monitor_index( self .config.launcher.layer.monitor, & self .instance_id);
+```
+
+### 8.4 Edge Cases
+
+- **No display available** — `Display::default()` returns `None`, validation is skipped silently.
+- **Index 0** — Always valid (primary monitor), no warning.
+- **Monitor appears after startup** — The warning is only logged once at startup. If the monitor
+  appears later (hotplug), the instance must be restarted or the hotplug handler (see Section 9) must
+  re-assign the window.
+
+## 9. Monitor-Hotplug-Erkennung
+
+### 9.1 Problem
+
+When a monitor is connected or disconnected at runtime, the launcher does not react. Windows remain on
+their original monitor (or are moved by the compositor), and coordinated size calculations are not
+recalculated. This is particularly relevant for laptops with docking stations.
+
+### 9.2 Requirements
+
+1. **Detect monitor add/remove events** at runtime via GDK signals.
+2. **Recalculate coordinated sizes** when the monitor configuration changes.
+3. **Re-assign windows** to the correct monitor when a configured monitor reappears.
+4. **Fall back gracefully** when a configured monitor disappears.
+
+### 9.3 GDK Signals
+
+GDK's `Display` provides two signals for monitor changes:
+
+```rust
+display.connect_monitor_added( | _display, monitor| {
+// A monitor was connected
+});
+
+display.connect_monitor_removed( | _display, monitor| {
+// A monitor was disconnected
+});
+```
+
+### 9.4 Proposed Implementation
+
+Register hotplug signal handlers in `LauncherHost::build_ui`, after all instances are created:
+
+```rust
+// application.rs — in build_ui, after instances are built
+
+let self_clone = self .clone();
+if let Some(display) = Display::default () {
+display.connect_monitor_added( move | _display, _monitor | {
+debug ! ("Monitor added — recalculating coordinated sizes");
+self_clone.calculate_coordinated_sizes();
+self_clone.rebuild_windows();
+});
+
+let self_clone2 = self.clone();
+display.connect_monitor_removed( move | _display, _monitor| {
+debug ! ("Monitor removed — recalculating coordinated sizes");
+self_clone2.calculate_coordinated_sizes();
+self_clone2.rebuild_windows();
+});
+}
+```
+
+### 9.5 Window Rebuild Strategy
+
+When a monitor change is detected, windows may need to be re-created or re-assigned. The approach
+depends on whether `gtk4-layer-shell` supports changing the monitor of an existing surface:
+
+**Option A: Re-create windows (safe, simple)**
+
+Destroy and re-build all windows via `LauncherInstance::build_window`. This ensures correct monitor
+assignment and sizing but causes a brief flicker.
+
+```rust
+impl LauncherHost {
+    pub fn rebuild_windows(&self) {
+        let Some(app) = Application::default() else {
+            return;
+        };
+
+        let Ok(instances) = self.instances.lock() else {
+            return;
+        };
+
+        for instance in instances.values() {
+            // Close existing window
+            if let Ok(mut window_guard) = instance.window.lock() {
+                if let Some(window) = window_guard.take() {
+                    window.close();
+                }
+            }
+            // Build new window with updated monitor
+            if let Err(error) = instance.build_window(&app) {
+                error!("Failed to rebuild window for instance {}: {}", instance.instance_id, error);
+            }
+        }
+    }
+}
+```
+
+**Option B: Update monitor in-place (if supported)**
+
+If `gtk4-layer-shell` allows calling `set_monitor()` on an existing surface, the window can be
+re-assigned without destruction. This avoids flicker but requires testing compositor behavior.
+
+```rust
+impl LauncherHost {
+    pub fn reassign_monitors(&self) {
+        let Ok(instances) = self.instances.lock() else {
+            return;
+        };
+
+        for instance in instances.values() {
+            if let Ok(window_guard) = instance.window.lock() {
+                if let Some(window) = &*window_guard {
+                    let monitor = resolve_monitor(instance.config.launcher.layer.monitor);
+                    if let Some(ref mon) = monitor {
+                        window.set_monitor(mon);
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**Recommendation:** Start with Option A (re-create windows). It is simpler and guaranteed to work.
+Option B can be explored as an optimization once the basic hotplug support is functional.
+
+### 9.6 Debouncing
+
+Monitor hotplug events can fire rapidly (e.g. during display negotiation). Add a debounce mechanism to
+avoid excessive rebuilds:
+
+```rust
+use std::time::{Duration, Instant};
+use std::sync::Mutex;
+
+struct HotplugDebouncer {
+    last_event: Mutex<Option<Instant>>,
+    debounce_delay: Duration,
+}
+
+impl HotplugDebouncer {
+    pub fn new(delay: Duration) -> Self {
+        HotplugDebouncer {
+            last_event: Mutex::new(None),
+            debounce_delay: delay,
+        }
+    }
+
+    pub fn should_process(&self) -> bool {
+        let Ok(mut last) = self.last_event.lock() else {
+            return false;
+        };
+        let now = Instant::now();
+        if let Some(last_time) = *last {
+            if now.duration_since(last_time) < self.debounce_delay {
+                return false;
+            }
+        }
+        *last = Some(now);
+        true
+    }
+}
+```
+
+A debounce delay of 500ms–1000ms is recommended, as display configuration changes typically settle
+within this window.
+
+### 9.7 Interaction with Monitor-Index-Validierung
+
+When a monitor is added, the validation from Section 8 may now succeed for previously invalid indices.
+The hotplug handler should re-check all instances:
+
+```rust
+pub fn rebuild_windows(&self) {
+    // ... rebuild logic ...
+    // Re-validate monitor indices for all instances
+    let Ok(instances) = self.instances.lock() else {
+        return;
+    };
+    for instance in instances.values() {
+        validate_monitor_index(instance.config.launcher.layer.monitor, &instance.instance_id);
+    }
+}
+```
+
+## 10. Implementation Roadmap
 
 ### Phase 1: Config & Args
 
@@ -432,11 +666,30 @@ The `--monitor 2` argument overrides any `monitor` value in the config file.
 |-----|-------------------------------------------------------------------|------------------|--------|
 | 4.1 | Group instances by monitor index in `calculate_coordinated_sizes` | `application.rs` | Medium |
 
-### Phase 5: Testing & Validation
+### Phase 5: Monitor-Index-Validierung
+
+| #   | Task                                                   | Files         | Effort |
+|-----|--------------------------------------------------------|---------------|--------|
+| 5.1 | Add `validate_monitor_index()` function                | `display.rs`  | Small  |
+| 5.2 | Call validation in `build_window` or `create_instance` | `instance.rs` | Small  |
+
+### Phase 6: Monitor-Hotplug-Erkennung
+
+| #   | Task                                                       | Files            | Effort |
+|-----|------------------------------------------------------------|------------------|--------|
+| 6.1 | Register `connect_monitor_added`/`connect_monitor_removed` | `application.rs` | Small  |
+| 6.2 | Implement `rebuild_windows()` method                       | `application.rs` | Medium |
+| 6.3 | Add debounce mechanism for hotplug events                  | `application.rs` | Small  |
+| 6.4 | Re-validate monitor indices after hotplug                  | `application.rs` | Small  |
+
+### Phase 7: Testing & Validation
 
 | #   | Task                                                           | Effort |
 |-----|----------------------------------------------------------------|--------|
-| 5.1 | Test single-instance with no `monitor` field (backward compat) | Small  |
-| 5.2 | Test two instances on different monitors                       | Medium |
-| 5.3 | Test out-of-bounds monitor index fallback                      | Small  |
-| 5.4 | Test CLI `--monitor` override                                  | Small  |
+| 7.1 | Test single-instance with no `monitor` field (backward compat) | Small  |
+| 7.2 | Test two instances on different monitors                       | Medium |
+| 7.3 | Test out-of-bounds monitor index fallback + warning log        | Small  |
+| 7.4 | Test CLI `--monitor` override                                  | Small  |
+| 7.5 | Test hotplug: disconnect monitor, verify fallback              | Medium |
+| 7.6 | Test hotplug: reconnect monitor, verify re-assignment          | Medium |
+| 7.7 | Test debounce: rapid hotplug events, single rebuild            | Small  |
