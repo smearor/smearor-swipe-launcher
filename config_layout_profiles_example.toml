@@ -1,4 +1,4 @@
-# Example configuration for a 3-monitor system.
+# Example configuration for a 3-monitor system with workspace-aware layouts.
 #
 # Each monitor needs its own launcher instance with its own config file.
 # Use this file as a template and create three copies:
@@ -10,6 +10,15 @@
 # Launch with:
 #   smearor-swipe-launcher --config config-monitor0.toml --config config-monitor1.toml --config config-monitor2.toml \
 #     --instance monitor0 --instance monitor1 --instance monitor2
+#
+# Workspace tracking requires enabling it in the Hyprland service config:
+#
+#   [[services]]
+#   id = "hyprland"
+#   path = "target/release/libsmearor_hyprland_service.so"
+#
+#   [hyprland]
+#   enable_workspace_tracking = true
 
 areas = ["main"]
 
@@ -26,7 +35,32 @@ monitor = 0
 orientation = "horizontal"
 spacing = 0
 
-# --- Layout profiles per monitor index ---
+# --- Layout profiles ---
+#
+# Profiles are evaluated in declaration order. The first matching profile wins.
+# When no profile matches, the default layout (areas = ["main"]) is used.
+#
+# Available triggers:
+#   { monitor_index = 0 }                          — match by GDK monitor index
+#   { monitor = "DP-1" }                           — match by connector name
+#   { workspace = 2 }                              — match by workspace ID (any monitor)
+#   { monitor_index = 0, workspace = 2 }           — match by index + workspace
+#   { monitor = "DP-1", workspace = 2 }            — match by name + workspace
+#   "Default"                                      — always matches (fallback)
+
+# --- Workspace-specific layouts for monitor 0 ---
+
+# Monitor 0, workspace 2: media controls only
+[[profiles]]
+trigger = { monitor_index = 0, workspace = 2 }
+areas = ["media_left", "media_scroll", "media_right"]
+
+# Monitor 0, workspace 3: system info layout
+[[profiles]]
+trigger = { monitor_index = 0, workspace = 3 }
+areas = ["sysinfo_left", "sysinfo_scroll"]
+
+# --- Monitor-specific layouts (fallback when workspace doesn't match) ---
 
 # Layout for monitor 0 (primary): clock + app launcher + clock
 [[profiles]]
@@ -51,7 +85,7 @@ plugins = [
     { id = "app_launcher_main", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
 
-# --- Areas for monitor 0 profile ---
+# --- Areas for monitor 0 default profile ---
 
 [left]
 area_type = "fixed"
@@ -71,6 +105,43 @@ area_type = "fixed"
 width = 200
 plugins = [
     { id = "clock_right", path = "target/release/libsmearor_clock_widget.so" },
+]
+
+# --- Areas for workspace 2 (media) on monitor 0 ---
+
+[media_left]
+area_type = "fixed"
+width = 200
+plugins = [
+    { id = "mpris_media", path = "target/release/libsmearor_mpris_widget.so" },
+]
+
+[media_scroll]
+area_type = "scroll"
+plugins = [
+    { id = "app_launcher_media", path = "target/release/libsmearor_app_launcher_widget.so" },
+]
+
+[media_right]
+area_type = "fixed"
+width = 200
+plugins = [
+    { id = "audio_media", path = "target/release/libsmearor_audio_widget.so" },
+]
+
+# --- Areas for workspace 3 (system info) on monitor 0 ---
+
+[sysinfo_left]
+area_type = "fixed"
+width = 200
+plugins = [
+    { id = "sysinfo_left", path = "target/release/libsmearor_sysinfo_widget.so" },
+]
+
+[sysinfo_scroll]
+area_type = "scroll"
+plugins = [
+    { id = "app_launcher_sysinfo", path = "target/release/libsmearor_app_launcher_widget.so" },
 ]
 
 # --- Plugin configs ---
