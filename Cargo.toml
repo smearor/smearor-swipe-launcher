@@ -34,6 +34,7 @@ members = [
     "plugins/weather",
     "services/app-launcher",
     "services/audio",
+    "services/gnome",
     "services/hyprland",
     "services/http",
     "services/mpris",
@@ -42,6 +43,7 @@ members = [
     "services/power",
     "services/sysinfo",
     "services/wallpaper",
+    "services/wayland",
     "services/weather",
     "smearor-swipe-launcher",
 ]
@@ -79,6 +81,7 @@ default-members = [
     "plugins/weather",
     "services/app-launcher",
     "services/audio",
+    "services/gnome",
     "services/hyprland",
     "services/http",
     "services/mpris",
@@ -87,6 +90,7 @@ default-members = [
     "services/power",
     "services/sysinfo",
     "services/wallpaper",
+    "services/wayland",
     "services/weather",
     "smearor-swipe-launcher",
 ]
@@ -134,4 +138,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1.23", features = ["v4"] }
 typed-builder = "0.23.2"
 which = "8.0"
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 zbus = "5"

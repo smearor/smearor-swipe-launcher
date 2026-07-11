@@ -43,6 +43,14 @@ id = "network"
 path = "target/release/libsmearor_network_service.so"
 
 [[services]]
+id = "wayland"
+path = "target/release/libsmearor_wayland_service.so"
+
+[[services]]
+id = "gnome"
+path = "target/release/libsmearor_gnome_service.so"
+
+[[services]]
 id = "wallpaper"
 path = "target/release/libsmearor_wallpaper_service.so"
 
@@ -99,3 +107,10 @@ default_theme = "Smearor"
 auto_start = false
 config_path = "wallpaper.toml"
 kill_grace_period_ms = 3000
+
+[wayland]
+enable_workspace_tracking = true
+
+[gnome]
+enable_workspace_tracking = true
+poll_interval_ms = 500
