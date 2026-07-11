@@ -1,5 +1,5 @@
 [package]
-name = "smearor-workspace-model"
+name = "smearor-model-compositor"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -22,7 +22,7 @@ smearor-mcp-server = { path = "../mcp-server" }
 smearor-model-area = { path = "../model/area" }
 smearor-model-mcp = { path = "../model/mcp" }
 smearor-model-plugin = { path = "../model/plugin" }
-smearor-workspace-model = { path = "../model/workspace" }
+smearor-model-compositor = { path = "../model/workspace" }
 smearor-swipe-launcher-plugin-api = { path = "../plugin-api" }
 smearor-wrot-rotation = { workspace = true }
 stabby = { workspace = true }

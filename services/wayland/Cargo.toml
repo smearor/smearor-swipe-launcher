@@ -19,5 +19,5 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 wayland-client = { workspace = true }
 wayland-protocols = { workspace = true }
-smearor-workspace-model = { path = "../../model/workspace" }
+smearor-model-compositor = { path = "../../model/workspace" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }

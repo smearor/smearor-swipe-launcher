@@ -1,10 +1,10 @@
 use crate::instance::LauncherInstance;
 use gtk4::prelude::*;
+use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageRouter;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
-use smearor_workspace_model::WorkspaceChangedEvent;
 use std::time::Duration;
 use std::time::Instant;
 use tracing::debug;

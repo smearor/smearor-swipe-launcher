@@ -1,4 +1,4 @@
-use smearor_workspace_model::WorkspaceChangedEvent;
+use smearor_model_compositor::WorkspaceChangedEvent;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::debug;

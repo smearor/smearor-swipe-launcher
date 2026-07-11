@@ -24,7 +24,7 @@ pub struct WorkspaceChangedEvent {
 }
 
 impl TypedMessage for WorkspaceChangedEvent {
-    const TYPE_ID: u64 = generate_type_id("smearor_workspace_model::WorkspaceChangedEvent");
+    const TYPE_ID: u64 = generate_type_id("smearor_model_compositor::WorkspaceChangedEvent");
 }
 
 impl MessageTopic for WorkspaceChangedEvent {

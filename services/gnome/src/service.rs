@@ -1,6 +1,7 @@
 use crate::config::GnomeWorkspaceServiceConfig;
 use crate::workspace::WorkspaceEvent;
 use crate::workspace::run_workspace_polling;
+use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
@@ -10,7 +11,6 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::Service;
-use smearor_workspace_model::WorkspaceChangedEvent;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;

@@ -1,6 +1,6 @@
 use crate::workspace::dbus::GnomeShellEvalProxy;
 use crate::workspace::dbus::MutterDisplayConfigProxy;
-use smearor_workspace_model::WorkspaceChangedEvent;
+use smearor_model_compositor::WorkspaceChangedEvent;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::debug;

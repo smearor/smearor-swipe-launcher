@@ -294,7 +294,7 @@ workspace group to a GDK monitor index:
 | `tokio`                             | Async runtime for the service worker                        |
 | `tracing`                           | Logging                                                     |
 | `stabby`                            | ABI-stable types                                            |
-| `smearor-workspace-model`           | `WorkspaceChangedEvent` and topic                           |
+| `smearor-model-compositor`          | `WorkspaceChangedEvent` and topic                           |
 | `smearor-swipe-launcher-plugin-api` | Service trait, FFI types                                    |
 
 ## 6. Service: `services/gnome` (D-Bus)
@@ -476,7 +476,7 @@ If no connector name can be matched, fall back to `monitor_index = 0`.
 | `tokio`                             | Async runtime                     |
 | `tracing`                           | Logging                           |
 | `stabby`                            | ABI-stable types                  |
-| `smearor-workspace-model`           | `WorkspaceChangedEvent` and topic |
+| `smearor-model-compositor`          | `WorkspaceChangedEvent` and topic |
 | `smearor-swipe-launcher-plugin-api` | Service trait, FFI types          |
 
 ## 7. Workspace Event Reference
