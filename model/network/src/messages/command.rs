@@ -17,6 +17,8 @@ pub enum NetworkCommandAction {
     Disconnect,
     /// Toggle a radio technology (WLAN, WWAN, or all).
     ToggleRadio,
+    /// Activate a connection on a specific interface (e.g., Ethernet reconnect).
+    Connect,
     /// Request a WLAN scan.
     ScanWifi,
     /// Toggle a VPN connection.
@@ -45,6 +47,8 @@ pub struct NetworkCommandMessage {
     pub profile_name: stabby::option::Option<stabby::string::String>,
     /// Whether the VPN should be active (used with `ToggleVpn`).
     pub active: bool,
+    /// Interface name for `Connect` action (e.g., "eth0").
+    pub interface_name: stabby::option::Option<stabby::string::String>,
 }
 
 impl NetworkCommandMessage {
@@ -60,10 +64,20 @@ impl NetworkCommandMessage {
         }
     }
 
-    /// Creates a disconnect command.
-    pub fn disconnect() -> Self {
+    /// Creates a disconnect command for a specific interface.
+    pub fn disconnect(interface_name: &str) -> Self {
         Self {
             action: NetworkCommandAction::Disconnect,
+            interface_name: stabby::option::Option::Some(stabby::string::String::from(interface_name)),
+            ..Default::default()
+        }
+    }
+
+    /// Creates a connect command for a specific interface (e.g., Ethernet reconnect).
+    pub fn connect(interface_name: &str) -> Self {
+        Self {
+            action: NetworkCommandAction::Connect,
+            interface_name: stabby::option::Option::Some(stabby::string::String::from(interface_name)),
             ..Default::default()
         }
     }

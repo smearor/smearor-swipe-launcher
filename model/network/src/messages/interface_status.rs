@@ -21,4 +21,6 @@ pub struct InterfaceStatus {
     pub ipv6_address: stabby::option::Option<stabby::string::String>,
     /// Whether the interface has internet access.
     pub internet_accessible: bool,
+    /// WiFi password (PSK) for the connected network, if available.
+    pub wifi_password: stabby::option::Option<stabby::string::String>,
 }

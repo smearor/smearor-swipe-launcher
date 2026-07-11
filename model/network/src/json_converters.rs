@@ -102,6 +102,7 @@ fn parse_interface_status(value: &serde_json::Value) -> InterfaceStatus {
         ipv4_address: parse_option_string(value, "ipv4_address"),
         ipv6_address: parse_option_string(value, "ipv6_address"),
         internet_accessible: value.get("internet_accessible").and_then(|v| v.as_bool()).unwrap_or(false),
+        wifi_password: parse_option_string(value, "wifi_password"),
     }
 }
 
@@ -142,6 +143,7 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(NetworkCommandMessageC
     let enabled = json.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
     let profile_name = parse_option_string(&json, "profile_name");
     let active = json.get("active").and_then(|v| v.as_bool()).unwrap_or(false);
+    let interface_name = parse_option_string(&json, "interface_name");
     NetworkCommandMessage {
         action,
         ssid,
@@ -150,6 +152,7 @@ smearor_swipe_launcher_plugin_api::impl_json_convertible!(NetworkCommandMessageC
         enabled,
         profile_name,
         active,
+        interface_name,
     }
 });
 

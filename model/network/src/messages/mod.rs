@@ -7,5 +7,6 @@ pub mod security;
 pub mod state;
 pub mod status;
 pub mod type_enum;
+pub mod view;
 pub mod vpn_profiles;
 pub mod vpn_profiles_message;

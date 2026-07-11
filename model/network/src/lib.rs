@@ -20,6 +20,7 @@ pub use messages::state::NetworkConnectionState;
 pub use messages::status::NetworkStatusMessage;
 pub use messages::status::TOPIC_STATUS;
 pub use messages::type_enum::NetworkInterfaceType;
+pub use messages::view::NetworkView;
 pub use messages::vpn_profiles::VpnProfileInfo;
 pub use messages::vpn_profiles_message::TOPIC_VPN_PROFILES;
 pub use messages::vpn_profiles_message::VpnProfilesMessage;

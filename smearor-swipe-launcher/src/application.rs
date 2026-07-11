@@ -284,8 +284,9 @@ impl LauncherHost {
             }
         }
 
-        // Service commands are routed to the shared ServiceManager
-        if topic.starts_with("service.") && !topic.ends_with(".status") {
+        // Route service.* topics to the shared ServiceManager, except for known
+        // outbound topics that services broadcast to widgets.
+        if topic.starts_with("service.") && !topic.ends_with(".status") && !topic.ends_with(".scan_results") && !topic.ends_with(".vpn_profiles") {
             let parts: Vec<&str> = topic.split('.').collect();
             if parts.len() >= 2 {
                 let target_service_id = parts[1];

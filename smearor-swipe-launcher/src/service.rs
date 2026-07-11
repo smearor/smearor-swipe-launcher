@@ -76,6 +76,14 @@ impl LoadedService {
         }
     }
 
+    pub unsafe fn start(&self) {
+        unsafe {
+            if !self.vtable.is_null() && !self.instance.is_null() {
+                ((*self.vtable).start)(self.instance);
+            }
+        }
+    }
+
     pub unsafe fn on_message(&self, message: FfiEnvelope) {
         unsafe {
             if !self.vtable.is_null() && !self.instance.is_null() {

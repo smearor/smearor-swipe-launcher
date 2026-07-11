@@ -1,7 +1,9 @@
 use crate::config::NetworkServiceConfig;
 use crate::dbus::activate_vpn;
+use crate::dbus::connect_interface;
 use crate::dbus::connect_to_wifi;
 use crate::dbus::deactivate_vpn;
+use crate::dbus::disconnect_interface;
 use crate::dbus::disconnect_wifi;
 use crate::dbus::get_all_access_points;
 use crate::dbus::get_all_interfaces;
@@ -55,8 +57,10 @@ use tracing::error;
 pub enum NetworkCommand {
     /// Connect to a WLAN access point.
     ConnectWifi(String, Option<String>),
-    /// Disconnect from the active WiFi connection.
-    DisconnectWifi,
+    /// Disconnect from an interface by interface name.
+    Disconnect(String),
+    /// Activate a connection on a specific interface (e.g., Ethernet reconnect).
+    Connect(String),
     /// Toggle a radio technology.
     ToggleRadio(String, bool),
     /// Request a WLAN scan and broadcast results.
@@ -193,17 +197,27 @@ impl MessageHandler<FfiEnvelopePayload<NetworkCommandMessage>> for NetworkServic
                 let _ = self.command_sender.send(NetworkCommand::ConnectWifi(ssid, password));
             }
             NetworkCommandAction::Disconnect => {
-                let _ = self.command_sender.send(NetworkCommand::DisconnectWifi);
+                let interface_name = message.interface_name.as_ref().map(|s| s.to_string()).unwrap_or_default();
+                debug!("Network Service: dispatching Disconnect interface={}", interface_name);
+                let _ = self.command_sender.send(NetworkCommand::Disconnect(interface_name));
+            }
+            NetworkCommandAction::Connect => {
+                let interface_name = message.interface_name.as_ref().map(|s| s.to_string()).unwrap_or_default();
+                debug!("Network Service: dispatching Connect interface={}", interface_name);
+                let _ = self.command_sender.send(NetworkCommand::Connect(interface_name));
             }
             NetworkCommandAction::ToggleRadio => {
                 let technology = message.technology.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "wifi".to_string());
+                debug!("Network Service: dispatching ToggleRadio technology={} enabled={}", technology, message.enabled);
                 let _ = self.command_sender.send(NetworkCommand::ToggleRadio(technology, message.enabled));
             }
             NetworkCommandAction::ScanWifi => {
+                debug!("Network Service: dispatching ScanWifi");
                 let _ = self.command_sender.send(NetworkCommand::ScanWifi);
             }
             NetworkCommandAction::ToggleVpn => {
                 let profile_name = message.profile_name.as_ref().map(|s| s.to_string()).unwrap_or_default();
+                debug!("Network Service: dispatching ToggleVpn profile={} active={}", profile_name, message.active);
                 let _ = self.command_sender.send(NetworkCommand::ToggleVpn(profile_name, message.active));
             }
             NetworkCommandAction::Refresh => {
@@ -399,7 +413,8 @@ impl Service for NetworkService {
                         return;
                     }
                 };
-                rt.block_on(async move {
+                let local_set = tokio::task::LocalSet::new();
+                local_set.block_on(&rt, async move {
                     if let Some(receiver) = command_receiver {
                         run_network_async(meta, core_context, receiver, config, shared_state, throughput_tracker).await;
                     }
@@ -605,6 +620,9 @@ async fn run_network_async(
         tokio::select! {
             _ = interval.tick() => {
                 do_refresh(&conn_for_refresh, &state_for_refresh, &status_sender_for_refresh, &throughput_for_refresh).await;
+                if config.enable_vpn_management {
+                    refresh_vpn(&connection, &state, &vpn_sender).await;
+                }
             }
             _ = throughput_timer.tick() => {
                 if config.enable_throughput_monitoring {
@@ -627,9 +645,26 @@ async fn run_network_async(
                         debug!("Network Service: connect WiFi ssid={ssid}");
                         connect_to_wifi(&connection, &ssid, password.as_deref()).await;
                     }
-                    Some(NetworkCommand::DisconnectWifi) => {
-                        debug!("Network Service: disconnect WiFi");
-                        disconnect_wifi(&connection).await;
+                    Some(NetworkCommand::Disconnect(interface_name)) => {
+                        debug!("Network Service: disconnect {interface_name}");
+                        if interface_name.is_empty() {
+                            disconnect_wifi(&connection).await;
+                        } else {
+                            disconnect_interface(&connection, &interface_name).await;
+                        }
+                        do_refresh(&conn_for_refresh, &state_for_refresh, &status_sender_for_refresh, &throughput_for_refresh).await;
+                    }
+                    Some(NetworkCommand::Connect(interface_name)) => {
+                        debug!("Network Service: connect interface {interface_name}");
+                        // If WiFi radio is off, enable it and wait for the device to become available
+                        let (wifi_enabled, _) = get_radio_state(&connection).await;
+                        if !wifi_enabled && interface_name.starts_with("wl") {
+                            debug!("Network Service: WiFi radio off, enabling before connect");
+                            set_wireless_enabled(&connection, true).await;
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
+                        connect_interface(&connection, &interface_name).await;
+                        do_refresh(&conn_for_refresh, &state_for_refresh, &status_sender_for_refresh, &throughput_for_refresh).await;
                     }
                     Some(NetworkCommand::ToggleRadio(technology, enabled)) => {
                         debug!("Network Service: toggle radio {technology}={enabled}");

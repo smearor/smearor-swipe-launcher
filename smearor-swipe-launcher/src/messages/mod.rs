@@ -34,7 +34,7 @@ impl LauncherInstance {
         trace!("Event Broker: Received message from '{}' on topic '{}' (type_id={})", sender_id, topic, envelope.type_id);
 
         // Rate-limit command topics to protect the broker from burst overload.
-        if topic.ends_with(".command") || topic.ends_with(".status") {
+        if topic.ends_with(".command") {
             let now = Instant::now();
             let should_drop = {
                 if let Ok(mut limiter) = self.topic_rate_limiter.lock() {
@@ -103,8 +103,22 @@ impl LauncherInstance {
             }
         }
 
-        // Broadcast status updates (e.g. audio.status, mpris.status) to all plugins
-        if topic.ends_with(".status") {
+        // Broadcast service outbound updates to all plugins.
+        // These are topics that services broadcast to widgets.
+        if topic.ends_with(".status") || topic.ends_with(".scan_results") || topic.ends_with(".vpn_profiles") {
+            if topic.starts_with("service.") {
+                for r in self.plugin_manager.plugins.iter() {
+                    let plugin = r.value();
+                    unsafe {
+                        plugin.on_message(envelope.clone());
+                    }
+                }
+            }
+        }
+
+        // Broadcast status updates (e.g. audio.status, mpris.status) to all plugins.
+        // service.*.status is already handled by the block above.
+        if topic.ends_with(".status") && !topic.starts_with("service.") {
             for r in self.plugin_manager.plugins.iter() {
                 let plugin = r.value();
                 unsafe {

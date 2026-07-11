@@ -577,3 +577,36 @@ scrolledwindow {
     color: white;
     text-shadow: 0 0 4px rgba(136, 204, 255, 0.4);
 }
+
+/* Network widget */
+.network-widget {
+    padding: 4px 8px;
+}
+
+.network-widget:hover {
+    background-color: #00a1e433;
+}
+
+.network-icon {
+    color: white;
+    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+}
+
+.network-value {
+    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
+    font-size: 16px;
+    font-weight: bold;
+    color: #ffffff;
+    text-shadow: 0 0 4px rgba(0, 170, 255, 0.6);
+}
+
+.network-info {
+    font-size: 0.8em;
+    color: #88ccff;
+    text-shadow: 0 0 4px rgba(136, 204, 255, 0.4);
+}
+
+.network-qr {
+    background-color: white;
+    border-radius: 4px;
+}

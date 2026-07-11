@@ -1107,16 +1107,25 @@ fallback_icon = "nf-md-wallpaper"
 [network_menu_widget]
 width = 100
 height = 100
-spacing = 8
-show_status = true
-show_scan_list = true
-show_airplane_toggle = true
-show_vpn_toggles = true
-show_throughput = true
-show_qr_code = true
+spacing = 0
 button_size = 48
 icon_size = 36
 max_access_points = 10
+views = ["WifiStatus", "EthernetStatus", "Throughput", "WifiScan", "Vpn", "Airplane", "QrCode"]
+icon_wifi_strength_4 = "nf-md-wifi_strength_4"
+icon_wifi_strength_3 = "nf-md-wifi_strength_3"
+icon_wifi_strength_2 = "nf-md-wifi_strength_2"
+icon_wifi_strength_1 = "nf-md-wifi_strength_1"
+icon_wifi_strength_off = "nf-md-wifi_strength_off"
+icon_ethernet_on = "nf-md-network_outline"
+icon_ethernet_off = "nf-md-network_off"
+icon_vpn_on = "nf-md-shield_key"
+icon_vpn_off = "nf-md-shield_off"
+icon_airplane_on = "nf-md-airplane"
+icon_airplane_off = "nf-md-airplane_off"
+icon_throughput = "nf-md-swap_vertical"
+icon_wifi_scan = "nf-md-wifi_strength_4"
+icon_qr_code = "nf-md-qrcode"
 longpress_topic = "area.open"
 longpress_payload = { area_id = "network_area" }
 

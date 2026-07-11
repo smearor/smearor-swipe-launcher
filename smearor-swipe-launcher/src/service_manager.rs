@@ -34,6 +34,13 @@ impl ServiceManager {
         self.services.insert(actual_service_id.clone(), service);
         debug!("Successfully loaded service: {}", actual_service_id);
 
+        if let Some(service) = self.services.get(&actual_service_id) {
+            unsafe {
+                service.start();
+            }
+            debug!("Started service: {}", actual_service_id);
+        }
+
         Ok(())
     }
 

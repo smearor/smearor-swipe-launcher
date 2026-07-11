@@ -1,30 +1,30 @@
 use crate::config::NetworkWidgetConfig;
 use gtk4::Align;
 use gtk4::Box as GtkBox;
-use gtk4::Button;
 use gtk4::DrawingArea;
-use gtk4::Entry;
+use gtk4::EventSequenceState;
 use gtk4::GestureClick;
+use gtk4::GestureDrag;
 use gtk4::GestureLongPress;
+use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
-use gtk4::Overlay;
+use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
 use gtk4::prelude::WidgetExt;
 use gtk4::prelude::*;
 use smearor_network_model::NetworkCommandMessage;
+use smearor_network_model::NetworkConnectionState;
 use smearor_network_model::NetworkInterfaceType;
 use smearor_network_model::NetworkStatusMessage;
+use smearor_network_model::NetworkView;
 use smearor_network_model::ScanResultsMessage;
 use smearor_network_model::TOPIC_SCAN_RESULTS;
 use smearor_network_model::TOPIC_STATUS;
 use smearor_network_model::TOPIC_VPN_PROFILES;
 use smearor_network_model::VpnProfilesMessage;
-use smearor_network_model::network_interface_icon_unicode;
-use smearor_network_model::wifi_security_icon_unicode;
-use smearor_network_model::wifi_signal_icon_unicode;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
@@ -39,17 +39,15 @@ use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
+use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
 use tracing::debug;
 
+type SharedImage = Rc<RefCell<Option<Image>>>;
 type SharedLabel = Rc<RefCell<Option<Label>>>;
-type SharedBox = Rc<RefCell<Option<GtkBox>>>;
 type SharedDrawingArea = Rc<RefCell<Option<DrawingArea>>>;
-type SharedOverlay = Rc<RefCell<Option<Overlay>>>;
-type ThroughputHistory = Rc<RefCell<Vec<f64>>>;
-
-const THROUGHPUT_HISTORY_MAX: usize = 60;
+type SharedString = Rc<RefCell<String>>;
 
 pub struct NetworkWidget {
     pub meta: PluginMeta,
@@ -61,14 +59,16 @@ pub struct NetworkWidget {
     pub scan_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<ScanResultsMessage>>,
     pub vpn_sender: tokio::sync::mpsc::UnboundedSender<VpnProfilesMessage>,
     pub vpn_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<VpnProfilesMessage>>,
-    pub status_label: SharedLabel,
-    pub throughput_label: SharedLabel,
-    pub scan_box: SharedBox,
-    pub vpn_box: SharedBox,
-    pub airplane_button: SharedLabel,
-    pub sparkline_area: SharedDrawingArea,
-    pub sparkline_history: ThroughputHistory,
-    pub qr_overlay: SharedOverlay,
+    pub icon_image: SharedImage,
+    pub value_label: SharedLabel,
+    pub info_label: SharedLabel,
+    pub qr_drawing_area: SharedDrawingArea,
+    pub current_view: Rc<RefCell<usize>>,
+    pub latest_status: Rc<RefCell<Option<NetworkStatusMessage>>>,
+    pub latest_scan: Rc<RefCell<Option<ScanResultsMessage>>>,
+    pub latest_vpn: Rc<RefCell<Option<VpnProfilesMessage>>>,
+    pub latest_ssid: SharedString,
+    pub latest_password: SharedString,
 }
 
 impl NetworkWidget {
@@ -90,79 +90,254 @@ impl NetworkWidget {
             scan_receiver: Some(scan_receiver),
             vpn_sender,
             vpn_receiver: Some(vpn_receiver),
-            status_label: Rc::new(RefCell::new(None)),
-            throughput_label: Rc::new(RefCell::new(None)),
-            scan_box: Rc::new(RefCell::new(None)),
-            vpn_box: Rc::new(RefCell::new(None)),
-            airplane_button: Rc::new(RefCell::new(None)),
-            sparkline_area: Rc::new(RefCell::new(None)),
-            sparkline_history: Rc::new(RefCell::new(Vec::new())),
-            qr_overlay: Rc::new(RefCell::new(None)),
+            icon_image: Rc::new(RefCell::new(None)),
+            value_label: Rc::new(RefCell::new(None)),
+            info_label: Rc::new(RefCell::new(None)),
+            qr_drawing_area: Rc::new(RefCell::new(None)),
+            current_view: Rc::new(RefCell::new(0)),
+            latest_status: Rc::new(RefCell::new(None)),
+            latest_scan: Rc::new(RefCell::new(None)),
+            latest_vpn: Rc::new(RefCell::new(None)),
+            latest_ssid: Rc::new(RefCell::new(String::new())),
+            latest_password: Rc::new(RefCell::new(String::new())),
         })
+    }
+
+    fn update_ui(&self, status: &NetworkStatusMessage) {
+        let view_index = *self.current_view.borrow();
+        let view = self.config.views.get(view_index).copied().unwrap_or(NetworkView::WifiStatus);
+
+        let icon_image = self.icon_image.clone();
+        let value_label = self.value_label.clone();
+        let info_label = self.info_label.clone();
+        let qr_area = self.qr_drawing_area.clone();
+        let config = self.config.clone();
+        let status = status.clone();
+        let latest_scan = self.latest_scan.clone();
+        let latest_vpn = self.latest_vpn.clone();
+
+        MainContext::default().spawn_local(async move {
+            if view == NetworkView::QrCode {
+                if let Some(ref area) = *qr_area.borrow() {
+                    area.set_visible(true);
+                    area.queue_draw();
+                }
+                if let Some(ref img) = *icon_image.borrow() {
+                    img.set_visible(false);
+                }
+                if let Some(ref label) = *value_label.borrow() {
+                    label.set_visible(false);
+                }
+                if let Some(ref label) = *info_label.borrow() {
+                    label.set_visible(false);
+                }
+            } else {
+                if let Some(ref area) = *qr_area.borrow() {
+                    area.set_visible(false);
+                }
+                if let Some(ref img) = *icon_image.borrow() {
+                    img.set_visible(true);
+                }
+                if let Some(ref label) = *value_label.borrow() {
+                    label.set_visible(true);
+                }
+                if let Some(ref label) = *info_label.borrow() {
+                    label.set_visible(true);
+                }
+
+                let scan = latest_scan.borrow().clone();
+                let vpn = latest_vpn.borrow().clone();
+                let (icon_name, value_text, info_text) = render_view(&status, scan.as_ref(), vpn.as_ref(), &config, view);
+
+                if let Some(ref img) = *icon_image.borrow() {
+                    set_icon_image(img, &icon_name, config.icon_size);
+                }
+                if let Some(ref label) = *value_label.borrow() {
+                    label.set_text(&value_text);
+                }
+                if let Some(ref label) = *info_label.borrow() {
+                    label.set_text(&info_text);
+                }
+            }
+        });
+    }
+
+    fn next_view(&self) {
+        let current_view = self.current_view.clone();
+        let latest_status = self.latest_status.clone();
+        let latest_scan = self.latest_scan.clone();
+        let latest_vpn = self.latest_vpn.clone();
+        let icon_image = self.icon_image.clone();
+        let value_label = self.value_label.clone();
+        let info_label = self.info_label.clone();
+        let qr_area = self.qr_drawing_area.clone();
+        let config = self.config.clone();
+
+        MainContext::default().spawn_local(async move {
+            if config.views.is_empty() {
+                return;
+            }
+            let mut idx = current_view.borrow_mut();
+            *idx = (*idx + 1) % config.views.len();
+            let view = config.views[*idx];
+            drop(idx);
+
+            if let Some(ref status) = *latest_status.borrow() {
+                if view == NetworkView::QrCode {
+                    if let Some(ref area) = *qr_area.borrow() {
+                        area.set_visible(true);
+                        area.queue_draw();
+                    }
+                    if let Some(ref img) = *icon_image.borrow() {
+                        img.set_visible(false);
+                    }
+                    if let Some(ref label) = *value_label.borrow() {
+                        label.set_visible(false);
+                    }
+                    if let Some(ref label) = *info_label.borrow() {
+                        label.set_visible(false);
+                    }
+                } else {
+                    if let Some(ref area) = *qr_area.borrow() {
+                        area.set_visible(false);
+                    }
+                    if let Some(ref img) = *icon_image.borrow() {
+                        img.set_visible(true);
+                    }
+                    if let Some(ref label) = *value_label.borrow() {
+                        label.set_visible(true);
+                    }
+                    if let Some(ref label) = *info_label.borrow() {
+                        label.set_visible(true);
+                    }
+
+                    let scan = latest_scan.borrow().clone();
+                    let vpn = latest_vpn.borrow().clone();
+                    let (icon_name, value_text, info_text) = render_view(status, scan.as_ref(), vpn.as_ref(), &config, view);
+                    if let Some(ref img) = *icon_image.borrow() {
+                        set_icon_image(img, &icon_name, config.icon_size);
+                    }
+                    if let Some(ref label) = *value_label.borrow() {
+                        label.set_text(&value_text);
+                    }
+                    if let Some(ref label) = *info_label.borrow() {
+                        label.set_text(&info_text);
+                    }
+                }
+            }
+        });
+    }
+
+    fn prev_view(&self) {
+        let current_view = self.current_view.clone();
+        let latest_status = self.latest_status.clone();
+        let latest_scan = self.latest_scan.clone();
+        let latest_vpn = self.latest_vpn.clone();
+        let icon_image = self.icon_image.clone();
+        let value_label = self.value_label.clone();
+        let info_label = self.info_label.clone();
+        let qr_area = self.qr_drawing_area.clone();
+        let config = self.config.clone();
+
+        MainContext::default().spawn_local(async move {
+            if config.views.is_empty() {
+                return;
+            }
+            let mut idx = current_view.borrow_mut();
+            if *idx == 0 {
+                *idx = config.views.len() - 1;
+            } else {
+                *idx -= 1;
+            }
+            let view = config.views[*idx];
+            drop(idx);
+
+            if let Some(ref status) = *latest_status.borrow() {
+                if view == NetworkView::QrCode {
+                    if let Some(ref area) = *qr_area.borrow() {
+                        area.set_visible(true);
+                        area.queue_draw();
+                    }
+                    if let Some(ref img) = *icon_image.borrow() {
+                        img.set_visible(false);
+                    }
+                    if let Some(ref label) = *value_label.borrow() {
+                        label.set_visible(false);
+                    }
+                    if let Some(ref label) = *info_label.borrow() {
+                        label.set_visible(false);
+                    }
+                } else {
+                    if let Some(ref area) = *qr_area.borrow() {
+                        area.set_visible(false);
+                    }
+                    if let Some(ref img) = *icon_image.borrow() {
+                        img.set_visible(true);
+                    }
+                    if let Some(ref label) = *value_label.borrow() {
+                        label.set_visible(true);
+                    }
+                    if let Some(ref label) = *info_label.borrow() {
+                        label.set_visible(true);
+                    }
+
+                    let scan = latest_scan.borrow().clone();
+                    let vpn = latest_vpn.borrow().clone();
+                    let (icon_name, value_text, info_text) = render_view(status, scan.as_ref(), vpn.as_ref(), &config, view);
+                    if let Some(ref img) = *icon_image.borrow() {
+                        set_icon_image(img, &icon_name, config.icon_size);
+                    }
+                    if let Some(ref label) = *value_label.borrow() {
+                        label.set_text(&value_text);
+                    }
+                    if let Some(ref label) = *info_label.borrow() {
+                        label.set_text(&info_text);
+                    }
+                }
+            }
+        });
     }
 
     fn start_listeners(&mut self) {
         if let Some(mut receiver) = self.status_receiver.take() {
-            let status_label = self.status_label.clone();
-            let throughput_label = self.throughput_label.clone();
-            let airplane_button = self.airplane_button.clone();
-            let sparkline_area = self.sparkline_area.clone();
-            let sparkline_history = self.sparkline_history.clone();
-            let show_status = self.config.show_status;
-            let show_throughput = self.config.show_throughput;
-            let show_airplane = self.config.show_airplane_toggle;
-            let show_sparkline = self.config.show_throughput;
+            let latest_status = self.latest_status.clone();
+            let latest_ssid = self.latest_ssid.clone();
+            let latest_password = self.latest_password.clone();
 
             MainContext::default().spawn_local(async move {
                 while let Some(status) = receiver.recv().await {
-                    if show_status && let Some(ref label) = *status_label.borrow() {
-                        update_status_label(label, &status);
-                    }
-                    if show_throughput && let Some(ref label) = *throughput_label.borrow() {
-                        update_throughput_label(label, &status);
-                    }
-                    if show_sparkline {
-                        let total_bps = (status.received_bytes_per_second + status.transmitted_bytes_per_second) as f64;
-                        {
-                            let mut history = sparkline_history.borrow_mut();
-                            history.push(total_bps);
-                            if history.len() > THROUGHPUT_HISTORY_MAX {
-                                history.remove(0);
-                            }
+                    *latest_status.borrow_mut() = Some(status.clone());
+
+                    if let Some(wifi) = status.interfaces.iter().find(|i| i.interface_type == NetworkInterfaceType::Wifi) {
+                        if let Some(ssid) = wifi.ssid.as_ref() {
+                            *latest_ssid.borrow_mut() = ssid.to_string();
                         }
-                        if let Some(ref area) = *sparkline_area.borrow() {
-                            area.queue_draw();
+                        if let Some(pw) = wifi.wifi_password.as_ref() {
+                            *latest_password.borrow_mut() = pw.to_string();
+                        } else {
+                            *latest_password.borrow_mut() = String::new();
                         }
-                    }
-                    if show_airplane && let Some(ref label) = *airplane_button.borrow() {
-                        update_airplane_button(label, &status);
                     }
                 }
             });
         }
 
         if let Some(mut receiver) = self.scan_receiver.take() {
-            let scan_box = self.scan_box.clone();
-            let max_aps = self.config.max_access_points;
-            let scan_broadcaster = self.get_broadcaster();
+            let latest_scan = self.latest_scan.clone();
 
             MainContext::default().spawn_local(async move {
                 while let Some(scan) = receiver.recv().await {
-                    if let Some(ref box_widget) = *scan_box.borrow() {
-                        update_scan_list(box_widget, &scan, max_aps, &scan_broadcaster);
-                    }
+                    *latest_scan.borrow_mut() = Some(scan);
                 }
             });
         }
 
         if let Some(mut receiver) = self.vpn_receiver.take() {
-            let vpn_box = self.vpn_box.clone();
+            let latest_vpn = self.latest_vpn.clone();
 
             MainContext::default().spawn_local(async move {
                 while let Some(vpn) = receiver.recv().await {
-                    if let Some(ref box_widget) = *vpn_box.borrow() {
-                        update_vpn_list(box_widget, &vpn);
-                    }
+                    *latest_vpn.borrow_mut() = Some(vpn);
                 }
             });
         }
@@ -171,9 +346,11 @@ impl NetworkWidget {
 
 impl MessageHandler<FfiEnvelopePayload<NetworkStatusMessage>> for NetworkWidget {
     fn handle_message(&self, message: FfiEnvelopePayload<NetworkStatusMessage>, _sender_id: &str) {
-        if let Err(e) = self.status_sender.send(message.0) {
+        if let Err(e) = self.status_sender.send(message.0.clone()) {
             debug!("Network Widget: failed to forward status to UI thread: {e}");
         }
+        *self.latest_status.borrow_mut() = Some(message.0.clone());
+        self.update_ui(&message.0);
     }
 }
 
@@ -235,7 +412,7 @@ impl WidgetBuilder for NetworkWidget {
         let config = self.config.clone();
         let broadcaster = self.get_broadcaster();
 
-        let main_box = GtkBox::builder()
+        let outer_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
             .spacing(config.spacing)
             .css_classes(["network-widget".to_string()])
@@ -243,287 +420,355 @@ impl WidgetBuilder for NetworkWidget {
             .valign(Align::Center)
             .build();
 
-        main_box.set_width_request(config.width);
-        main_box.set_height_request(config.height);
+        outer_box.set_width_request(config.width);
+        outer_box.set_height_request(config.height);
 
-        if config.show_status {
-            let label = Label::builder().css_classes(["network-status".to_string()]).halign(Align::Start).build();
-            label.set_text("\u{f0928} Loading...");
-            main_box.append(&label);
-            *self.status_label.borrow_mut() = Some(label);
-        }
+        let icon_image = Image::builder()
+            .css_classes(["network-icon".to_string()])
+            .halign(Align::Center)
+            .pixel_size(config.icon_size)
+            .build();
 
-        if config.show_throughput {
-            let label = Label::builder().css_classes(["network-throughput".to_string()]).halign(Align::Start).build();
-            label.set_text("\u{f01b7} 0 B/s  \u{f01b1} 0 B/s");
-            main_box.append(&label);
-            *self.throughput_label.borrow_mut() = Some(label);
+        let value_label = Label::builder().css_classes(["network-value".to_string()]).halign(Align::Center).build();
+        value_label.set_text("Loading...");
 
-            let sparkline = DrawingArea::builder()
-                .css_classes(["network-sparkline".to_string()])
-                .height_request(32)
-                .halign(Align::Fill)
-                .build();
-            let history = self.sparkline_history.clone();
-            sparkline.set_draw_func(move |_, cr, width, height| {
-                draw_sparkline(cr, width, height, &history.borrow());
-            });
-            main_box.append(&sparkline);
-            *self.sparkline_area.borrow_mut() = Some(sparkline);
-        }
+        let info_label = Label::builder().css_classes(["network-info".to_string()]).halign(Align::Center).build();
+        info_label.set_text("");
 
-        if config.show_airplane_toggle {
-            let airplane_box = GtkBox::builder()
-                .orientation(Orientation::Horizontal)
-                .spacing(config.spacing)
-                .halign(Align::Center)
-                .build();
+        let qr_area = DrawingArea::builder()
+            .css_classes(["network-qr".to_string()])
+            .width_request(128)
+            .height_request(128)
+            .halign(Align::Center)
+            .valign(Align::Center)
+            .visible(false)
+            .build();
 
-            let airplane_label = Label::builder().css_classes(["network-airplane".to_string()]).halign(Align::Center).build();
-            airplane_label.set_text("\u{f001d} Airplane Mode");
-            airplane_box.append(&airplane_label);
+        let latest_ssid_for_qr = self.latest_ssid.clone();
+        let latest_password_for_qr = self.latest_password.clone();
+        qr_area.set_draw_func(move |_, cr, w, h| {
+            let ssid = latest_ssid_for_qr.borrow().clone();
+            if ssid.is_empty() {
+                cr.set_source_rgba(0.5, 0.5, 0.5, 1.0);
+                cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
+                cr.set_font_size(14.0);
+                let text = "No WiFi";
+                if let Ok(extents) = cr.text_extents(text) {
+                    let tx = (w as f64 - extents.width()) / 2.0 - extents.x_bearing();
+                    let ty = (h as f64) / 2.0;
+                    let _ = cr.move_to(tx, ty);
+                    let _ = cr.show_text(text);
+                }
+                return;
+            }
+            let password = latest_password_for_qr.borrow().clone();
+            let qr_string = generate_wifi_qr_string(&ssid, &password, "WPA");
+            if let Ok(qr_code) = qrcode::QrCode::new(qr_string.as_bytes()) {
+                draw_qr_code(cr, w, h, &qr_code);
+            }
+        });
 
-            let airplane_btn = Button::builder().label("Off").css_classes(["network-airplane-button".to_string()]).build();
-            airplane_box.append(&airplane_btn);
+        outer_box.append(&icon_image);
+        outer_box.append(&value_label);
+        outer_box.append(&info_label);
+        outer_box.append(&qr_area);
 
-            let airplane_status_label = Rc::new(RefCell::new(None::<Label>));
-            *airplane_status_label.borrow_mut() = Some(airplane_label);
-            *self.airplane_button.borrow_mut() = airplane_status_label.borrow().as_ref().cloned();
-
-            let broadcaster_clone = broadcaster.clone();
-            airplane_btn.connect_clicked(move |_| {
-                let command = NetworkCommandMessage::toggle_radio("all", true);
-                broadcaster_clone.broadcast_message_to_topic(command);
-            });
-
-            main_box.append(&airplane_box);
-        }
-
-        if config.show_qr_code {
-            let qr_btn = Button::builder()
-                .label("\u{f0347} Share WiFi QR")
-                .css_classes(["network-qr-button".to_string()])
-                .halign(Align::Center)
-                .build();
-
-            let qr_overlay = self.qr_overlay.clone();
-            let status_label_qr = self.status_label.clone();
-            let broadcaster_qr = broadcaster.clone();
-            qr_btn.connect_clicked(move |_| {
-                show_qr_overlay(&qr_overlay, &status_label_qr, &broadcaster_qr);
-            });
-
-            main_box.append(&qr_btn);
-        }
-
-        if config.show_scan_list {
-            let scan_header = Label::builder().css_classes(["network-scan-header".to_string()]).halign(Align::Start).build();
-            scan_header.set_text("\u{f0928} Available Networks");
-            main_box.append(&scan_header);
-
-            let scan_box = GtkBox::builder()
-                .orientation(Orientation::Vertical)
-                .spacing(4)
-                .css_classes(["network-scan-list".to_string()])
-                .halign(Align::Fill)
-                .build();
-
-            let scan_box_clone = scan_box.clone();
-            let scan_box_for_click = scan_box.clone();
-            *self.scan_box.borrow_mut() = Some(scan_box);
-            main_box.append(&scan_box_clone);
-
-            let _ = scan_box_for_click;
-        }
-
-        if config.show_vpn_toggles {
-            let vpn_header = Label::builder().css_classes(["network-vpn-header".to_string()]).halign(Align::Start).build();
-            vpn_header.set_text("\u{f099d} VPN Profiles");
-            main_box.append(&vpn_header);
-
-            let vpn_box = GtkBox::builder()
-                .orientation(Orientation::Vertical)
-                .spacing(4)
-                .css_classes(["network-vpn-list".to_string()])
-                .halign(Align::Fill)
-                .build();
-            main_box.append(&vpn_box);
-            *self.vpn_box.borrow_mut() = Some(vpn_box);
-        }
-
-        let overlay = Overlay::new();
-        overlay.set_child(Some(&main_box));
+        *self.icon_image.borrow_mut() = Some(icon_image);
+        *self.value_label.borrow_mut() = Some(value_label);
+        *self.info_label.borrow_mut() = Some(info_label);
+        *self.qr_drawing_area.borrow_mut() = Some(qr_area);
 
         let click_topic = config.click_topic.clone();
         let click_payload = config.click_payload.clone();
         let click_instance = config.click_instance.clone();
-        let click_broadcaster = broadcaster.clone();
-        let click_gesture = GestureClick::new();
-        click_gesture.connect_released(move |_gesture, _n_press, _, _| {
-            if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
-                let payload_str = payload.to_string();
-                if let Some(instance) = click_instance.clone() {
-                    click_broadcaster.broadcast_string_to_instance(&instance, &topic, &payload_str);
-                } else {
-                    click_broadcaster.broadcast_string(&topic, &payload_str);
-                }
-            }
-        });
-        overlay.add_controller(click_gesture);
-
         let longpress_topic = config.longpress_topic.clone();
         let longpress_payload = config.longpress_payload.clone();
         let longpress_instance = config.longpress_instance.clone();
-        let longpress_broadcaster = broadcaster.clone();
-        let longpress_gesture = GestureLongPress::new();
-        longpress_gesture.connect_pressed(move |gesture, _, _| {
+        let message_broadcaster = broadcaster.clone();
+
+        let widget_self = Rc::new(Self {
+            meta: self.meta.clone(),
+            core_context: self.core_context,
+            config: self.config.clone(),
+            status_sender: self.status_sender.clone(),
+            status_receiver: None,
+            scan_sender: self.scan_sender.clone(),
+            scan_receiver: None,
+            vpn_sender: self.vpn_sender.clone(),
+            vpn_receiver: None,
+            icon_image: self.icon_image.clone(),
+            value_label: self.value_label.clone(),
+            info_label: self.info_label.clone(),
+            qr_drawing_area: self.qr_drawing_area.clone(),
+            current_view: self.current_view.clone(),
+            latest_status: self.latest_status.clone(),
+            latest_scan: self.latest_scan.clone(),
+            latest_vpn: self.latest_vpn.clone(),
+            latest_ssid: self.latest_ssid.clone(),
+            latest_password: self.latest_password.clone(),
+        });
+
+        let click_gesture = GestureClick::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
+        let broadcaster_for_click = message_broadcaster.clone();
+        let widget_for_click = widget_self.clone();
+        click_gesture.connect_released(move |gesture, _n_press, _x, _y| {
+            if let Some(seq) = gesture.current_sequence() {
+                let state = gesture.sequence_state(&seq);
+                if state == EventSequenceState::Claimed || state == EventSequenceState::Denied {
+                    return;
+                }
+            }
+            if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
+                let payload_str = payload.to_string();
+                if let Some(instance) = click_instance.clone() {
+                    broadcaster_for_click.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                } else {
+                    broadcaster_for_click.broadcast_string(&topic, &payload_str);
+                }
+            }
+            widget_for_click.handle_click();
+            gesture.set_state(EventSequenceState::Claimed);
+        });
+        outer_box.add_controller(click_gesture);
+
+        let drag_gesture = GestureDrag::new();
+        drag_gesture.set_propagation_phase(PropagationPhase::Capture);
+        let widget_for_drag = widget_self.clone();
+        drag_gesture.connect_drag_end(move |gesture, offset_x, offset_y| {
+            const SWIPE_THRESHOLD: f64 = 50.0;
+            if offset_y.abs() > offset_x.abs() && offset_y.abs() > SWIPE_THRESHOLD {
+                gesture.set_state(EventSequenceState::Claimed);
+                if offset_y < 0.0 {
+                    widget_for_drag.next_view();
+                } else {
+                    widget_for_drag.prev_view();
+                }
+            }
+        });
+        outer_box.add_controller(drag_gesture);
+
+        let longpress_gesture = GestureLongPress::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
+        let broadcaster_for_longpress = message_broadcaster.clone();
+        longpress_gesture.connect_pressed(move |gesture, _x, _y| {
             if let (Some(topic), Some(payload)) = (longpress_topic.clone(), longpress_payload.clone()) {
                 let payload_str = payload.to_string();
                 if let Some(instance) = longpress_instance.clone() {
-                    longpress_broadcaster.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                    broadcaster_for_longpress.broadcast_string_to_instance(&instance, &topic, &payload_str);
                 } else {
-                    longpress_broadcaster.broadcast_string(&topic, &payload_str);
+                    broadcaster_for_longpress.broadcast_string(&topic, &payload_str);
                 }
-                gesture.set_state(gtk4::EventSequenceState::Claimed);
             }
+            let command = NetworkCommandMessage::refresh();
+            broadcaster_for_longpress.broadcast_message_to_topic(command);
+            gesture.set_state(EventSequenceState::Claimed);
         });
-        overlay.add_controller(longpress_gesture);
-
-        *self.qr_overlay.borrow_mut() = Some(overlay.clone());
+        outer_box.add_controller(longpress_gesture);
 
         self.start_listeners();
 
-        overlay.upcast::<Widget>()
+        outer_box.upcast::<Widget>()
     }
 }
 
-fn update_status_label(label: &Label, status: &NetworkStatusMessage) {
-    let primary = &status.primary_interface;
-    let icon = network_interface_icon_unicode(&primary.interface_type);
-    let interface_name = primary.interface_name.to_string();
-
-    let text = match primary.interface_type {
-        NetworkInterfaceType::Wifi => {
-            let ssid = primary.ssid.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "Unknown".to_string());
-            let signal = primary.signal.as_ref().map(|s| *s).unwrap_or(0);
-            let signal_icon = wifi_signal_icon_unicode(signal);
-            let ip = primary.ipv4_address.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "No IP".to_string());
-            format!("{icon} {ssid} {signal_icon} {signal}%  {interface_name}  {ip}")
-        }
-        NetworkInterfaceType::Ethernet => {
-            let ip = primary.ipv4_address.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "No IP".to_string());
-            format!("{icon} Ethernet  {interface_name}  {ip}")
-        }
-        NetworkInterfaceType::Vpn => {
-            let ip = primary.ipv4_address.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "No IP".to_string());
-            format!("{icon} VPN  {interface_name}  {ip}")
-        }
-        _ => {
-            format!("{icon} {interface_name}")
-        }
-    };
-    label.set_text(&text);
-}
-
-fn update_throughput_label(label: &Label, status: &NetworkStatusMessage) {
-    let rx = format_bytes(status.received_bytes_per_second);
-    let tx = format_bytes(status.transmitted_bytes_per_second);
-    label.set_text(&format!("\u{f01b7} {rx}/s  \u{f01b1} {tx}/s"));
-}
-
-fn update_airplane_button(label: &Label, status: &NetworkStatusMessage) {
-    if status.airplane_mode {
-        label.set_text("\u{f001d} Airplane Mode ON");
-    } else {
-        label.set_text("\u{f001d} Airplane Mode");
-    }
-}
-
-fn update_scan_list(box_widget: &GtkBox, scan: &ScanResultsMessage, max_aps: usize, broadcaster: &smearor_swipe_launcher_plugin_api::MessageBroadcasterInner) {
-    while box_widget.first_child().is_some() {
-        if let Some(child) = box_widget.first_child() {
-            box_widget.remove(&child);
-        }
-    }
-
-    let count = scan.access_points.len().min(max_aps);
-    for ap in scan.access_points.iter().take(count) {
-        let ssid = ap.ssid.to_string();
-        let signal = ap.signal;
-        let signal_icon = wifi_signal_icon_unicode(signal);
-        let security_icon = wifi_security_icon_unicode(&ap.security);
-        let connected_marker = if ap.is_connected { " \u{f00c}" } else { "" };
-        let is_known = ap.is_known;
-
-        let row = GtkBox::builder()
-            .orientation(Orientation::Horizontal)
-            .spacing(8)
-            .css_classes(["network-scan-row".to_string()])
-            .halign(Align::Fill)
-            .build();
-
-        let label = Label::builder()
-            .label(format!("{signal_icon} {ssid} {security_icon}{connected_marker}"))
-            .css_classes(["network-scan-item".to_string()])
-            .halign(Align::Start)
-            .build();
-        row.append(&label);
-
-        let click_gesture = GestureClick::new();
-        let ssid_click = ssid.clone();
-        let is_known_click = is_known;
-        let broadcaster_click = broadcaster.clone();
-        click_gesture.connect_released(move |_, _, _, _| {
-            if is_known_click {
-                let command = NetworkCommandMessage::connect_wifi(&ssid_click, None);
-                broadcaster_click.broadcast_message_to_topic(command);
+fn render_view(
+    status: &NetworkStatusMessage,
+    _scan: Option<&ScanResultsMessage>,
+    _vpn: Option<&VpnProfilesMessage>,
+    config: &NetworkWidgetConfig,
+    view: NetworkView,
+) -> (String, String, String) {
+    match view {
+        NetworkView::WifiStatus => {
+            let wifi = find_interface(status, NetworkInterfaceType::Wifi);
+            if let Some(iface) = wifi {
+                let ssid = iface.ssid.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "Unknown".to_string());
+                let signal = iface.signal.as_ref().map(|s| *s).unwrap_or(0);
+                let ip = iface.ipv4_address.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "No IP".to_string());
+                let icon_name = wifi_signal_icon_name(signal, config);
+                (icon_name, ssid, format!("{signal}%  {ip}"))
             } else {
-                show_password_dialog(&ssid_click, &broadcaster_click, None);
+                (config.icon_wifi_strength_off.clone(), "WiFi Off".to_string(), String::new())
             }
-        });
-        row.add_controller(click_gesture);
-
-        box_widget.append(&row);
+        }
+        NetworkView::EthernetStatus => {
+            let eth = find_interface(status, NetworkInterfaceType::Ethernet);
+            if let Some(iface) = eth {
+                let ip = iface.ipv4_address.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "No IP".to_string());
+                let is_connected = iface.state == NetworkConnectionState::Connected;
+                let icon_name = if is_connected {
+                    config.icon_ethernet_on.clone()
+                } else {
+                    config.icon_ethernet_off.clone()
+                };
+                let state_text = if is_connected { "Connected" } else { "Disconnected" };
+                (icon_name, state_text.to_string(), format!("{}  {ip}", iface.interface_name))
+            } else {
+                (config.icon_ethernet_off.clone(), "No Ethernet".to_string(), String::new())
+            }
+        }
+        NetworkView::Throughput => {
+            let rx = format_bytes(status.received_bytes_per_second);
+            let tx = format_bytes(status.transmitted_bytes_per_second);
+            (config.icon_throughput.clone(), format!("{rx}/s"), format!("{tx}/s"))
+        }
+        NetworkView::WifiScan => {
+            let count = _scan.map(|s| s.access_points.len()).unwrap_or(0);
+            let strongest = _scan
+                .and_then(|s| s.access_points.iter().max_by_key(|ap| ap.signal))
+                .map(|ap| (ap.ssid.to_string(), ap.signal))
+                .unwrap_or_else(|| ("Unknown".to_string(), 0u8));
+            (config.icon_wifi_scan.clone(), format!("{count} networks"), format!("{}  {}%", strongest.0, strongest.1))
+        }
+        NetworkView::Vpn => {
+            let active_profile = _vpn.and_then(|v| v.profiles.iter().find(|p| p.is_active)).map(|p| p.name.to_string());
+            let inactive_profile = _vpn.and_then(|v| v.profiles.iter().find(|p| !p.is_active)).map(|p| p.name.to_string());
+            if let Some(name) = active_profile {
+                (config.icon_vpn_on.clone(), name, "Active".to_string())
+            } else if let Some(name) = inactive_profile {
+                (config.icon_vpn_off.clone(), name, "Inactive".to_string())
+            } else {
+                (config.icon_vpn_off.clone(), "No VPN".to_string(), "Not configured".to_string())
+            }
+        }
+        NetworkView::Airplane => {
+            if status.airplane_mode {
+                (config.icon_airplane_on.clone(), "ON".to_string(), "Airplane Mode".to_string())
+            } else {
+                (config.icon_airplane_off.clone(), "OFF".to_string(), "Airplane Mode".to_string())
+            }
+        }
+        NetworkView::QrCode => (config.icon_qr_code.clone(), "QR Code".to_string(), String::new()),
     }
 }
 
-fn update_vpn_list(box_widget: &GtkBox, vpn: &VpnProfilesMessage) {
-    while box_widget.first_child().is_some() {
-        if let Some(child) = box_widget.first_child() {
-            box_widget.remove(&child);
+fn wifi_signal_icon_name(signal: u8, config: &NetworkWidgetConfig) -> String {
+    if signal > 75 {
+        config.icon_wifi_strength_4.clone()
+    } else if signal > 50 {
+        config.icon_wifi_strength_3.clone()
+    } else if signal > 25 {
+        config.icon_wifi_strength_2.clone()
+    } else if signal > 0 {
+        config.icon_wifi_strength_1.clone()
+    } else {
+        config.icon_wifi_strength_off.clone()
+    }
+}
+
+fn find_interface<'a>(status: &'a NetworkStatusMessage, iface_type: NetworkInterfaceType) -> Option<&'a smearor_network_model::InterfaceStatus> {
+    status.interfaces.iter().find(|iface| iface.interface_type == iface_type)
+}
+
+fn set_icon_image(img: &Image, icon_name: &str, icon_size: i32) {
+    if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(icon_name) {
+        let resource_path = format!("/com/nerd/icons/{}.svg", gtk_icon_name);
+        if gtk4::gio::resources_lookup_data(&resource_path, gtk4::gio::ResourceLookupFlags::NONE).is_ok() {
+            img.set_resource(Some(&resource_path));
+        } else {
+            debug!("Network Widget: GResource not found for icon '{}': {}", icon_name, resource_path);
         }
+        img.set_pixel_size(icon_size);
     }
+}
 
-    if vpn.profiles.is_empty() {
-        let label = Label::builder()
-            .label("No VPN profiles configured")
-            .css_classes(["network-vpn-empty".to_string()])
-            .halign(Align::Start)
-            .build();
-        box_widget.append(&label);
-        return;
-    }
+impl NetworkWidget {
+    fn handle_click(&self) {
+        let view_index = *self.current_view.borrow();
+        let view = self.config.views.get(view_index).copied().unwrap_or(NetworkView::WifiStatus);
+        let broadcaster = self.get_broadcaster();
+        debug!("Network Widget: handle_click view={:?}", view);
 
-    for profile in vpn.profiles.iter() {
-        let name = profile.name.to_string();
-        let is_active = profile.is_active;
-        let status_icon = if is_active { "\u{f00c}" } else { "\u{f0c8}" };
-
-        let row = GtkBox::builder()
-            .orientation(Orientation::Horizontal)
-            .spacing(8)
-            .css_classes(["network-vpn-row".to_string()])
-            .halign(Align::Fill)
-            .build();
-
-        let label = Label::builder()
-            .label(format!("\u{f099d} {name} {status_icon}"))
-            .css_classes(["network-vpn-item".to_string()])
-            .halign(Align::Start)
-            .build();
-        row.append(&label);
-
-        box_widget.append(&row);
+        match view {
+            NetworkView::WifiStatus => {
+                let status_ref = self.latest_status.borrow();
+                let wifi = status_ref.as_ref().and_then(|s| find_interface(s, NetworkInterfaceType::Wifi));
+                let is_connected = wifi.map(|i| i.state == NetworkConnectionState::Connected).unwrap_or(false);
+                let is_unavailable = wifi.map(|i| i.state == NetworkConnectionState::Unavailable).unwrap_or(false);
+                debug!("Network Widget: WiFi is_connected={} is_unavailable={}", is_connected, is_unavailable);
+                if is_connected && let Some(iface) = wifi {
+                    let interface_name = iface.interface_name.to_string();
+                    debug!("Network Widget: broadcasting disconnect for WiFi interface={}", interface_name);
+                    let command = NetworkCommandMessage::disconnect(&interface_name);
+                    broadcaster.broadcast_message_to_topic(command);
+                } else if is_unavailable {
+                    debug!("Network Widget: WiFi unavailable, broadcasting connect (service will enable radio first)");
+                    let interface_name = wifi.map(|i| i.interface_name.to_string()).unwrap_or_default();
+                    if !interface_name.is_empty() {
+                        let command = NetworkCommandMessage::connect(&interface_name);
+                        broadcaster.broadcast_message_to_topic(command);
+                    }
+                } else if let Some(iface) = wifi {
+                    let interface_name = iface.interface_name.to_string();
+                    if let Some(ssid) = iface.ssid.as_ref() {
+                        debug!("Network Widget: broadcasting connect_wifi ssid={}", ssid);
+                        let command = NetworkCommandMessage::connect_wifi(&ssid.to_string(), None);
+                        broadcaster.broadcast_message_to_topic(command);
+                    } else {
+                        debug!("Network Widget: broadcasting connect for WiFi interface={} (no SSID, using saved profile)", interface_name);
+                        let command = NetworkCommandMessage::connect(&interface_name);
+                        broadcaster.broadcast_message_to_topic(command);
+                    }
+                }
+            }
+            NetworkView::EthernetStatus => {
+                let status_ref = self.latest_status.borrow();
+                let eth = status_ref.as_ref().and_then(|s| find_interface(s, NetworkInterfaceType::Ethernet));
+                if let Some(iface) = eth {
+                    let is_connected = iface.state == NetworkConnectionState::Connected;
+                    let interface_name = iface.interface_name.to_string();
+                    debug!("Network Widget: Ethernet interface={} is_connected={}", interface_name, is_connected);
+                    if is_connected {
+                        debug!("Network Widget: broadcasting disconnect for Ethernet interface={}", interface_name);
+                        let command = NetworkCommandMessage::disconnect(&interface_name);
+                        broadcaster.broadcast_message_to_topic(command);
+                    } else {
+                        debug!("Network Widget: broadcasting connect for Ethernet interface={}", interface_name);
+                        let command = NetworkCommandMessage::connect(&interface_name);
+                        broadcaster.broadcast_message_to_topic(command);
+                    }
+                }
+            }
+            NetworkView::Airplane => {
+                let is_on = self.latest_status.borrow().as_ref().map(|s| s.airplane_mode).unwrap_or(false);
+                debug!("Network Widget: Airplane current_mode={}, toggling to {}", is_on, !is_on);
+                let command = NetworkCommandMessage::toggle_radio("all", is_on);
+                broadcaster.broadcast_message_to_topic(command);
+            }
+            NetworkView::Vpn => {
+                if let Some(ref vpn) = *self.latest_vpn.borrow() {
+                    if let Some(profile) = vpn.profiles.iter().find(|p| p.is_active) {
+                        debug!("Network Widget: VPN deactivating profile={} uuid={}", profile.name, profile.uuid);
+                        let command = NetworkCommandMessage::toggle_vpn(&profile.uuid, false);
+                        broadcaster.broadcast_message_to_topic(command);
+                    } else if let Some(profile) = vpn.profiles.first() {
+                        debug!("Network Widget: VPN activating profile={} uuid={}", profile.name, profile.uuid);
+                        let command = NetworkCommandMessage::toggle_vpn(&profile.uuid, true);
+                        broadcaster.broadcast_message_to_topic(command);
+                    } else {
+                        debug!("Network Widget: VPN no profiles available");
+                    }
+                } else {
+                    debug!("Network Widget: VPN no profile data received yet");
+                }
+            }
+            NetworkView::WifiScan => {
+                let wifi_available = self
+                    .latest_status
+                    .borrow()
+                    .as_ref()
+                    .and_then(|s| find_interface(s, NetworkInterfaceType::Wifi))
+                    .map(|i| i.state != NetworkConnectionState::Unavailable)
+                    .unwrap_or(false);
+                if wifi_available {
+                    debug!("Network Widget: broadcasting scan_wifi");
+                    let command = NetworkCommandMessage::scan_wifi();
+                    broadcaster.broadcast_message_to_topic(command);
+                } else {
+                    debug!("Network Widget: skipping scan_wifi, WiFi unavailable");
+                }
+            }
+            NetworkView::Throughput | NetworkView::QrCode => {}
+        }
     }
 }
 
@@ -539,172 +784,43 @@ fn format_bytes(bytes_per_second: u64) -> String {
     }
 }
 
-/// Draws a sparkline graph of throughput history on a DrawingArea.
-fn draw_sparkline(cr: &gtk4::cairo::Context, width: i32, height: i32, history: &[f64]) {
-    if history.is_empty() {
-        return;
-    }
-
-    let w = width as f64;
-    let h = height as f64;
-    let max_val = history.iter().cloned().fold(0.0f64, f64::max).max(1.0);
-    let step_x = w / (THROUGHPUT_HISTORY_MAX as f64 - 1.0).max(1.0);
-
-    cr.set_source_rgba(0.3, 0.6, 1.0, 0.8);
-    cr.set_line_width(1.5);
-
-    let start_x = w - (history.len() as f64 - 1.0) * step_x;
-    for (i, val) in history.iter().enumerate() {
-        let x = start_x + i as f64 * step_x;
-        let y = h - (val / max_val) * (h - 4.0) - 2.0;
-        if i == 0 {
-            cr.move_to(x, y);
-        } else {
-            cr.line_to(x, y);
-        }
-    }
-    let _ = cr.stroke();
+fn escape_wifi_qr_field(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '\\' | ';' | ',' | ':' | '"' => format!("\\{c}"),
+            _ => c.to_string(),
+        })
+        .collect()
 }
 
-/// Generates a WiFi QR code string in the format `WIFI:T:WPA;S:<ssid>;P:<password>;;`.
 fn generate_wifi_qr_string(ssid: &str, password: &str, security: &str) -> String {
-    format!("WIFI:T:{security};S:{ssid};P:{password};;")
+    let escaped_ssid = escape_wifi_qr_field(ssid);
+    let escaped_password = escape_wifi_qr_field(password);
+    format!("WIFI:T:{security};S:{escaped_ssid};P:{escaped_password};;")
 }
 
-/// Renders a QR code as a grid of black/white squares on a DrawingArea.
 fn draw_qr_code(cr: &gtk4::cairo::Context, width: i32, height: i32, qr_data: &qrcode::QrCode) {
     let modules = qr_data.width() as i32;
+    let quiet_zone = 2;
+    let total_modules = modules + 2 * quiet_zone;
     let size = width.min(height);
-    let cell_size = size as f64 / modules as f64;
-    let offset_x = (width as f64 - size as f64) / 2.0;
-    let offset_y = (height as f64 - size as f64) / 2.0;
+    let cell_size = size as f64 / total_modules as f64;
+    let offset_x = (width as f64 - cell_size * total_modules as f64) / 2.0;
+    let offset_y = (height as f64 - cell_size * total_modules as f64) / 2.0;
 
     cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    cr.rectangle(offset_x, offset_y, size as f64, size as f64);
+    cr.rectangle(offset_x, offset_y, cell_size * total_modules as f64, cell_size * total_modules as f64);
     let _ = cr.fill();
 
     cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
     for y in 0..modules {
         for x in 0..modules {
             if qr_data[(x as usize, y as usize)] == qrcode::Color::Dark {
-                let px = offset_x + x as f64 * cell_size;
-                let py = offset_y + y as f64 * cell_size;
+                let px = offset_x + (x + quiet_zone) as f64 * cell_size;
+                let py = offset_y + (y + quiet_zone) as f64 * cell_size;
                 cr.rectangle(px, py, cell_size, cell_size);
                 let _ = cr.fill();
             }
         }
     }
-}
-
-/// Shows a QR code overlay for the current WiFi connection.
-fn show_qr_overlay(qr_overlay: &SharedOverlay, status_label: &SharedLabel, broadcaster: &smearor_swipe_launcher_plugin_api::MessageBroadcasterInner) {
-    let ssid = status_label
-        .borrow()
-        .as_ref()
-        .and_then(|l| l.text().to_string().split_whitespace().nth(1).map(|s| s.to_string()))
-        .unwrap_or_else(|| "Unknown".to_string());
-
-    let qr_string = generate_wifi_qr_string(&ssid, "", "WPA");
-    let qr_code = match qrcode::QrCode::new(qr_string.as_bytes()) {
-        Ok(code) => code,
-        Err(e) => {
-            debug!("Network Widget: failed to generate QR code: {e}");
-            return;
-        }
-    };
-
-    let popup = gtk4::Window::builder()
-        .title("WiFi QR Code")
-        .default_width(300)
-        .default_height(350)
-        .modal(true)
-        .build();
-
-    let content = GtkBox::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .margin_top(12)
-        .margin_bottom(12)
-        .margin_start(12)
-        .margin_end(12)
-        .build();
-
-    let qr_area = DrawingArea::builder().width_request(256).height_request(256).halign(Align::Center).build();
-    let qr_code_clone = qr_code.clone();
-    qr_area.set_draw_func(move |_, cr, w, h| {
-        draw_qr_code(cr, w, h, &qr_code_clone);
-    });
-    content.append(&qr_area);
-
-    let info_label = Label::builder().label(format!("Scan to connect to: {ssid}")).halign(Align::Center).build();
-    content.append(&info_label);
-
-    let close_btn = Button::builder().label("Close").halign(Align::Center).build();
-    let popup_clone = popup.clone();
-    close_btn.connect_clicked(move |_| {
-        popup_clone.close();
-    });
-    content.append(&close_btn);
-
-    popup.set_child(Some(&content));
-    popup.present();
-
-    let _ = qr_overlay;
-    let _ = broadcaster;
-}
-
-/// Shows a password dialog for connecting to an unknown WiFi network.
-fn show_password_dialog(ssid: &str, broadcaster: &smearor_swipe_launcher_plugin_api::MessageBroadcasterInner, parent: Option<&gtk4::Window>) {
-    let dialog = gtk4::Window::builder()
-        .title(format!("Connect to {ssid}"))
-        .default_width(300)
-        .default_height(150)
-        .modal(true)
-        .build();
-
-    if let Some(p) = parent {
-        dialog.set_transient_for(Some(p));
-    }
-
-    let content = GtkBox::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .margin_top(12)
-        .margin_bottom(12)
-        .margin_start(12)
-        .margin_end(12)
-        .build();
-
-    let label = Label::builder().label(format!("Enter password for {ssid}:")).halign(Align::Start).build();
-    content.append(&label);
-
-    let entry = Entry::builder().visibility(false).placeholder_text("Password").halign(Align::Fill).build();
-    content.append(&entry);
-
-    let btn_box = GtkBox::builder().orientation(Orientation::Horizontal).spacing(8).halign(Align::Center).build();
-
-    let cancel_btn = Button::builder().label("Cancel").build();
-    let dialog_cancel = dialog.clone();
-    cancel_btn.connect_clicked(move |_| {
-        dialog_cancel.close();
-    });
-    btn_box.append(&cancel_btn);
-
-    let connect_btn = Button::builder().label("Connect").css_classes(["suggested-action".to_string()]).build();
-    let dialog_connect = dialog.clone();
-    let ssid_clone = ssid.to_string();
-    let entry_clone = entry.clone();
-    let broadcaster_clone = broadcaster.clone();
-    connect_btn.connect_clicked(move |_| {
-        let password = entry_clone.text().to_string();
-        let command = NetworkCommandMessage::connect_wifi(&ssid_clone, Some(&password));
-        broadcaster_clone.broadcast_message_to_topic(command);
-        dialog_connect.close();
-    });
-    btn_box.append(&connect_btn);
-
-    content.append(&btn_box);
-
-    dialog.set_child(Some(&content));
-    dialog.present();
 }

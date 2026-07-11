@@ -9,6 +9,23 @@ use tracing::error;
 use zbus::Connection;
 use zbus::zvariant::OwnedValue;
 
+/// Lists all saved connection profiles via the NetworkManager Settings interface.
+async fn list_all_connections(connection: &Connection) -> Vec<zbus::zvariant::OwnedObjectPath> {
+    match NetworkManagerSettingsProxy::new(connection).await {
+        Ok(settings) => match settings.list_connections().await {
+            Ok(paths) => paths,
+            Err(e) => {
+                error!("Network Service: failed to list connections: {e}");
+                Vec::new()
+            }
+        },
+        Err(e) => {
+            error!("Network Service: failed to create NM Settings proxy: {e}");
+            Vec::new()
+        }
+    }
+}
+
 /// D-Bus proxy for `org.freedesktop.NetworkManager`.
 #[zbus::proxy(
     interface = "org.freedesktop.NetworkManager",
@@ -25,7 +42,8 @@ trait NetworkManager {
     #[zbus(property)]
     fn set_wwan_enabled(&self, value: bool) -> zbus::Result<()>;
     fn get_devices(&self) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath>>;
-    fn get_active_connections(&self) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath>>;
+    #[zbus(property)]
+    fn active_connections(&self) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath>>;
     fn activate_connection(
         &self,
         connection: &zbus::zvariant::ObjectPath<'_>,
@@ -33,13 +51,22 @@ trait NetworkManager {
         specific_object: &zbus::zvariant::ObjectPath<'_>,
     ) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
     fn deactivate_connection(&self, active_connection: &zbus::zvariant::ObjectPath<'_>) -> zbus::Result<()>;
-    fn get_all_connections(&self) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath>>;
     fn add_and_activate_connection(
         &self,
         connection: std::collections::HashMap<&str, std::collections::HashMap<&str, zbus::zvariant::Value<'_>>>,
         device: &zbus::zvariant::ObjectPath<'_>,
         specific_object: &zbus::zvariant::ObjectPath<'_>,
     ) -> zbus::Result<(zbus::zvariant::OwnedObjectPath, zbus::zvariant::OwnedObjectPath)>;
+}
+
+/// D-Bus proxy for `org.freedesktop.NetworkManager.Settings`.
+#[zbus::proxy(
+    interface = "org.freedesktop.NetworkManager.Settings",
+    default_service = "org.freedesktop.NetworkManager",
+    default_path = "/org/freedesktop/NetworkManager/Settings"
+)]
+trait NetworkManagerSettings {
+    fn list_connections(&self) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath>>;
 }
 
 /// D-Bus proxy for `org.freedesktop.NetworkManager.Device`.
@@ -124,6 +151,7 @@ trait IP6Config {
 )]
 trait SettingsConnection {
     fn get_settings(&self) -> zbus::Result<std::collections::HashMap<String, std::collections::HashMap<String, OwnedValue>>>;
+    fn get_secrets(&self, setting_name: &str) -> zbus::Result<std::collections::HashMap<String, std::collections::HashMap<String, OwnedValue>>>;
 }
 
 const NM_DEVICE_TYPE_ETHERNET: u32 = 1;
@@ -235,6 +263,7 @@ pub async fn get_all_interfaces(connection: &Connection) -> Vec<InterfaceStatus>
             ipv4_address: stabby::option::Option::None(),
             ipv6_address: stabby::option::Option::None(),
             internet_accessible,
+            wifi_password: stabby::option::Option::None(),
         };
 
         if interface_type == NetworkInterfaceType::Wifi
@@ -246,7 +275,10 @@ pub async fn get_all_interfaces(connection: &Connection) -> Vec<InterfaceStatus>
             let ssid_bytes = ap.ssid().await.unwrap_or_default();
             let ssid_str = ssid_bytes_to_string(&ssid_bytes);
             if !ssid_str.is_empty() {
-                status.ssid = stabby::option::Option::Some(stabby::string::String::from(ssid_str));
+                status.ssid = stabby::option::Option::Some(stabby::string::String::from(ssid_str.clone()));
+                if let Some(psk) = get_wifi_password(connection, &ssid_str).await {
+                    status.wifi_password = stabby::option::Option::Some(stabby::string::String::from(psk));
+                }
             }
             let signal = ap.strength().await.unwrap_or(0);
             status.signal = stabby::option::Option::Some(signal);
@@ -433,15 +465,7 @@ pub async fn get_all_access_points(connection: &Connection) -> Vec<AccessPointIn
 
 /// Retrieves the SSIDs of all saved (known) connections from NetworkManager settings.
 async fn get_known_ssids(connection: &Connection) -> Vec<String> {
-    let manager = match NetworkManagerProxy::new(connection).await {
-        Ok(proxy) => proxy,
-        Err(_) => return Vec::new(),
-    };
-
-    let conn_paths = match manager.get_all_connections().await {
-        Ok(paths) => paths,
-        Err(_) => return Vec::new(),
-    };
+    let conn_paths = list_all_connections(connection).await;
 
     let mut ssids = Vec::new();
 
@@ -474,6 +498,37 @@ async fn get_known_ssids(connection: &Connection) -> Vec<String> {
     ssids
 }
 
+/// Retrieves the WiFi password (PSK) for a given SSID from NetworkManager settings.
+pub async fn get_wifi_password(connection: &Connection, target_ssid: &str) -> Option<String> {
+    let conn_paths = list_all_connections(connection).await;
+
+    for path in conn_paths {
+        if let Ok(settings_conn) = SettingsConnectionProxy::new(connection, path.clone()).await
+            && let Ok(settings) = settings_conn.get_settings().await
+            && let Some(wireless_map) = settings.get("802-11-wireless")
+            && let Some(v) = wireless_map.get("ssid")
+            && let zbus::zvariant::Value::Array(ssid_arr) = &**v
+        {
+            let bytes: Vec<u8> = ssid_arr
+                .iter()
+                .filter_map(|v| if let zbus::zvariant::Value::U8(b) = v { Some(*b) } else { None })
+                .collect();
+            let ssid_str = ssid_bytes_to_string(&bytes);
+            if ssid_str == target_ssid {
+                if let Ok(secrets) = settings_conn.get_secrets("802-11-wireless-security").await
+                    && let Some(security_map) = secrets.get("802-11-wireless-security")
+                    && let Some(psk_value) = security_map.get("psk")
+                    && let zbus::zvariant::Value::Str(psk) = &**psk_value
+                {
+                    return Some(psk.to_string());
+                }
+                return None;
+            }
+        }
+    }
+    None
+}
+
 /// Retrieves all VPN connection profiles from NetworkManager.
 pub async fn get_vpn_profiles(connection: &Connection) -> Vec<VpnProfileInfo> {
     let manager = match NetworkManagerProxy::new(connection).await {
@@ -484,23 +539,25 @@ pub async fn get_vpn_profiles(connection: &Connection) -> Vec<VpnProfileInfo> {
         }
     };
 
-    let all_conn_paths = match manager.get_all_connections().await {
-        Ok(paths) => paths,
-        Err(e) => {
-            error!("Network Service: failed to get all connections for VPN: {e}");
-            return Vec::new();
-        }
-    };
+    let all_conn_paths = list_all_connections(connection).await;
 
-    let active_conn_paths = manager.get_active_connections().await.unwrap_or_default();
+    let active_conn_paths = manager.active_connections().await.unwrap_or_default();
+    debug!("Network Service: active_connections returned {} paths: {:?}", active_conn_paths.len(), active_conn_paths);
 
     let mut active_uuids: Vec<String> = Vec::new();
     for path in &active_conn_paths {
-        if let Ok(active) = ActiveConnectionProxy::new(connection, path.clone()).await {
-            let conn_type = active.type_().await.unwrap_or_default();
-            if conn_type == "vpn" || conn_type == "wireguard" {
-                let uuid = active.uuid().await.unwrap_or_default();
-                active_uuids.push(uuid);
+        match ActiveConnectionProxy::new(connection, path.clone()).await {
+            Ok(active) => {
+                let conn_type = active.type_().await.unwrap_or_default();
+                debug!("Network Service: active connection path={} type={}", path, conn_type);
+                if conn_type == "vpn" || conn_type == "wireguard" {
+                    let uuid = active.uuid().await.unwrap_or_default();
+                    debug!("Network Service: active VPN uuid={}", uuid);
+                    active_uuids.push(uuid);
+                }
+            }
+            Err(e) => {
+                debug!("Network Service: failed to create ActiveConnectionProxy for {}: {e}", path);
             }
         }
     }
@@ -531,6 +588,7 @@ pub async fn get_vpn_profiles(connection: &Connection) -> Vec<VpnProfileInfo> {
                     })
                     .unwrap_or_default();
                 let is_active = active_uuids.contains(&uuid);
+                debug!("Network Service: VPN profile id={} uuid={} is_active={} active_uuids={:?}", id, uuid, is_active, active_uuids);
                 profiles.push(VpnProfileInfo {
                     name: stabby::string::String::from(id),
                     vpn_type: stabby::string::String::from(conn_type_str),
@@ -554,13 +612,7 @@ pub async fn activate_vpn(connection: &Connection, uuid: &str) {
         }
     };
 
-    let all_conn_paths = match manager.get_all_connections().await {
-        Ok(paths) => paths,
-        Err(e) => {
-            error!("Network Service: failed to get connections for VPN activate: {e}");
-            return;
-        }
-    };
+    let all_conn_paths = list_all_connections(connection).await;
 
     for path in all_conn_paths {
         if let Ok(settings_conn) = SettingsConnectionProxy::new(connection, path.clone()).await
@@ -576,11 +628,16 @@ pub async fn activate_vpn(connection: &Connection, uuid: &str) {
                 .unwrap_or_default();
             if conn_uuid == uuid {
                 let empty_path = zbus::zvariant::ObjectPath::try_from("/").unwrap_or(zbus::zvariant::ObjectPath::from_static_str_unchecked("/"));
-                let _ = manager.activate_connection(&path, &empty_path, &empty_path).await;
+                if let Err(e) = manager.activate_connection(&path, &empty_path, &empty_path).await {
+                    error!("Network Service: failed to activate VPN {uuid}: {e}");
+                } else {
+                    debug!("Network Service: activated VPN {uuid}");
+                }
                 return;
             }
         }
     }
+    debug!("Network Service: no VPN connection found for uuid {uuid}");
 }
 
 /// Deactivates an active VPN connection by UUID.
@@ -593,7 +650,7 @@ pub async fn deactivate_vpn(connection: &Connection, uuid: &str) {
         }
     };
 
-    let active_conn_paths = match manager.get_active_connections().await {
+    let active_conn_paths = match manager.active_connections().await {
         Ok(paths) => paths,
         Err(e) => {
             error!("Network Service: failed to get active connections for VPN deactivate: {e}");
@@ -640,13 +697,7 @@ pub async fn connect_to_wifi(connection: &Connection, ssid: &str, password: Opti
 
     if is_known {
         debug!("Network Service: connecting to known SSID {ssid}");
-        let all_conn_paths = match manager.get_all_connections().await {
-            Ok(paths) => paths,
-            Err(e) => {
-                error!("Network Service: failed to get connections for connect: {e}");
-                return;
-            }
-        };
+        let all_conn_paths = list_all_connections(connection).await;
 
         for path in all_conn_paths {
             if let Ok(settings_conn) = SettingsConnectionProxy::new(connection, path.clone()).await
@@ -718,6 +769,70 @@ pub async fn get_wifi_device_path(connection: &Connection) -> Option<zbus::zvari
     None
 }
 
+/// Returns the D-Bus object path of the device with the given interface name, if any.
+async fn get_device_path_by_interface(connection: &Connection, interface_name: &str) -> Option<zbus::zvariant::OwnedObjectPath> {
+    let manager = NetworkManagerProxy::new(connection).await.ok()?;
+    let device_paths = manager.get_devices().await.ok()?;
+    for path in device_paths {
+        if let Ok(device) = NetworkDeviceProxy::new(connection, path.clone()).await {
+            if let Ok(iface) = device.interface().await {
+                if iface.as_str() == interface_name {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Activates a connection profile for the given interface name (e.g., Ethernet reconnect).
+/// Finds the first saved connection profile whose `connection.interface-name` matches
+/// the given interface name and activates it on the corresponding device.
+pub async fn connect_interface(connection: &Connection, interface_name: &str) {
+    let manager = match NetworkManagerProxy::new(connection).await {
+        Ok(proxy) => proxy,
+        Err(e) => {
+            error!("Network Service: failed to create NM proxy for connect_interface: {e}");
+            return;
+        }
+    };
+
+    let connection_paths = list_all_connections(connection).await;
+
+    let device_path = match get_device_path_by_interface(connection, interface_name).await {
+        Some(path) => path,
+        None => {
+            error!("Network Service: no device found for interface {interface_name}");
+            return;
+        }
+    };
+
+    let empty_path = zbus::zvariant::ObjectPath::try_from("/").unwrap_or(zbus::zvariant::ObjectPath::from_static_str_unchecked("/"));
+
+    for conn_path in connection_paths {
+        let settings = match SettingsConnectionProxy::new(connection, conn_path.clone()).await {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let settings_map = match settings.get_settings().await {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if let Some(conn_settings) = settings_map.get("connection")
+            && let Some(iface_value) = conn_settings.get("interface-name")
+        {
+            let conn_iface = iface_value.to_string().trim_matches('"').to_string();
+            if conn_iface == interface_name {
+                if let Err(e) = manager.activate_connection(&conn_path, &device_path, &empty_path).await {
+                    error!("Network Service: failed to activate connection for {interface_name}: {e}");
+                }
+                return;
+            }
+        }
+    }
+    debug!("Network Service: no saved connection profile found for interface {interface_name}");
+}
+
 /// Deactivates the active connection on the primary wireless device.
 pub async fn disconnect_wifi(connection: &Connection) {
     let manager = match NetworkManagerProxy::new(connection).await {
@@ -750,6 +865,44 @@ pub async fn disconnect_wifi(connection: &Connection) {
                 zbus::zvariant::ObjectPath::try_from(active_conn_path.as_str()).unwrap_or(zbus::zvariant::ObjectPath::from_static_str_unchecked("/"));
             if let Err(e) = manager.deactivate_connection(&obj_path).await {
                 error!("Network Service: failed to disconnect WiFi: {e}");
+            }
+            return;
+        }
+    }
+}
+
+/// Deactivates the active connection on a specific interface by interface name.
+pub async fn disconnect_interface(connection: &Connection, interface_name: &str) {
+    let manager = match NetworkManagerProxy::new(connection).await {
+        Ok(proxy) => proxy,
+        Err(e) => {
+            error!("Network Service: failed to create NM proxy for disconnect: {e}");
+            return;
+        }
+    };
+
+    let device_paths = match manager.get_devices().await {
+        Ok(paths) => paths,
+        Err(e) => {
+            error!("Network Service: failed to get devices for disconnect: {e}");
+            return;
+        }
+    };
+
+    for path in device_paths {
+        let device = match NetworkDeviceProxy::new(connection, path.clone()).await {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        let iface = device.interface().await.unwrap_or_default();
+        if iface.as_str() == interface_name
+            && let Ok(active_conn_path) = device.active_connection().await
+            && !active_conn_path.as_str().is_empty()
+        {
+            let obj_path =
+                zbus::zvariant::ObjectPath::try_from(active_conn_path.as_str()).unwrap_or(zbus::zvariant::ObjectPath::from_static_str_unchecked("/"));
+            if let Err(e) = manager.deactivate_connection(&obj_path).await {
+                error!("Network Service: failed to disconnect {interface_name}: {e}");
             }
             return;
         }

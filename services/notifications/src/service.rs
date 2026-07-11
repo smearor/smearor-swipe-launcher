@@ -309,7 +309,8 @@ impl Service for NotificationService {
                         return;
                     }
                 };
-                rt.block_on(async move {
+                let local_set = tokio::task::LocalSet::new();
+                local_set.block_on(&rt, async move {
                     if let Some(receiver) = command_receiver {
                         run_notification_async(meta, core_context, receiver, config).await;
                     }
