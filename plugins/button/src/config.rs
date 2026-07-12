@@ -43,6 +43,24 @@ pub struct ButtonConfig {
     /// Target instance for long-press message
     #[serde(default)]
     pub longpress_instance: Option<String>,
+    /// Message topic for swipe-up gesture
+    #[serde(default)]
+    pub swipe_up_topic: Option<String>,
+    /// Message payload for swipe-up gesture (JSON/TOML)
+    #[serde(default)]
+    pub swipe_up_payload: Option<Value>,
+    /// Target instance for swipe-up message
+    #[serde(default)]
+    pub swipe_up_instance: Option<String>,
+    /// Message topic for swipe-down gesture
+    #[serde(default)]
+    pub swipe_down_topic: Option<String>,
+    /// Message payload for swipe-down gesture (JSON/TOML)
+    #[serde(default)]
+    pub swipe_down_payload: Option<Value>,
+    /// Target instance for swipe-down message
+    #[serde(default)]
+    pub swipe_down_instance: Option<String>,
     /// Keyboard shortcut (e.g., "Ctrl+G", "Alt+F1")
     #[serde(default)]
     pub shortcut: Option<String>,

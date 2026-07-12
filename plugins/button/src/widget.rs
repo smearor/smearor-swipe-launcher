@@ -2,10 +2,12 @@ use crate::config::ButtonConfig;
 use gtk4::Align;
 use gtk4::Button;
 use gtk4::EventSequenceState;
+use gtk4::GestureDrag;
 use gtk4::GestureLongPress;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
+use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::gio;
 use gtk4::prelude::*;
@@ -246,6 +248,45 @@ impl WidgetBuilder for ButtonWidget {
             }
         });
         button.add_controller(long_press_gesture);
+
+        let swipe_up_topic = self.config.swipe_up_topic.clone();
+        let swipe_up_payload = self.config.swipe_up_payload.clone();
+        let swipe_up_instance = self.config.swipe_up_instance.clone();
+        let swipe_down_topic = self.config.swipe_down_topic.clone();
+        let swipe_down_payload = self.config.swipe_down_payload.clone();
+        let swipe_down_instance = self.config.swipe_down_instance.clone();
+        let has_swipe = swipe_up_topic.is_some() || swipe_down_topic.is_some();
+        let drag_gesture = GestureDrag::new();
+        drag_gesture.set_propagation_phase(PropagationPhase::Capture);
+        let message_broadcaster = self.get_broadcaster();
+        drag_gesture.connect_drag_end(move |gesture, _offset_x, offset_y| {
+            const SWIPE_THRESHOLD: f64 = 30.0;
+            if offset_y.abs() < SWIPE_THRESHOLD {
+                return;
+            }
+            if offset_y < 0.0 {
+                if let (Some(topic), Some(payload)) = (swipe_up_topic.clone(), swipe_up_payload.clone()) {
+                    let payload_str = payload.to_string();
+                    if let Some(instance) = swipe_up_instance.clone() {
+                        message_broadcaster.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                    } else {
+                        message_broadcaster.broadcast_string(&topic, &payload_str);
+                    }
+                    gesture.set_state(EventSequenceState::Claimed);
+                }
+            } else if let (Some(topic), Some(payload)) = (swipe_down_topic.clone(), swipe_down_payload.clone()) {
+                let payload_str = payload.to_string();
+                if let Some(instance) = swipe_down_instance.clone() {
+                    message_broadcaster.broadcast_string_to_instance(&instance, &topic, &payload_str);
+                } else {
+                    message_broadcaster.broadcast_string(&topic, &payload_str);
+                }
+                gesture.set_state(EventSequenceState::Claimed);
+            }
+        });
+        if has_swipe {
+            button.add_controller(drag_gesture);
+        }
 
         button.clone().upcast::<Widget>()
     }

@@ -33,6 +33,14 @@ click_payload = { area_id = "games_area" }
 longpress_topic = "area.close"
 longpress_payload = { area_id = "games_area" }
 
+# Swipe-up action
+swipe_up_topic = "area.next"
+swipe_up_payload = { area_id = "games_area" }
+
+# Swipe-down action
+swipe_down_topic = "area.prev"
+swipe_down_payload = { area_id = "games_area" }
+
 # Keyboard shortcut
 shortcut = "Ctrl+G"
 
@@ -55,8 +63,16 @@ css_classes = ["menu-button", "primary"]
 - **icon_only** (optional, default: false): Show only icon without text
 - **click_topic** (optional): Message topic for single-click
 - **click_payload** (optional): Message payload for single-click (JSON/TOML)
+- **click_instance** (optional): Target instance for single-click message
 - **longpress_topic** (optional): Message topic for long-press
 - **longpress_payload** (optional): Message payload for long-press (JSON/TOML)
+- **longpress_instance** (optional): Target instance for long-press message
+- **swipe_up_topic** (optional): Message topic for swipe-up gesture
+- **swipe_up_payload** (optional): Message payload for swipe-up gesture (JSON/TOML)
+- **swipe_up_instance** (optional): Target instance for swipe-up message
+- **swipe_down_topic** (optional): Message topic for swipe-down gesture
+- **swipe_down_payload** (optional): Message payload for swipe-down gesture (JSON/TOML)
+- **swipe_down_instance** (optional): Target instance for swipe-down message
 - **shortcut** (optional): Keyboard shortcut (e.g., "Ctrl+G", "Alt+F1")
 - **enabled** (optional, default: true): Whether the button is interactive
 - **active** (optional, default: false): Whether the button is in active state
