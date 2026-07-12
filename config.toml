@@ -83,7 +83,6 @@ plugins = [
     { id = "web_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "sysinfo_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "smarthome_menu_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "gnome_settings_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "system_tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "graphics_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "messenger_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -330,7 +329,8 @@ plugins = [
     { id = "resources", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "hardinfo", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "bustle", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "sysprof", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "sysprof", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_settings_menu_button", path = "target/release/libsmearor_button_widget.so" }
 ]
 
 [system_tools_close_button]
