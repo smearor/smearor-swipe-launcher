@@ -9,7 +9,22 @@ config.Video.outputs = ["ALL"]
 config.Video.loop_playlist = true
 config.Video.shuffle = false
 config.Video.muted = true
-config.Video.volume = 50
+config.Video.volume = 0
+config.Video.speed_percentage = 100
+config.Video.extra_arguments = []
+
+[[themes]]
+name = "Nature"
+description = "Panoramic nature videos"
+preview_image_path = ""
+preview_icon = "nf-md-pine_tree"
+wallpaper_type = "Video"
+config.Video.directory = "/home/aschaeffer/Videos/Nature"
+config.Video.outputs = ["ALL"]
+config.Video.loop_playlist = true
+config.Video.shuffle = false
+config.Video.muted = true
+config.Video.volume = 0
 config.Video.speed_percentage = 100
 config.Video.extra_arguments = []
 
@@ -24,7 +39,52 @@ config.Video.outputs = ["ALL"]
 config.Video.loop_playlist = true
 config.Video.shuffle = false
 config.Video.muted = true
-config.Video.volume = 50
+config.Video.volume = 0
+config.Video.speed_percentage = 100
+config.Video.extra_arguments = []
+
+[[themes]]
+name = "Looping"
+description = "Hintergründe, die sich endlos wiederholen"
+preview_image_path = ""
+preview_icon = "nf-md-infinity"
+wallpaper_type = "Video"
+config.Video.directory = "/home/aschaeffer/Videos/Looping Backgrounds"
+config.Video.outputs = ["ALL"]
+config.Video.loop_playlist = true
+config.Video.shuffle = false
+config.Video.muted = true
+config.Video.volume = 0
+config.Video.speed_percentage = 100
+config.Video.extra_arguments = []
+
+[[themes]]
+name = "Astro"
+description = "Astronomie Videos"
+preview_image_path = ""
+preview_icon = "nf-fae-planet"
+wallpaper_type = "Video"
+config.Video.directory = "/home/aschaeffer/Videos/Astro"
+config.Video.outputs = ["ALL"]
+config.Video.loop_playlist = true
+config.Video.shuffle = false
+config.Video.muted = true
+config.Video.volume = 0
+config.Video.speed_percentage = 100
+config.Video.extra_arguments = []
+
+[[themes]]
+name = "Nature Portrait"
+description = "Portrait nature videos"
+preview_image_path = ""
+preview_icon = "nf-md-phone_rotate_portrait"
+wallpaper_type = "Video"
+config.Video.directory = "/home/aschaeffer/Videos/Nature Portrait"
+config.Video.outputs = ["ALL"]
+config.Video.loop_playlist = true
+config.Video.shuffle = false
+config.Video.muted = true
+config.Video.volume = 0
 config.Video.speed_percentage = 100
 config.Video.extra_arguments = []
 
