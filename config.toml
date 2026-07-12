@@ -650,7 +650,7 @@ follows_rotation = true
 [maps_menu_button]
 defaults = "menu_button"
 text = "Maps"
-icon = "nf-md-map"
+icon = "nf-md-globe_model"
 icon_size = 36
 tooltip = "Maps"
 css_classes = ["menu-button", "maps-icon-color"]
@@ -688,7 +688,7 @@ follows_rotation = true
 [reading_and_knowledge_menu_button]
 defaults = "menu_button"
 text = "Reading"
-icon = "nf-md-book_open"
+icon = "nf-md-book_open_variant"
 icon_size = 36
 tooltip = "Reading and Knowledge"
 css_classes = ["menu-button", "reading-icon-color"]
@@ -850,7 +850,7 @@ click_payload = { area_id = "tools_area" }
 [video_menu_button]
 defaults = "menu_button"
 text = "Video"
-icon = "multimedia-video-player-symbolic"
+icon = "nf-md-video_outline"
 tooltip = "Video"
 click_payload = { area_id = "video_area" }
 longpress_payload = { area_id = "video_area" }
@@ -903,7 +903,7 @@ click_payload = { area_id = "video_area" }
 [music_menu_button]
 defaults = "menu_button"
 text = "Music"
-icon = "music-app-symbolic"
+icon = "nf-md-music"
 tooltip = "Music"
 click_payload = { area_id = "music_area" }
 longpress_payload = { area_id = "music_area" }
@@ -941,7 +941,7 @@ click_payload = { area_id = "music_area" }
 [web_menu_button]
 defaults = "menu_button"
 text = "Web"
-icon = "applications-internet-symbolic"
+icon = "nf-md-firefox"
 tooltip = "Web"
 click_payload = { area_id = "web_area" }
 longpress_payload = { area_id = "web_area" }
