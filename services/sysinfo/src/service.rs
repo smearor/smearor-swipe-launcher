@@ -68,6 +68,7 @@ pub struct LatestState {
 pub struct SysinfoService {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
+    #[allow(unused)]
     pub config: SysinfoServiceConfig,
     pub command_sender: tokio::sync::mpsc::UnboundedSender<SysinfoCommandAction>,
     pub latest_state: Arc<RwLock<LatestState>>,

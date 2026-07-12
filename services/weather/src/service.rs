@@ -42,6 +42,7 @@ pub struct LatestWeatherState {
 pub struct WeatherService {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
+    #[allow(unused)]
     pub config: WeatherServiceConfig,
     pub command_sender: tokio::sync::mpsc::UnboundedSender<WeatherCommandAction>,
     pub latest_state: Arc<RwLock<LatestWeatherState>>,

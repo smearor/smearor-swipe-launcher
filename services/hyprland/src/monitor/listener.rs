@@ -1,4 +1,5 @@
 use crate::monitor::event::MonitorEvent;
+use crate::service::ensure_hyprland_instance_signature;
 use tokio::sync::mpsc;
 use tracing::debug;
 
@@ -17,6 +18,7 @@ pub fn spawn_monitor_listener(event_sender: mpsc::UnboundedSender<MonitorEvent>)
         };
 
         rt.block_on(async move {
+            ensure_hyprland_instance_signature();
             loop {
                 let mut listener = hyprland::event_listener::EventListener::new();
 

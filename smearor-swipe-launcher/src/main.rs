@@ -28,6 +28,7 @@ pub use service_manager::ServiceManager;
 use crate::mcp_response_tracker::McpResponseTracker;
 use clap::Parser;
 use gtk4::Application;
+use gtk4::glib::ControlFlow;
 use gtk4::glib::MainContext;
 use gtk4::prelude::ApplicationExt;
 use miette::IntoDiagnostic;
@@ -43,6 +44,8 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
@@ -130,19 +133,25 @@ async fn main() -> Result<()> {
     // Without this, SIGINT kills the process immediately and service threads
     // (network polling, audio events, etc.) keep running in the background.
     //
-    // gtk4::Application is not Send, so we use a oneshot channel: the tokio
-    // task waits for SIGINT and signals the GLib main context which calls quit.
-    let (signal_tx, signal_rx) = tokio::sync::oneshot::channel::<()>();
+    // gtk4::Application is not Send, so we use an Arc<AtomicBool> flag:
+    // a tokio task waits for SIGINT and sets the flag; a GLib timeout source
+    // polls the flag on the main thread and calls gtk_app.quit().
+    let shutdown_flag = Arc::new(AtomicBool::new(false));
+    let shutdown_flag_for_signal = shutdown_flag.clone();
     tokio::spawn(async move {
         if tokio::signal::ctrl_c().await.is_ok() {
             debug!("SIGINT received, quitting GTK application gracefully");
-            let _ = signal_tx.send(());
+            shutdown_flag_for_signal.store(true, Ordering::SeqCst);
         }
     });
     let gtk_app_for_signal = gtk_app.clone();
-    MainContext::default().spawn_local(async move {
-        let _ = signal_rx.await;
-        gtk_app_for_signal.quit();
+    gtk4::glib::source::timeout_add_local(std::time::Duration::from_millis(200), move || {
+        if shutdown_flag.load(Ordering::SeqCst) {
+            gtk_app_for_signal.quit();
+            ControlFlow::Break
+        } else {
+            ControlFlow::Continue
+        }
     });
 
     host.run();

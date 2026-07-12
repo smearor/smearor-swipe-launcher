@@ -23,6 +23,7 @@ use crate::whitelist::is_url_allowed;
 pub struct HttpService {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
+    #[allow(unused)]
     pub config: HttpServiceConfig,
     pub request_sender: tokio::sync::mpsc::UnboundedSender<HttpRequestMessage>,
 }

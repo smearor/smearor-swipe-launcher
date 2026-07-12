@@ -85,6 +85,7 @@ impl Default for PulseState {
 pub struct AudioService {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
+    #[allow(unused)]
     pub config: AudioServiceConfig,
     pub command_sender: tokio::sync::mpsc::UnboundedSender<PulseCommand>,
 }

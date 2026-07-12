@@ -90,6 +90,7 @@ struct MprisState {
 pub struct MprisService {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
+    #[allow(unused)]
     pub config: MprisServiceConfig,
     pub command_sender: tokio::sync::mpsc::UnboundedSender<MprisCommand>,
 }

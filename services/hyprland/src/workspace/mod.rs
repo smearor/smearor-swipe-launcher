@@ -1,3 +1,4 @@
+use crate::service::ensure_hyprland_instance_signature;
 use hyprland::shared::HyprData;
 use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_model_compositor::WorkspaceLifecycleEvent;
@@ -33,6 +34,7 @@ pub fn spawn_workspace_listener(event_sender: mpsc::UnboundedSender<WorkspaceEve
         };
 
         rt.block_on(async move {
+            ensure_hyprland_instance_signature();
             loop {
                 let mut listener = hyprland::event_listener::EventListener::new();
 
