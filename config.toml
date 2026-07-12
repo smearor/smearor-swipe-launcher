@@ -87,7 +87,6 @@ plugins = [
     { id = "system_tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "graphics_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "messenger_menu_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "fonts_and_icons_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "astro_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "maps_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "reading_and_knowledge_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -453,7 +452,8 @@ plugins = [
     { id = "krita", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "inkscape", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "loupe", path = "target/release/libsmearor_app_launcher_widget.so" },
-    { id = "fraqtive", path = "target/release/libsmearor_app_launcher_widget.so" }
+    { id = "fraqtive", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "fonts_and_icons_menu_button", path = "target/release/libsmearor_button_widget.so" }
 ]
 
 [graphics_close_button]
