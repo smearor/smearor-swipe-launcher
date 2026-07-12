@@ -117,3 +117,18 @@ config.Image.transitions = false
 config.Image.transition_effect = "fade"
 config.Image.transition_duration_ms = 1000
 config.Image.extra_arguments = []
+
+[[themes]]
+name = "Tønsåsheia"
+description = ""
+preview_image_path = ""
+preview_icon = "nf-md-ski_cross_country"
+wallpaper_type = "Image"
+config.Image.directory = "/home/aschaeffer/Bilder/Gallerie/Norwegen/2025/2025-07-04-Tønsåsheia"
+config.Image.outputs = ["ALL"]
+config.Image.display_duration_ms = 30000
+config.Image.shuffle = true
+config.Image.transitions = false
+config.Image.transition_effect = "fade"
+config.Image.transition_duration_ms = 1000
+config.Image.extra_arguments = []
