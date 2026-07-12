@@ -88,6 +88,28 @@ pub struct ButtonConfig {
     /// Fallback text when the topic has not yet delivered a message.
     #[serde(default)]
     pub label_fallback: Option<String>,
+    /// Topic whose messages update the internal state (JSON)
+    #[serde(default)]
+    pub state_topic: Option<String>,
+    /// Initial one-shot request topic (sent on widget construction)
+    #[serde(default)]
+    pub init_topic: Option<String>,
+    /// Initial one-shot request payload (JSON/TOML)
+    #[serde(default)]
+    pub init_payload: Option<Value>,
+    /// Target instance for the initial one-shot request
+    #[serde(default)]
+    pub init_instance: Option<String>,
+    /// Icon expression evaluated against the internal state.
+    /// Supports static icon names and conditional expressions like "{ison?nf-md-fan:nf-md-fan-off}".
+    #[serde(default)]
+    pub state_icon: Option<String>,
+    /// CSS class added when the internal state is truthy, removed when falsy.
+    #[serde(default)]
+    pub state_css_class: Option<String>,
+    /// Label format string evaluated against the internal state.
+    #[serde(default)]
+    pub state_label: Option<String>,
 }
 
 impl ButtonConfig {

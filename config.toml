@@ -257,14 +257,111 @@ open_transition = "SlideUp"
 css_classes = ["smarthome-area-bg"]
 plugins = [
     { id = "smarthome_close_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "shelly_light_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "shelly_rgbw_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" }
+    { id = "office_room_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "livingroom_room_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "bedroom_room_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "bathroom_room_button", path = "target/release/libsmearor_button_widget.so" }
 ]
 
 [smarthome_close_button]
 defaults = "close_button"
 click_payload = { area_id = "smarthome_area" }
+
+[office_room_button]
+defaults = "menu_button"
+text = "Office"
+icon = "nf-md-monitor"
+icon_size = 36
+tooltip = "Office"
+css_classes = ["menu-button", "glow-blue"]
+click_payload = { area_id = "office_area" }
+
+[livingroom_room_button]
+defaults = "menu_button"
+text = "Living Room"
+icon = "nf-md-sofa"
+icon_size = 36
+tooltip = "Living Room"
+css_classes = ["menu-button", "glow-blue"]
+click_payload = { area_id = "livingroom_area" }
+
+[bedroom_room_button]
+defaults = "menu_button"
+text = "Bedroom"
+icon = "nf-md-bed"
+icon_size = 36
+tooltip = "Bedroom"
+css_classes = ["menu-button", "glow-blue"]
+click_payload = { area_id = "bedroom_area" }
+
+[bathroom_room_button]
+defaults = "menu_button"
+text = "Bathroom"
+icon = "nf-md-shower"
+icon_size = 36
+tooltip = "Bathroom"
+css_classes = ["menu-button", "glow-blue"]
+click_payload = { area_id = "bathroom_area" }
+
+[office_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["smarthome-area-bg"]
+plugins = [
+    { id = "office_area_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_office_desk_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_office_window_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_office_kommode_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" }
+]
+
+[office_area_close_button]
+defaults = "close_button"
+click_payload = { area_id = "office_area" }
+
+[livingroom_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["smarthome-area-bg"]
+plugins = [
+    { id = "livingroom_area_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_livingroom_couch_floor_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_livingroom_couch_wall_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_livingroom_vitrine_light_button", path = "target/release/libsmearor_button_widget.so" }
+]
+
+[livingroom_area_close_button]
+defaults = "close_button"
+click_payload = { area_id = "livingroom_area" }
+
+[bedroom_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["smarthome-area-bg"]
+plugins = [
+    { id = "bedroom_area_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_bedroom_main_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_bedroom_henna_large_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_bedroom_henna_small_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_bedroom_kommode_light_button", path = "target/release/libsmearor_button_widget.so" }
+]
+
+[bedroom_area_close_button]
+defaults = "close_button"
+click_payload = { area_id = "bedroom_area" }
+
+[bathroom_area]
+include = "areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["smarthome-area-bg"]
+plugins = [
+    { id = "bathroom_area_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_bathroom_main_light_button", path = "target/release/libsmearor_button_widget.so" }
+]
+
+[bathroom_area_close_button]
+defaults = "close_button"
+click_payload = { area_id = "bathroom_area" }
 
 
 
@@ -1189,32 +1286,193 @@ desktop_file_path = "/var/lib/flatpak/exports/share/applications/io.github.sigma
 follows_rotation = true
 
 
-[shelly_light_button]
-text = "Light"
-icon = "nf-md-ceiling_light_multiple"
-icon_only = true
+[shelly_office_desk_light_button]
+text = "Office Desk"
+icon = "nf-md-lamp"
+icon_only = false
 click_topic = "service.http.request"
-click_payload = { method = "Get", url = "http://192.168.178.71/relay/0?turn=on", response_topic = "service.http.response.shelly.light" }
+click_payload = { method = "Get", url = "http://192.168.178.64/relay/0?turn=on", response_topic = "service.http.response.shelly.office.desk.light" }
 longpress_topic = "service.http.request"
-longpress_payload = { method = "Get", url = "http://192.168.178.71/relay/0?turn=off", response_topic = "service.http.response.shelly.light" }
+longpress_payload = { method = "Get", url = "http://192.168.178.64/relay/0?turn=off", response_topic = "service.http.response.shelly.office.desk.light" }
+state_topic = "service.http.response.shelly.office.desk.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.64/relay/0", response_topic = "service.http.response.shelly.office.desk.light" }
+state_icon = "{ison?nf-md-lamp:nf-md-lamp_outline}"
+state_css_class = "light-active"
 
-[shelly_rgbw_button]
-text = "RGBW"
-icon = "nf-md-led_strip"
-icon_only = true
+[shelly_office_window_light_button]
+text = "Office Window"
+icon = "nf-md-ceiling_light_multiple"
+icon_only = false
 click_topic = "service.http.request"
-click_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.rgbw" }
+click_payload = { method = "Get", url = "http://192.168.178.71/relay/0?turn=on", response_topic = "service.http.response.shelly.office.window.light" }
 longpress_topic = "service.http.request"
-longpress_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=off", response_topic = "service.http.response.shelly.rgbw" }
+longpress_payload = { method = "Get", url = "http://192.168.178.71/relay/0?turn=off", response_topic = "service.http.response.shelly.office.window.light" }
+state_topic = "service.http.response.shelly.office.window.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.71/relay/0", response_topic = "service.http.response.shelly.office.window.light" }
+state_icon = "{ison?nf-md-ceiling_light_multiple:nf-md-ceiling_light_multiple_outline}"
+state_css_class = "light-active"
+
+[shelly_office_kommode_light_button]
+text = "Office Kommode"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.office.kommode.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=off", response_topic = "service.http.response.shelly.office.kommode.light" }
+state_topic = "service.http.response.shelly.office.kommode.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.31/color/0", response_topic = "service.http.response.shelly.office.kommode.light" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+swipe_up_topic = "service.http.request"
+swipe_up_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=on&red=255&green=0&blue=0&gain={gain+10}", response_topic = "service.http.response.shelly.office.kommode.light" }
+swipe_down_topic = "service.http.request"
+swipe_down_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=on&red=255&green=0&blue=0&gain={gain-10}", response_topic = "service.http.response.shelly.office.kommode.light" }
+
+[shelly_livingroom_couch_floor_light_button]
+text = "Living Room Couch Floor"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.25/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.livingroom.couch.floor.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.25/color/0?turn=off", response_topic = "service.http.response.shelly.livingroom.couch.floor.light" }
+state_topic = "service.http.response.shelly.livingroom.couch.floor.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.25/color/0", response_topic = "service.http.response.shelly.livingroom.couch.floor.light" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+swipe_up_topic = "service.http.request"
+swipe_up_payload = { method = "Get", url = "http://192.168.178.25/color/0?turn=on&red=255&green=0&blue=0&gain={gain+10}", response_topic = "service.http.response.shelly.livingroom.couch.floor.light" }
+swipe_down_topic = "service.http.request"
+swipe_down_payload = { method = "Get", url = "http://192.168.178.25/color/0?turn=on&red=255&green=0&blue=0&gain={gain-10}", response_topic = "service.http.response.shelly.livingroom.couch.floor.light" }
+
+[shelly_livingroom_couch_wall_light_button]
+text = "Living Room Couch Wall"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.30/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.livingroom.couch.wall.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.30/color/0?turn=off", response_topic = "service.http.response.shelly.livingroom.couch.wall.light" }
+state_topic = "service.http.response.shelly.livingroom.couch.wall.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.30/color/0", response_topic = "service.http.response.shelly.livingroom.couch.wall.light" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+swipe_up_topic = "service.http.request"
+swipe_up_payload = { method = "Get", url = "http://192.168.178.30/color/0?turn=on&red=255&green=0&blue=0&gain={gain+10}", response_topic = "service.http.response.shelly.livingroom.couch.wall.light" }
+swipe_down_topic = "service.http.request"
+swipe_down_payload = { method = "Get", url = "http://192.168.178.30/color/0?turn=on&red=255&green=0&blue=0&gain={gain-10}", response_topic = "service.http.response.shelly.livingroom.couch.wall.light" }
+
+[shelly_livingroom_vitrine_light_button]
+text = "Living Room Vitrine"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.livingroom.vitrine.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=off", response_topic = "service.http.response.shelly.livingroom.vitrine.light" }
+state_topic = "service.http.response.shelly.livingroom.vitrine.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.29/color/0", response_topic = "service.http.response.shelly.livingroom.vitrine.light" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+swipe_up_topic = "service.http.request"
+swipe_up_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=on&red=255&green=0&blue=0&gain={gain+10}", response_topic = "service.http.response.shelly.livingroom.vitrine.light" }
+swipe_down_topic = "service.http.request"
+swipe_down_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=on&red=255&green=0&blue=0&gain={gain-10}", response_topic = "service.http.response.shelly.livingroom.vitrine.light" }
+
+[shelly_bathroom_main_light_button]
+text = "Bathroom Main"
+icon = "nf-md-ceiling_light"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.53/relay/0?turn=on", response_topic = "service.http.response.shelly.bathroom.main.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.53/relay/0?turn=off", response_topic = "service.http.response.shelly.bathroom.main.light" }
+state_topic = "service.http.response.shelly.bathroom.main.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.53/relay/0", response_topic = "service.http.response.shelly.bathroom.main.light" }
+state_icon = "{ison?nf-md-ceiling_light:nf-md-ceiling_light_outline}"
+state_css_class = "light-active"
+
+[shelly_bedroom_main_light_button]
+text = "Bedroom Main"
+icon = "nf-md-ceiling_light"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.26/relay/0?turn=on", response_topic = "service.http.response.shelly.bedroom.main.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.26/relay/0?turn=off", response_topic = "service.http.response.shelly.bedroom.main.light" }
+state_topic = "service.http.response.shelly.bedroom.main.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.26/relay/0", response_topic = "service.http.response.shelly.bedroom.main.light" }
+state_icon = "{ison?nf-md-ceiling_light:nf-md-ceiling_light_outline}"
+state_css_class = "light-active"
+
+[shelly_bedroom_henna_large_light_button]
+text = "Bedroom Henna Large"
+icon = "nf-md-floor_lamp"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=on", response_topic = "service.http.response.shelly.bedroom.henna.large.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=off", response_topic = "service.http.response.shelly.bedroom.henna.large.light" }
+state_topic = "service.http.response.shelly.bedroom.henna.large.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.34/relay/0", response_topic = "service.http.response.shelly.bedroom.henna.large.light" }
+state_icon = "{ison?nf-md-floor_lamp:nf-md-floor_lamp_outline}"
+state_css_class = "light-active"
+
+[shelly_bedroom_henna_small_light_button]
+text = "Bedroom Henna Small"
+icon = "nf-md-desk_lamp"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.32/relay/0?turn=on", response_topic = "service.http.response.shelly.bedroom.henna.small.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.32/relay/0?turn=off", response_topic = "service.http.response.shelly.bedroom.henna.small.light" }
+state_topic = "service.http.response.shelly.bedroom.henna.small.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.32/relay/0", response_topic = "service.http.response.shelly.bedroom.henna.small.light" }
+state_icon = "{ison?nf-md-desk_lamp:nf-md-lamp_outline}"
+state_css_class = "light-active"
+
+[shelly_bedroom_kommode_light_button]
+text = "Bedroom Kommode"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.bedroom.kommode.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=off", response_topic = "service.http.response.shelly.bedroom.kommode.light" }
+state_topic = "service.http.response.shelly.bedroom.kommode.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.33/color/0", response_topic = "service.http.response.shelly.bedroom.kommode.light" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+swipe_up_topic = "service.http.request"
+swipe_up_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=on&red=255&green=0&blue=0&gain={gain+10}", response_topic = "service.http.response.shelly.bedroom.kommode.light" }
+swipe_down_topic = "service.http.request"
+swipe_down_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=on&red=255&green=0&blue=0&gain={gain-10}", response_topic = "service.http.response.shelly.bedroom.kommode.light" }
 
 [shelly_fan_button]
 text = "Fan"
 icon = "nf-md-fan"
-icon_only = true
+icon_only = false
 click_topic = "service.http.request"
 click_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=on", response_topic = "service.http.response.shelly.fan" }
 longpress_topic = "service.http.request"
 longpress_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=off", response_topic = "service.http.response.shelly.fan" }
+state_topic = "service.http.response.shelly.fan"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.39/relay/0", response_topic = "service.http.response.shelly.fan" }
+state_icon = "{ison?nf-md-fan:nf-md-fan_off}"
+state_css_class = "fan-active"
 
 
 # Sample button widget with dynamic label (button-side handling to be solved later)

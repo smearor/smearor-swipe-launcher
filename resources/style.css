@@ -343,6 +343,26 @@ scrolledwindow {
     background-color: #00a1e433;
 }
 
+@keyframes fan-spin {
+    from {
+        -gtk-icon-transform: rotate(0deg);
+    }
+    to {
+        -gtk-icon-transform: rotate(360deg);
+    }
+}
+
+.menu-button.fan-active image {
+    animation: fan-spin 2s linear infinite;
+    filter: brightness(1.0) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4aa);
+    transition: filter 0.3s ease-in-out;
+}
+
+.menu-button.light-active image {
+    filter: brightness(1.0) drop-shadow(0 0 4px #f5b700ff) drop-shadow(0 0 8px #f5b700aa);
+    transition: filter 0.3s ease-in-out;
+}
+
 /*.menu-button.glow-blue:hover {*/
 /*    box-shadow: 0 0 15px #00a1e4cc, 0 0 30px #00a1e466;*/
 /*    transition: box-shadow 0.3s ease-in-out;*/

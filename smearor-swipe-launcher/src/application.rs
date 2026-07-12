@@ -365,7 +365,12 @@ impl LauncherHost {
 
         // Route service.* topics to the shared ServiceManager, except for known
         // outbound topics that services broadcast to widgets.
-        if topic.starts_with("service.") && !topic.ends_with(".status") && !topic.ends_with(".scan_results") && !topic.ends_with(".vpn_profiles") {
+        if topic.starts_with("service.")
+            && !topic.ends_with(".status")
+            && !topic.ends_with(".scan_results")
+            && !topic.ends_with(".vpn_profiles")
+            && !topic.contains(".response.")
+        {
             let parts: Vec<&str> = topic.split('.').collect();
             if parts.len() >= 2 {
                 let target_service_id = parts[1];
@@ -422,6 +427,17 @@ impl LauncherHost {
 
         // Broadcast to all instances (used by shared services for status updates)
         if target == "*" || (target.is_empty() && topic.ends_with(".status")) {
+            if let Ok(instances) = self.instances.lock() {
+                for instance in instances.values() {
+                    instance.handle_message(envelope.clone());
+                }
+            }
+            return;
+        }
+
+        // Broadcast service response topics (e.g. service.http.response.*)
+        // to all instances so widgets can react to HTTP responses.
+        if target.is_empty() && topic.starts_with("service.") && topic.contains(".response.") {
             if let Ok(instances) = self.instances.lock() {
                 for instance in instances.values() {
                     instance.handle_message(envelope.clone());

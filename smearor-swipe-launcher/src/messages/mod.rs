@@ -121,6 +121,17 @@ impl LauncherInstance {
             }
         }
 
+        // Broadcast service response topics (e.g. service.http.response.*)
+        // to all plugins so widgets can react to HTTP responses.
+        if topic.starts_with("service.") && topic.contains(".response.") {
+            for r in self.plugin_manager.plugins.iter() {
+                let plugin = r.value();
+                unsafe {
+                    plugin.on_message(envelope.clone());
+                }
+            }
+        }
+
         // Broadcast status updates (e.g. audio.status, mpris.status) to all plugins.
         // service.*.status is already handled by the block above.
         if topic.ends_with(".status") && !topic.starts_with("service.") {
