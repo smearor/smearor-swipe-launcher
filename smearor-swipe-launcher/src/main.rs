@@ -29,6 +29,7 @@ use crate::mcp_response_tracker::McpResponseTracker;
 use clap::Parser;
 use gtk4::Application;
 use gtk4::glib::MainContext;
+use gtk4::prelude::ApplicationExt;
 use miette::IntoDiagnostic;
 use miette::Result;
 use smearor_mcp_server::McpCommand;
@@ -122,6 +123,26 @@ async fn main() -> Result<()> {
                 process_mcp_command(host_clone.clone(), command).await;
             }
         }
+    });
+
+    // Install SIGINT handler: Ctrl-C should quit the GTK main loop gracefully
+    // so the cleanup code below (service teardown, MCP server stop) runs.
+    // Without this, SIGINT kills the process immediately and service threads
+    // (network polling, audio events, etc.) keep running in the background.
+    //
+    // gtk4::Application is not Send, so we use a oneshot channel: the tokio
+    // task waits for SIGINT and signals the GLib main context which calls quit.
+    let (signal_tx, signal_rx) = tokio::sync::oneshot::channel::<()>();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            debug!("SIGINT received, quitting GTK application gracefully");
+            let _ = signal_tx.send(());
+        }
+    });
+    let gtk_app_for_signal = gtk_app.clone();
+    MainContext::default().spawn_local(async move {
+        let _ = signal_rx.await;
+        gtk_app_for_signal.quit();
     });
 
     host.run();
