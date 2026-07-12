@@ -1,5 +1,5 @@
 [package]
-name = "smearor-gnome-service"
+name = "smearor-workspace-switcher"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,14 +10,16 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-gio = { workspace = true }
+stabby = { workspace = true }
+glib = { workspace = true }
+gtk4 = { workspace = true }
+miette = { workspace = true }
 paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-stabby = { workspace = true }
+smearor-model-compositor = { path = "../../model/workspace" }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-zbus = { workspace = true }
-smearor-model-compositor = { path = "../../model/workspace" }
-smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+typed-builder = { workspace = true }

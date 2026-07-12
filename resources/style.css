@@ -610,3 +610,40 @@ scrolledwindow {
     background-color: white;
     border-radius: 4px;
 }
+
+/* Workspace switcher widget */
+.workspace-switcher-widget {
+    padding: 4px 8px;
+}
+
+.workspace-switcher-widget:hover {
+    background-color: #00a1e433;
+}
+
+.workspace-switcher-icon {
+    color: white;
+    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+}
+
+.workspace-switcher-label {
+    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
+    font-size: 12px;
+    font-weight: bold;
+    color: #ffffff;
+    text-shadow: 0 0 4px rgba(0, 170, 255, 0.6);
+}
+
+.workspace-switcher-dots {
+    padding: 0;
+}
+
+.workspace-dot-active {
+    color: #00a1e4;
+    font-size: 1.2em;
+    text-shadow: 0 0 4px rgba(0, 170, 255, 0.8);
+}
+
+.workspace-dot-inactive {
+    color: #555555;
+    font-size: 1.2em;
+}

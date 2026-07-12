@@ -1,4 +1,5 @@
 pub mod dbus;
+pub mod gsettings;
 pub mod tracker;
 
 pub use tracker::WorkspaceEvent;

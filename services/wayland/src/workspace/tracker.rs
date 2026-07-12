@@ -5,8 +5,10 @@ use crate::workspace::state::WaylandState;
 use crate::workspace::state::WorkspaceInfo;
 use smearor_model_compositor::MonitorChangeType;
 use smearor_model_compositor::MonitorChangedEvent;
+use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_model_compositor::WorkspaceLifecycleEvent;
 use smearor_model_compositor::WorkspaceLifecycleType;
+use smearor_model_compositor::WorkspaceSnapshotMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
@@ -277,8 +279,13 @@ pub fn run_workspace_event_loop(workspace_sender: mpsc::UnboundedSender<Workspac
 }
 
 /// Spawn the workspace event worker thread that broadcasts workspace events
-/// to the launcher core.
-pub fn spawn_workspace_worker(mut event_receiver: mpsc::UnboundedReceiver<WorkspaceEvent>, core_context: Option<FfiCoreContext>, meta: PluginMeta) {
+/// to the launcher core and maintains a shared snapshot for snapshot requests.
+pub fn spawn_workspace_worker(
+    mut event_receiver: mpsc::UnboundedReceiver<WorkspaceEvent>,
+    core_context: Option<FfiCoreContext>,
+    meta: PluginMeta,
+    shared_snapshot: crate::service::SharedSnapshot,
+) {
     std::thread::spawn(move || {
         let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
             Ok(rt) => rt,
@@ -293,6 +300,7 @@ pub fn spawn_workspace_worker(mut event_receiver: mpsc::UnboundedReceiver<Worksp
                 match event {
                     WorkspaceEvent::WorkspaceChanged(event) => {
                         debug!("Broadcasting workspace changed event: {:?}", event);
+                        update_shared_snapshot(&shared_snapshot, &event);
                         broadcast_event(&core_context, &meta, event);
                     }
                     WorkspaceEvent::WorkspaceLifecycle(event) => {
@@ -303,6 +311,46 @@ pub fn spawn_workspace_worker(mut event_receiver: mpsc::UnboundedReceiver<Worksp
             }
         });
     });
+}
+
+/// Update the shared snapshot with the latest workspace changed event.
+fn update_shared_snapshot(shared_snapshot: &crate::service::SharedSnapshot, event: &WorkspaceChangedEvent) {
+    let workspace_info = smearor_model_compositor::WorkspaceInfo {
+        workspace_id: event.workspace_id,
+        workspace_name: event.workspace_name.clone(),
+        monitor_index: event.monitor_index,
+        is_active: true,
+    };
+
+    let mut guard = match shared_snapshot.lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
+    if let Some(ref mut snapshot) = *guard {
+        let mut found = false;
+        for ws in snapshot.workspaces.iter_mut() {
+            if ws.workspace_id == event.workspace_id {
+                ws.is_active = false;
+                if !found {
+                    ws.workspace_name = event.workspace_name.clone();
+                    ws.monitor_index = event.monitor_index;
+                    found = true;
+                }
+            }
+        }
+        if !found {
+            snapshot.workspaces.push(workspace_info);
+        }
+        snapshot.active_workspace_id = event.workspace_id;
+        snapshot.active_monitor_index = event.monitor_index;
+    } else {
+        let snapshot = WorkspaceSnapshotMessage {
+            workspaces: vec![workspace_info].into_iter().collect(),
+            active_workspace_id: event.workspace_id,
+            active_monitor_index: event.monitor_index,
+        };
+        *guard = Some(snapshot);
+    }
 }
 
 /// Broadcast an event to all launcher instances via the core context.

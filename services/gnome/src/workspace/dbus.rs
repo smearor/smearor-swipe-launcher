@@ -3,11 +3,30 @@ use zbus::proxy;
 /// D-Bus proxy for `org.gnome.Shell.Eval`.
 ///
 /// This interface allows executing JavaScript in the GNOME Shell process.
-/// We use it to query the current workspace index.
+/// We use it as a fallback for workspace switching and creation.
 #[proxy(interface = "org.gnome.Shell", default_service = "org.gnome.Shell", default_path = "/org/gnome/Shell")]
 pub trait GnomeShellEval {
     /// Execute JavaScript in the GNOME Shell process.
     fn eval(&self, code: &str) -> zbus::Result<(bool, String)>;
+}
+
+/// D-Bus proxy for `org.gnome.Shell.Introspect`.
+///
+/// This interface provides window information without requiring unsafe mode.
+/// The `GetWindows` method returns a map of window IDs to window properties,
+/// including the workspace each window is on.
+#[proxy(
+    interface = "org.gnome.Shell.Introspect",
+    default_service = "org.gnome.Shell",
+    default_path = "/org/gnome/Shell/Introspect"
+)]
+pub trait GnomeShellIntrospect {
+    /// Get all windows with their properties.
+    ///
+    /// Returns a map of window ID (as string) to a dictionary of properties.
+    /// Key properties include "workspace" (i32), "has-focus" (bool),
+    /// "title" (string), and "class" (string).
+    fn get_windows(&self) -> zbus::Result<std::collections::HashMap<String, std::collections::HashMap<String, zbus::zvariant::OwnedValue>>>;
 }
 
 /// D-Bus proxy for `org.gnome.Mutter.DisplayConfig`.

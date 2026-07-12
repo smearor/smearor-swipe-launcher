@@ -8,6 +8,8 @@ use crate::workspace::spawn_workspace_worker;
 use hyprland::dispatch::Dispatch;
 use hyprland::dispatch::DispatchType;
 use hyprland::dispatch::FirstEmpty;
+use hyprland::shared::HyprData;
+use hyprland::shared::HyprDataActive;
 use smearor_hyprland_model::ExecDispatchMessage;
 use smearor_hyprland_model::HyprlandDirection;
 use smearor_hyprland_model::HyprlandDispatchActionKind;
@@ -20,10 +22,17 @@ use smearor_hyprland_model::MoveToWorkspaceDispatchMessage;
 use smearor_hyprland_model::ToggleFloatingDispatchMessage;
 use smearor_hyprland_model::ToggleFullscreenDispatchMessage;
 use smearor_hyprland_model::WorkspaceDispatchMessage;
+use smearor_model_compositor::CreateWorkspaceMessage;
+use smearor_model_compositor::SwitchWorkspaceMessage;
+use smearor_model_compositor::WorkspaceCreatePosition;
+use smearor_model_compositor::WorkspaceInfo;
+use smearor_model_compositor::WorkspaceSnapshotMessage;
+use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
+use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
@@ -45,6 +54,9 @@ use tracing::warn;
 /// Internal union of all command types the service handles.
 pub enum HyprlandCommand {
     Dispatch(HyprlandDispatchMessage),
+    SwitchWorkspace(SwitchWorkspaceMessage),
+    CreateWorkspace(CreateWorkspaceMessage),
+    SnapshotRequest(WorkspaceSnapshotRequestMessage),
 }
 
 /// Hyprland service plugin.
@@ -66,6 +78,7 @@ impl HyprlandService {
             if core_context.is_some() { "Some" } else { "None" }
         );
         smearor_hyprland_model::register_json_converters(core_context);
+        smearor_model_compositor::register_json_converters(core_context);
         debug!("Hyprland service: JSON converters registered");
 
         let service_config: HyprlandServiceConfig = serde_json::from_value(config.config.clone())
@@ -95,6 +108,15 @@ impl HyprlandService {
                     match command {
                         HyprlandCommand::Dispatch(message) => {
                             handle_dispatch(message).await;
+                        }
+                        HyprlandCommand::SwitchWorkspace(message) => {
+                            handle_switch_workspace(message).await;
+                        }
+                        HyprlandCommand::CreateWorkspace(message) => {
+                            handle_create_workspace(message).await;
+                        }
+                        HyprlandCommand::SnapshotRequest(message) => {
+                            handle_snapshot_request(message, core_context.clone()).await;
                         }
                     }
                 }
@@ -377,6 +399,95 @@ async fn handle_workspace(payload: WorkspaceDispatchMessage) -> hyprland::Result
     }
 }
 
+/// Handle a compositor-unified SwitchWorkspaceMessage by translating it to a
+/// Hyprland workspace dispatch.
+async fn handle_switch_workspace(message: SwitchWorkspaceMessage) {
+    ensure_hyprland_instance_signature();
+    debug!("Hyprland service: switching to workspace {}", message.workspace_id);
+    let result = Dispatch::call_async(DispatchType::Workspace(hyprland::dispatch::WorkspaceIdentifierWithSpecial::Id(message.workspace_id))).await;
+    if let Err(error) = result {
+        error!("Hyprland service: failed to switch workspace: {error}");
+    }
+}
+
+/// Handle a compositor-unified CreateWorkspaceMessage.
+///
+/// Hyprland supports creating workspaces by dispatching to a new workspace ID.
+/// For `After`, we use `workspace +1` relative to the reference workspace.
+/// For `Before`, we use `workspace -1`.
+async fn handle_create_workspace(message: CreateWorkspaceMessage) {
+    ensure_hyprland_instance_signature();
+    let new_id = match message.position {
+        WorkspaceCreatePosition::After => message.relative_to + 1,
+        WorkspaceCreatePosition::Before => message.relative_to - 1,
+    };
+    debug!(
+        "Hyprland service: creating workspace at {} (relative_to={}, position={:?})",
+        new_id, message.relative_to, message.position
+    );
+    let result = Dispatch::call_async(DispatchType::Workspace(hyprland::dispatch::WorkspaceIdentifierWithSpecial::Id(new_id))).await;
+    if let Err(error) = result {
+        error!("Hyprland service: failed to create workspace: {error}");
+    }
+}
+
+/// Handle a WorkspaceSnapshotRequestMessage by querying Hyprland for all
+/// workspaces and broadcasting a WorkspaceSnapshotMessage.
+async fn handle_snapshot_request(_message: WorkspaceSnapshotRequestMessage, core_context: Option<FfiCoreContext>) {
+    ensure_hyprland_instance_signature();
+    debug!("Hyprland service: building workspace snapshot");
+
+    let workspaces = match hyprland::data::Workspaces::get_async().await {
+        Ok(ws) => ws,
+        Err(error) => {
+            error!("Hyprland service: failed to query workspaces: {error}");
+            return;
+        }
+    };
+
+    let active_workspace = match hyprland::data::Workspace::get_active_async().await {
+        Ok(ws) => ws,
+        Err(error) => {
+            error!("Hyprland service: failed to query active workspace: {error}");
+            return;
+        }
+    };
+
+    let active_id = active_workspace.id;
+    let active_monitor = active_workspace.monitor;
+
+    let mut ws_list: Vec<WorkspaceInfo> = Vec::new();
+    for ws in workspaces {
+        let id = ws.id;
+        let name = ws.name;
+        let monitor_index = ws.monitor.parse::<u32>().ok().unwrap_or(0);
+        let is_active = id == active_id;
+        ws_list.push(WorkspaceInfo {
+            workspace_id: id,
+            workspace_name: name.into(),
+            monitor_index,
+            is_active,
+        });
+    }
+
+    let active_monitor_index = active_monitor.parse::<u32>().ok().unwrap_or(0);
+
+    let snapshot = WorkspaceSnapshotMessage {
+        workspaces: ws_list.into_iter().collect(),
+        active_workspace_id: active_id,
+        active_monitor_index,
+    };
+
+    let Some(ctx) = core_context else {
+        return;
+    };
+    let broadcaster = MessageBroadcasterInner {
+        meta: PluginMeta::new("hyprland-service".to_string(), "Hyprland Service".to_string(), None),
+        core_context: Some(ctx),
+    };
+    broadcaster.broadcast_message_to_topic(snapshot);
+}
+
 fn convert_direction(direction: HyprlandDirection) -> hyprland::dispatch::Direction {
     match direction {
         HyprlandDirection::Up => hyprland::dispatch::Direction::Up,
@@ -481,6 +592,30 @@ impl MessageHandler<FfiEnvelopePayload<ToggleFullscreenDispatchMessage>> for Hyp
     }
 }
 
+impl MessageHandler<FfiEnvelopePayload<SwitchWorkspaceMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<SwitchWorkspaceMessage>, _sender_id: &str) {
+        debug!("Hyprland service: queueing workspace switch to {}", message.0.workspace_id);
+        let _ = self.command_sender.send(HyprlandCommand::SwitchWorkspace(message.0));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<CreateWorkspaceMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<CreateWorkspaceMessage>, _sender_id: &str) {
+        debug!(
+            "Hyprland service: queueing workspace creation relative_to={}, position={:?}",
+            message.0.relative_to, message.0.position
+        );
+        let _ = self.command_sender.send(HyprlandCommand::CreateWorkspace(message.0));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<WorkspaceSnapshotRequestMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<WorkspaceSnapshotRequestMessage>, _sender_id: &str) {
+        debug!("Hyprland service: queueing workspace snapshot request");
+        let _ = self.command_sender.send(HyprlandCommand::SnapshotRequest(message.0));
+    }
+}
+
 impl MessageBroadcaster for HyprlandService {}
 
 impl PluginMetaGetter for HyprlandService {
@@ -527,6 +662,18 @@ impl Service for HyprlandService {
                 id if id == FfiEnvelopePayload::<ToggleFullscreenDispatchMessage>::TYPE_ID => {
                     debug!("ToggleFullscreenDispatchMessage");
                     MessageHandler::<FfiEnvelopePayload<ToggleFullscreenDispatchMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<SwitchWorkspaceMessage>::TYPE_ID => {
+                    debug!("SwitchWorkspaceMessage");
+                    MessageHandler::<FfiEnvelopePayload<SwitchWorkspaceMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<CreateWorkspaceMessage>::TYPE_ID => {
+                    debug!("CreateWorkspaceMessage");
+                    MessageHandler::<FfiEnvelopePayload<CreateWorkspaceMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<WorkspaceSnapshotRequestMessage>::TYPE_ID => {
+                    debug!("WorkspaceSnapshotRequestMessage");
+                    MessageHandler::<FfiEnvelopePayload<WorkspaceSnapshotRequestMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {
                     warn!("Unknown message type");

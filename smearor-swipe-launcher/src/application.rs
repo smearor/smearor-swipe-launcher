@@ -18,7 +18,12 @@ use gtk4::gio;
 use gtk4::gio::prelude::*;
 use gtk4::glib::MainContext;
 use gtk4::prelude::*;
+use smearor_model_compositor::TOPIC_CREATE_WORKSPACE;
+use smearor_model_compositor::TOPIC_SWITCH_WORKSPACE;
 use smearor_model_compositor::TOPIC_WORKSPACE_CHANGED;
+use smearor_model_compositor::TOPIC_WORKSPACE_LIFECYCLE;
+use smearor_model_compositor::TOPIC_WORKSPACE_SNAPSHOT;
+use smearor_model_compositor::TOPIC_WORKSPACE_SNAPSHOT_REQUEST;
 use smearor_model_mcp::InvokeResourceResponse;
 use smearor_model_mcp::InvokeToolResponse;
 use smearor_model_mcp::RegisterResourceMessage;
@@ -399,6 +404,22 @@ impl LauncherHost {
             }
         }
 
+        // Route compositor command topics (Widget -> Service) to all services.
+        // Services that implement the relevant MessageHandler will process them;
+        // others will ignore them via on_message dispatch.
+        if topic == TOPIC_SWITCH_WORKSPACE || topic == TOPIC_CREATE_WORKSPACE || topic == TOPIC_WORKSPACE_SNAPSHOT_REQUEST {
+            let service_ids: Vec<String> = self.service_manager.services.iter().map(|s| s.key().to_string()).collect();
+            for service_id in service_ids {
+                if let Some(service) = self.service_manager.services.get(&service_id) {
+                    trace!("Routing compositor command {} to service {}", topic, service_id);
+                    unsafe {
+                        service.on_message(envelope.clone());
+                    }
+                }
+            }
+            return;
+        }
+
         // Broadcast to all instances (used by shared services for status updates)
         if target == "*" || (target.is_empty() && topic.ends_with(".status")) {
             if let Ok(instances) = self.instances.lock() {
@@ -409,8 +430,8 @@ impl LauncherHost {
             return;
         }
 
-        // Broadcast workspace change events from the Hyprland service to all instances.
-        if target.is_empty() && topic == TOPIC_WORKSPACE_CHANGED {
+        // Broadcast workspace events from compositor services to all instances.
+        if target.is_empty() && (topic == TOPIC_WORKSPACE_CHANGED || topic == TOPIC_WORKSPACE_SNAPSHOT || topic == TOPIC_WORKSPACE_LIFECYCLE) {
             if let Ok(instances) = self.instances.lock() {
                 for instance in instances.values() {
                     instance.handle_message(envelope.clone());
