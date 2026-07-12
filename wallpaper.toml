@@ -86,7 +86,7 @@ config.Video.shuffle = false
 config.Video.muted = true
 config.Video.volume = 0
 config.Video.speed_percentage = 100
-config.Video.extra_arguments = []
+config.Video.extra_arguments = ["video-rotate=90"]
 
 [[themes]]
 name = "Tischdecken"
