@@ -132,3 +132,13 @@ config.Image.transitions = false
 config.Image.transition_effect = "fade"
 config.Image.transition_duration_ms = 1000
 config.Image.extra_arguments = []
+
+[[themes]]
+name = "Weather"
+description = "Wetter-Widget im Hintergrund"
+preview_image_path = ""
+preview_icon = "nf-md-weather_partly_cloudy"
+wallpaper_type = "Application"
+config.Application.command = "smearor-wrot"
+config.Application.outputs = ["ALL"]
+config.Application.arguments = ["--layer", "Background", "-f", "/home/aschaeffer/.local/bin/mousam"]
