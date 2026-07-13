@@ -1,6 +1,16 @@
 # Shared background services for all launcher instances
 # Loaded once by LauncherHost and shared across all windows
 
+[mcp]
+# Address to bind the MCP server to.
+# Use "127.0.0.1" (default) for localhost-only access.
+# Use "0.0.0.0" to allow access from other machines on the network.
+#bind_address = "127.0.0.1"
+bind_address = "0.0.0.0"
+port = 8765
+# Optional bearer token for authentication.
+# auth_token = "my-secret-token"
+
 [[services]]
 id = "app_launcher"
 path = "target/release/libsmearor_app_launcher_service.so"

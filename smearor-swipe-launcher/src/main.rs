@@ -106,7 +106,12 @@ async fn main() -> Result<()> {
 
     debug!("Application initialized successfully");
 
-    let (mut mcp_server, mcp_receiver) = McpServer::new(McpServerConfig::default(), host.mcp_registry.clone());
+    let mcp_config = McpServerConfig {
+        bind_address: services_config.mcp.bind_address.clone(),
+        port: services_config.mcp.port,
+        auth_token: services_config.mcp.auth_token.clone(),
+    };
+    let (mut mcp_server, mcp_receiver) = McpServer::new(mcp_config, host.mcp_registry.clone());
     mcp_server.start();
     let _mcp_server = Some(mcp_server);
 
