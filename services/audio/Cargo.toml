@@ -19,6 +19,7 @@ paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-audio-model = { path = "../../model/audio" }
+smearor-model-mcp = { path = "../../model/mcp" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 thiserror = { workspace = true }
 typed-builder = { workspace = true }

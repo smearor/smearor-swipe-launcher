@@ -24,7 +24,9 @@ use smearor_model_compositor::TOPIC_WORKSPACE_CHANGED;
 use smearor_model_compositor::TOPIC_WORKSPACE_LIFECYCLE;
 use smearor_model_compositor::TOPIC_WORKSPACE_SNAPSHOT;
 use smearor_model_compositor::TOPIC_WORKSPACE_SNAPSHOT_REQUEST;
+use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeResourceResponse;
+use smearor_model_mcp::InvokeToolMessage;
 use smearor_model_mcp::InvokeToolResponse;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
@@ -384,29 +386,59 @@ impl LauncherHost {
             return;
         }
 
-        // MCP invocation requests must also reach shared services (e.g. sysinfo)
-        // that register tools and resources. Plugins inside instances get the same
-        // message via the broadcast below.
-        if topic.starts_with("mcp.invoke.") {
-            let service_count = self.service_manager.services.len();
+        // MCP invocation requests are routed exclusively to the owning service
+        // or plugin, as determined by the McpRegistry. This prevents unrelated
+        // services from responding with errors for URIs/tools they don't own.
+        if topic == smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE || topic == smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL {
+            let plugin_id = if topic == smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE {
+                if !envelope.payload.is_null() {
+                    let msg = unsafe { &*(envelope.payload as *const InvokeResourceMessage) };
+                    let uri = msg.uri.to_string();
+                    self.mcp_registry.list_resources().iter().find(|r| r.uri == uri).map(|r| r.plugin_id.clone())
+                } else {
+                    None
+                }
+            } else if !envelope.payload.is_null() {
+                let msg = unsafe { &*(envelope.payload as *const InvokeToolMessage) };
+                let name = msg.name.to_string();
+                self.mcp_registry.list_tools().iter().find(|t| t.name == name).map(|t| t.plugin_id.clone())
+            } else {
+                None
+            };
+
+            if let Some(plugin_id) = plugin_id {
+                debug!("routing {} to plugin_id={}", topic, plugin_id);
+                // Try service first
+                if let Some(service) = self.service_manager.services.get(&plugin_id) {
+                    debug!("sending {} to service {}", topic, plugin_id);
+                    unsafe {
+                        service.on_message(envelope);
+                    }
+                    return;
+                }
+                // Route to specific plugin in instances via targeted target_instance_id
+                let mut targeted_envelope = envelope;
+                targeted_envelope.target_instance_id = stabby::string::String::from(plugin_id);
+                if let Ok(instances) = self.instances.lock() {
+                    for instance in instances.values() {
+                        instance.handle_message(targeted_envelope.clone());
+                    }
+                }
+                return;
+            }
+
+            // Fallback: no registry match, broadcast to all services
+            debug!("no registry match for {}, broadcasting to all services", topic);
             let service_ids: Vec<String> = self.service_manager.services.iter().map(|s| s.key().to_string()).collect();
-            debug!(
-                "routing mcp.invoke topic={} ServiceManager ptr={:p} count={} ids={:?}",
-                topic,
-                self.service_manager.as_ref(),
-                service_count,
-                service_ids
-            );
             for service_id in service_ids {
                 if let Some(service) = self.service_manager.services.get(&service_id) {
-                    debug!("sending mcp.invoke to service {}", service_id);
+                    debug!("sending {} to service {} (broadcast)", topic, service_id);
                     unsafe {
                         service.on_message(envelope.clone());
                     }
-                } else {
-                    debug!("service {} disappeared after listing", service_id);
                 }
             }
+            // Fall through to broadcast to instances below
         }
 
         // Route compositor command topics (Widget -> Service) to all services.

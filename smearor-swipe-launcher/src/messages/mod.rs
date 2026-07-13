@@ -143,17 +143,29 @@ impl LauncherInstance {
             }
         }
 
-        // Broadcast MCP invocation requests to all plugins so the registering
-        // plugin can handle its own tools/resources.
+        // Route MCP invocation requests to the specific plugin that registered
+        // the tool/resource, or broadcast to all if no specific target is set.
         if topic.starts_with("mcp.invoke.") {
-            let plugin_count = self.plugin_manager.plugins.len();
-            debug!("instance.handle_message: topic={} plugin_count={}", topic, plugin_count);
-            for r in self.plugin_manager.plugins.iter() {
-                let plugin_id = r.key().to_string();
-                let plugin = r.value();
-                debug!("instance.handle_message: sending mcp.invoke to plugin {}", plugin_id);
-                unsafe {
-                    plugin.on_message(envelope.clone());
+            let target = envelope.target_instance_id.to_string();
+            if target != "*" && !target.is_empty() {
+                if let Some(plugin) = self.plugin_manager.plugins.get(&target) {
+                    debug!("instance.handle_message: routing {} to plugin {}", topic, target);
+                    unsafe {
+                        plugin.on_message(envelope.clone());
+                    }
+                } else {
+                    debug!("instance.handle_message: target plugin {} not found for {}", target, topic);
+                }
+            } else {
+                let plugin_count = self.plugin_manager.plugins.len();
+                debug!("instance.handle_message: topic={} plugin_count={}", topic, plugin_count);
+                for r in self.plugin_manager.plugins.iter() {
+                    let plugin_id = r.key().to_string();
+                    let plugin = r.value();
+                    debug!("instance.handle_message: sending mcp.invoke to plugin {}", plugin_id);
+                    unsafe {
+                        plugin.on_message(envelope.clone());
+                    }
                 }
             }
         }
