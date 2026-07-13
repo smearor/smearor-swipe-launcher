@@ -676,7 +676,7 @@ Implemented and building:
 Services and plugins **without** MCP functionality (not yet implemented):
 
 * Services: `gnome`, `http`, `hyprland`, `notifications`, `wayland`.
-* Plugins: `app-launcher`, `button`, `network` (dependency only), `notifications`, `power` (dependency only), `sysinfo`, `wallpaper`,
+* Plugins: `button`, `network` (dependency only), `notifications`, `power` (dependency only), `sysinfo`, `wallpaper`,
   `workspace-switcher`.
 
 ---
@@ -720,10 +720,10 @@ Services and plugins **without** MCP functionality (not yet implemented):
 * The following service plugins must still implement and register their resources:
     * `services/audio`: `audio://status`, `audio://volume`, `audio://muted`, `audio://active_sink`, `audio://sinks` ✅
     * `mpris`: `mpris://status`, `mpris://players`, `mpris://playback`, `mpris://metadata` ✅
-    * `app_launcher`: `app_launcher://running_apps` ✅
-        * `notifications`: `plugin://notifications/status` ⏳
-        * `hyprland`: `plugin://hyprland/active_workspace` (new status tracking needed) ⏳
-        * `http`: `plugin://http/stats` (new status tracking needed) ⏳
+    * `app_launcher`: `app_launcher://running_apps`, `app_launcher://available_apps` ✅
+      * `notifications`: `plugin://notifications/status` ⏳
+      * `hyprland`: `plugin://hyprland/active_workspace` (new status tracking needed) ⏳
+      * `http`: `plugin://http/stats` (new status tracking needed) ⏳
 * The following service plugins must still implement and register their tools:
     * `audio`: `audio_volume_up`, `audio_volume_down`, `audio_set_volume`, `audio_toggle_mute`, `audio_mute`, `audio_unmute`, `audio_next_device`,
       `audio_previous_device`, `audio_refresh_status` ✅
