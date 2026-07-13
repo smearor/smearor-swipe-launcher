@@ -589,7 +589,7 @@ pub async fn get_vpn_profiles(connection: &Connection) -> Vec<VpnProfileInfo> {
                     })
                     .unwrap_or_default();
                 let is_active = active_uuids.contains(&uuid);
-                debug!("Network Service: VPN profile id={} uuid={} is_active={} active_uuids={:?}", id, uuid, is_active, active_uuids);
+                trace!("Network Service: VPN profile id={} uuid={} is_active={} active_uuids={:?}", id, uuid, is_active, active_uuids);
                 profiles.push(VpnProfileInfo {
                     name: stabby::string::String::from(id),
                     vpn_type: stabby::string::String::from(conn_type_str),
