@@ -165,7 +165,7 @@ area_type = "fixed"
 width = 200
 align = "left"
 plugins = [
-    #    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so" },
+    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so" },
     { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
 ]
 
@@ -447,6 +447,7 @@ plugins = [
     { id = "hardinfo", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "bustle", path = "target/release/libsmearor_app_launcher_widget.so" },
     { id = "sysprof", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "btop", path = "target/release/libsmearor_button_widget.so" },
     { id = "gnome_settings_menu_button", path = "target/release/libsmearor_button_widget.so" }
 ]
 
@@ -459,6 +460,15 @@ defaults = "app_launcher"
 desktop_file_path = "/usr/share/applications/Alacritty.desktop"
 [alacritty.wrapper]
 follows_rotation = true
+
+[btop]
+text = "btop"
+icon = "nf-md-chart_bar"
+click_topic = "service.terminal_command.command"
+click_payload = { action = "Launch", command_id = "btop" }
+longpress_topic = "service.terminal_command.command"
+longpress_payload = { action = "Terminate", command_id = "btop" }
+
 
 [nautilus]
 defaults = "app_launcher"

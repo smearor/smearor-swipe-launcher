@@ -51,6 +51,10 @@ id = "gnome"
 path = "target/release/libsmearor_gnome_service.so"
 
 [[services]]
+id = "terminal_command"
+path = "target/release/libsmearor_terminal_command_service.so"
+
+[[services]]
 id = "wallpaper"
 path = "target/release/libsmearor_wallpaper_service.so"
 
@@ -116,3 +120,14 @@ enable_workspace_tracking = true
 [gnome]
 enable_workspace_tracking = true
 poll_interval_ms = 500
+
+[terminal_command.commands.btop]
+command = "smearor-wrot"
+args = [
+    "--auto-color-mask",
+    "--decorated",
+    "alacritty",
+    "--command",
+    "btop"
+]
+env = { }
