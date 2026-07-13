@@ -229,15 +229,35 @@ plugins = [
     { id = "sysinfo_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "cpu_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "cpu" },
     { id = "memory_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "memory" },
-    { id = "battery_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "battery" },
+    { id = "battery_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "battery", disabled = true },
     { id = "disks_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "disks" },
     { id = "network_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "network" },
-    { id = "uptime_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "uptime" }
+    { id = "uptime_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "uptime" },
+    { id = "cpu_package_temp_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "temperature" },
+    { id = "gpu_temp_widget", path = "target/release/libsmearor_sysinfo_widget.so", widget = "temperature" }
 ]
 
 [sysinfo_close_button]
 defaults = "close_button"
 click_payload = { area_id = "sysinfo_area" }
+
+[cpu_package_temp_widget]
+components = ["asusec CPU Package"]
+format = "{temperature:.0}°C"
+show_label = true
+gauge_size = 120
+show_icon = true
+icon = "nf-md-cpu_64_bit"
+icon_size = 24
+
+[gpu_temp_widget]
+components = ["amdgpu junction"]
+format = "{temperature:.0}°C"
+show_label = true
+gauge_size = 120
+show_icon = true
+icon = "nf-md-gpu"
+icon_size = 24
 
 
 

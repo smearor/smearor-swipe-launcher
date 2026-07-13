@@ -97,6 +97,12 @@ pub struct CpuWidgetConfig {
     pub show_temperature: bool,
     /// Format string for the temperature label.
     pub temperature_format: String,
+    /// Optional filter to select which temperature component to display.
+    ///
+    /// Matched against component label and id (case-insensitive substring match).
+    /// If `None`, the primary `cpu_temperature` from the service is used.
+    /// Example values: `"k10temp"`, `"Tctl"`, `"thermal_zone0"`, `"hwmon0_1"`.
+    pub temperature_component: Option<String>,
 }
 
 impl Default for CpuWidgetConfig {
@@ -109,6 +115,7 @@ impl Default for CpuWidgetConfig {
             },
             show_temperature: true,
             temperature_format: String::from("{cpu_temperature:.0}°C"),
+            temperature_component: None,
         }
     }
 }
@@ -251,6 +258,46 @@ impl Default for NetworkWidgetConfig {
             history_length: 30,
             show_icon: true,
             icon: Some(String::from("nf-md-network")),
+            icon_size: DEFAULT_ICON_SIZE,
+        }
+    }
+}
+
+/// Configuration for the temperature widget.
+///
+/// Displays one or more temperature components as circular gauges.
+/// Each gauge shows current temperature, max marker, and critical threshold.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default)]
+pub struct TemperatureWidgetConfig {
+    /// Filter list for which temperature components to display.
+    ///
+    /// Each entry is matched against component label and id (case-insensitive substring).
+    /// If empty, all available components are shown.
+    pub components: Vec<String>,
+    /// Format string for the temperature label.
+    pub format: String,
+    /// Whether to show the component label text.
+    pub show_label: bool,
+    /// Gauge diameter in pixels.
+    pub gauge_size: i32,
+    /// Whether to show an icon.
+    pub show_icon: bool,
+    /// Optional icon name.
+    pub icon: Option<String>,
+    /// Size of the icon in pixels.
+    pub icon_size: i32,
+}
+
+impl Default for TemperatureWidgetConfig {
+    fn default() -> Self {
+        Self {
+            components: Vec::new(),
+            format: String::from("{temperature:.0}°C"),
+            show_label: true,
+            gauge_size: 120,
+            show_icon: true,
+            icon: Some(String::from("nf-md-thermometer")),
             icon_size: DEFAULT_ICON_SIZE,
         }
     }

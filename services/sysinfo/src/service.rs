@@ -116,6 +116,12 @@ impl SysinfoService {
 
         let resources = [
             ("sysinfo://cpu", "CPU Status", "Current CPU usage and temperature.", "application/json"),
+            (
+                "sysinfo://temperature-components",
+                "Temperature Components",
+                "Lists all available temperature components with label, id, current temperature, max and critical thresholds. Use this to find the correct component name for config filters.",
+                "application/json",
+            ),
             ("sysinfo://memory", "Memory Status", "Current memory usage and available memory.", "application/json"),
             ("sysinfo://battery", "Battery Status", "Current battery level and charging state.", "application/json"),
             ("sysinfo://disks", "Disk Status", "Per-mount usage and disk throughput.", "application/json"),
@@ -274,7 +280,13 @@ async fn run_update_loop(
             }
         }
 
-        let cpu = crate::collector::collect_cpu(config.enable_cpu_temperature, config.cpu_temperature_source.as_deref(), &mut state).await;
+        let cpu = crate::collector::collect_cpu(
+            config.enable_cpu_temperature,
+            config.cpu_temperature_source.as_deref(),
+            config.cpu_temperature_component.as_deref(),
+            &mut state,
+        )
+        .await;
         let memory = crate::collector::collect_memory().await;
         let battery = if config.enable_battery {
             crate::collector::collect_battery().await
@@ -352,6 +364,23 @@ fn serialize_resource_state(uri: &str, state: &LatestState) -> Result<String, St
         "sysinfo://cpu" => Ok(serde_json::json!({
             "cpu_usage": state.cpu.cpu_usage,
             "cpu_temperature": state.cpu.cpu_temperature.as_ref().copied(),
+            "temperature_components": state.cpu.temperature_components.iter().map(|c| serde_json::json!({
+                "label": c.label.to_string(),
+                "id": c.id.to_string(),
+                "temperature": c.temperature.as_ref().copied(),
+                "max_temperature": c.max_temperature.as_ref().copied(),
+                "critical_temperature": c.critical_temperature.as_ref().copied(),
+            })).collect::<Vec<_>>(),
+        })
+        .to_string()),
+        "sysinfo://temperature-components" => Ok(serde_json::json!({
+            "components": state.cpu.temperature_components.iter().map(|c| serde_json::json!({
+                "label": c.label.to_string(),
+                "id": c.id.to_string(),
+                "temperature": c.temperature.as_ref().copied(),
+                "max_temperature": c.max_temperature.as_ref().copied(),
+                "critical_temperature": c.critical_temperature.as_ref().copied(),
+            })).collect::<Vec<_>>(),
         })
         .to_string()),
         "sysinfo://memory" => Ok(serde_json::json!({

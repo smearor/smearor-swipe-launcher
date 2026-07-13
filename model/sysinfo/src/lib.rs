@@ -8,6 +8,7 @@ pub use messages::disks::DiskUsage;
 pub use messages::disks::DisksStatusMessage;
 pub use messages::memory::MemoryStatusMessage;
 pub use messages::network::NetworkStatusMessage;
+pub use messages::temperature::TemperatureComponent;
 pub use messages::uptime::UptimeStatusMessage;
 pub use topics::TOPIC_BATTERY;
 pub use topics::TOPIC_CPU;

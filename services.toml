@@ -73,6 +73,8 @@ enable_cpu_temperature = true
 enable_battery = true
 enable_disks = true
 enable_network = true
+# selects which component is the primary cpu_temperature
+cpu_temperature_component = "Tctl"
 
 [weather]
 latitude = 47.55

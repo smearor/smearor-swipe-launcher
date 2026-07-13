@@ -293,6 +293,60 @@ pub fn draw_network_gauge(
     let _ = context.stroke();
 }
 
+/// Draws a circular temperature gauge showing current, max, and critical.
+///
+/// The gauge scale runs from 0 to `critical` (or `fallback_max` if critical is `None`).
+/// The current temperature is drawn as a colored arc. The max temperature is marked
+/// with a small tick. The critical threshold is marked with a red tick at the end.
+pub fn draw_temperature_gauge(context: &gtk4::cairo::Context, width: i32, height: i32, current: f32, max: Option<f32>, critical: Option<f32>) {
+    let scale_max = critical.unwrap_or(100.0).max(1.0);
+    let current_ratio = (current / scale_max).clamp(0.0, 1.0) as f64;
+    let max_ratio = max.map(|m| (m / scale_max).clamp(0.0, 1.0) as f64);
+
+    let center_x = width as f64 / 2.0;
+    let center_y = height as f64 / 2.0;
+    let line_width = 8.0;
+    let radius = (center_x.min(center_y) - line_width / 2.0 - 2.0).max(1.0);
+    let start_angle = 1.5 * std::f64::consts::PI;
+
+    let warning_ratio = 0.7_f64;
+    let critical_ratio = 0.9_f64;
+
+    let color = if current_ratio >= critical_ratio {
+        COLOR_MEXICAN_PINK
+    } else if current_ratio >= warning_ratio {
+        COLOR_SELECTIVE_YELLOW
+    } else {
+        COLOR_MALACHITE
+    };
+
+    context.set_line_width(line_width);
+
+    context.set_source_rgb(0.2, 0.2, 0.2);
+    let _ = context.arc(center_x, center_y, radius, 0.0, 2.0 * std::f64::consts::PI);
+    let _ = context.stroke();
+
+    let end_angle = start_angle + current_ratio * 2.0 * std::f64::consts::PI;
+    context.set_source_rgb(color.0, color.1, color.2);
+    let _ = context.arc(center_x, center_y, radius, start_angle, end_angle);
+    let _ = context.stroke();
+
+    if let Some(max_r) = max_ratio {
+        let max_angle = start_angle + max_r * 2.0 * std::f64::consts::PI;
+        context.set_source_rgb(0.5, 0.5, 0.5);
+        context.set_line_width(line_width + 4.0);
+        let _ = context.arc(center_x, center_y, radius, max_angle - 0.03, max_angle + 0.03);
+        let _ = context.stroke();
+        context.set_line_width(line_width);
+    }
+
+    let critical_angle = start_angle + 2.0 * std::f64::consts::PI;
+    context.set_source_rgb(COLOR_MEXICAN_PINK.0, COLOR_MEXICAN_PINK.1, COLOR_MEXICAN_PINK.2);
+    context.set_line_width(line_width + 4.0);
+    let _ = context.arc(center_x, center_y, radius, critical_angle - 0.04, critical_angle);
+    let _ = context.stroke();
+}
+
 /// Formats bytes as a human-readable string.
 pub fn format_bytes(bytes: u64) -> String {
     let units = ["B", "KiB", "MiB", "GiB", "TiB"];

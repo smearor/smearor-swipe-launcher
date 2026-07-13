@@ -4,6 +4,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
 
 use crate::TOPIC_CPU;
+use crate::TemperatureComponent;
 
 /// Status message for CPU metrics.
 #[stabby::stabby(no_opt)]
@@ -12,13 +13,22 @@ pub struct CpuStatusMessage {
     /// CPU usage in percent (0.0 - 100.0).
     pub cpu_usage: f32,
     /// CPU temperature in degrees Celsius.
+    ///
+    /// This is the primary temperature value, selected by the service config
+    /// `cpu_temperature_component` or the first available component.
     pub cpu_temperature: stabby::option::Option<f32>,
+    /// All available temperature components detected by the system.
+    pub temperature_components: stabby::vec::Vec<TemperatureComponent>,
 }
 
 impl CpuStatusMessage {
     /// Creates a new CPU status message.
-    pub fn new(cpu_usage: f32, cpu_temperature: stabby::option::Option<f32>) -> Self {
-        Self { cpu_usage, cpu_temperature }
+    pub fn new(cpu_usage: f32, cpu_temperature: stabby::option::Option<f32>, temperature_components: stabby::vec::Vec<TemperatureComponent>) -> Self {
+        Self {
+            cpu_usage,
+            cpu_temperature,
+            temperature_components,
+        }
     }
 }
 

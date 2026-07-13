@@ -499,6 +499,11 @@ scrolledwindow {
     color: #aaaaaa;
 }
 
+.sysinfo-temperature-label {
+    font-size: 0.7em;
+    color: #888888;
+}
+
 .sysinfo-normal {
     color: #04e762;
 }

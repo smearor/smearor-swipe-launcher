@@ -5,6 +5,7 @@ use smearor_sysinfo_model::DiskUsage;
 use smearor_sysinfo_model::DisksStatusMessage;
 use smearor_sysinfo_model::MemoryStatusMessage;
 use smearor_sysinfo_model::NetworkStatusMessage;
+use smearor_sysinfo_model::TemperatureComponent;
 use smearor_sysinfo_model::UptimeStatusMessage;
 use std::io;
 use std::path::Path;
@@ -66,25 +67,43 @@ pub(self) struct CpuSample {
 }
 
 /// Collects CPU metrics.
-pub async fn collect_cpu(enable_temperature: bool, temperature_source: Option<&str>, state: &mut CollectorState) -> CpuStatusMessage {
+///
+/// `temperature_component_filter` selects which component's temperature is used
+/// as the primary `cpu_temperature`. If `None`, the first available component is used.
+pub async fn collect_cpu(
+    enable_temperature: bool,
+    temperature_source: Option<&str>,
+    temperature_component_filter: Option<&str>,
+    state: &mut CollectorState,
+) -> CpuStatusMessage {
     let usage = read_cpu_usage(state).await.unwrap_or_else(|error| {
         error!("CPU collector failed: {error}");
         0.0
     });
 
-    let temperature = if enable_temperature {
-        match read_cpu_temperature(temperature_source).await {
-            Ok(value) => stabby::option::Option::Some(value),
-            Err(error) => {
-                debug!("CPU temperature not available: {error}");
-                stabby::option::Option::None()
+    let (temperature, components) = if enable_temperature {
+        let components = read_temperature_components(temperature_source).await;
+        if components.is_empty() {
+            debug!("CPU temperature not available: no temperature components found");
+            (stabby::option::Option::None(), components)
+        } else {
+            let selected = select_temperature_component(&components, temperature_component_filter);
+            match selected {
+                Some(comp) => {
+                    let temp = comp.temperature.clone();
+                    (temp, components)
+                }
+                None => {
+                    debug!("CPU temperature not available: no component matched filter '{:?}'", temperature_component_filter);
+                    (stabby::option::Option::None(), components)
+                }
             }
         }
     } else {
-        stabby::option::Option::None()
+        (stabby::option::Option::None(), stabby::vec::Vec::new())
     };
 
-    CpuStatusMessage::new(usage, temperature)
+    CpuStatusMessage::new(usage, temperature, components)
 }
 
 /// Collects memory metrics.
@@ -164,56 +183,127 @@ async fn read_cpu_usage(state: &mut CollectorState) -> Result<f32, CollectorErro
     Ok(usage)
 }
 
-async fn read_cpu_temperature(source: Option<&str>) -> Result<f32, CollectorError> {
+/// Reads all available temperature components using `sysinfo` first, falling back
+/// to the `/sys`-based approach if `sysinfo` returns no components.
+async fn read_temperature_components(source: Option<&str>) -> stabby::vec::Vec<TemperatureComponent> {
+    let components = read_temperature_components_sysinfo().await;
+    if !components.is_empty() {
+        return components;
+    }
+
+    debug!("sysinfo returned no temperature components, falling back to /sys approach");
+    read_temperature_components_sysfs(source).await
+}
+
+/// Reads temperature components using the `sysinfo` crate.
+async fn read_temperature_components_sysinfo() -> stabby::vec::Vec<TemperatureComponent> {
+    let sysinfo_components = sysinfo::Components::new_with_refreshed_list();
+    let mut components = stabby::vec::Vec::new();
+    for component in &sysinfo_components {
+        let label = component.label();
+        let id = component.id().unwrap_or("");
+        let temperature = component.temperature().filter(|t| t.is_finite() && *t > 0.0);
+        let max = component.max().filter(|t| t.is_finite() && *t > 0.0);
+        let critical = component.critical().filter(|t| t.is_finite() && *t > 0.0);
+        components.push(TemperatureComponent::new(
+            label,
+            id,
+            temperature.map(stabby::option::Option::Some).unwrap_or(stabby::option::Option::None()),
+            max.map(stabby::option::Option::Some).unwrap_or(stabby::option::Option::None()),
+            critical.map(stabby::option::Option::Some).unwrap_or(stabby::option::Option::None()),
+        ));
+    }
+    components
+}
+
+/// Reads temperature components using the `/sys` filesystem as fallback.
+async fn read_temperature_components_sysfs(source: Option<&str>) -> stabby::vec::Vec<TemperatureComponent> {
     match source {
-        None | Some("thermal_zone") => read_cpu_temperature_thermal_zone().await,
-        Some("hwmon") => read_cpu_temperature_hwmon().await,
-        Some(path) => read_cpu_temperature_path(Path::new(path)).await,
+        None | Some("thermal_zone") => read_temperature_components_thermal_zone().await,
+        Some("hwmon") => read_temperature_components_hwmon().await,
+        Some(path) => read_temperature_components_path(Path::new(path)).await,
     }
 }
 
-async fn read_cpu_temperature_thermal_zone() -> Result<f32, CollectorError> {
-    let thermal_dir = Path::new("/sys/class/thermal");
-    let mut entries = fs::read_dir(thermal_dir).await.map_err(|source| CollectorError::Read {
-        path: String::from("/sys/class/thermal"),
-        source,
-    })?;
+/// Selects a temperature component by label or id match.
+///
+/// If `filter` is `None`, returns the first component with a valid temperature.
+/// If `filter` is `Some`, returns the first component whose label or id contains the filter string.
+fn select_temperature_component<'a>(components: &'a [TemperatureComponent], filter: Option<&str>) -> Option<&'a TemperatureComponent> {
+    match filter {
+        None => components.iter().find(|c| c.temperature.is_some()),
+        Some(filter_str) => components.iter().find(|c| {
+            (c.label.to_string().to_lowercase().contains(&filter_str.to_lowercase()) || c.id.to_string().to_lowercase().contains(&filter_str.to_lowercase()))
+                && c.temperature.is_some()
+        }),
+    }
+}
 
+async fn read_temperature_components_thermal_zone() -> stabby::vec::Vec<TemperatureComponent> {
+    let thermal_dir = Path::new("/sys/class/thermal");
+    let mut entries = match fs::read_dir(thermal_dir).await {
+        Ok(entries) => entries,
+        Err(error) => {
+            debug!("Failed to read /sys/class/thermal: {error}");
+            return stabby::vec::Vec::new();
+        }
+    };
+
+    let mut components = stabby::vec::Vec::new();
     while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
         let temp_path = path.join("temp");
         if !temp_path.exists() {
             continue;
         }
-        let content = read_file(&temp_path).await?;
-        let millis: i32 = content.trim().parse().map_err(|_| CollectorError::Parse {
-            path: temp_path.to_string_lossy().to_string(),
-            reason: String::from("invalid temperature value"),
-        })?;
-        if millis > 0 {
-            return Ok(millis as f32 / 1000.0);
+        let zone_name = entry.file_name().to_string_lossy().to_string();
+        let content = match read_file(&temp_path).await {
+            Ok(content) => content,
+            Err(error) => {
+                debug!("Failed to read {:?}: {error}", temp_path);
+                continue;
+            }
+        };
+        if let Ok(millis) = content.trim().parse::<i32>() {
+            if millis > 0 {
+                components.push(TemperatureComponent::new(
+                    zone_name.as_str(),
+                    zone_name.as_str(),
+                    stabby::option::Option::Some(millis as f32 / 1000.0),
+                    stabby::option::Option::None(),
+                    stabby::option::Option::None(),
+                ));
+            }
         }
     }
-
-    Err(CollectorError::Parse {
-        path: String::from("/sys/class/thermal"),
-        reason: String::from("no thermal zone found"),
-    })
+    components
 }
 
-async fn read_cpu_temperature_hwmon() -> Result<f32, CollectorError> {
+async fn read_temperature_components_hwmon() -> stabby::vec::Vec<TemperatureComponent> {
     let hwmon_dir = Path::new("/sys/class/hwmon");
-    let mut entries = fs::read_dir(hwmon_dir).await.map_err(|source| CollectorError::Read {
-        path: String::from("/sys/class/hwmon"),
-        source,
-    })?;
+    let mut entries = match fs::read_dir(hwmon_dir).await {
+        Ok(entries) => entries,
+        Err(error) => {
+            debug!("Failed to read /sys/class/hwmon: {error}");
+            return stabby::vec::Vec::new();
+        }
+    };
 
+    let mut components = stabby::vec::Vec::new();
     while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
-        let mut temp_entries = fs::read_dir(&path).await.map_err(|source| CollectorError::Read {
-            path: path.to_string_lossy().to_string(),
-            source,
-        })?;
+        let hwmon_name = entry.file_name().to_string_lossy().to_string();
+
+        let name_content = read_file(&path.join("name")).await.ok();
+        let device_name = name_content.map(|c| c.trim().to_string()).unwrap_or_else(|| hwmon_name.clone());
+
+        let mut temp_entries = match fs::read_dir(&path).await {
+            Ok(entries) => entries,
+            Err(error) => {
+                debug!("Failed to read hwmon dir {:?}: {error}", path);
+                continue;
+            }
+        };
         while let Ok(Some(temp_entry)) = temp_entries.next_entry().await {
             let name = temp_entry.file_name();
             let name_str = name.to_string_lossy();
@@ -222,34 +312,47 @@ async fn read_cpu_temperature_hwmon() -> Result<f32, CollectorError> {
                 if let Ok(content) = read_file(&temp_path).await {
                     if let Ok(millis) = content.trim().parse::<i32>() {
                         if millis > 0 {
-                            return Ok(millis as f32 / 1000.0);
+                            let label = format!("{} {}", device_name, name_str);
+                            let id = format!("{}_{}", hwmon_name, name_str.trim_end_matches("_input"));
+                            components.push(TemperatureComponent::new(
+                                label.as_str(),
+                                id.as_str(),
+                                stabby::option::Option::Some(millis as f32 / 1000.0),
+                                stabby::option::Option::None(),
+                                stabby::option::Option::None(),
+                            ));
                         }
                     }
                 }
             }
         }
     }
-
-    Err(CollectorError::Parse {
-        path: String::from("/sys/class/hwmon"),
-        reason: String::from("no hwmon temperature found"),
-    })
+    components
 }
 
-async fn read_cpu_temperature_path(path: &Path) -> Result<f32, CollectorError> {
-    let content = read_file(path).await?;
-    let millis: i32 = content.trim().parse().map_err(|_| CollectorError::Parse {
-        path: path.to_string_lossy().to_string(),
-        reason: String::from("invalid temperature value"),
-    })?;
-    if millis > 0 {
-        Ok(millis as f32 / 1000.0)
-    } else {
-        Err(CollectorError::Parse {
-            path: path.to_string_lossy().to_string(),
-            reason: String::from("temperature value is zero or negative"),
-        })
+async fn read_temperature_components_path(path: &Path) -> stabby::vec::Vec<TemperatureComponent> {
+    let content = match read_file(path).await {
+        Ok(content) => content,
+        Err(error) => {
+            debug!("Failed to read {:?}: {error}", path);
+            return stabby::vec::Vec::new();
+        }
+    };
+    if let Ok(millis) = content.trim().parse::<i32>() {
+        if millis > 0 {
+            let path_str = path.to_string_lossy().to_string();
+            let mut components = stabby::vec::Vec::new();
+            components.push(TemperatureComponent::new(
+                path_str.as_str(),
+                path_str.as_str(),
+                stabby::option::Option::Some(millis as f32 / 1000.0),
+                stabby::option::Option::None(),
+                stabby::option::Option::None(),
+            ));
+            return components;
+        }
     }
+    stabby::vec::Vec::new()
 }
 
 async fn read_memory() -> Result<MemoryStatusMessage, CollectorError> {

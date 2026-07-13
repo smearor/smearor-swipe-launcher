@@ -64,7 +64,20 @@ impl CpuWidget {
 
     fn update_ui(&self, message: &CpuStatusMessage) {
         let cpu_usage = message.cpu_usage.clamp(0.0, 100.0);
-        let cpu_temperature: Option<f32> = message.cpu_temperature.clone().into();
+        let cpu_temperature: Option<f32> = if let Some(ref filter) = self.config.temperature_component {
+            let filter_lower = filter.to_lowercase();
+            message
+                .temperature_components
+                .iter()
+                .find(|c| {
+                    (c.label.to_string().to_lowercase().contains(&filter_lower) || c.id.to_string().to_lowercase().contains(&filter_lower))
+                        && c.temperature.is_some()
+                })
+                .and_then(|c| c.temperature.as_ref().copied().into())
+                .or_else(|| message.cpu_temperature.clone().into())
+        } else {
+            message.cpu_temperature.clone().into()
+        };
         *self.current_value.borrow_mut() = cpu_usage;
         let value_label = self.value_label.clone();
         let bar = self.bar.clone();
