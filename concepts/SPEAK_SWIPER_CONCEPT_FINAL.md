@@ -325,11 +325,17 @@ auto-stop).
 
 - **Thread isolation:** `cpal::Stream` is `!Send` on some platforms. The stream is created, played, and dropped on the same dedicated thread. The audio data is
   collected into a `Arc<Mutex<Vec<f32>>>` shared with the callback closure.
-- **Sample format:** Whisper expects 32-bit float PCM at 16 kHz mono. The capture stream is configured to deliver `f32` samples directly. If the hardware device
-  does not natively support `f32`, `cpal` performs the conversion internally.
+- **Sample format:** Whisper expects 32-bit float PCM at 16 kHz mono. The capture stream requests `f32` samples. If the hardware device does not natively
+  support `f32`, `cpal` performs the conversion internally.
+- **Sample rate negotiation:** Instead of forcing a fixed 16 kHz `StreamConfig` (which can cause `StreamBuildError` on devices or sound servers that do not
+  support it), the capture code queries `device.default_input_config()` to determine the native sample rate. If the native rate is 16 kHz, no resampling is
+  needed. If the native rate differs (e.g., 44.1 kHz, 48 kHz), the stream is opened at the native rate and a post-capture `resample_linear` step is **always**
+  applied as a guaranteed pipeline stage. This two-phase approach (native capture → resample) avoids `StreamBuildError` entirely.
 - **Silence detection:** A rolling window of RMS (root mean square) amplitude is computed over the incoming samples. If the RMS stays below a fixed threshold (
-  e.g., `0.01`) for a continuous duration exceeding `silence_threshold_seconds`, the recording auto-stops.
-- **Max duration:** A hard ceiling of `max_recording_seconds` prevents unbounded recording. At 16 kHz, this is `max_recording_seconds * 16000` samples.
+  e.g., `0.01`) for a continuous duration exceeding `silence_threshold_seconds`, the recording auto-stops. The silence threshold is scaled by the actual
+  capture sample rate, not the target 16 kHz rate.
+- **Max duration:** A hard ceiling of `max_recording_seconds` prevents unbounded recording. The max sample count is computed from the actual capture sample
+  rate, not the target 16 kHz rate: `max_recording_seconds * actual_sample_rate`.
 - **Cancellation:** The caller can send a stop signal via a `tokio::sync::oneshot::Sender<()>` at any time. The capture thread checks this signal between buffer
   writes.
 
@@ -391,16 +397,13 @@ pub async fn capture_audio(
     config: &VoiceAssistantServiceConfig,
     stop_rx: oneshot::Receiver<()>,
 ) -> Result<Vec<f32>, AudioError> {
-    let max_samples = (config.max_recording_seconds as usize) * (config.audio_sample_rate as usize);
-    let silence_window_samples = (config.silence_threshold_seconds as usize) * (config.audio_sample_rate as usize);
-
-    let buffer: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::with_capacity(max_samples)));
-    let buffer_clone = buffer.clone();
-
     let (done_tx, done_rx) = oneshot::channel::<Result<Vec<f32>, AudioError>>();
 
     // Spawn the capture thread. cpal::Stream is !Send on some platforms,
     // so the entire stream lifecycle must live on this thread.
+    // The thread captures at the device's native sample rate, performs
+    // mono downmix block-wise in the callback, and resamples to the
+    // target rate (16 kHz) after capture if needed.
     std::thread::spawn(move || {
         let host = cpal::default_host();
 
@@ -433,15 +436,46 @@ pub async fn capture_audio(
             SampleFormat::F32
         };
 
+        // Determine the actual capture sample rate.
+        // Instead of forcing 16 kHz (which can cause StreamBuildError on devices
+        // that do not support it), we use the device's native sample rate and
+        // resample to 16 kHz after capture if needed.
+        let native_sample_rate = supported_config.sample_rate().0;
+        let needs_resampling = native_sample_rate != config.audio_sample_rate;
+        if needs_resampling {
+            debug!(
+                "Audio capture: native sample rate is {} Hz, will resample to {} Hz after capture",
+                native_sample_rate, config.audio_sample_rate
+            );
+        }
+
+        let actual_sample_rate = native_sample_rate;
+        let max_samples = (config.max_recording_seconds as usize) * (actual_sample_rate as usize);
+        let silence_window_samples = (config.silence_threshold_seconds as usize) * (actual_sample_rate as usize);
+
         let stream_config = StreamConfig {
             channels: config.audio_channels,
-            sample_rate: SampleRate(config.audio_sample_rate),
+            sample_rate: SampleRate(actual_sample_rate),
             buffer_size: BufferSize::Default,
         };
+
+        // Shared buffer for captured mono samples.
+        // The callback performs block-wise mono downmix so the buffer
+        // always contains mono f32 data at the native sample rate.
+        let max_mono_samples = max_samples / (config.audio_channels as usize);
+        let buffer: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::with_capacity(max_mono_samples)));
+        let buffer_clone = buffer.clone();
 
         // Track consecutive silence samples for silence detection.
         let consecutive_silence: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
         let consecutive_silence_clone = consecutive_silence.clone();
+
+        // Stream error flag: set by the cpal error callback to signal
+        // the outer loop that the stream has failed (e.g., USB mic disconnect).
+        let stream_error: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let stream_error_clone = stream_error.clone();
+
+        let channels = config.audio_channels as usize;
 
         let stream = device.build_input_stream(
             &stream_config,
@@ -449,16 +483,25 @@ pub async fn capture_audio(
                 let mut buf = buffer_clone.lock().unwrap_or_default();
                 let mut silence_count = consecutive_silence_clone.lock().unwrap_or_default();
 
-                for &sample in data {
-                    // If the buffer is full, stop capturing.
-                    if buf.len() >= max_samples {
+                // Block-wise mono downmix: average all channels per frame.
+                // This ensures the buffer always contains mono data,
+                // avoiding a costly post-capture downmix pass.
+                let frame_count = data.len() / channels;
+                for frame in 0..frame_count {
+                    if buf.len() >= max_mono_samples {
                         break;
                     }
-                    buf.push(sample);
+
+                    let mut sum = 0.0f32;
+                    for channel in 0..channels {
+                        sum += data[frame * channels + channel];
+                    }
+                    let mono_sample = sum / (channels as f32);
+                    buf.push(mono_sample);
 
                     // RMS-based silence detection on individual samples.
                     // We use absolute amplitude as a lightweight proxy for RMS over a window.
-                    if sample.abs() < SILENCE_RMS_THRESHOLD {
+                    if mono_sample.abs() < SILENCE_RMS_THRESHOLD {
                         *silence_count += 1;
                     } else {
                         *silence_count = 0;
@@ -468,17 +511,17 @@ pub async fn capture_audio(
                 // Check if silence threshold has been exceeded.
                 if *silence_count >= silence_window_samples && buf.len() > silence_window_samples {
                     debug!(
-                        "Audio capture: silence detected after {} samples ({}s)",
+                        "Audio capture: silence detected after {} mono samples ({}s)",
                         buf.len(),
-                        buf.len() / (config.audio_sample_rate as usize)
+                        buf.len() / (actual_sample_rate as usize)
                     );
-                    // The stream will be stopped by the outer loop after this callback returns.
-                    // We signal completion by truncating the buffer to mark it as "done".
-                    // The outer loop checks buffer length against max_samples or silence.
                 }
             },
             |error| {
                 tracing::error!("Audio capture stream error: {}", error);
+                if let Ok(mut err) = stream_error_clone.lock() {
+                    *err = Some(error.to_string());
+                }
             },
             None,
         );
@@ -497,8 +540,8 @@ pub async fn capture_audio(
         }
         debug!("Audio capture: stream started");
 
-        // Wait for either: stop signal, silence, or max duration.
-        // We poll the buffer length every 50ms to check if silence or max duration was reached.
+        // Wait for either: stop signal, silence, max duration, or stream error.
+        // We poll every 50ms to check conditions.
         let mut stop_rx = stop_rx;
         loop {
             // Check if the stop signal has been sent.
@@ -510,9 +553,18 @@ pub async fn capture_audio(
                 Err(oneshot::error::TryRecvError::Empty) => {}
             }
 
+            // Check if the stream has errored (e.g., USB mic disconnect).
+            if let Ok(mut err) = stream_error.lock() {
+                if let Some(error_msg) = err.take() {
+                    debug!("Audio capture: stream error detected, aborting: {}", error_msg);
+                    let _ = done_tx.send(Err(AudioError::StreamBuild(error_msg)));
+                    return;
+                }
+            }
+
             // Check if max duration reached.
             let current_len = buffer.lock().map(|buf| buf.len()).unwrap_or(0);
-            if current_len >= max_samples {
+            if current_len >= max_mono_samples {
                 debug!("Audio capture: max recording duration reached");
                 break;
             }
@@ -531,7 +583,10 @@ pub async fn capture_audio(
         drop(stream);
         debug!("Audio capture: stream stopped");
 
-        // Extract the captured samples.
+        // Extract the captured mono samples.
+        // The buffer already contains mono data (downmix was done block-wise
+        // in the callback). Only resampling remains if the native rate differs
+        // from the target rate.
         let samples = buffer.lock().map(|mut buf| {
             let drained = std::mem::take(&mut *buf);
             drained
@@ -540,8 +595,32 @@ pub async fn capture_audio(
         if samples.is_empty() {
             let _ = done_tx.send(Err(AudioError::EmptyBuffer));
         } else {
-            debug!("Audio capture: captured {} samples ({}s)", samples.len(), samples.len() / 16000);
-            let _ = done_tx.send(Ok(samples));
+            debug!(
+                "Audio capture: captured {} mono samples at {} Hz ({}s)",
+                samples.len(),
+                actual_sample_rate,
+                samples.len() / (actual_sample_rate as usize)
+            );
+
+            // Resampling: if the capture rate differs from the target rate
+            // (16 kHz), apply linear resampling. Mono downmix was already
+            // done in the callback, so no post-capture downmix is needed.
+            let final_samples = if needs_resampling {
+                debug!(
+                    "Audio capture: resampling from {} Hz to {} Hz",
+                    actual_sample_rate, config.audio_sample_rate
+                );
+                resample_linear(&samples, actual_sample_rate, config.audio_sample_rate)
+            } else {
+                samples
+            };
+
+            debug!(
+                "Audio capture: {} samples after processing ({} Hz mono)",
+                final_samples.len(),
+                config.audio_sample_rate
+            );
+            let _ = done_tx.send(Ok(final_samples));
         }
     });
 
@@ -551,14 +630,25 @@ pub async fn capture_audio(
 }
 ```
 
-#### 4.4.4 Resampling Consideration
+#### 4.4.4 Resampling Pipeline
 
-If the hardware default input device does not natively support 16 kHz, `cpal` will use the device's native sample rate and the `StreamConfig` will be adjusted.
-In practice, most Linux audio systems (PulseAudio, PipeWire, ALSA) support 16 kHz natively. If the native rate differs, the `StreamConfig.sample_rate` should be
-set to the device's native rate and a post-capture resampling step should be applied.
+The audio capture code queries `device.default_input_config()` to determine the device's native sample rate. Instead of forcing a fixed 16 kHz `StreamConfig`
+(which can cause `StreamBuildError` on ALSA/PulseAudio/PipeWire if the rate is not supported), the stream is opened at the native rate. The pipeline has two
+stages:
 
-For the MVP, the service assumes the device supports 16 kHz. If `device.default_input_config()` reports a different sample rate, the service logs a warning and
-falls back to the native rate, followed by a linear resampling step:
+1. **Block-wise mono downmix (in callback):** The cpal input callback averages all channels per frame in real-time, so the shared buffer always contains
+   mono f32 data at the native sample rate. This avoids a costly post-capture downmix pass on the full buffer.
+2. **Linear resampling (post-capture):** If the native rate differs from 16 kHz, `resample_linear` interpolates the mono buffer to the target rate after
+   capture completes. The resampling overhead is negligible compared to Whisper inference time.
+
+This approach eliminates `StreamBuildError` entirely — the stream is always opened at a rate the device supports.
+
+#### 4.4.5 Stream Error Handling
+
+If the cpal audio stream errors internally (e.g., USB microphone disconnect, ALSA device reset), the error callback sets a shared `Arc<Mutex<Option<String>>>`
+flag. The outer polling loop checks this flag every 50ms alongside the stop signal, silence, and max-duration conditions. If a stream error is detected, the
+loop breaks immediately and sends `AudioError::StreamBuild` through the `done_tx` channel, allowing the pipeline to abort with `AssistantState::Error` instead
+of waiting for a timeout.
 
 ```rust
 /// Resamples a PCM buffer from one sample rate to another using linear interpolation.
@@ -838,10 +928,15 @@ creation — it is stored for the lifetime of the service.
   constructed and used on the same thread. The model itself is `Send + Sync` after loading.
 - **Context creation:** `LlamaModel::new_context(&backend, ctx_params)` creates a `LlamaContext<'a>` borrowing the model. `LlamaContext` is `!Send` and
   `!Sync` — it must live on the same thread as the model. The context holds the KV cache and is the primary handle for inference.
-- **Context parameters:** `LlamaContextParams` is `Send + Sync` and uses a builder pattern: `.with_n_ctx(NonZeroU32::new(2048))`, `.with_n_threads(4)`,
+- **Context reuse across ReAct iterations:** The `LlamaContext` is created once per pipeline run (not per `generate` call) and reused across all ReAct
+  iterations. Thanks to llama.cpp's KV cache, only newly added tokens (tool results, assistant responses) need to be evaluated in subsequent iterations —
+  the system prompt and previous conversation history are not re-evaluated. This avoids O(N) prompt processing time on each iteration and is critical for
+  CPU inference latency. The context is managed via a `LlmSession` struct that holds the context, batch, sampler, and current token position.
+- **Context parameters:** `LlamaContextParams` is `Send + Sync` and uses a builder pattern: `.with_n_ctx(NonZeroU32::new(4096))`, `.with_n_threads(4)`,
   `.with_n_threads_batch(4)`, `.with_n_batch(2048)`, `.with_n_seq_max(1)`.
 - **Thread isolation:** Because `LlamaContext` is `!Send`, the entire inference pipeline (tokenize → batch → decode → sample → detokenize) must run on a single
-  dedicated thread. The `generate` function is synchronous and called from `tokio::task::spawn_blocking`.
+  dedicated thread. The `generate` function is synchronous and called from `tokio::task::spawn_blocking`. The `LlmSession` is created and used entirely
+  within a single `spawn_blocking` call for the duration of one pipeline run.
 - **Chat template:** The model's built-in chat template is retrieved via `model.chat_template(None)` and applied with
   `model.apply_chat_template(&tmpl, &messages, true)`. This produces a prompt string formatted according to the model's expected format (ChatML, Llama-3,
   Mistral, etc.).
@@ -851,7 +946,9 @@ creation — it is stored for the lifetime of the service.
 - **Batching:** `LlamaBatch::new(n_tokens, n_seq_max)` holds tokens for decode. `batch.add(token, pos, &[seq_id], logits)` adds individual tokens.
   `batch.add_sequence(&tokens, seq_id, logits_all)` adds a full sequence. Only the last token needs `logits=true` for generation.
 - **Generation loop:** The loop tokenizes the prompt, feeds the tokens as a batch, calls `ctx.decode(&mut batch)`, then repeatedly samples the next token,
-  appends it to the batch, and decodes until an end-of-generation token is produced or `max_tokens` is reached.
+  appends it to the batch, and decodes until an end-of-generation token is produced or `max_tokens` is reached. In subsequent ReAct iterations, only the
+  new conversation tokens (tool result + new user/assistant messages) are tokenized and fed to the context — the KV cache retains all previously
+  processed tokens, so the model does not re-evaluate them.
 - **End-of-generation detection:** `model.is_eog_token(token)` checks whether a token is an end-of-generation marker (EOS, EOT, etc.).
 
 #### 4.6.2 Error Types
@@ -927,7 +1024,7 @@ impl Default for LlmConfig {
         Self {
             model_path: "models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf".to_string(),
             n_threads: 4,
-            n_ctx: 2048,
+            n_ctx: 4096,
             n_batch: 2048,
             max_tokens: 256,
             temperature: 0.7,
@@ -939,6 +1036,16 @@ impl Default for LlmConfig {
 ```
 
 #### 4.6.4 LLM Inference Engine
+
+The engine is split into two layers:
+
+1. **`LlmInferenceEngine`** — holds the `LlamaBackend` and `LlamaModel` (both `Send + Sync`). Created once at service startup. Shared via `Arc`.
+2. **`LlmSession`** — holds a `LlamaContext`, `LlamaBatch`, and `LlamaSampler` (all `!Send`). Created per pipeline run inside `spawn_blocking`. Reused across
+   ReAct iterations to leverage the KV cache.
+
+This separation is critical for performance: creating a new `LlamaContext` for each ReAct iteration would force the model to re-evaluate the entire
+conversation history from scratch (O(N) prompt processing per iteration). By reusing the context, only newly added tokens (tool results, assistant
+responses) are evaluated in subsequent iterations — the KV cache retains all previously processed tokens.
 
 ```rust
 use std::num::NonZeroU32;
@@ -954,9 +1061,11 @@ use llama_cpp_2::model::LlamaChatMessage;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::Special;
 use llama_cpp_2::sampling::LlamaSampler;
+use llama_cpp_2::token::LlamaToken;
 use tracing::debug;
 
-/// LLM inference engine wrapping a llama.cpp model and context.
+/// LLM inference engine wrapping a llama.cpp model.
+/// Created once at service startup. Shared via `Arc`.
 pub struct LlmInferenceEngine {
     backend: LlamaBackend,
     model: LlamaModel,
@@ -985,38 +1094,11 @@ impl LlmInferenceEngine {
         })
     }
 
-    /// Generates a completion from a system prompt and conversation history.
-    ///
-    /// This function is synchronous and CPU-bound. It should be called from
-    /// `tokio::task::spawn_blocking` to avoid blocking the async runtime.
-    pub fn generate(
-        &self,
-        system_prompt: &str,
-        conversation: &[LlamaChatMessage],
-    ) -> Result<String, LlmError> {
-        // 1. Apply the model's chat template to produce a formatted prompt.
-        let chat_template = self.model
-            .chat_template(None)
-            .map_err(|error| LlmError::ChatTemplate(error.to_string()))?;
-
-        let mut all_messages = vec![
-            LlamaChatMessage::new("system".to_string(), system_prompt.to_string())
-                .map_err(|error| LlmError::ChatMessage(error.to_string()))?,
-        ];
-        all_messages.extend(conversation.iter().cloned());
-
-        let prompt = self.model
-            .apply_chat_template(&chat_template, &all_messages, true)
-            .map_err(|error| LlmError::ApplyChatTemplate(error.to_string()))?;
-        debug!("LLM: formatted prompt ({} chars)", prompt.len());
-
-        // 2. Tokenize the prompt.
-        let prompt_tokens = self.model
-            .str_to_token(&prompt, AddBos::Always)
-            .map_err(|error| LlmError::Tokenize(error.to_string()))?;
-        debug!("LLM: tokenized to {} tokens", prompt_tokens.len());
-
-        // 3. Create a context for inference.
+    /// Creates a new inference session for one pipeline run.
+    /// The session holds the `LlamaContext` (with KV cache) and is reused
+    /// across all ReAct iterations within a single pipeline run.
+    /// Must be called from within `spawn_blocking`.
+    pub fn create_session(&self) -> Result<LlmSession, LlmError> {
         let ctx_params = LlamaContextParams::default()
             .with_n_ctx(NonZeroU32::new(self.config.n_ctx))
             .with_n_batch(self.config.n_batch)
@@ -1024,42 +1106,124 @@ impl LlmInferenceEngine {
             .with_n_threads_batch(self.config.n_threads)
             .with_n_seq_max(1);
 
-        let mut ctx = self.model
+        let ctx = self.model
             .new_context(&self.backend, ctx_params)
             .map_err(|error| LlmError::ContextCreate(error.to_string()))?;
-        debug!("LLM: context created (n_ctx={})", ctx.n_ctx());
+        debug!("LLM: session context created (n_ctx={})", ctx.n_ctx());
 
-        // 4. Feed the prompt tokens as a batch.
-        let batch_size = prompt_tokens.len();
-        let mut batch = LlamaBatch::new(batch_size, 1);
-        batch
-            .add_sequence(&prompt_tokens, 0, false)
-            .map_err(|error| LlmError::Decode(error.to_string()))?;
+        let batch = LlamaBatch::new(self.config.n_batch as usize, 1);
 
-        // Decode the prompt batch.
-        ctx.decode(&mut batch)
-            .map_err(|error| LlmError::Decode(error.to_string()))?;
-        debug!("LLM: prompt batch decoded");
-
-        // 5. Build the sampler chain.
-        let mut sampler = LlamaSampler::chain_simple([
+        let sampler = LlamaSampler::chain_simple([
             LlamaSampler::temp(self.config.temperature),
             LlamaSampler::top_k(self.config.top_k),
             LlamaSampler::top_p(self.config.top_p, 1),
             LlamaSampler::greedy(),
         ]);
 
-        // 6. Autoregressive generation loop.
-        let mut generated_tokens: Vec<LlamaToken> = Vec::with_capacity(self.config.max_tokens);
-        let mut n_cur = batch_size as i32;
+        Ok(LlmSession {
+            ctx,
+            batch,
+            sampler,
+            n_cur: 0,
+            chat_template: self.model
+                .chat_template(None)
+                .map_err(|error| LlmError::ChatTemplate(error.to_string()))?,
+        })
+    }
+}
 
-        for _ in 0..self.config.max_tokens {
+/// A reusable LLM inference session for one pipeline run.
+/// Holds the `LlamaContext` (with KV cache), `LlamaBatch`, and `LlamaSampler`.
+/// All fields are `!Send` — the session must live on the `spawn_blocking` thread.
+pub struct LlmSession<'a> {
+    ctx: LlamaContext<'a>,
+    batch: LlamaBatch,
+    sampler: LlamaSampler,
+    n_cur: i32,
+    chat_template: llama_cpp_2::model::LlamaChatTemplate,
+}
+
+impl<'a> LlmSession<'a> {
+    /// Generates a completion from the system prompt and conversation history.
+    ///
+    /// The full conversation (system prompt + all messages) is always passed
+    /// through `apply_chat_template` and tokenized. This ensures the chat
+    /// template produces well-formed output with correct role tags in every
+    /// iteration — applying the template to only new messages would break
+    /// the template context (e.g., unclosed assistant/user tags).
+    ///
+    /// To leverage the KV cache across ReAct iterations, only the **delta**
+    /// tokens (tokens not yet processed by the context) are fed to the batch.
+    /// Since tokenization is deterministic, the delta is computed by skipping
+    /// the first `self.n_cur` tokens from the full token vector. The KV cache
+    /// retains all previously evaluated tokens, so only the new tokens need
+    /// decoding.
+    pub fn generate(
+        &mut self,
+        model: &LlamaModel,
+        system_prompt: &str,
+        conversation: &[LlamaChatMessage],
+    ) -> Result<String, LlmError> {
+        // 1. Always build the full prompt with system + entire conversation.
+        // This ensures the chat template produces correct, well-formed output
+        // with proper role tags in every iteration.
+        let mut all_messages = vec![
+            LlamaChatMessage::new("system".to_string(), system_prompt.to_string())
+                .map_err(|error| LlmError::ChatMessage(error.to_string()))?,
+        ];
+        all_messages.extend(conversation.iter().cloned());
+
+        let prompt = model
+            .apply_chat_template(&self.chat_template, &all_messages, true)
+            .map_err(|error| LlmError::ApplyChatTemplate(error.to_string()))?;
+        debug!("LLM: formatted prompt ({} chars)", prompt.len());
+
+        // 2. Tokenize the full prompt with BOS on first call only.
+        let prompt_tokens = model
+            .str_to_token(&prompt, AddBos::Always)
+            .map_err(|error| LlmError::Tokenize(error.to_string()))?;
+        debug!("LLM: tokenized to {} tokens total", prompt_tokens.len());
+
+        // 3. Compute the delta: only tokens beyond self.n_cur are new.
+        // The KV cache already holds the first self.n_cur tokens, so we
+        // skip them and only decode the new ones.
+        let prev_tokens = self.n_cur as usize;
+        if prompt_tokens.len() <= prev_tokens {
+            // No new tokens to process — this shouldn't happen in practice
+            // but we guard against it to avoid an empty batch.
+            return Err(LlmError::Decode("No new tokens to decode".to_string()));
+        }
+
+        let delta_tokens = &prompt_tokens[prev_tokens..];
+        debug!("LLM: {} delta tokens ({} already in KV cache)", delta_tokens.len(), prev_tokens);
+
+        // 4. Feed only the delta tokens as a batch.
+        // Only the last token needs logits=true for generation.
+        self.batch.clear();
+        for (index, &token) in delta_tokens.iter().enumerate() {
+            let is_last = index == delta_tokens.len() - 1;
+            self.batch
+                .add(token, self.n_cur + index as i32, &[0], is_last)
+                .map_err(|error| LlmError::Decode(error.to_string()))?;
+        }
+
+        self.ctx
+            .decode(&mut self.batch)
+            .map_err(|error| LlmError::Decode(error.to_string()))?;
+        debug!("LLM: delta batch decoded ({} tokens)", delta_tokens.len());
+
+        self.n_cur += delta_tokens.len() as i32;
+
+        // 4. Autoregressive generation loop.
+        let mut generated_tokens: Vec<LlamaToken> = Vec::with_capacity(model.config().max_tokens);
+
+        for _ in 0..model.config().max_tokens {
             // Sample the next token from the last decoded position.
-            let token = sampler.sample(&ctx, -1);
-            sampler.accept(token);
+            let token = self.sampler.sample(&self.ctx, -1);
+            self.sampler.accept(token);
 
             // Check for end-of-generation.
-            if self.model.is_eog_token(token) {
+            if model.is_eog_token(token) {
                 debug!("LLM: end-of-generation token produced");
                 break;
             }
@@ -1067,26 +1231,27 @@ impl LlmInferenceEngine {
             generated_tokens.push(token);
 
             // Feed the new token back into the context.
-            batch.clear();
-            batch
-                .add(token, n_cur, &[0], true)
+            self.batch.clear();
+            self.batch
+                .add(token, self.n_cur, &[0], true)
                 .map_err(|error| LlmError::Decode(error.to_string()))?;
 
-            ctx.decode(&mut batch)
+            self.ctx
+                .decode(&mut self.batch)
                 .map_err(|error| LlmError::Decode(error.to_string()))?;
 
-            n_cur += 1;
+            self.n_cur += 1;
         }
 
-        if generated_tokens.len() >= self.config.max_tokens {
-            return Err(LlmError::MaxTokensReached(self.config.max_tokens));
+        if generated_tokens.len() >= model.config().max_tokens {
+            return Err(LlmError::MaxTokensReached(model.config().max_tokens));
         }
 
-        // 7. Detokenize the generated tokens.
+        // 5. Detokenize the generated tokens.
         let mut decoder = encoding_rs::UTF_8.new_decoder();
         let mut output = String::new();
         for token in &generated_tokens {
-            let token_str = self.model
+            let token_str = model
                 .token_to_piece(token, &mut decoder, false, None)
                 .map_err(|error| LlmError::Detokenize(error.to_string()))?;
             output.push_str(&token_str);
@@ -1100,18 +1265,45 @@ impl LlmInferenceEngine {
 
 #### 4.6.5 Async Wrapper
 
-The `generate` function is synchronous and CPU-bound. To avoid blocking the tokio async runtime, it is wrapped in an async function that uses `spawn_blocking`:
+The `LlmSession` is synchronous and CPU-bound. To avoid blocking the tokio async runtime, the entire ReAct loop (session creation + all `generate` calls)
+is wrapped in a single `spawn_blocking` call. This ensures the `LlmSession` (which is `!Send`) stays on one thread for its entire lifetime:
 
 ```rust
-/// Async wrapper for `generate`. Runs the synchronous LLM inference
-/// on a blocking thread pool to avoid stalling the async runtime.
-pub async fn generate_async(
+/// Runs the full ReAct loop with a single LLM session, reusing the KV cache
+/// across all iterations. Must be called from `spawn_blocking`.
+pub fn run_react_with_session(
+    engine: &LlmInferenceEngine,
+    system_prompt: &str,
+    conversation_history: &[LlamaChatMessage],
+) -> Result<String, LlmError> {
+    let mut session = engine.create_session()?;
+    let mut conversation = conversation_history.to_vec();
+
+    for iteration in 0..engine.config().max_react_iterations {
+        let output = session.generate(&engine.model, system_prompt, &conversation)?;
+
+        // Parse the output (tool call or final answer).
+        // If tool call: invoke tool, append result to conversation, continue.
+        // If final answer: return.
+        // (This logic lives in the ReAct loop, shown in section 4.8.)
+        break; // placeholder
+    }
+
+    Ok(String::new()) // placeholder
+}
+```
+
+The async wrapper delegates to `spawn_blocking`:
+
+```rust
+/// Async wrapper for the full ReAct loop with LLM session.
+pub async fn run_react_async(
     engine: Arc<LlmInferenceEngine>,
     system_prompt: String,
     conversation: Vec<LlamaChatMessage>,
 ) -> Result<String, LlmError> {
     tokio::task::spawn_blocking(move || {
-        engine.generate(&system_prompt, &conversation)
+        run_react_with_session(&engine, &system_prompt, &conversation)
     })
         .await
         .map_err(|join_error| LlmError::Decode(format!("Blocking task failed: {join_error}")))?
@@ -1185,25 +1377,49 @@ The engine uses a composable sampler chain via `LlamaSampler::chain_simple`:
 3. **`LlamaSampler::top_p(0.95, 1)`** — Nucleus sampling: keeps tokens whose cumulative probability exceeds 0.95.
 4. **`LlamaSampler::greedy()`** — Selects the token with the highest logit after the above filters.
 
-For tool-calling scenarios where structured JSON output is required, a grammar sampler can be added to the chain:
+For tool-calling scenarios where structured JSON output is required, a grammar sampler can be added to the chain. The grammar must be valid GBNF (GGML BNF),
+which differs from regex in several ways: there is no `.` wildcard (use `[^]` or character classes instead), string literals use double quotes with `\"` for
+escaped quotes, and rules are defined with `::=`.
+
+The grammar below handles both tool calls and final answers, following the community-standard JSON-GBNF pattern from llama.cpp:
 
 ```rust
 let grammar = LlamaSampler::grammar(
-& self .model,
-r#"root ::= "{" "\"tool\":" "\"" [a-z]+ "\"" "," "\"arguments\":" "{" .* "}" "}""#,
-"root",
-).map_err( | error| LlmError::ChatTemplate(error.to_string())) ?;
+    &self.model,
+    r#"
+root         ::= "{" ws (tool-call | final-answer) ws "}"
+tool-call    ::= "\"tool\"" ws ":" ws "\"" name "\"" ws "," ws "\"arguments\"" ws ":" ws json-value
+final-answer ::= "\"final_answer\"" ws ":" ws json-string
+name         ::= [a-zA-Z0-9_/-]+
+json-value   ::= json-object | json-array | json-string | json-number | "true" | "false" | "null"
+json-object  ::= "{" ws "}" | "{" ws json-members ws "}"
+json-members ::= json-pair | json-pair ws "," ws json-members
+json-pair    ::= json-string ws ":" ws json-value
+json-array   ::= "[" ws "]" | "[" ws json-elements ws "]"
+json-elements::= json-value | json-value ws "," ws json-elements
+json-string  ::= "\"" ([^"\\] | "\\" ["\\/bfnrtu])* "\""
+json-number  ::= "-"? ([0-9] | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [-+]? [0-9]+)?
+ws           ::= [ \t\n]*
+"#,
+    "root",
+).map_err(|error| LlmError::ChatTemplate(error.to_string()))?;
 
 let mut sampler = LlamaSampler::chain_simple([
-LlamaSampler::temp( self .config.temperature),
-LlamaSampler::top_k( self .config.top_k),
-LlamaSampler::top_p( self .config.top_p, 1),
-grammar,
-LlamaSampler::greedy(),
+    LlamaSampler::temp(self.config.temperature),
+    LlamaSampler::top_k(self.config.top_k),
+    LlamaSampler::top_p(self.config.top_p, 1),
+    grammar,
+    LlamaSampler::greedy(),
 ]);
 ```
 
-This constrains the model to produce valid JSON matching the grammar, ensuring tool calls can be parsed reliably.
+This constrains the model to produce valid JSON matching the grammar, ensuring tool calls and final answers can be parsed reliably. The grammar supports:
+
+- **Tool calls:** `{"tool": "<name>", "arguments": <json-value>}` — the `arguments` field accepts any valid JSON value (object, array, string, number, boolean,
+  null).
+- **Final answers:** `{"final_answer": "<text>"}` — the `final_answer` field is a JSON string.
+- **Nested JSON:** The `json-object` and `json-array` rules are recursive, supporting arbitrarily nested JSON structures in tool arguments.
+- **Whitespace tolerance:** The `ws` rule allows optional whitespace between tokens, matching standard JSON formatting.
 
 #### 4.6.9 Tokenization and Detokenization
 
@@ -1238,8 +1454,12 @@ in `services.toml`.
   token generation. Setting `n_threads` to the number of physical cores is recommended.
 - **Thread isolation:** The `generate_async` wrapper uses `tokio::task::spawn_blocking`, which runs the inference on a dedicated blocking thread from the tokio
   runtime's blocking pool. This ensures the async runtime remains responsive while the LLM runs.
-- **Context window:** The `n_ctx` parameter limits the total number of tokens (prompt + generated) that can be processed. 2048 is sufficient for short voice
-  commands and tool calls. Larger contexts increase memory usage and slow down inference.
+- **Context window:** The `n_ctx` parameter limits the total number of tokens (prompt + generated) that can be processed. The default is 4096 tokens,
+  which provides sufficient headroom for the system prompt (including tool catalog), conversation history, and generated responses across multiple ReAct
+  iterations. Larger contexts increase memory usage and slow down inference.
+- **Tool catalog truncation:** The `build_system_prompt` function includes a token-budget-aware truncation mechanism. If the serialized tool catalog exceeds
+  a configurable budget (default: 1024 tokens, approximately 4000 characters), less relevant tools are truncated to fit. This prevents the system prompt
+  from consuming the majority of the context window, leaving room for conversation history and generated responses.
 
 #### 4.6.12 Thread Safety Summary
 
@@ -1275,9 +1495,17 @@ impl VoiceAssistantService {
     }
 
     /// Builds the system prompt for the LLM, injecting the tool catalog.
+    ///
+    /// If the serialized tool catalog exceeds the token budget (default: ~1024 tokens / ~4000 chars),
+    /// tools are truncated to fit. Each tool entry includes name, description, and a compressed
+    /// input schema (required fields only). This prevents the system prompt from consuming
+    /// the majority of the context window.
     pub fn build_system_prompt(&self) -> String {
         let catalog = self.tool_catalog.read().unwrap_or_default();
-        let tools_json: Vec<serde_json::Value> = catalog
+        let max_catalog_chars = 4000; // ~1024 tokens, configurable in future
+
+        // Serialize each tool entry with a compact representation.
+        let mut tools_json: Vec<serde_json::Value> = catalog
             .iter()
             .map(|t| serde_json::json!({
                 "name": t.name,
@@ -1286,6 +1514,24 @@ impl VoiceAssistantService {
                     .unwrap_or(serde_json::Value::Null),
             }))
             .collect();
+
+        // Truncate tool catalog if it exceeds the character budget.
+        // Strategy: keep tools in registration order (most relevant first),
+        // drop the least recently registered tools if the budget is exceeded.
+        let mut serialized = serde_json::to_string(&tools_json).unwrap_or_default();
+        while serialized.len() > max_catalog_chars && !tools_json.is_empty() {
+            tools_json.pop();
+            serialized = serde_json::to_string(&tools_json).unwrap_or_default();
+        }
+
+        if tools_json.len() < catalog.len() {
+            debug!(
+                "Tool catalog truncated: {}/{} tools fit in {} char budget",
+                tools_json.len(),
+                catalog.len(),
+                max_catalog_chars
+            );
+        }
 
         format!(
             "You are a desktop assistant for the Smearor Swipe Launcher. \
@@ -1311,7 +1557,39 @@ The ReAct loop orchestrates the multi-step reasoning process. Each iteration:
 5. If final answer: broadcasts the status and exits the loop.
 6. Safety limit: the loop terminates after `max_react_iterations`.
 
+#### 4.8.1 Pending Invocations Tracker
+
+The message broker is event-driven. When `invoke_tool` broadcasts an `InvokeToolMessage`, the response arrives asynchronously via
+`MessageHandler<FfiEnvelopePayload<InvokeToolResponse>>`. To bridge the gap between the async `invoke_tool` caller and the event-driven `MessageHandler`, the
+service maintains a **pending invocations tracker**: an `Arc<Mutex<HashMap<String, oneshot::Sender<String>>>>` keyed by correlation ID.
+
+When `invoke_tool` is called:
+
+1. A new `oneshot::channel` is created.
+2. The `Sender` is inserted into the pending invocations map under the correlation ID.
+3. The `InvokeToolMessage` is broadcast to `mcp.invoke.tool`.
+4. The `Receiver` is awaited with a timeout (10 seconds, matching the MCP server).
+
+When `MessageHandler::handle_message` receives an `InvokeToolResponse`:
+
+1. The correlation ID is extracted from the response.
+2. The matching `Sender` is removed from the pending invocations map.
+3. The response payload is sent through the `Sender`, resolving the `Receiver` in `invoke_tool`.
+
+If the timeout expires before a response arrives, the pending entry is removed and `AssistantError::ToolTimeout` is returned. This prevents hangs when a tool
+plugin fails to respond.
+
 ```rust
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
+use tokio::sync::oneshot;
+
+/// Tracks pending tool invocations by correlation ID.
+/// The `MessageHandler` implementation resolves the `oneshot::Sender`
+/// when the matching `InvokeToolResponse` arrives.
+pub type PendingInvocations = Arc<Mutex<HashMap<String, oneshot::Sender<String>>>>;
+
 impl VoiceAssistantService {
     /// Executes the ReAct loop for a given user text input.
     pub async fn execute_react_loop(
@@ -1345,12 +1623,27 @@ impl VoiceAssistantService {
     }
 
     /// Invokes a tool via the MCP tool registry and waits for the response.
+    ///
+    /// This function registers a `oneshot::Sender` in the pending invocations
+    /// tracker, broadcasts the `InvokeToolMessage`, and awaits the `Receiver`
+    /// with a 10-second timeout. The `MessageHandler` implementation resolves
+    /// the sender when the matching `InvokeToolResponse` arrives.
     async fn invoke_tool(
         &self,
         tool_name: &str,
         arguments: &serde_json::Value,
     ) -> Result<String, AssistantError> {
         let correlation_id = uuid::Uuid::new_v4().to_string();
+        let (tx, rx) = oneshot::channel::<String>();
+
+        // Register the pending invocation so MessageHandler can resolve it.
+        {
+            let mut pending = self.pending_invocations
+                .lock()
+                .map_err(|e| AssistantError::ToolInvocation(format!("Pending invocations lock poisoned: {e}")))?;
+            pending.insert(correlation_id.clone(), tx);
+        }
+
         let invoke_message = InvokeToolMessage::new(
             &correlation_id,
             tool_name,
@@ -1360,10 +1653,47 @@ impl VoiceAssistantService {
         let broadcaster = self.get_broadcaster();
         broadcaster.broadcast_message_to_topic(invoke_message);
 
-        // Wait for the response on mcp.tool.response with matching correlation_id.
-        // The response is received via MessageHandler<FfiEnvelopePayload<InvokeToolResponse>>.
-        // A pending-response tracker matches by correlation_id.
-        self.wait_for_tool_response(&correlation_id).await
+        // Await the response with a 10-second timeout.
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            rx,
+        )
+            .await
+            .map_err(|_| {
+                // Clean up the pending entry on timeout.
+                if let Ok(mut pending) = self.pending_invocations.lock() {
+                    pending.remove(&correlation_id);
+                }
+                AssistantError::ToolTimeout(correlation_id)
+            })?
+            .map_err(|_| AssistantError::ToolInvocation("Response channel closed".to_string()))?;
+
+        Ok(result)
+    }
+}
+```
+
+#### 4.8.2 MessageHandler for InvokeToolResponse
+
+The service implements `MessageHandler<FfiEnvelopePayload<InvokeToolResponse>>` to receive tool responses from the broker. When a response arrives, the handler
+extracts the correlation ID, looks up the matching `oneshot::Sender` in the pending invocations tracker, and sends the response payload through it:
+
+```rust
+impl MessageHandler<FfiEnvelopePayload<InvokeToolResponse>> for VoiceAssistantService {
+    fn handle_message(&mut self, message: FfiEnvelopePayload<InvokeToolResponse>) {
+        let correlation_id = message.correlation_id.to_string();
+        let result = message.result.to_string();
+
+        if let Ok(mut pending) = self.pending_invocations.lock() {
+            if let Some(sender) = pending.remove(&correlation_id) {
+                let _ = sender.send(result);
+            } else {
+                debug!(
+                    "Voice assistant: received tool response for unknown correlation_id: {}",
+                    correlation_id
+                );
+            }
+        }
     }
 }
 ```

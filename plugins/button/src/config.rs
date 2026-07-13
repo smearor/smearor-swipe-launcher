@@ -110,6 +110,11 @@ pub struct ButtonConfig {
     /// Label format string evaluated against the internal state.
     #[serde(default)]
     pub state_label: Option<String>,
+    /// Optional description for MCP tool registration. When set, the button
+    /// registers an MCP tool that allows the voice assistant to trigger actions.
+    /// The tool supports an "action" parameter: "click", "longpress", "swipe_up", "swipe_down".
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 impl ButtonConfig {

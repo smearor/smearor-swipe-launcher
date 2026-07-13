@@ -33,6 +33,8 @@ use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
+use smearor_swipe_launcher_plugin_api::MessageTopic;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -44,6 +46,24 @@ use tokio::sync::mpsc::unbounded_channel;
 use tracing::debug;
 use tracing::error;
 use tracing::trace;
+
+/// Destroy a typed payload that was allocated with `Box::into_raw`.
+extern "C" fn destroy_payload<T>(ptr: *mut core::ffi::c_void) {
+    if !ptr.is_null() {
+        unsafe {
+            let _ = Box::from_raw(ptr as *mut T);
+        }
+    }
+}
+
+/// Clone a typed payload for safe `FfiEnvelope` cloning across multiple
+/// broker recipients.
+extern "C" fn clone_payload<T: Clone>(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe { Box::into_raw(Box::new((*(ptr as *const T)).clone())) as *mut core::ffi::c_void }
+}
 
 /// Host that manages all launcher instances in a single process.
 ///
@@ -100,6 +120,41 @@ impl LauncherHost {
             }
         }
         debug!("Successfully loaded {} services", self.service_manager.services.len());
+
+        // Defer tool replay so the broker has time to process pending
+        // RegisterToolMessage broadcasts from services that just started.
+        let self_clone = self.clone();
+        gtk4::glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
+            self_clone.replay_registered_tools_to_services();
+        });
+    }
+
+    /// Replays all tools currently in the McpRegistry to every loaded service.
+    /// This ensures services that were loaded after a tool was registered
+    /// (e.g. voice_assistant) still receive the registration and can build
+    /// a complete tool catalog.
+    fn replay_registered_tools_to_services(&self) {
+        let tools = self.mcp_registry.list_tools();
+        if tools.is_empty() {
+            return;
+        }
+        debug!("Replaying {} registered tools to all services", tools.len());
+        for tool in tools {
+            let message = RegisterToolMessage::new(&tool.name, &tool.description, &tool.input_schema.to_string());
+            let payload_ptr = Box::into_raw(Box::new(message)) as *mut core::ffi::c_void;
+            let envelope = FfiEnvelope {
+                sender_id: stabby::string::String::from(tool.plugin_id.as_str()),
+                target_instance_id: stabby::string::String::from(""),
+                topic: stabby::string::String::from(RegisterToolMessage::topic()),
+                type_id: RegisterToolMessage::TYPE_ID,
+                payload: payload_ptr,
+                destroy_payload: Some(destroy_payload::<RegisterToolMessage>),
+                clone_payload: Some(clone_payload::<RegisterToolMessage>),
+            };
+            if let Err(error) = self.broker_sender.send(envelope) {
+                error!("Failed to replay tool registration {}: {}", tool.name, error);
+            }
+        }
     }
 
     pub fn build_ui(&self) -> miette::Result<()> {
@@ -317,10 +372,19 @@ impl LauncherHost {
             self.service_manager.services.len()
         );
 
-        // Global MCP registration messages are routed to the shared registry.
+        // Global MCP registration messages are routed to the shared registry
+        // and broadcast to all services so they can discover available tools.
         if topic == smearor_model_mcp::TOPIC_MCP_REGISTER_TOOL {
             MessageHandler::<FfiEnvelopePayload<RegisterToolMessage>>::handle_envelope_message(&self.mcp_registry, &envelope);
             debug!("Plugin registered a new MCP tool, list_changed notification deferred to SDK runtime");
+            let service_ids: Vec<String> = self.service_manager.services.iter().map(|s| s.key().to_string()).collect();
+            for service_id in service_ids {
+                if let Some(service) = self.service_manager.services.get(&service_id) {
+                    unsafe {
+                        service.on_message(envelope.clone());
+                    }
+                }
+            }
             return;
         }
         if topic == smearor_model_mcp::TOPIC_MCP_REGISTER_RESOURCE {
@@ -329,8 +393,13 @@ impl LauncherHost {
             return;
         }
 
-        // Global MCP invocation responses complete the pending response trackers.
+        // Global MCP invocation responses complete the pending response trackers
+        // and are forwarded to the voice_assistant service which awaits
+        // tool results via its own oneshot channels.
+        // Note: We cannot use envelope.clone() here because service-broadcast
+        // envelopes have clone_payload=None, which produces null-payload clones.
         if topic == smearor_model_mcp::TOPIC_MCP_TOOL_RESPONSE {
+            debug!("Application: received mcp.tool.response, forwarding to tracker and voice_assistant");
             let response = unsafe { &*(envelope.payload as *const InvokeToolResponse) };
             let result = if response.error.is_empty() {
                 Ok(response.result.to_string())
@@ -338,6 +407,13 @@ impl LauncherHost {
                 Err(response.error.to_string())
             };
             self.mcp_response_tracker.resolve(&response.correlation_id.to_string(), result);
+            if let Some(service) = self.service_manager.services.get("voice_assistant") {
+                unsafe {
+                    service.on_message(envelope);
+                }
+            } else {
+                debug!("voice_assistant service not found, dropping tool response");
+            }
             return;
         }
         if topic == smearor_model_mcp::TOPIC_MCP_RESOURCE_RESPONSE {

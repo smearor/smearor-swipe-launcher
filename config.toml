@@ -96,6 +96,7 @@ plugins = [
     { id = "power_widget", path = "target/release/libsmearor_power_widget.so" },
     { id = "wallpaper_widget", path = "target/release/libsmearor_wallpaper_widget.so" },
     { id = "network_menu_widget", path = "target/release/libsmearor_network_widget.so" },
+    { id = "voice_assistant_widget", path = "target/release/libsmearor_voice_assistant_widget.so" },
     { id = "workspace_switcher", path = "target/release/libsmearor_workspace_switcher.so", disabled = true },
     { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
 ]
@@ -1492,6 +1493,7 @@ swipe_down_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn
 
 [shelly_fan_button]
 text = "Fan"
+description = "Schaltet den Ventilator im Büro an (click) oder aus (longpress)"
 icon = "nf-md-fan"
 icon_only = false
 click_topic = "service.http.request"
@@ -1517,3 +1519,18 @@ state_css_class = "fan-active"
 # label_fallback = "loading..."
 # click_topic = "area.open"
 # click_payload = { area_id = "sysinfo_area" }
+
+[voice_assistant_widget]
+width = 120
+height = 80
+spacing = 4
+icon_size = 32
+show_icon = true
+show_transcript = true
+show_final_answer = true
+icon_idle = "nf-md-microphone_off"
+icon_listening = "nf-md-microphone"
+icon_processing = "nf-md-waveform"
+icon_thinking = "nf-md-brain"
+icon_executing = "nf-md-cog_play"
+icon_error = "nf-md-alert_circle"

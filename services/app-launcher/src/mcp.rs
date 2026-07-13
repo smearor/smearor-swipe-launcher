@@ -75,9 +75,12 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for AppLauncherServic
                 let desktop_file = args.get("desktop_file").and_then(|v| v.as_str());
                 match desktop_file {
                     Some(path) => {
+                        debug!("AppLauncher Service: handle_terminate for {path}");
                         self.handle_terminate(path);
                         let response = InvokeToolResponse::success(&message.0.correlation_id, "Application terminated");
+                        debug!("AppLauncher Service: sending InvokeToolResponse for correlation_id={}", message.0.correlation_id);
                         broadcaster.broadcast_message_to_topic(response);
+                        debug!("AppLauncher Service: InvokeToolResponse sent");
                     }
                     None => {
                         let response = InvokeToolResponse::error(&message.0.correlation_id, "Missing required parameter: desktop_file");

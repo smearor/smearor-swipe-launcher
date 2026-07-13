@@ -1,6 +1,6 @@
 [package]
-name = "smearor-button-widget"
-version = "0.1.0"
+name = "smearor-voice-assistant-service"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -10,18 +10,21 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-stabby = { workspace = true }
-adw = { workspace = true }
+cpal = { workspace = true }
+encoding_rs = { workspace = true }
 glib = { workspace = true }
-gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
+llama-cpp-4 = { workspace = true }
 miette = { workspace = true }
 paste = { workspace = true }
-regex = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
-smearor-model-mcp = { path = "../../model/mcp" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+smearor-model-mcp = { path = "../../model/mcp" }
+smearor-voice-assistant-model = { path = "../../model/voice_assistant" }
+stabby = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+whisper-rs = { workspace = true }

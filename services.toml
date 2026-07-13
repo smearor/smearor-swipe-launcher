@@ -68,6 +68,10 @@ path = "target/release/libsmearor_terminal_command_service.so"
 id = "wallpaper"
 path = "target/release/libsmearor_wallpaper_service.so"
 
+[[services]]
+id = "voice_assistant"
+path = "target/release/libsmearor_voice_assistant_service.so"
+
 [http]
 allowed_urls = ["192.168.178.*", "https://api.open-meteo.com/*", "https://api.sunrise-sunset.org/*"]
 default_timeout_ms = 10000
@@ -156,3 +160,25 @@ args = [
     "yazi"
 ]
 env = { }
+
+[voice_assistant]
+#whisper_model_path = "models/ggml-tiny.bin"
+#whisper_model_path = "models/ggml-base.bin"
+#whisper_model_path = "models/ggml-small.bin"
+whisper_model_path = "models/ggml-large-v3-turbo-q5_0.bin"
+#llm_model_path = "models/gemma-4-E4B-it-Q4_K_M.gguf"
+llm_model_path = "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+llm_threads = 4
+#llm_context_size = 4096
+llm_context_size = 8192
+max_catalog_chars = 8000
+max_react_iterations = 8
+llm_temperature = 0.1
+audio_sample_rate = 16000
+audio_channels = 1
+max_recording_seconds = 30
+silence_threshold_seconds = 1.5
+language = "de"
+#language = "en"
+auto_enable = false
+system_prompt = "Du bist ein Smart-Home-Assistent. Verfügbare Tools: {tools}. Antworte in JSON. Tool-Aufruf: {\"tool\": \"<name>\", \"arguments\": {...}}. Finale Antwort: {\"final_answer\": \"<text>\"}. Be concise and efficient. Prefer single tool calls when possible."

@@ -12,9 +12,13 @@ use gtk4::Widget;
 use gtk4::gio;
 use gtk4::prelude::*;
 use regex::Regex;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::InvokeToolResponse;
+use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::Plugin;
@@ -23,6 +27,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use tracing::debug;
@@ -68,7 +73,24 @@ impl ButtonWidget {
             debug!("ButtonWidget sent init one-shot to topic {}", topic);
         }
 
+        widget.register_mcp_capabilities();
+
         Ok(widget)
+    }
+
+    fn register_mcp_capabilities(&self) {
+        let Some(description) = &self.config.description else {
+            return;
+        };
+        let tool_name = format!("button_{}", self.meta.id);
+        let tool = RegisterToolMessage::new(
+            &tool_name,
+            description,
+            r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "swipe_up", "swipe_down"], "description": "The button action to trigger" } }, "required": ["action"] }"#,
+        );
+        let broadcaster = self.get_broadcaster();
+        broadcaster.broadcast_message_to_topic(tool);
+        debug!("ButtonWidget registered MCP tool: {}", tool_name);
     }
 
     fn update_label_from_message(&self, payload: &str) {
@@ -333,6 +355,49 @@ impl MessageHandler<String> for ButtonWidget {
     }
 }
 
+impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for ButtonWidget {
+    fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, _sender_id: &str) {
+        let tool_name = format!("button_{}", self.meta.id);
+        if message.0.name.to_string() != tool_name {
+            return;
+        }
+        debug!("ButtonWidget: handle_message tool={} correlation_id={}", tool_name, message.0.correlation_id);
+
+        let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
+        let action = args.get("action").and_then(|v| v.as_str()).unwrap_or("click");
+
+        let (topic, payload, instance) = match action {
+            "click" => (&self.config.click_topic, &self.config.click_payload, &self.config.click_instance),
+            "longpress" => (&self.config.longpress_topic, &self.config.longpress_payload, &self.config.longpress_instance),
+            "swipe_up" => (&self.config.swipe_up_topic, &self.config.swipe_up_payload, &self.config.swipe_up_instance),
+            "swipe_down" => (&self.config.swipe_down_topic, &self.config.swipe_down_payload, &self.config.swipe_down_instance),
+            _ => {
+                let response = InvokeToolResponse::error(&message.0.correlation_id.to_string(), &format!("Unknown action: {action}"));
+                let broadcaster = self.get_broadcaster();
+                broadcaster.broadcast_message_to_topic(response);
+                return;
+            }
+        };
+
+        let response = match (topic, payload) {
+            (Some(topic), Some(payload)) => {
+                let payload_str = payload.to_string();
+                let broadcaster = self.get_broadcaster();
+                if let Some(instance) = instance {
+                    broadcaster.broadcast_string_to_instance(instance, topic, &payload_str);
+                } else {
+                    broadcaster.broadcast_string(topic, &payload_str);
+                }
+                debug!("ButtonWidget: sent action '{}' to topic '{}'", action, topic);
+                InvokeToolResponse::success(&message.0.correlation_id.to_string(), &format!("Button action '{action}' triggered"))
+            }
+            _ => InvokeToolResponse::error(&message.0.correlation_id.to_string(), &format!("No topic/payload configured for action: {action}")),
+        };
+        let broadcaster = self.get_broadcaster();
+        broadcaster.broadcast_message_to_topic(response);
+    }
+}
+
 impl MessageBroadcaster for ButtonWidget {}
 
 impl Plugin for ButtonWidget {
@@ -343,6 +408,12 @@ impl Plugin for ButtonWidget {
         unsafe {
             let envelope = &*(message as *mut FfiEnvelope);
             let topic = envelope.topic.to_string();
+
+            if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+                return;
+            }
+
             let type_id = smearor_swipe_launcher_plugin_api::generate_type_id("std::string::String");
             if envelope.type_id == type_id && !envelope.payload.is_null() {
                 let payload = &*(envelope.payload as *const String);
