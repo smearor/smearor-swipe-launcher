@@ -641,6 +641,12 @@ Implemented and building:
       `stop_current_wallpaper_process`.
     * `services/sysinfo`: `sysinfo_refresh`.
     * `services/weather`: `weather_refresh`, `weather_get_forecast`.
+    * `services/audio`: `audio_volume_up`, `audio_volume_down`, `audio_set_volume`, `audio_toggle_mute`, `audio_mute`, `audio_unmute`, `audio_next_device`,
+      `audio_previous_device`, `audio_refresh_status`.
+    * `services/mpris`: `mpris_play`, `mpris_pause`, `mpris_toggle_play_pause`, `mpris_stop`, `mpris_next_track`, `mpris_previous_track`, `mpris_seek`,
+      `mpris_set_position`, `mpris_cycle_loop`, `mpris_toggle_shuffle`, `mpris_next_player`, `mpris_previous_player`, `mpris_raise`, `mpris_quit`,
+      `mpris_refresh_status`.
+    * `services/app-launcher`: `app_launcher_exec`, `app_launcher_terminate`.
 * Implemented widget plugin tools:
     * `plugins/clock`: `get_current_time`.
     * `plugins/weather`: `weather_widget_refresh`.
@@ -650,6 +656,9 @@ Implemented and building:
     * `services/network`: `network://status`, `network://scan-results`, `network://vpn-profiles`.
     * `services/wallpaper`: `wallpaper://status`, `wallpaper://themes`.
     * `services/weather`: `weather://current`.
+    * `services/audio`: `audio://status`, `audio://volume`, `audio://muted`, `audio://active_sink`, `audio://sinks`.
+    * `services/mpris`: `mpris://status`, `mpris://players`, `mpris://playback`, `mpris://metadata`.
+    * `services/app-launcher`: `app_launcher://running_apps`.
 * Implemented widget plugin resources:
     * `plugins/clock`: `clock://time`.
     * `plugins/weather`: `weather://widget`.
@@ -666,8 +675,8 @@ Implemented and building:
 
 Services and plugins **without** MCP functionality (not yet implemented):
 
-* Services: `app-launcher`, `audio`, `gnome`, `http`, `hyprland`, `notifications`, `wayland`.
-* Plugins: `app-launcher`, `audio`, `button`, `mpris`, `network` (dependency only), `notifications`, `power` (dependency only), `sysinfo`, `wallpaper`,
+* Services: `gnome`, `http`, `hyprland`, `notifications`, `wayland`.
+* Plugins: `app-launcher`, `button`, `network` (dependency only), `notifications`, `power` (dependency only), `sysinfo`, `wallpaper`,
   `workspace-switcher`.
 
 ---
@@ -709,19 +718,19 @@ Services and plugins **without** MCP functionality (not yet implemented):
     * `clock`: `get_current_time` tool, `clock://time` resource ✅
     * `weather`: `weather_widget_refresh` tool, `weather://widget` resource ✅
 * The following service plugins must still implement and register their resources:
-    * `audio`: Snapshot `plugin://audio/status` as well as fine-grained resources `plugin://audio/volume`, `plugin://audio/muted`, `plugin://audio/active_sink`,
-      `plugin://audio/sinks` ⏳
+    * `services/audio`: `audio://status`, `audio://volume`, `audio://muted`, `audio://active_sink`, `audio://sinks` ✅
     * `mpris`: `mpris://status`, `mpris://players`, `mpris://playback`, `mpris://metadata` ✅
+    * `app_launcher`: `app_launcher://running_apps` ✅
         * `notifications`: `plugin://notifications/status` ⏳
-        * `app_launcher`: `plugin://app_launcher/running_apps` ⏳
         * `hyprland`: `plugin://hyprland/active_workspace` (new status tracking needed) ⏳
         * `http`: `plugin://http/stats` (new status tracking needed) ⏳
 * The following service plugins must still implement and register their tools:
-    * `audio`: `plugin.audio.volume_up`, `plugin.audio.volume_down`, `plugin.audio.set_volume`, `plugin.audio.toggle_mute`, `plugin.audio.mute`,
-      `plugin.audio.unmute`, `plugin.audio.next_device`, `plugin.audio.previous_device`, `plugin.audio.refresh_status` ⏳
+    * `audio`: `audio_volume_up`, `audio_volume_down`, `audio_set_volume`, `audio_toggle_mute`, `audio_mute`, `audio_unmute`, `audio_next_device`,
+      `audio_previous_device`, `audio_refresh_status` ✅
     * `mpris`: `mpris_play`, `mpris_pause`, `mpris_toggle_play_pause`, `mpris_stop`, `mpris_next_track`, `mpris_previous_track`, `mpris_seek`,
       `mpris_set_position`, `mpris_cycle_loop`, `mpris_toggle_shuffle`, `mpris_next_player`, `mpris_previous_player`, `mpris_raise`, `mpris_quit`,
       `mpris_refresh_status` ✅
+    * `app_launcher`: `app_launcher_exec`, `app_launcher_terminate` ✅
         * `hyprland`: `plugin.hyprland.switch_workspace` (new status tracking needed) ⏳
 * Core resources still pending: `area://<area_id>/state`, `area://current/focus`, `area://current/visible` ⏳
 

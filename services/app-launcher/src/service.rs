@@ -9,6 +9,10 @@ use smearor_app_launcher_model::DesktopFileCommandAction;
 use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
 use smearor_app_launcher_model::SmearorWindowRotationWrapper;
+use smearor_model_mcp::InvokeResourceMessage;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
@@ -104,10 +108,11 @@ impl AppLauncherService {
             }
         });
 
+        service.register_mcp_capabilities();
         Ok(service)
     }
 
-    fn handle_exec(&self, desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>, forked: bool, terminate_on_exit: bool) {
+    pub(crate) fn handle_exec(&self, desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>, forked: bool, terminate_on_exit: bool) {
         trace!("AppLauncher Service: Launching app: {desktop_file} (forked={forked})");
         trace!("Using wrapper smearor-wrot: {:?}", wrapper);
         let entry = match Entry::parse_file(desktop_file) {
@@ -218,7 +223,7 @@ impl AppLauncherService {
         }
     }
 
-    fn handle_terminate(&self, desktop_file: &str) {
+    pub(crate) fn handle_terminate(&self, desktop_file: &str) {
         trace!("AppLauncher Service: Terminating app: {desktop_file}");
         if let Some(mut r) = self.tracked_processes.get_mut(desktop_file) {
             let procs = r.value_mut();
@@ -248,6 +253,51 @@ impl AppLauncherService {
                 trace!("Failed to resolve executable '{executable_name}': {}", e);
                 executable_name.to_string().into()
             })
+    }
+
+    pub(crate) fn running_apps_snapshot(&self) -> Vec<(String, Vec<u32>, bool)> {
+        self.tracked_processes
+            .iter()
+            .map(|entry| {
+                let desktop_file = entry.key().clone();
+                let pids = entry.value().iter().map(|tp| tp.pid).collect::<Vec<_>>();
+                let terminate_on_exit = entry.value().first().map(|tp| tp.terminate_on_exit).unwrap_or(false);
+                (desktop_file, pids, terminate_on_exit)
+            })
+            .collect()
+    }
+
+    pub(crate) fn available_apps_snapshot(&self) -> Vec<(String, String)> {
+        let mut apps = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        let search_dirs: [Option<std::path::PathBuf>; 7] = [
+            Some(std::path::PathBuf::from("/usr/share/applications")),
+            Some(std::path::PathBuf::from("/usr/local/share/applications")),
+            Some(std::path::PathBuf::from("/var/lib/flatpak/exports/share/applications")),
+            Some(std::path::PathBuf::from("/var/lib/snapd/desktop/applications")),
+            dirs::data_dir().map(|d| d.join("applications")),
+            dirs::data_dir().map(|d| d.join("flatpak/exports/share/applications")),
+            dirs::data_local_dir().map(|d| d.join("applications")),
+        ];
+
+        for dir in search_dirs.into_iter().flatten() {
+            if let Ok(entries) = std::fs::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().map(|e| e == "desktop").unwrap_or(false) {
+                        let path_str = path.to_string_lossy().to_string();
+                        if seen.insert(path_str.clone()) {
+                            let name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| path_str.clone());
+                            apps.push((path_str, name));
+                        }
+                    }
+                }
+            }
+        }
+
+        apps.sort_by(|a, b| a.1.cmp(&b.1));
+        apps
     }
 }
 
@@ -292,8 +342,13 @@ impl Service for AppLauncherService {
         if !message.is_null() {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
+                let topic = envelope.topic.to_string();
                 if envelope.type_id == FfiEnvelopePayload::<DesktopFileCommandMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<DesktopFileCommandMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_TOOL && envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_RESOURCE && envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }

@@ -3193,6 +3193,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smearor-app-launcher-model",
+ "smearor-model-mcp",
  "smearor-swipe-launcher-plugin-api",
  "stabby",
  "thiserror",

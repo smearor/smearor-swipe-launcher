@@ -1,4 +1,5 @@
 pub(crate) mod config;
+pub(crate) mod mcp;
 pub(crate) mod service;
 
 use crate::service::AppLauncherService;

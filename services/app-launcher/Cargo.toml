@@ -23,6 +23,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 smearor-app-launcher-model = { path = "../../model/app-launcher" }
+smearor-model-mcp = { path = "../../model/mcp" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
