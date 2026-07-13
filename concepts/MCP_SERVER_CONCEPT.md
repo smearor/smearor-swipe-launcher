@@ -196,7 +196,7 @@ these resources dynamically.
 | `audio`         | `plugin://audio/muted`               | Current mute status.                                          | `AudioStatusMessage`             |
 | `audio`         | `plugin://audio/active_sink`         | Active output device with name, index, and channels.          | `AudioStatusMessage`             |
 | `audio`         | `plugin://audio/sinks`               | List of all available output devices.                         | `AudioStatusMessage`             |
-| `mpris`         | `plugin://mpris/status`              | Active players, playback status, metadata, position, volume.  | `MprisStatusMessage`             |
+| `mpris`         | `mpris://status`                     | Active players, playback status, metadata, position, volume.  | `MprisStatusMessage`             |
 | `notifications` | `plugin://notifications/status`      | Do-not-disturb, active notifications, unread count.           | `NotificationStatusMessage`      |
 | `hyprland`      | `plugin://hyprland/active_workspace` | Current workspace and window list (to be implemented).        | Custom status message            |
 | `http`          | `plugin://http/stats`                | Last request statistics or last response (to be implemented). | Custom status message            |
@@ -666,7 +666,7 @@ Implemented and building:
 
 Services and plugins **without** MCP functionality (not yet implemented):
 
-* Services: `app-launcher`, `audio`, `gnome`, `http`, `hyprland`, `mpris`, `notifications`, `wayland`.
+* Services: `app-launcher`, `audio`, `gnome`, `http`, `hyprland`, `notifications`, `wayland`.
 * Plugins: `app-launcher`, `audio`, `button`, `mpris`, `network` (dependency only), `notifications`, `power` (dependency only), `sysinfo`, `wallpaper`,
   `workspace-switcher`.
 
@@ -711,16 +711,18 @@ Services and plugins **without** MCP functionality (not yet implemented):
 * The following service plugins must still implement and register their resources:
     * `audio`: Snapshot `plugin://audio/status` as well as fine-grained resources `plugin://audio/volume`, `plugin://audio/muted`, `plugin://audio/active_sink`,
       `plugin://audio/sinks` ⏳
-    * `mpris`: `plugin://mpris/status` ⏳
-    * `notifications`: `plugin://notifications/status` ⏳
-    * `app_launcher`: `plugin://app_launcher/running_apps` ⏳
-    * `hyprland`: `plugin://hyprland/active_workspace` (new status tracking needed) ⏳
-    * `http`: `plugin://http/stats` (new status tracking needed) ⏳
+    * `mpris`: `mpris://status`, `mpris://players`, `mpris://playback`, `mpris://metadata` ✅
+        * `notifications`: `plugin://notifications/status` ⏳
+        * `app_launcher`: `plugin://app_launcher/running_apps` ⏳
+        * `hyprland`: `plugin://hyprland/active_workspace` (new status tracking needed) ⏳
+        * `http`: `plugin://http/stats` (new status tracking needed) ⏳
 * The following service plugins must still implement and register their tools:
     * `audio`: `plugin.audio.volume_up`, `plugin.audio.volume_down`, `plugin.audio.set_volume`, `plugin.audio.toggle_mute`, `plugin.audio.mute`,
       `plugin.audio.unmute`, `plugin.audio.next_device`, `plugin.audio.previous_device`, `plugin.audio.refresh_status` ⏳
-    * `mpris`: `plugin.mpris.play_pause`, `plugin.mpris.next`, `plugin.mpris.previous`, `plugin.mpris.stop` ⏳
-    * `hyprland`: `plugin.hyprland.switch_workspace` (new status tracking needed) ⏳
+    * `mpris`: `mpris_play`, `mpris_pause`, `mpris_toggle_play_pause`, `mpris_stop`, `mpris_next_track`, `mpris_previous_track`, `mpris_seek`,
+      `mpris_set_position`, `mpris_cycle_loop`, `mpris_toggle_shuffle`, `mpris_next_player`, `mpris_previous_player`, `mpris_raise`, `mpris_quit`,
+      `mpris_refresh_status` ✅
+        * `hyprland`: `plugin.hyprland.switch_workspace` (new status tracking needed) ⏳
 * Core resources still pending: `area://<area_id>/state`, `area://current/focus`, `area://current/visible` ⏳
 
 ### Phase 4: Protocol Stabilization ✅
