@@ -92,6 +92,9 @@ async fn main() -> Result<()> {
     // Load shared services from dedicated config
     let services_config = args.load_services_config()?;
     host.load_services(&services_config);
+    if let Ok(mut guard) = host.services_config.lock() {
+        *guard = Some(services_config.clone());
+    }
 
     // Create one instance per config file
     for (index, config_path) in args.config.iter().enumerate() {
@@ -364,9 +367,100 @@ fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String>
             let area = areas.into_iter().find(|a| a.area_id == area_id).ok_or(format!("Area {} not found", area_id))?;
             serde_json::to_string(&area).map_err(|e| e.to_string())
         })
+    } else if uri == "area://plugins" {
+        with_first_area_manager(host, |area_manager| {
+            let config = &area_manager.config;
+            let areas: Vec<serde_json::Value> = config
+                .areas
+                .iter()
+                .map(|area_id| {
+                    let plugins: Vec<serde_json::Value> = config
+                        .get_area_config(area_id)
+                        .map(|area_config| {
+                            area_config
+                                .plugins
+                                .iter()
+                                .filter(|p| !p.disabled)
+                                .map(|p| {
+                                    serde_json::json!({
+                                        "id": p.id,
+                                        "path": p.path,
+                                        "widget": p.widget,
+                                    })
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    serde_json::json!({
+                        "area_id": area_id,
+                        "plugins": plugins,
+                    })
+                })
+                .collect();
+            serde_json::to_string(&serde_json::json!({ "areas": areas })).map_err(|e| e.to_string())
+        })
+    } else if uri == "area://buttons" {
+        with_first_area_manager(host, |area_manager| {
+            let config = &area_manager.config;
+            let mut buttons: Vec<serde_json::Value> = Vec::new();
+            for area_id in &config.areas {
+                if let Some(area_config) = config.get_area_config(area_id) {
+                    for plugin in &area_config.plugins {
+                        if plugin.path.contains("libsmearor_button_widget") && !plugin.disabled {
+                            if let Some(button_config) = config.get_plugin_config(&plugin.id) {
+                                buttons.push(serde_json::json!({
+                                    "id": plugin.id,
+                                    "area_id": area_id,
+                                    "config": button_config,
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+            serde_json::to_string(&serde_json::json!({ "buttons": buttons })).map_err(|e| e.to_string())
+        })
+    } else if uri == "plugin://list" {
+        read_plugin_list(host)
     } else {
         Err(format!("Resource {} not implemented", uri))
     }
+}
+
+fn read_plugin_list(host: &LauncherHost) -> Result<String, String> {
+    let mut plugins: Vec<serde_json::Value> = Vec::new();
+
+    if let Ok(guard) = host.services_config.lock() {
+        if let Some(services_config) = guard.as_ref() {
+            for service in &services_config.services {
+                plugins.push(serde_json::json!({
+                    "id": service.id,
+                    "path": service.path,
+                    "type": "service",
+                }));
+            }
+        }
+    }
+
+    with_first_area_manager(host, |area_manager| {
+        let config = &area_manager.config;
+        for area_id in &config.areas {
+            if let Some(area_config) = config.get_area_config(area_id) {
+                for plugin in &area_config.plugins {
+                    if !plugin.disabled {
+                        plugins.push(serde_json::json!({
+                            "id": plugin.id,
+                            "path": plugin.path,
+                            "type": "widget",
+                        }));
+                    }
+                }
+            }
+        }
+        Ok(())
+    })?;
+
+    serde_json::to_string(&serde_json::json!({ "plugins": plugins })).map_err(|e| e.to_string())
 }
 
 fn invoke_plugin_tool_sender(

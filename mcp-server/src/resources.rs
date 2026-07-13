@@ -25,13 +25,38 @@ pub struct ResourceDefinition {
 
 /// Build the list of core resources available from the MVP.
 pub fn core_resources() -> Vec<ResourceDefinition> {
-    vec![ResourceDefinition {
-        uri: "area://list".to_string(),
-        name: "area_list".to_string(),
-        description: "List of all configured areas with status and position.".to_string(),
-        mime_type: "application/json".to_string(),
-        handler: Box::new(|sender, _uri| Box::pin(async move { read_resource(sender, "area://list".to_string()).await })),
-    }]
+    vec![
+        ResourceDefinition {
+            uri: "area://list".to_string(),
+            name: "area_list".to_string(),
+            description: "List of all configured areas with status and position.".to_string(),
+            mime_type: "application/json".to_string(),
+            handler: Box::new(|sender, _uri| Box::pin(async move { read_resource(sender, "area://list".to_string()).await })),
+        },
+        ResourceDefinition {
+            uri: "area://plugins".to_string(),
+            name: "area_plugins".to_string(),
+            description: "Lists all plugins across all configured areas with their IDs, library paths, and area assignments.".to_string(),
+            mime_type: "application/json".to_string(),
+            handler: Box::new(|sender, _uri| Box::pin(async move { read_resource(sender, "area://plugins".to_string()).await })),
+        },
+        ResourceDefinition {
+            uri: "area://buttons".to_string(),
+            name: "area_buttons".to_string(),
+            description:
+                "Lists all configured button widgets across all areas with their full action configuration (topics, payloads, state topics, icons, etc.)."
+                    .to_string(),
+            mime_type: "application/json".to_string(),
+            handler: Box::new(|sender, _uri| Box::pin(async move { read_resource(sender, "area://buttons".to_string()).await })),
+        },
+        ResourceDefinition {
+            uri: "plugin://list".to_string(),
+            name: "plugin_list".to_string(),
+            description: "Lists all loaded plugins (services and widgets) with their IDs, library paths, and type.".to_string(),
+            mime_type: "application/json".to_string(),
+            handler: Box::new(|sender, _uri| Box::pin(async move { read_resource(sender, "plugin://list".to_string()).await })),
+        },
+    ]
 }
 
 /// Read a resource by sending the request to the launcher core.

@@ -59,6 +59,7 @@ pub struct LauncherHost {
     pub(crate) mcp_registry: McpRegistry,
     pub(crate) mcp_response_tracker: McpResponseTracker,
     pub(crate) hotplug_last_event: Arc<Mutex<Option<Instant>>>,
+    pub(crate) services_config: Arc<Mutex<Option<ServicesConfig>>>,
 }
 
 impl LauncherHost {
@@ -77,6 +78,7 @@ impl LauncherHost {
             mcp_registry: McpRegistry::new(),
             mcp_response_tracker: McpResponseTracker::new(),
             hotplug_last_event: Arc::new(Mutex::new(None)),
+            services_config: Arc::new(Mutex::new(None)),
         }
     }
 
