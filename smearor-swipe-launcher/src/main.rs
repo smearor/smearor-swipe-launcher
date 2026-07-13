@@ -371,30 +371,29 @@ fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String>
         with_first_area_manager(host, |area_manager| {
             let config = &area_manager.config;
             let areas: Vec<serde_json::Value> = config
-                .areas
+                .entries
                 .iter()
-                .map(|area_id| {
-                    let plugins: Vec<serde_json::Value> = config
-                        .get_area_config(area_id)
-                        .map(|area_config| {
-                            area_config
-                                .plugins
-                                .iter()
-                                .filter(|p| !p.disabled)
-                                .map(|p| {
-                                    serde_json::json!({
-                                        "id": p.id,
-                                        "path": p.path,
-                                        "widget": p.widget,
-                                    })
-                                })
-                                .collect()
+                .filter_map(|(area_id, entry)| {
+                    let area_config = match entry {
+                        config::area::config_entry::ConfigEntry::Area(ac) => ac,
+                        config::area::config_entry::ConfigEntry::Plugin(_) => return None,
+                    };
+                    let plugins: Vec<serde_json::Value> = area_config
+                        .plugins
+                        .iter()
+                        .filter(|p| !p.disabled)
+                        .map(|p| {
+                            serde_json::json!({
+                                "id": p.id,
+                                "path": p.path,
+                                "widget": p.widget,
+                            })
                         })
-                        .unwrap_or_default();
-                    serde_json::json!({
+                        .collect();
+                    Some(serde_json::json!({
                         "area_id": area_id,
                         "plugins": plugins,
-                    })
+                    }))
                 })
                 .collect();
             serde_json::to_string(&serde_json::json!({ "areas": areas })).map_err(|e| e.to_string())
@@ -403,17 +402,19 @@ fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String>
         with_first_area_manager(host, |area_manager| {
             let config = &area_manager.config;
             let mut buttons: Vec<serde_json::Value> = Vec::new();
-            for area_id in &config.areas {
-                if let Some(area_config) = config.get_area_config(area_id) {
-                    for plugin in &area_config.plugins {
-                        if plugin.path.contains("libsmearor_button_widget") && !plugin.disabled {
-                            if let Some(button_config) = config.get_plugin_config(&plugin.id) {
-                                buttons.push(serde_json::json!({
-                                    "id": plugin.id,
-                                    "area_id": area_id,
-                                    "config": button_config,
-                                }));
-                            }
+            for (area_id, entry) in &config.entries {
+                let area_config = match entry {
+                    config::area::config_entry::ConfigEntry::Area(ac) => ac,
+                    config::area::config_entry::ConfigEntry::Plugin(_) => continue,
+                };
+                for plugin in &area_config.plugins {
+                    if plugin.path.contains("libsmearor_button_widget") && !plugin.disabled {
+                        if let Some(button_config) = config.get_plugin_config(&plugin.id) {
+                            buttons.push(serde_json::json!({
+                                "id": plugin.id,
+                                "area_id": area_id,
+                                "config": button_config,
+                            }));
                         }
                     }
                 }
@@ -444,16 +445,18 @@ fn read_plugin_list(host: &LauncherHost) -> Result<String, String> {
 
     with_first_area_manager(host, |area_manager| {
         let config = &area_manager.config;
-        for area_id in &config.areas {
-            if let Some(area_config) = config.get_area_config(area_id) {
-                for plugin in &area_config.plugins {
-                    if !plugin.disabled {
-                        plugins.push(serde_json::json!({
-                            "id": plugin.id,
-                            "path": plugin.path,
-                            "type": "widget",
-                        }));
-                    }
+        for (_area_id, entry) in &config.entries {
+            let area_config = match entry {
+                config::area::config_entry::ConfigEntry::Area(ac) => ac,
+                config::area::config_entry::ConfigEntry::Plugin(_) => continue,
+            };
+            for plugin in &area_config.plugins {
+                if !plugin.disabled {
+                    plugins.push(serde_json::json!({
+                        "id": plugin.id,
+                        "path": plugin.path,
+                        "type": "widget",
+                    }));
                 }
             }
         }
