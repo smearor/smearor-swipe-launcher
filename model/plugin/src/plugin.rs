@@ -14,6 +14,13 @@ pub struct PluginEntry {
     /// This field is optional. When present, the host passes it to the plugin
     /// through the `widget` field in the plugin configuration.
     pub widget: Option<String>,
+
+    /// Whether this plugin entry is disabled and should be skipped during loading.
+    ///
+    /// Defaults to `false`. When set to `true`, the host does not load the
+    /// plugin library nor add it to any area.
+    #[serde(default)]
+    pub disabled: bool,
 }
 
 /// ABI-stable version of `PluginEntry` for cross-plugin messaging.
@@ -44,6 +51,7 @@ impl From<PluginEntryStabby> for PluginEntry {
                 let widget: Option<stabby::string::String> = value.widget.into();
                 widget.map(|widget| widget.to_string())
             },
+            disabled: false,
         }
     }
 }

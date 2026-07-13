@@ -70,6 +70,10 @@ impl LauncherInstance {
         for area_id in areas {
             if let Some(ConfigEntry::Area(area_config)) = entries.get(area_id) {
                 for plugin_entry in &area_config.plugins {
+                    if plugin_entry.disabled {
+                        debug!("Skipping disabled plugin {} on area {}", plugin_entry.id, area_id);
+                        continue;
+                    }
                     trace!("Loading plugin {} on area {}", plugin_entry.id, area_id);
                     let plugin_config = self.config.plugin_config(&plugin_entry.id);
                     trace!("Plugin config: {plugin_config:?}");

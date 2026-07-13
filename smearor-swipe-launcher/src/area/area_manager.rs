@@ -237,6 +237,10 @@ impl AreaManager {
 
         // Load plugins for this transient area
         for plugin_entry in &config.plugins {
+            if plugin_entry.disabled {
+                trace!("Skipping disabled plugin {} for transient area {}", plugin_entry.id, area_id);
+                continue;
+            }
             let namespaced_id = self.plugin_manager.namespaced_plugin_id(&plugin_entry.id);
             if !self.plugin_manager.plugins.contains_key(&namespaced_id) {
                 let plugin_config = self.config.plugin_config(&plugin_entry.id);
@@ -432,6 +436,9 @@ impl AreaManager {
 
     fn add_plugins(&self, area_config: &AreaConfig, container: &GtkBox) {
         for plugin_entry in &area_config.plugins {
+            if plugin_entry.disabled {
+                continue;
+            }
             let namespaced_id = self.plugin_manager.namespaced_plugin_id(&plugin_entry.id);
             let Some(plugin) = self.plugin_manager.plugins.get(&namespaced_id) else {
                 continue;
@@ -533,6 +540,10 @@ impl AreaManager {
 
         // Load plugins for this area (matching add_transient_area pattern)
         for plugin_entry in &area_config.plugins {
+            if plugin_entry.disabled {
+                debug!("Skipping disabled plugin {} for area {}", plugin_entry.id, area_id);
+                continue;
+            }
             let namespaced_id = self.plugin_manager.namespaced_plugin_id(&plugin_entry.id);
             if !self.plugin_manager.plugins.contains_key(&namespaced_id) {
                 let plugin_config = self.config.plugin_config(&plugin_entry.id);
