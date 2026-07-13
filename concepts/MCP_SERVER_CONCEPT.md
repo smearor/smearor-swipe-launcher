@@ -1,8 +1,9 @@
 # MCP Server Concept for Smearor Swipe Launcher
 
 This document describes the concept for an **MCP Server (Model Context Protocol)** that exposes the *Smearor Swipe Launcher* through a standardized interface
-for external AI clients. The MCP server runs as an integrated part of the launcher application and communicates with MCP clients exclusively via **SSE (
-Server-Sent Events)** over an **axum** web server.
+for external AI clients. The MCP server runs as an integrated part of the launcher application and communicates with MCP clients via **Streamable HTTP** and *
+*SSE (
+Server-Sent Events)** using the `rust-mcp-sdk` and `rust-mcp-axum` crates.
 
 ---
 
@@ -25,7 +26,8 @@ system state without needing to know proprietary interfaces.
 ## 2. Architecture
 
 The MCP server is implemented as a separate crate `mcp-server` in the workspace. It is always started automatically when the launcher starts and runs as a
-dedicated tokio task inside the launcher process. The transport is exclusively **SSE over an axum HTTP server**.
+dedicated tokio task inside the launcher process. The transport uses `rust-mcp-axum`'s `create_axum_server` with both **Streamable HTTP** and **SSE** support
+(`sse_support: true`, `enable_json_response: Some(true)`).
 
 **Process model:** The MCP server runs as a dedicated task inside the launcher process. No separate process is required.
 
@@ -38,10 +40,10 @@ header. Without a token, the server only binds to the configured address (defaul
 │                     MCP CLIENT                              │
 │  (e.g., Claude Desktop, Cursor, VS Code Extension)          │
 └─────────────────────┬───────────────────────┬───────────────┘
-                      │ JSON-RPC / MCP over SSE │
+                      │ JSON-RPC / MCP over Streamable HTTP + SSE │
                       ▼                         ▼
 ┌──────────────────────────────────────────┐  ┌────────────────────────┐
-│          MCP Server (axum + SSE)         │  │  Resource/Tool Registry │
+│   MCP Server (rust-mcp-sdk + axum)       │  │  Resource/Tool Registry │
 │  ┌────────────────────────────────────┐  │  │  (AreaManager +        │
 │  │   Tools: open_area, close_area,    │  │  │   Plugin handlers)     │
 │  │   send_message, plugin tools, ...  │  │  └────────────────────────┘
@@ -69,15 +71,17 @@ Tools are functions callable by the MCP client that trigger actions in the launc
 
 ### 3.1 Mandatory Tools (from the MVP)
 
-| Tool              | Description                                                                              | Parameters                                                      |
-|-------------------|------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
-| `open_area`       | Opens a defined area by its ID.                                                          | `area_id: string`                                               |
-| `close_area`      | Closes a currently visible area.                                                         | `area_id: string`                                               |
-| `list_areas`      | Lists all configured areas with ID, position, activation status, and current visibility. | –                                                               |
-| `focus_area`      | Sets focus on an area (e.g., for keyboard navigation).                                   | `area_id: string`                                               |
-| `send_message`    | Publishes a message to a topic on the central broker.                                    | `topic: string`, `payload: json`, `target_instance_id?: string` |
-| `toggle_area`     | Toggles the visibility of an area.                                                       | `area_id: string`                                               |
-| `get_area_config` | Returns the configuration of an area as JSON.                                            | `area_id: string`                                               |
+| Tool                  | Description                                                                              | Parameters                                                      |
+|-----------------------|------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| `open_area`           | Opens a defined area by its ID.                                                          | `area_id: string`                                               |
+| `close_area`          | Closes a currently visible area.                                                         | `area_id: string`                                               |
+| `list_areas`          | Lists all currently managed (opened) areas with ID, position, and visibility.            | –                                                               |
+| `list_all_areas`      | Lists all configured areas (including not-yet-opened ones) with their area IDs.          | –                                                               |
+| `focus_area`          | Sets focus on an area (e.g., for keyboard navigation).                                   | `area_id: string`                                               |
+| `send_message`        | Publishes a message to a topic on the central broker.                                    | `topic: string`, `payload: json`, `target_instance_id?: string` |
+| `toggle_area`         | Toggles the visibility of an area.                                                       | `area_id: string`                                               |
+| `get_area_config`     | Returns the configuration of an area as JSON.                                            | `area_id: string`                                               |
+| `open_transient_area` | Opens an area as a transient overlay on top of a source area (simulates a button click). | `area_id: string`, `source_area_id?: string`                    |
 
 ### 3.2 Additional Useful Tools
 
@@ -91,24 +95,53 @@ Tools are functions callable by the MCP client that trigger actions in the launc
 
 ### 3.3 Plugin-Provided Tools
 
-In addition to generic core tools, service plugins can register their own, semantically typed tools via the **Plugin-Tool-Registry**. The MCP server queries
+In addition to generic core tools, service and widget plugins can register their own, semantically typed tools via the **Plugin-Tool-Registry**. The MCP server
+queries
 this registry and exposes the tools dynamically.
+
+**Naming convention:** Implemented plugins use flat, service-prefixed names (e.g., `system_power_action`, `network_toggle_radio`) rather than dotted
+`plugin.<service>.<action>` names. The naming convention is not enforced by the registry — each plugin chooses its tool names.
+
+#### Implemented Plugin Tools
+
+| Plugin               | Tool                               | Description                                                            | Parameters                                                                                      |
+|----------------------|------------------------------------|------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| `services/power`     | `system_power_action`              | Executes the desired power action immediately.                         | `action: enum [shutdown, reboot, suspend, hibernate, lock, logout]`                             |
+| `services/power`     | `system_schedule_power_action`     | Schedules a shutdown or reboot in the future.                          | `action: enum [shutdown, reboot]`, `delay_minutes: integer`                                     |
+| `services/power`     | `system_cancel_power_action`       | Cancels a running shutdown timer or scheduled action.                  | –                                                                                               |
+| `services/power`     | `system_reboot_to_uefi`            | Sets the firmware reboot flag and reboots directly into BIOS/UEFI.     | –                                                                                               |
+| `services/network`   | `network_toggle_radio`             | Toggles WLAN or airplane mode on/off.                                  | `technology: enum [wifi, wwan, all]`, `enabled: boolean`                                        |
+| `services/network`   | `network_connect_wifi`             | Connects the system to a specific access point.                        | `ssid: string`, `password?: string`                                                             |
+| `services/network`   | `network_toggle_vpn`               | Starts or stops a specific VPN connection.                             | `profile_name: string`, `active: boolean`                                                       |
+| `services/network`   | `network_get_public_ip`            | Queries the external IP address and provider (GeoIP) via HTTP service. | –                                                                                               |
+| `services/wallpaper` | `add_wallpaper_theme`              | Permanently appends a new wallpaper theme to the configuration store.  | `name: string`, `type: enum [Video, Image, Application]`, `config: object`, `description?`, ... |
+| `services/wallpaper` | `remove_wallpaper_theme`           | Deletes a wallpaper theme from the configuration store.                | `name: string`                                                                                  |
+| `services/wallpaper` | `select_wallpaper_theme`           | Selects a wallpaper theme by name without starting it.                 | `name: string`                                                                                  |
+| `services/wallpaper` | `start_selected_wallpaper_process` | Starts the currently selected wallpaper theme.                         | –                                                                                               |
+| `services/wallpaper` | `stop_current_wallpaper_process`   | Stops the currently running wallpaper process immediately.             | –                                                                                               |
+| `services/sysinfo`   | `sysinfo_refresh`                  | Force an immediate refresh of all sysinfo metrics.                     | –                                                                                               |
+| `services/weather`   | `weather_refresh`                  | Force an immediate refresh of weather data.                            | –                                                                                               |
+| `services/weather`   | `weather_get_forecast`             | Get weather forecast for arbitrary coordinates.                        | `latitude: number`, `longitude: number`                                                         |
+| `plugins/clock`      | `get_current_time`                 | Returns the current local time as a formatted string.                  | –                                                                                               |
+| `plugins/weather`    | `weather_widget_refresh`           | Force the weather widget to request a data refresh.                    | –                                                                                               |
+
+#### Proposed Plugin Tools (not yet implemented)
 
 **Example: Audio Service (based on `PulseCommand`):**
 
-| Tool                           | Description                            | Parameters                |
-|--------------------------------|----------------------------------------|---------------------------|
-| `plugin.audio.volume_up`       | Increases volume by a configured step. | –                         |
-| `plugin.audio.volume_down`     | Decreases volume by a configured step. | –                         |
-| `plugin.audio.set_volume`      | Sets the volume to an absolute value.  | `volume: f32` (0.0 – 1.0) |
-| `plugin.audio.toggle_mute`     | Toggles the mute state.                | –                         |
-| `plugin.audio.mute`            | Enables mute.                          | –                         |
-| `plugin.audio.unmute`          | Disables mute.                         | –                         |
-| `plugin.audio.next_device`     | Selects the next audio device.         | –                         |
-| `plugin.audio.previous_device` | Selects the previous audio device.     | –                         |
-| `plugin.audio.refresh_status`  | Manually re-reads the status.          | –                         |
+| Tool                    | Description                            | Parameters                |
+|-------------------------|----------------------------------------|---------------------------|
+| `audio_volume_up`       | Increases volume by a configured step. | –                         |
+| `audio_volume_down`     | Decreases volume by a configured step. | –                         |
+| `audio_set_volume`      | Sets the volume to an absolute value.  | `volume: f32` (0.0 – 1.0) |
+| `audio_toggle_mute`     | Toggles the mute state.                | –                         |
+| `audio_mute`            | Enables mute.                          | –                         |
+| `audio_unmute`          | Disables mute.                         | –                         |
+| `audio_next_device`     | Selects the next audio device.         | –                         |
+| `audio_previous_device` | Selects the previous audio device.     | –                         |
+| `audio_refresh_status`  | Manually re-reads the status.          | –                         |
 
-Other plugins (e.g., `sysinfo`, `mpris`, `hyprland`) register their own tools analogously, e.g., `sysinfo.refresh`, `plugin.mpris.play_pause`,
+Other proposed plugins (e.g., `mpris`, `hyprland`) would register their own tools analogously, e.g., `plugin.mpris.play_pause`,
 `plugin.hyprland.switch_workspace`.
 
 ---
@@ -124,17 +157,36 @@ these resources dynamically.
 
 #### Core Resources (AreaManager)
 
-| URI                      | Description                                            | Format |
-|--------------------------|--------------------------------------------------------|--------|
-| `area://list`            | List of all configured areas with status and position. | JSON   |
-| `area://<area_id>/state` | Current state of an area (open, focused, visible).     | JSON   |
-| `area://current/focus`   | Currently focused area.                                | JSON   |
-| `area://current/visible` | Currently visible area(s).                             | JSON   |
+| URI                      | Description                                            | Format | Status    |
+|--------------------------|--------------------------------------------------------|--------|-----------|
+| `area://list`            | List of all configured areas with status and position. | JSON   | ✅         |
+| `area://<area_id>/state` | Current state of an area (open, focused, visible).     | JSON   | ⏳ Planned |
+| `area://current/focus`   | Currently focused area.                                | JSON   | ⏳ Planned |
+| `area://current/visible` | Currently visible area(s).                             | JSON   | ⏳ Planned |
 
-#### Service Plugin Resources
+#### Implemented Service Plugin Resources
 
-Each service plugin provides a **snapshot resource** for the complete status and, where useful, **fine-grained individual resources** for frequently queried
-values.
+| Service              | URI                         | Description                                                                            | Status |
+|----------------------|-----------------------------|----------------------------------------------------------------------------------------|--------|
+| `services/sysinfo`   | `sysinfo://cpu`             | CPU usage and temperature.                                                             | ✅      |
+| `services/sysinfo`   | `sysinfo://memory`          | RAM usage, total, used, available.                                                     | ✅      |
+| `services/sysinfo`   | `sysinfo://disk`            | Mount point usage, read/write throughput.                                              | ✅      |
+| `services/sysinfo`   | `sysinfo://temperature`     | CPU and GPU temperature readings.                                                      | ✅      |
+| `services/sysinfo`   | `sysinfo://network`         | Incoming/outgoing network throughput.                                                  | ✅      |
+| `services/sysinfo`   | `sysinfo://uptime`          | Uptime in seconds and load average.                                                    | ✅      |
+| `services/power`     | `power://capabilities`      | System power capabilities as reported by systemd-logind.                               | ✅      |
+| `services/power`     | `power://inhibitors`        | List of active inhibitor locks blocking power actions.                                 | ✅      |
+| `services/power`     | `power://scheduled_actions` | Currently scheduled power action, if any.                                              | ✅      |
+| `services/network`   | `network://status`          | Current network status including primary interface, SSID, signal, IP, and radio state. | ✅      |
+| `services/network`   | `network://scan-results`    | List of all WLAN access points in range, including signal strength and encryption.     | ✅      |
+| `services/network`   | `network://vpn-profiles`    | List of all VPN connections registered in NetworkManager and their current state.      | ✅      |
+| `services/wallpaper` | `wallpaper://status`        | Current wallpaper service status including running theme and configured themes.        | ✅      |
+| `services/wallpaper` | `wallpaper://themes`        | List of all configured wallpaper themes with their configurations.                     | ✅      |
+| `services/weather`   | `weather://current`         | Current weather conditions for the configured location.                                | ✅      |
+| `plugins/clock`      | `clock://time`              | Current time formatted by the clock widget.                                            | ✅      |
+| `plugins/weather`    | `weather://widget`          | Current weather data displayed by the weather widget.                                  | ✅      |
+
+#### Proposed Service Plugin Resources (not yet implemented)
 
 | Service         | URI                                  | Description                                                   | Source type                      |
 |-----------------|--------------------------------------|---------------------------------------------------------------|----------------------------------|
@@ -146,23 +198,16 @@ values.
 | `audio`         | `plugin://audio/sinks`               | List of all available output devices.                         | `AudioStatusMessage`             |
 | `mpris`         | `plugin://mpris/status`              | Active players, playback status, metadata, position, volume.  | `MprisStatusMessage`             |
 | `notifications` | `plugin://notifications/status`      | Do-not-disturb, active notifications, unread count.           | `NotificationStatusMessage`      |
-| `sysinfo`       | `sysinfo://cpu`                      | CPU usage and temperature.                                    | `CpuStatusMessage`               |
-| `sysinfo`       | `sysinfo://memory`                   | RAM usage, total, used, available.                            | `MemoryStatusMessage`            |
-| `sysinfo`       | `sysinfo://battery`                  | Battery level and charging state.                             | `BatteryStatusMessage`           |
-| `sysinfo`       | `sysinfo://disks`                    | Mount point usage, read/write throughput.                     | `DisksStatusMessage`             |
-| `sysinfo`       | `sysinfo://network`                  | Incoming/outgoing network throughput.                         | `NetworkStatusMessage`           |
-| `sysinfo`       | `sysinfo://uptime`                   | Uptime in seconds and load average.                           | `UptimeStatusMessage`            |
 | `hyprland`      | `plugin://hyprland/active_workspace` | Current workspace and window list (to be implemented).        | Custom status message            |
 | `http`          | `plugin://http/stats`                | Last request statistics or last response (to be implemented). | Custom status message            |
 
 ### 4.2 Additional Useful Resources
 
-| URI                   | Description                           | Format    |
-|-----------------------|---------------------------------------|-----------|
-| `launcher://config`   | Entire active launcher configuration. | JSON/TOML |
-| `launcher://version`  | Version of the launcher application.  | JSON      |
-| `network://status`    | Network status (connected, SSID, IP). | JSON      |
-| `bluetooth://devices` | Paired Bluetooth devices.             | JSON      |
+| URI                   | Description                           | Format    | Status    |
+|-----------------------|---------------------------------------|-----------|-----------|
+| `launcher://config`   | Entire active launcher configuration. | JSON/TOML | ⏳ Planned |
+| `launcher://version`  | Version of the launcher application.  | JSON      | ⏳ Planned |
+| `bluetooth://devices` | Paired Bluetooth devices.             | JSON      | ⏳ Planned |
 
 `launcher://config` is provided unfiltered during discovery. Security filters are not enforced in the MVP.
 
@@ -202,8 +247,9 @@ The SSE endpoint returns headers that prevent buffering and keep the connection 
 
 ### 6.2 Timeouts
 
-Every tool and resource call that waits for the launcher core uses a 5-second timeout. If the launcher core does not respond in time, the server returns a
-JSON-RPC error with `JSONRPC_INTERNAL_ERROR` and a clear timeout message, instead of leaving the client waiting indefinitely.
+Every tool and resource call that waits for the launcher core uses a **10-second timeout** (`tokio::time::timeout(Duration::from_secs(10))`). If the launcher
+core does not respond in time, the server returns
+a JSON-RPC error with `JSONRPC_INTERNAL_ERROR` and a clear timeout message, instead of leaving the client waiting indefinitely.
 
 ### 6.3 Error Handling
 
@@ -336,14 +382,102 @@ Internally: `AreaManager::focus(area_id)`.
 with the MCP ecosystem. Inside the MCP server, the JSON payload is converted into the appropriate internal ABI-stable type using the host's JSON converter
 registry and then published via `MessageBrokerHandle::send`.
 
+### 7.6 `toggle_area`
+
+```json
+{
+  "name": "toggle_area",
+  "description": "Toggles the visibility of a Smearor area.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "area_id": {
+        "type": "string",
+        "description": "Unique area identifier from config.toml"
+      }
+    },
+    "required": [
+      "area_id"
+    ]
+  }
+}
+```
+
+Internally: toggles `AreaManager::open` / `AreaManager::close` depending on current visibility.
+
+### 7.7 `get_area_config`
+
+```json
+{
+  "name": "get_area_config",
+  "description": "Returns the configuration of a Smearor area as JSON.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "area_id": {
+        "type": "string",
+        "description": "Unique area identifier from config.toml"
+      }
+    },
+    "required": [
+      "area_id"
+    ]
+  }
+}
+```
+
+Internally: serializes the area's TOML configuration as JSON.
+
+### 7.8 `list_all_areas`
+
+```json
+{
+  "name": "list_all_areas",
+  "description": "Lists all configured Smearor areas (including not-yet-opened ones) with their area IDs.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  }
+}
+```
+
+Internally: returns all configured area IDs from the config, regardless of whether they have been opened yet.
+
+### 7.9 `open_transient_area`
+
+```json
+{
+  "name": "open_transient_area",
+  "description": "Opens a Smearor area as a transient overlay on top of a source area (simulates a button click).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "area_id": {
+        "type": "string",
+        "description": "Unique area identifier from config.toml"
+      },
+      "source_area_id": {
+        "type": "string",
+        "description": "ID of the managed area to use as source for the overlay. Defaults to the first scroll area."
+      }
+    },
+    "required": [
+      "area_id"
+    ]
+  }
+}
+```
+
+Internally: opens the area as a transient child overlay of the source area, mimicking the behavior of a button click that opens a sub-menu.
+
 ---
 
 ## 8. Resource Implementation Details (MVP)
 
 ### 8.1 Area Status and Current Area
 
-The resources `area://list`, `area://<area_id>/state`, `area://current/focus`, and `area://current/visible` are read directly from the `AreaManager`. The
-`AreaManager` registers them at startup via the Plugin-Resource-Registry. An area status resource contains at least:
+The resource `area://list` is read directly from the `AreaManager` and is the only core resource currently implemented. It is registered as a built-in
+resource in `mcp-server/src/resources.rs`. An area status entry contains at least:
 
 ```json
 {
@@ -355,26 +489,32 @@ The resources `area://list`, `area://<area_id>/state`, `area://current/focus`, a
 }
 ```
 
+The resources `area://<area_id>/state`, `area://current/focus`, and `area://current/visible` are proposed but not yet implemented.
+
 ### 8.2 Service Plugin Resources
 
-Each service plugin keeps its current state and registers the corresponding resources. Example `plugin://sysinfo/cpu`:
+Each service plugin keeps its current state and registers the corresponding resources via `RegisterResourceMessage`. Example `sysinfo://cpu`:
 
 ```
-URI: plugin://sysinfo/cpu
+URI: sysinfo://cpu
 MIME type: application/json
 Body: { "cpu_usage": 12.5, "cpu_temperature": 45.2 }
 ```
 
-Example `plugin://audio/status`:
+Example `power://capabilities`:
 
 ```
-URI: plugin://audio/status
+URI: power://capabilities
 MIME type: application/json
-Body: {
-  "volume": 0.8,
-  "is_muted": false,
-  "active_device": { "id": 1, "name": "Built-in Audio", "is_default": true }
-}
+Body: { "can_power_off": true, "can_reboot": true, "can_suspend": true, "can_hibernate": false }
+```
+
+Example `network://status`:
+
+```
+URI: network://status
+MIME type: application/json
+Body: { "primary_interface": "wlan0", "ssid": "MyNetwork", "signal": 75, "ip": "192.168.1.42", "radio_enabled": true }
 ```
 
 ### 8.3 Generic Resources from Plugins
@@ -392,21 +532,27 @@ core:
 │      Plugin Resource Registry           │
 │  (global registry in the core)          │
 │                                         │
-│  plugin://sysinfo/cpu  -> PluginHandler │
-│  plugin://audio/volume -> PluginHandler │
-│  plugin://clock/time   -> PluginHandler │
+│  sysinfo://cpu     -> PluginHandler │
+│  power://status    -> PluginHandler │
+│  clock://time      -> PluginHandler │
 └─────────────────────────────────────────┘
 ```
 
-**Mechanism:**
+**Mechanism (implemented):**
 
-1. Every plugin (widget or service) can register resources during initialization via a new callback in `FfiCoreContext`:
-    - `resource_uri: stabby::string::String` (e.g., `plugin://sysinfo/cpu`)
-    - `metadata: ResourceMetadata` (name, description, MIME type)
-    - `read_fn: extern "C" fn(...) -> DynFuture<'static, stabby::string::String>`
-2. The MCP server queries the registry at startup and registers all URIs dynamically with the MCP client.
-3. For `read_resource(plugin://<plugin>/<name>)`, the MCP server calls the corresponding `read_fn` of the plugin.
-4. The plugin returns JSON as a `stabby::string::String`; the MCP server forwards it unchanged to the client.
+1. Every plugin (widget or service) registers resources during initialization by broadcasting a `RegisterResourceMessage` to the topic `mcp.register.resource`.
+   The message contains:
+    - `uri: stabby::string::String` (e.g., `sysinfo://cpu`)
+    - `name: stabby::string::String` (display name)
+    - `description: stabby::string::String` (human-readable description)
+    - `mime_type: stabby::string::String` (e.g., `application/json`)
+2. The host's `route_message` function in `application.rs` intercepts `TOPIC_MCP_REGISTER_RESOURCE` messages and inserts them into the shared `McpRegistry`.
+3. The MCP server queries the `McpRegistry` at list-time and dynamically exposes all registered URIs to the MCP client.
+4. For `read_resource(<uri>)`, the host sends an `InvokeResourceMessage` to the owning plugin via `TOPIC_MCP_INVOKE_RESOURCE` with a correlation ID.
+5. The plugin handles `InvokeResourceMessage`, reads its internal state, and responds with an `InvokeResourceResponse` (containing JSON as a string) broadcast
+   to
+   `TOPIC_MCP_RESOURCE_RESPONSE`.
+6. The host's `McpResponseTracker` resolves the pending response by correlation ID and returns it to the MCP server.
 
 Thus, even plugins developed later can provide resources without requiring changes to the MCP server or the core model. For stabby-FFI types, the plugin
 converts internally via the JSON converter registry.
@@ -422,19 +568,25 @@ MCP server and is not exposed as a resource.
 Analogous to the Plugin-Resource-Registry, there is a **Plugin-Tool-Registry** through which service plugins register their own MCP tools. The MCP server
 dynamically extends its tool list without having to implement tool handlers manually for each plugin.
 
-**Registration per plugin:**
+**Registration per plugin (implemented):**
 
-- `tool_id: stabby::string::String` (e.g., `plugin.audio.volume_up`)
+Plugins register tools by broadcasting a `RegisterToolMessage` to the topic `mcp.register.tool`. The message contains:
+
+- `name: stabby::string::String` (e.g., `system_power_action`)
 - `description: stabby::string::String`
 - `input_schema: stabby::string::String` (JSON schema for the tool parameters)
-- `handler: extern "C" fn(...) -> DynFuture<'static, ToolResult>`
+
+The host intercepts `TOPIC_MCP_REGISTER_TOOL` messages and inserts them into the `McpRegistry`.
 
 **Flow:**
 
-1. The MCP server reads all registered tools from the registry at startup.
+1. The MCP server reads all registered tools from the `McpRegistry` at list-time.
 2. For each tool, it reports `name`, `description`, and `inputSchema` dynamically to the MCP client.
-3. When a tool is called, the MCP server serializes the JSON arguments and passes them to the plugin handler.
-4. The plugin executes the action (e.g., `PulseCommand::VolumeUp`) and returns a result or an error message.
+3. When a tool is called, the host sends an `InvokeToolMessage` to the owning plugin via `TOPIC_MCP_INVOKE_TOOL` with a correlation ID and JSON-encoded
+   arguments.
+4. The plugin handles `InvokeToolMessage` via `MessageHandler<FfiEnvelopePayload<InvokeToolMessage>>`, executes the action (e.g., `PowerCommand::Execute`),
+   and responds with an `InvokeToolResponse` broadcast to `TOPIC_MCP_TOOL_RESPONSE`.
+5. The host's `McpResponseTracker` resolves the pending response by correlation ID and returns it to the MCP server.
 
 **Example JSON schema for `plugin.audio.set_volume`:**
 
@@ -461,8 +613,11 @@ dynamically extends its tool list without having to implement tool handlers manu
 
 **Recommended combination:**
 
-- **Generic core tools** (`open_area`, `close_area`, `list_areas`, `focus_area`, `send_message`) for launcher and broker control.
-- **Plugin tools** (`plugin.audio.*`, `plugin.mpris.*`, `plugin.hyprland.*`) for semantically specific actions.
+- **Generic core tools** (`open_area`, `close_area`, `list_areas`, `list_all_areas`, `focus_area`, `send_message`, `toggle_area`, `get_area_config`,
+  `open_transient_area`) for launcher and broker control.
+- **Plugin tools** (`system_power_action`, `network_toggle_radio`, `add_wallpaper_theme`, `sysinfo_refresh`, `weather_refresh`, `get_current_time`, etc.)
+  for semantically specific actions.
+- **Proposed plugin tools** (`plugin.audio.*`, `plugin.mpris.*`, `plugin.hyprland.*`) for future semantically specific actions.
 
 ---
 
@@ -470,24 +625,50 @@ dynamically extends its tool list without having to implement tool handlers manu
 
 Implemented and building:
 
-* Dedicated `mcp-server` crate with `axum` + SSE transport.
+* Dedicated `mcp-server` crate using `rust-mcp-sdk` and `rust-mcp-axum` for Streamable HTTP + SSE transport.
 * Server starts automatically in the launcher (no CLI flag required).
-* Core tools: `open_area`, `close_area`, `list_areas`, `focus_area`, `send_message`, `toggle_area`, `get_area_config`.
-* Core resources: `area://list`, `area://<id>/state`.
-* Plugin-Tool-Registry and Plugin-Resource-Registry in `model/mcp`.
-* Dynamic tool/resource registration by plugins (e.g., `plugins/clock` registers `get_current_time` and `clock://time`; `services/sysinfo` registers
-  `sysinfo.refresh` and `sysinfo://cpu`, `sysinfo://memory`, `sysinfo://battery`, `sysinfo://disks`, `sysinfo://network`, `sysinfo://uptime`).
+* Core tools: `open_area`, `close_area`, `list_areas`, `list_all_areas`, `focus_area`, `send_message`, `toggle_area`, `get_area_config`,
+  `open_transient_area`.
+* Core resources: `area://list`.
+* Plugin-Tool-Registry and Plugin-Resource-Registry in `model/mcp` with `RegisterToolMessage`, `RegisterResourceMessage`, `InvokeToolMessage`,
+  `InvokeToolResponse`, `InvokeResourceMessage`, `InvokeResourceResponse`.
+* Dynamic tool/resource registration by plugins via message broker topics (`mcp.register.tool`, `mcp.register.resource`).
 * Plugin tool and resource invocation via `mcp.invoke.tool` / `mcp.invoke.resource` with correlation IDs and `McpResponseTracker`.
+* Implemented service plugin tools:
+    * `services/power`: `system_power_action`, `system_schedule_power_action`, `system_cancel_power_action`, `system_reboot_to_uefi`.
+    * `services/network`: `network_toggle_radio`, `network_connect_wifi`, `network_toggle_vpn`, `network_get_public_ip`.
+    * `services/wallpaper`: `add_wallpaper_theme`, `remove_wallpaper_theme`, `select_wallpaper_theme`, `start_selected_wallpaper_process`,
+      `stop_current_wallpaper_process`.
+    * `services/sysinfo`: `sysinfo_refresh`.
+    * `services/weather`: `weather_refresh`, `weather_get_forecast`.
+* Implemented widget plugin tools:
+    * `plugins/clock`: `get_current_time`.
+    * `plugins/weather`: `weather_widget_refresh`.
+* Implemented service plugin resources:
+    * `services/sysinfo`: `sysinfo://cpu`, `sysinfo://memory`, `sysinfo://disk`, `sysinfo://temperature`, `sysinfo://network`, `sysinfo://uptime`.
+    * `services/power`: `power://capabilities`, `power://inhibitors`, `power://scheduled_actions`.
+    * `services/network`: `network://status`, `network://scan-results`, `network://vpn-profiles`.
+    * `services/wallpaper`: `wallpaper://status`, `wallpaper://themes`.
+    * `services/weather`: `weather://current`.
+* Implemented widget plugin resources:
+    * `plugins/clock`: `clock://time`.
+    * `plugins/weather`: `weather://widget`.
 * JSON-RPC error code constants, MCP-compliant response formats, `initialize`, `initialized`, and `ping`.
 * Optional bearer token authentication via `McpServerConfig::auth_token`.
 * Session notifications: `notifications/tools/list_changed`, `notifications/resources/list_changed`, and `notifications/resources/updated` pushed over SSE.
-* Server advertises `resources.subscribe: true`.
+* Server advertises `resources.subscribe: true` and `tools.listChanged: true`.
 * Per-session SSE response routing via `sessionId` query parameter.
 * SSE response headers: `Cache-Control: no-store`, `Connection: keep-alive`, `X-Accel-Buffering: no`.
-* 5-second timeouts on all tool/resource invocations to prevent hanging clients.
+* 10-second timeouts on all tool/resource invocations to prevent hanging clients.
 * Graceful error handling: parse errors, unknown methods, and timeouts are returned as JSON-RPC errors without closing the SSE stream.
 * Unit tests for JSON-RPC types in `mcp-server/src/jsonrpc.rs`.
 * Manual smoke test script `test_mcp_server.sh`.
+
+Services and plugins **without** MCP functionality (not yet implemented):
+
+* Services: `app-launcher`, `audio`, `gnome`, `http`, `hyprland`, `mpris`, `notifications`, `wayland`.
+* Plugins: `app-launcher`, `audio`, `button`, `mpris`, `network` (dependency only), `notifications`, `power` (dependency only), `sysinfo`, `wallpaper`,
+  `workspace-switcher`.
 
 ---
 
@@ -496,24 +677,38 @@ Implemented and building:
 ### Phase 1: Foundation (MVP) ✅
 
 * Create crate `mcp-server`.
-* Add `axum` and SSE middleware dependencies.
-* Implement MCP transport as an axum-based SSE endpoint.
+* Add `rust-mcp-sdk`, `rust-mcp-axum`, and `tokio` dependencies.
+* Implement MCP transport via `rust-mcp-axum`'s `create_axum_server` with Streamable HTTP + SSE.
 * Start the MCP server as an integrated task in the core.
 * Tool registry with `open_area`, `close_area`, `list_areas`, `focus_area`, `send_message`.
-* Resource registry with `area://list`, `area://<id>/state`.
-* `AreaManager` implements and registers its core resources.
+* Resource registry with `area://list`.
 * `send_message` processes only `serde_json` payloads.
 
 ### Phase 2: Tool Extensions ✅
 
-* Implement `toggle_area`, `reload_config`, `get_area_config`.
-* Implement `send_action` and `trigger_widget` for direct widget control.
+* Implement `toggle_area`, `get_area_config`, `list_all_areas`, `open_transient_area`.
+* `reload_config`, `send_action`, `trigger_widget`, `set_global_theme`, `play_sound` remain proposed (not yet implemented).
 
 ### Phase 3: Plugin-Resource-Registry, Service Resources & Plugin Tools 🚧
 
 * Define generic **Plugin-Resource-Registry** and **Plugin-Tool-Registry**. ✅
-* The following service plugins must implement and register their resources:
-    * `sysinfo`: `sysinfo://cpu`, `sysinfo://memory`, `sysinfo://battery`, `sysinfo://disks`, `sysinfo://network`, `sysinfo://uptime` ✅
+* The following service plugins have implemented and registered their resources:
+    * `sysinfo`: `sysinfo://cpu`, `sysinfo://memory`, `sysinfo://disk`, `sysinfo://temperature`, `sysinfo://network`, `sysinfo://uptime` ✅
+    * `power`: `power://capabilities`, `power://inhibitors`, `power://scheduled_actions` ✅
+    * `network`: `network://status`, `network://scan-results`, `network://vpn-profiles` ✅
+    * `wallpaper`: `wallpaper://status`, `wallpaper://themes` ✅
+    * `weather`: `weather://current` ✅
+* The following service plugins have implemented and registered their tools:
+    * `sysinfo`: `sysinfo_refresh` ✅
+    * `power`: `system_power_action`, `system_schedule_power_action`, `system_cancel_power_action`, `system_reboot_to_uefi` ✅
+    * `network`: `network_toggle_radio`, `network_connect_wifi`, `network_toggle_vpn`, `network_get_public_ip` ✅
+    * `wallpaper`: `add_wallpaper_theme`, `remove_wallpaper_theme`, `select_wallpaper_theme`, `start_selected_wallpaper_process`,
+      `stop_current_wallpaper_process` ✅
+    * `weather`: `weather_refresh`, `weather_get_forecast` ✅
+* The following widget plugins have implemented and registered their tools and resources:
+    * `clock`: `get_current_time` tool, `clock://time` resource ✅
+    * `weather`: `weather_widget_refresh` tool, `weather://widget` resource ✅
+* The following service plugins must still implement and register their resources:
     * `audio`: Snapshot `plugin://audio/status` as well as fine-grained resources `plugin://audio/volume`, `plugin://audio/muted`, `plugin://audio/active_sink`,
       `plugin://audio/sinks` ⏳
     * `mpris`: `plugin://mpris/status` ⏳
@@ -521,24 +716,23 @@ Implemented and building:
     * `app_launcher`: `plugin://app_launcher/running_apps` ⏳
     * `hyprland`: `plugin://hyprland/active_workspace` (new status tracking needed) ⏳
     * `http`: `plugin://http/stats` (new status tracking needed) ⏳
-* The following service plugins must implement and register their tools:
-    * `sysinfo`: `sysinfo.refresh` ✅
+* The following service plugins must still implement and register their tools:
     * `audio`: `plugin.audio.volume_up`, `plugin.audio.volume_down`, `plugin.audio.set_volume`, `plugin.audio.toggle_mute`, `plugin.audio.mute`,
       `plugin.audio.unmute`, `plugin.audio.next_device`, `plugin.audio.previous_device`, `plugin.audio.refresh_status` ⏳
     * `mpris`: `plugin.mpris.play_pause`, `plugin.mpris.next`, `plugin.mpris.previous`, `plugin.mpris.stop` ⏳
     * `hyprland`: `plugin.hyprland.switch_workspace` (new status tracking needed) ⏳
-* Bind existing services: `network`, `bluetooth` (if available). ⏳
+* Core resources still pending: `area://<area_id>/state`, `area://current/focus`, `area://current/visible` ⏳
 
 ### Phase 4: Protocol Stabilization ✅
 
 * Per-session SSE response routing with `sessionId` query parameter.
 * Broadcast notifications to all connected SSE clients.
 * SSE keep-alive and anti-buffering headers (`Cache-Control: no-store`, `Connection: keep-alive`, `X-Accel-Buffering: no`).
-* 5-second timeouts on tool/resource invocations.
+* 10-second timeouts on tool/resource invocations.
 * JSON-RPC error responses for parse errors, unknown methods, and timeouts without closing the SSE stream.
 * Optional bearer token authentication via `McpServerConfig::auth_token`.
-* CORS support for browser-based MCP clients.
-* Add sampling/logging support for MCP clients.
+* CORS support for browser-based MCP clients. ⏳
+* Add sampling/logging support for MCP clients. ⏳
 
 ### Phase 5: Integration & Tests
 
@@ -554,8 +748,12 @@ Implemented and building:
 
 ## 11. Dependencies
 
-* `axum` and `tokio` for the SSE HTTP transport.
-* `tower-http` for CORS middleware.
+* `rust-mcp-sdk` for MCP protocol handling (`ServerHandler` trait, schema types).
+* `rust-mcp-axum` for Streamable HTTP + SSE transport via `create_axum_server`.
+* `tokio` for async runtime and timeouts.
+* `async-channel` for `McpCommand` channel between server and launcher core.
+* `async-trait` for the `ServerHandler` trait implementation.
+* `tower-http` for CORS middleware (proposed).
 * `uuid` for per-session SSE connection identifiers.
 * Standalone JSON-RPC implementation in `mcp-server/src/jsonrpc.rs`.
 * `stabby` for ABI-stable FFI messages shared with plugins.
@@ -566,4 +764,4 @@ Implemented and building:
 ---
 
 *Concept for exposing the Smearor Swipe Launcher as an MCP server, focusing on area control, broker messages, central resource registry, and plugin-tool
-registry, with SSE transport powered by axum.*
+registry, with Streamable HTTP + SSE transport powered by `rust-mcp-sdk` and `rust-mcp-axum`.*
