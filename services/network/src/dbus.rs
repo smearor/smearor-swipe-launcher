@@ -6,6 +6,7 @@ use smearor_network_model::VpnProfileInfo;
 use smearor_network_model::WifiSecurity;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 use zbus::Connection;
 use zbus::zvariant::OwnedValue;
 
@@ -542,22 +543,22 @@ pub async fn get_vpn_profiles(connection: &Connection) -> Vec<VpnProfileInfo> {
     let all_conn_paths = list_all_connections(connection).await;
 
     let active_conn_paths = manager.active_connections().await.unwrap_or_default();
-    debug!("Network Service: active_connections returned {} paths: {:?}", active_conn_paths.len(), active_conn_paths);
+    trace!("Network Service: active_connections returned {} paths: {:?}", active_conn_paths.len(), active_conn_paths);
 
     let mut active_uuids: Vec<String> = Vec::new();
     for path in &active_conn_paths {
         match ActiveConnectionProxy::new(connection, path.clone()).await {
             Ok(active) => {
                 let conn_type = active.type_().await.unwrap_or_default();
-                debug!("Network Service: active connection path={} type={}", path, conn_type);
+                trace!("Network Service: active connection path={} type={}", path, conn_type);
                 if conn_type == "vpn" || conn_type == "wireguard" {
                     let uuid = active.uuid().await.unwrap_or_default();
-                    debug!("Network Service: active VPN uuid={}", uuid);
+                    trace!("Network Service: active VPN uuid={}", uuid);
                     active_uuids.push(uuid);
                 }
             }
             Err(e) => {
-                debug!("Network Service: failed to create ActiveConnectionProxy for {}: {e}", path);
+                trace!("Network Service: failed to create ActiveConnectionProxy for {}: {e}", path);
             }
         }
     }
