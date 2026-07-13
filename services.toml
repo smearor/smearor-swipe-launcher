@@ -125,9 +125,24 @@ poll_interval_ms = 500
 command = "smearor-wrot"
 args = [
     "--auto-color-mask",
+    "--background-color",
+    "#f5b70033",
     "--decorated",
     "alacritty",
     "--command",
     "btop"
+]
+env = { }
+
+[terminal_command.commands.yazi]
+command = "smearor-wrot"
+args = [
+    "--auto-color-mask",
+    "--background-color",
+    "#04e76233",
+    "--decorated",
+    "alacritty",
+    "--command",
+    "yazi"
 ]
 env = { }

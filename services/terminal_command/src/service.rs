@@ -9,6 +9,10 @@ use glib::MainContext;
 use nix::sys::signal::Signal;
 use nix::sys::signal::kill;
 use nix::unistd::Pid;
+use smearor_model_mcp::InvokeResourceMessage;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
@@ -75,6 +79,7 @@ impl TerminalCommandService {
             }
         });
 
+        service.register_mcp_capabilities();
         Ok(service)
     }
 
@@ -140,8 +145,13 @@ impl Service for TerminalCommandService {
         if !message.is_null() {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
+                let topic = envelope.topic.to_string();
                 if envelope.type_id == FfiEnvelopePayload::<TerminalCommandMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<TerminalCommandMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_TOOL && envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_RESOURCE && envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }

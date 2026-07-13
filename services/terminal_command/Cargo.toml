@@ -18,6 +18,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 smearor-terminal-command-model = { path = "../../model/terminal_command" }
+smearor-model-mcp = { path = "../../model/mcp" }
 stabby = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

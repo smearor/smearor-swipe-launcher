@@ -165,7 +165,7 @@ area_type = "fixed"
 width = 200
 align = "left"
 plugins = [
-    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so" },
+    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so", disabled = true },
     { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
 ]
 
