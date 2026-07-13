@@ -13,6 +13,9 @@ use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::warn;
 
+/// Maximum number of consecutive reconnect attempts before giving up.
+const MAX_RECONNECT_ATTEMPTS: u32 = 10;
+
 /// Internal workspace event sent from the Hyprland event listener to the worker.
 pub enum WorkspaceEvent {
     /// Active workspace changed on a monitor.
@@ -35,6 +38,7 @@ pub fn spawn_workspace_listener(event_sender: mpsc::UnboundedSender<WorkspaceEve
 
         rt.block_on(async move {
             ensure_hyprland_instance_signature();
+            let mut reconnect_attempts: u32 = 0;
             loop {
                 let mut listener = hyprland::event_listener::EventListener::new();
 
@@ -54,10 +58,18 @@ pub fn spawn_workspace_listener(event_sender: mpsc::UnboundedSender<WorkspaceEve
 
                 match listener.start_listener_async().await {
                     Ok(()) => {
+                        reconnect_attempts = 0;
                         debug!("Hyprland workspace listener exited cleanly, reconnecting in 5s");
                     }
                     Err(error) => {
-                        tracing::error!("Hyprland workspace listener stopped: {error}, reconnecting in 5s");
+                        reconnect_attempts += 1;
+                        if reconnect_attempts >= MAX_RECONNECT_ATTEMPTS {
+                            tracing::error!("Hyprland workspace listener stopped after {reconnect_attempts} consecutive failed attempts: {error}");
+                            break;
+                        }
+                        tracing::error!(
+                            "Hyprland workspace listener stopped: {error}, reconnecting in 5s (attempt {reconnect_attempts}/{MAX_RECONNECT_ATTEMPTS})"
+                        );
                     }
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
