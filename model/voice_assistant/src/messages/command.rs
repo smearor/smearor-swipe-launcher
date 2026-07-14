@@ -17,6 +17,8 @@ pub enum VoiceCommandAction {
     Deactivate,
     /// Submit a text command directly (bypassing STT, e.g., from a text input).
     SubmitText,
+    /// Clear conversation history and KV cache, starting a fresh session.
+    ClearConversation,
 }
 
 /// Command message sent by widgets or external clients to the voice assistant service.
@@ -72,6 +74,10 @@ impl VoiceCommandMessage {
 
     pub fn submit_text(text: &str) -> Self {
         Self::new(VoiceCommandAction::SubmitText, text)
+    }
+
+    pub fn clear_conversation() -> Self {
+        Self::new(VoiceCommandAction::ClearConversation, "")
     }
 }
 

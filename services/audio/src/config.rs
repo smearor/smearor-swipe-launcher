@@ -10,6 +10,9 @@ pub struct AudioServiceConfig {
     /// Maximum allowed volume ratio (e.g. 1.5 for 150% overdrive)
     #[builder(default = 1.5)]
     pub(crate) max_volume: f32,
+    /// Whether to enable MCP tool registration for this service.
+    #[builder(default = true)]
+    pub mcp_enabled: bool,
 }
 
 impl Default for AudioServiceConfig {
@@ -17,6 +20,7 @@ impl Default for AudioServiceConfig {
         Self {
             volume_step: 0.05,
             max_volume: 1.5,
+            mcp_enabled: true,
         }
     }
 }

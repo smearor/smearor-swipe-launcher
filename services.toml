@@ -106,6 +106,7 @@ forecast_days = 2
 countdown_seconds = 3
 enable_inhibitor_detection = true
 enable_scheduled_actions = true
+mcp_enabled = false
 refresh_interval_seconds = 30
 # Hyprland:
 #lock_command = "hyprlock"
@@ -181,4 +182,15 @@ silence_threshold_seconds = 1.5
 language = "de"
 #language = "en"
 auto_enable = false
-system_prompt = "Du bist ein Smart-Home-Assistent. Verfügbare Tools: {tools}. Antworte in JSON. Tool-Aufruf: {\"tool\": \"<name>\", \"arguments\": {...}}. Finale Antwort: {\"final_answer\": \"<text>\"}. Be concise and efficient. Prefer single tool calls when possible."
+# system_prompt removed — using built-in default which includes ReAct loop prevention
+
+# Session management: context shifting configuration
+# When the KV cache approaches the context limit, oldest tokens are shifted out
+# instead of resetting the entire session. This preserves recent context and
+# avoids expensive re-evaluation of all tokens.
+# Maximum tokens before context shifting is triggered (default: 4096)
+#max_context_tokens = 4096
+# Ratio of tokens to keep when shifting (0.0–1.0, default: 0.8 = keep 80%)
+#context_keep_ratio = 0.8
+# Minimum tokens to preserve during shifting, e.g. system prompt (default: 512)
+#min_preserve_tokens = 512

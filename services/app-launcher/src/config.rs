@@ -8,6 +8,9 @@ pub struct AppLauncherServiceConfig {
     pub(crate) smearor_wrot_path: Option<String>,
     #[builder(default, setter(into))]
     pub(crate) rotation: Option<f32>,
+    /// Whether to enable MCP tool registration for this service.
+    #[builder(default = true)]
+    pub mcp_enabled: bool,
 }
 
 impl Default for AppLauncherServiceConfig {
@@ -15,6 +18,7 @@ impl Default for AppLauncherServiceConfig {
         Self {
             smearor_wrot_path: None,
             rotation: None,
+            mcp_enabled: true,
         }
     }
 }

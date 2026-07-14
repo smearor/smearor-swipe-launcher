@@ -1,6 +1,5 @@
 use cpal::BufferSize;
 use cpal::SampleFormat;
-use cpal::SampleRate;
 use cpal::StreamConfig;
 use cpal::traits::DeviceTrait;
 use cpal::traits::HostTrait;
@@ -24,9 +23,6 @@ pub enum AudioError {
     /// Failed to query the default input configuration from the device.
     #[error("Failed to get default input config: {0}")]
     DefaultInputConfig(String),
-    /// The selected device does not support the required sample format (f32).
-    #[error("Unsupported sample format: {0}")]
-    UnsupportedSampleFormat(String),
     /// Failed to build the input stream from the device.
     #[error("Failed to build input stream: {0}")]
     StreamBuild(String),
@@ -63,7 +59,7 @@ pub async fn capture_audio(config: &VoiceAssistantServiceConfig, stop_rx: onesho
                 return;
             }
         };
-        debug!("Audio capture: selected input device: {:?}", device.name());
+        debug!("Audio capture: selected input device: {}", device);
 
         let supported_config = match device.default_input_config() {
             Ok(config) => config,
@@ -75,18 +71,15 @@ pub async fn capture_audio(config: &VoiceAssistantServiceConfig, stop_rx: onesho
 
         // We require f32 samples. If the device does not support f32 natively,
         // we attempt to request it anyway — cpal will convert internally on most platforms.
-        let sample_format = if supported_config.sample_format() == SampleFormat::F32 {
-            SampleFormat::F32
-        } else {
+        if supported_config.sample_format() != SampleFormat::F32 {
             debug!(
                 "Audio capture: device native format is {:?}, requesting F32 with conversion",
                 supported_config.sample_format()
             );
-            SampleFormat::F32
-        };
+        }
 
         // Determine the actual capture sample rate.
-        let native_sample_rate = supported_config.sample_rate().0;
+        let native_sample_rate = supported_config.sample_rate();
         let needs_resampling = native_sample_rate != config.audio_sample_rate;
         if needs_resampling {
             debug!(
@@ -101,7 +94,7 @@ pub async fn capture_audio(config: &VoiceAssistantServiceConfig, stop_rx: onesho
 
         let stream_config = StreamConfig {
             channels: config.audio_channels,
-            sample_rate: SampleRate(actual_sample_rate),
+            sample_rate: actual_sample_rate,
             buffer_size: BufferSize::Default,
         };
 
@@ -122,7 +115,7 @@ pub async fn capture_audio(config: &VoiceAssistantServiceConfig, stop_rx: onesho
         let channels = config.audio_channels as usize;
 
         let stream = device.build_input_stream(
-            &stream_config,
+            stream_config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
                 let mut buf = buffer_clone.lock().unwrap_or_else(|e| e.into_inner());
                 let mut silence_count = consecutive_silence_clone.lock().unwrap_or_else(|e| e.into_inner());

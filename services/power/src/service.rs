@@ -128,6 +128,11 @@ impl PowerService {
     }
 
     fn register_mcp_capabilities(&self) {
+        if !self.config.mcp_enabled {
+            debug!("Power Service: MCP tool registration disabled by config");
+            return;
+        }
+
         let broadcaster = self.get_broadcaster();
 
         let capabilities_resource = RegisterResourceMessage::new(

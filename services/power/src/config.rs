@@ -24,6 +24,9 @@ pub struct PowerServiceConfig {
     /// Custom logout command (e.g., "hyprctl dispatch exit"). If empty, uses D-Bus session terminate.
     #[builder(default = String::new())]
     pub logout_command: String,
+    /// Whether to enable MCP tool registration for this service.
+    #[builder(default = false)]
+    pub mcp_enabled: bool,
 }
 
 impl Default for PowerServiceConfig {
@@ -35,6 +38,7 @@ impl Default for PowerServiceConfig {
             refresh_interval_seconds: 30,
             lock_command: String::new(),
             logout_command: String::new(),
+            mcp_enabled: false,
         }
     }
 }

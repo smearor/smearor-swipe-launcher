@@ -12,6 +12,11 @@ use tracing::debug;
 
 impl AppLauncherService {
     pub fn register_mcp_capabilities(&self) {
+        if !self.config.mcp_enabled {
+            debug!("App Launcher Service: MCP tool registration disabled by config");
+            return;
+        }
+
         let broadcaster = self.get_broadcaster();
 
         let running_apps_resource = RegisterResourceMessage::new(

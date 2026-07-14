@@ -11,6 +11,7 @@ fn parse_voice_command_action(value: &serde_json::Value) -> VoiceCommandAction {
     match value.as_str() {
         Some("Deactivate") => VoiceCommandAction::Deactivate,
         Some("SubmitText") => VoiceCommandAction::SubmitText,
+        Some("ClearConversation") => VoiceCommandAction::ClearConversation,
         _ => VoiceCommandAction::Activate,
     }
 }

@@ -10,5 +10,7 @@ pub use messages::state::AssistantState;
 pub use messages::status::AssistantStatusMessage;
 pub use messages::status::AssistantStatusMessageStabby;
 pub use messages::tool_catalog::ToolCatalogEntry;
+pub use messages::tool_result::ToolError;
+pub use messages::tool_result::ToolResult;
 pub use messages::topics::TOPIC_COMMAND;
 pub use messages::topics::TOPIC_STATUS;

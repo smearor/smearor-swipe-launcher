@@ -10,12 +10,19 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+chrono = { workspace = true }
 cpal = { workspace = true }
 encoding_rs = { workspace = true }
+fastembed = { workspace = true }
+glob = "0.3"
 glib = { workspace = true }
 llama-cpp-4 = { workspace = true }
 miette = { workspace = true }
+moka = { workspace = true }
+nucleo-matcher = { workspace = true }
+ort = { workspace = true }
 paste = { workspace = true }
+rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
@@ -28,3 +35,14 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 whisper-rs = { workspace = true }
+
+[features]
+default = []
+ryzen-5-8500g = ["llm-vulkan", "whisper-vulkan"]
+ryzen-9-9950x3d = ["llm-vulkan", "whisper-vulkan", "ort-rocm", "whisper-hipblas"]
+llm-vulkan = ["llama-cpp-4/vulkan"]
+ort-cuda = ["ort/cuda"]
+ort-rocm = ["ort/rocm"]
+whisper-cuda = ["whisper-rs/cuda"]
+whisper-hipblas = ["whisper-rs/hipblas"]
+whisper-vulkan = ["whisper-rs/vulkan"]

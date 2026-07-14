@@ -14,6 +14,11 @@ use tracing::debug;
 impl AudioService {
     /// Registers all MCP resources and tools exposed by the audio service.
     pub fn register_mcp_capabilities(&self) {
+        if !self.config.mcp_enabled {
+            debug!("Audio Service: MCP tool registration disabled by config");
+            return;
+        }
+
         let broadcaster = self.get_broadcaster();
 
         let status_resource = RegisterResourceMessage::new(

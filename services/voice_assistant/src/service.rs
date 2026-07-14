@@ -2,7 +2,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 
+use moka::sync::Cache;
+
 use glib::MainContext;
+use llama_cpp_4::model::LlamaChatMessage;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
@@ -28,12 +31,19 @@ use smearor_voice_assistant_model::VoiceCommandAction;
 use smearor_voice_assistant_model::VoiceCommandMessage;
 use tracing::debug;
 use tracing::error;
+use tracing::warn;
 use whisper_rs::WhisperContext;
 
 use crate::audio::capture_audio;
 use crate::config::VoiceAssistantServiceConfig;
 use crate::llm::LlmInferenceEngine;
+use crate::llm::LlmWorker;
+use crate::memory::EntityStore;
+use crate::memory::SemanticMemory;
+use crate::memory::SharedSemanticMemory;
 use crate::react::PendingInvocations;
+use crate::tool_router::SharedToolRouter;
+use crate::tool_router::ToolRouter;
 use crate::transcriber::load_whisper_context;
 use crate::transcriber::transcribe_async;
 
@@ -43,8 +53,16 @@ pub struct VoiceAssistantService {
     pub config: VoiceAssistantServiceConfig,
     pub state: Arc<RwLock<AssistantState>>,
     pub tool_catalog: Arc<RwLock<Vec<ToolCatalogEntry>>>,
+    pub tool_router: SharedToolRouter,
+    pub tool_cache: crate::tool_cache::ToolCache,
+    pub performance_monitor: crate::performance::PerformanceMonitor,
+    pub tools_json_cache: Cache<Vec<String>, String>,
     pub whisper_context: Option<Arc<WhisperContext>>,
     pub llm_engine: Option<Arc<LlmInferenceEngine>>,
+    pub llm_worker: Option<Arc<LlmWorker>>,
+    pub entity_store: EntityStore,
+    pub semantic_memory: SharedSemanticMemory,
+    pub conversation_history: Arc<RwLock<Vec<LlamaChatMessage>>>,
     pub pending_invocations: PendingInvocations,
     pub current_transcript: Arc<RwLock<String>>,
     pub current_answer: Arc<RwLock<String>>,
@@ -60,14 +78,29 @@ impl VoiceAssistantService {
         let service_config: VoiceAssistantServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|error| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, error.to_string().into()))?;
 
+        let tool_router = Arc::new(RwLock::new(ToolRouter::new()));
+        let tool_cache = crate::tool_cache::ToolCache::new();
+        let performance_monitor = crate::performance::PerformanceMonitor::new();
+        let entity_store = Arc::new(RwLock::new(std::collections::HashMap::new()));
+        let conversation_history: Arc<RwLock<Vec<LlamaChatMessage>>> = Arc::new(RwLock::new(Vec::new()));
+        let tools_json_cache = Cache::builder().max_capacity(128).time_to_live(std::time::Duration::from_secs(600)).build();
+
         let mut service = VoiceAssistantService {
             meta: PluginMeta::try_from(&config)?,
             config: service_config,
             core_context,
             state: Arc::new(RwLock::new(AssistantState::Idle)),
             tool_catalog: Arc::new(RwLock::new(Vec::new())),
+            tool_router,
+            tool_cache,
+            performance_monitor,
+            tools_json_cache,
             whisper_context: None,
             llm_engine: None,
+            llm_worker: None,
+            entity_store,
+            semantic_memory: Arc::new(RwLock::new(SemanticMemory::uninit())),
+            conversation_history,
             pending_invocations: Arc::new(Mutex::new(std::collections::HashMap::new())),
             current_transcript: Arc::new(RwLock::new(String::new())),
             current_answer: Arc::new(RwLock::new(String::new())),
@@ -87,15 +120,35 @@ impl VoiceAssistantService {
             }
         }
 
-        // Initialize LLM engine.
+        // Initialize LLM engine and persistent worker.
         let llm_config = service.config.to_llm_config();
         match LlmInferenceEngine::load(&llm_config) {
             Ok(engine) => {
                 debug!("Voice Assistant: LLM engine loaded");
-                service.llm_engine = Some(Arc::new(engine));
+                let worker = LlmWorker::spawn(engine);
+                service.llm_worker = Some(Arc::new(worker));
             }
             Err(error) => {
                 error!("Voice Assistant: Failed to load LLM engine: {error}");
+            }
+        }
+
+        // Initialize semantic memory (L2/L3: entity states + long-term facts).
+        match SemanticMemory::new(&service.config.memory_db_path, &service.config.embedding_model) {
+            Ok(memory) => {
+                debug!("Voice Assistant: Semantic memory initialized");
+                // Reconstruct entity store from SQLite history.
+                if let Ok(entity_map) = memory.reconstruct_entity_store() {
+                    if let Ok(mut store) = service.entity_store.write() {
+                        *store = entity_map;
+                    }
+                }
+                if let Ok(mut guard) = service.semantic_memory.write() {
+                    *guard = memory;
+                }
+            }
+            Err(error) => {
+                error!("Voice Assistant: Failed to initialize semantic memory: {error}");
             }
         }
 
@@ -113,6 +166,11 @@ impl VoiceAssistantService {
         let service_state = service.state.clone();
         let service_whisper = service.whisper_context.clone();
         let service_llm = service.llm_engine.clone();
+        let service_worker = service.llm_worker.clone();
+        let service_entity_store = service.entity_store.clone();
+        let service_semantic_memory = service.semantic_memory.clone();
+        let service_conversation_history = service.conversation_history.clone();
+        let service_tool_router = service.tool_router.clone();
         let service_config = service.config.clone();
         let service_transcript = service.current_transcript.clone();
         let service_answer = service.current_answer.clone();
@@ -122,6 +180,7 @@ impl VoiceAssistantService {
         let service_core_context = service.core_context.clone();
         let service_meta = service.meta.clone();
         let service_status_sender = status_sender.clone();
+        let service_performance_monitor = service.performance_monitor.clone();
 
         std::thread::spawn(move || {
             let runtime = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
@@ -149,6 +208,11 @@ impl VoiceAssistantService {
                                 &service_state,
                                 &service_whisper,
                                 &service_llm,
+                                &service_worker,
+                                &service_entity_store,
+                                &service_semantic_memory,
+                                &service_conversation_history,
+                                &service_tool_router,
                                 &service_transcript,
                                 &service_answer,
                                 &service_active,
@@ -157,6 +221,7 @@ impl VoiceAssistantService {
                                 &service_core_context,
                                 &service_meta,
                                 &service_status_sender,
+                                &service_performance_monitor,
                             )
                             .await;
                         }
@@ -180,6 +245,11 @@ impl VoiceAssistantService {
                                 &service_config,
                                 &service_state,
                                 &service_llm,
+                                &service_worker,
+                                &service_entity_store,
+                                &service_semantic_memory,
+                                &service_conversation_history,
+                                &service_tool_router,
                                 &service_transcript,
                                 &service_answer,
                                 &service_active,
@@ -190,6 +260,18 @@ impl VoiceAssistantService {
                                 &service_status_sender,
                             )
                             .await;
+                        }
+                        VoiceCommandAction::ClearConversation => {
+                            debug!("Voice Assistant: clearing conversation history");
+                            if let Ok(mut history) = service_conversation_history.write() {
+                                history.clear();
+                            }
+                            if let Some(worker) = service_worker.as_ref() {
+                                if let Err(error) = worker.clear_conversation().await {
+                                    warn!("Voice Assistant: failed to clear LLM KV cache: {error}");
+                                }
+                            }
+                            service_performance_monitor.reset();
                         }
                     }
                 }
@@ -209,14 +291,12 @@ impl VoiceAssistantService {
         state: &Arc<RwLock<AssistantState>>,
         new_state: AssistantState,
         status_sender: &tokio::sync::mpsc::UnboundedSender<AssistantStatusMessage>,
-        transcript: &Arc<RwLock<String>>,
-        answer: &Arc<RwLock<String>>,
+        _transcript: &Arc<RwLock<String>>,
+        _answer: &Arc<RwLock<String>>,
     ) {
         if let Ok(mut state_guard) = state.write() {
             *state_guard = new_state.clone();
         }
-        let current_transcript = transcript.read().map(|t| t.clone()).unwrap_or_default();
-        let current_answer = answer.read().map(|a| a.clone()).unwrap_or_default();
         let status = AssistantStatusMessage::new(new_state);
         let _ = status_sender.send(status);
     }
@@ -227,6 +307,11 @@ impl VoiceAssistantService {
         state: &Arc<RwLock<AssistantState>>,
         whisper_context: &Option<Arc<WhisperContext>>,
         llm_engine: &Option<Arc<LlmInferenceEngine>>,
+        llm_worker: &Option<Arc<LlmWorker>>,
+        entity_store: &EntityStore,
+        semantic_memory: &SharedSemanticMemory,
+        conversation_history: &Arc<RwLock<Vec<LlamaChatMessage>>>,
+        tool_router: &SharedToolRouter,
         transcript: &Arc<RwLock<String>>,
         answer: &Arc<RwLock<String>>,
         active: &Arc<Mutex<bool>>,
@@ -235,6 +320,7 @@ impl VoiceAssistantService {
         core_context: &Option<FfiCoreContext>,
         meta: &PluginMeta,
         status_sender: &tokio::sync::mpsc::UnboundedSender<AssistantStatusMessage>,
+        performance_monitor: &crate::performance::PerformanceMonitor,
     ) {
         // 1. Capture audio.
         Self::set_state(state, AssistantState::Listening, status_sender, transcript, answer).await;
@@ -244,7 +330,7 @@ impl VoiceAssistantService {
             Ok(samples) => samples,
             Err(error) => {
                 error!("Voice Assistant: Audio capture failed: {error}");
-                Self::set_error(state, &error.to_string(), transcript, answer).await;
+                Self::set_error(state, &error.to_string(), answer).await;
                 let mut active_guard = active.lock().unwrap_or_else(|e| e.into_inner());
                 *active_guard = false;
                 return;
@@ -258,18 +344,22 @@ impl VoiceAssistantService {
             Some(ctx) => ctx.clone(),
             None => {
                 error!("Voice Assistant: Whisper context not initialized");
-                Self::set_error(state, "Whisper context not initialized", transcript, answer).await;
+                Self::set_error(state, "Whisper context not initialized", answer).await;
                 let mut active_guard = active.lock().unwrap_or_else(|e| e.into_inner());
                 *active_guard = false;
                 return;
             }
         };
 
+        let stt_start = std::time::Instant::now();
         let transcribed = match transcribe_async(whisper_ctx, samples, config.language.clone()).await {
-            Ok(text) => text,
+            Ok(text) => {
+                performance_monitor.record_speech_recognition(stt_start.elapsed());
+                text
+            }
             Err(error) => {
                 error!("Voice Assistant: STT failed: {error}");
-                Self::set_error(state, &error.to_string(), transcript, answer).await;
+                Self::set_error(state, &error.to_string(), answer).await;
                 let mut active_guard = active.lock().unwrap_or_else(|e| e.into_inner());
                 *active_guard = false;
                 return;
@@ -287,6 +377,11 @@ impl VoiceAssistantService {
             config,
             state,
             llm_engine,
+            llm_worker,
+            entity_store,
+            semantic_memory,
+            conversation_history,
+            tool_router,
             transcript,
             answer,
             active,
@@ -305,6 +400,11 @@ impl VoiceAssistantService {
         config: &VoiceAssistantServiceConfig,
         state: &Arc<RwLock<AssistantState>>,
         llm_engine: &Option<Arc<LlmInferenceEngine>>,
+        llm_worker: &Option<Arc<LlmWorker>>,
+        entity_store: &EntityStore,
+        semantic_memory: &SharedSemanticMemory,
+        conversation_history: &Arc<RwLock<Vec<LlamaChatMessage>>>,
+        tool_router: &SharedToolRouter,
         transcript: &Arc<RwLock<String>>,
         answer: &Arc<RwLock<String>>,
         active: &Arc<Mutex<bool>>,
@@ -324,6 +424,11 @@ impl VoiceAssistantService {
             config,
             state,
             llm_engine,
+            llm_worker,
+            entity_store,
+            semantic_memory,
+            conversation_history,
+            tool_router,
             transcript,
             answer,
             active,
@@ -342,6 +447,11 @@ impl VoiceAssistantService {
         config: &VoiceAssistantServiceConfig,
         state: &Arc<RwLock<AssistantState>>,
         llm_engine: &Option<Arc<LlmInferenceEngine>>,
+        llm_worker: &Option<Arc<LlmWorker>>,
+        entity_store: &EntityStore,
+        semantic_memory: &SharedSemanticMemory,
+        conversation_history: &Arc<RwLock<Vec<LlamaChatMessage>>>,
+        tool_router: &SharedToolRouter,
         transcript: &Arc<RwLock<String>>,
         answer: &Arc<RwLock<String>>,
         active: &Arc<Mutex<bool>>,
@@ -358,8 +468,16 @@ impl VoiceAssistantService {
             config: config.clone(),
             state: state.clone(),
             tool_catalog: tool_catalog.clone(),
+            tool_router: tool_router.clone(),
+            tool_cache: crate::tool_cache::ToolCache::new(),
+            performance_monitor: crate::performance::PerformanceMonitor::new(),
+            tools_json_cache: Cache::builder().build(),
             whisper_context: None,
             llm_engine: llm_engine.clone(),
+            llm_worker: llm_worker.clone(),
+            entity_store: entity_store.clone(),
+            semantic_memory: semantic_memory.clone(),
+            conversation_history: conversation_history.clone(),
             pending_invocations: pending_invocations.clone(),
             current_transcript: transcript.clone(),
             current_answer: answer.clone(),
@@ -369,6 +487,24 @@ impl VoiceAssistantService {
         };
 
         Self::set_state(state, AssistantState::ThinkingLlm, status_sender, transcript, answer).await;
+
+        // Proactively trim KV cache when conversation history is long,
+        // keeping recent context and avoiding overflow during generation.
+        if let Some(worker) = llm_worker.as_ref() {
+            let history_len = conversation_history.read().map(|h| h.len()).unwrap_or(0);
+            let max_messages = config.max_history_messages;
+            if history_len >= max_messages {
+                let n_ctx = worker.config().n_ctx as usize;
+                let target_tokens = (n_ctx as f64 * config.context_keep_ratio) as usize;
+                debug!(
+                    "Voice Assistant: proactively trimming KV cache to ~{} tokens (history: {}/{})",
+                    target_tokens, history_len, max_messages
+                );
+                if let Err(error) = worker.trim_context(target_tokens).await {
+                    warn!("Voice Assistant: proactive trim_context failed: {error}");
+                }
+            }
+        }
 
         match temp_service.execute_react_loop(user_text).await {
             Ok(final_answer) => {
@@ -380,16 +516,17 @@ impl VoiceAssistantService {
             }
             Err(error) => {
                 error!("Voice Assistant: ReAct loop failed: {error}");
-                Self::set_error(state, &error.to_string(), transcript, answer).await;
+                Self::set_error(state, &error.to_string(), answer).await;
             }
         }
+        temp_service.performance_monitor.log_summary();
 
         let mut active_guard = active.lock().unwrap_or_else(|e| e.into_inner());
         *active_guard = false;
     }
 
     /// Sets the error state and broadcasts a status update.
-    async fn set_error(state: &Arc<RwLock<AssistantState>>, error_message: &str, transcript: &Arc<RwLock<String>>, answer: &Arc<RwLock<String>>) {
+    async fn set_error(state: &Arc<RwLock<AssistantState>>, error_message: &str, answer: &Arc<RwLock<String>>) {
         if let Ok(mut state_guard) = state.write() {
             *state_guard = AssistantState::Error;
         }
@@ -418,6 +555,18 @@ impl VoiceAssistantService {
         if let Some(sender) = &self.command_sender {
             let _ = sender.send(VoiceCommandMessage::submit_text(text));
         }
+    }
+
+    /// Clears conversation history and LLM KV cache for a fresh session.
+    pub fn clear_conversation(&self) {
+        if let Some(sender) = &self.command_sender {
+            let _ = sender.send(VoiceCommandMessage::clear_conversation());
+        }
+    }
+
+    /// Returns a snapshot of current performance metrics.
+    pub fn performance_report(&self) -> crate::performance::PerformanceReport {
+        self.performance_monitor.snapshot()
     }
 }
 
@@ -451,6 +600,10 @@ impl MessageHandler<FfiEnvelopePayload<VoiceCommandMessage>> for VoiceAssistantS
             VoiceCommandAction::SubmitText => {
                 debug!("Voice Assistant: SubmitText command received: {}", message.0.text);
                 self.submit_text(&message.0.text);
+            }
+            VoiceCommandAction::ClearConversation => {
+                debug!("Voice Assistant: ClearConversation command received");
+                self.clear_conversation();
             }
         }
     }

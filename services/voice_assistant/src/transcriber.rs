@@ -20,16 +20,28 @@ pub enum SttError {
     /// The audio buffer is empty or too short for transcription.
     #[error("Audio buffer is too short: {0} samples")]
     BufferTooShort(usize),
-    /// The Whisper context has not been initialized.
-    #[error("Whisper context not initialized")]
-    ContextNotInitialized,
 }
 
 /// Loads the Whisper model from the configured path and returns a shared context.
+/// Configures GPU acceleration and flash attention when enabled via cargo features.
 pub fn load_whisper_context(model_path: &str) -> Result<Arc<WhisperContext>, SttError> {
     debug!("Loading Whisper model from: {}", model_path);
-    let context =
-        WhisperContext::new_with_params(model_path, WhisperContextParameters::default()).map_err(|error| SttError::StateCreation(error.to_string()))?;
+    let mut params = WhisperContextParameters::new();
+
+    #[cfg(any(feature = "whisper-cuda", feature = "whisper-hipblas", feature = "whisper-vulkan"))]
+    {
+        params.use_gpu(true);
+        params.flash_attn(true);
+        debug!("Whisper: GPU acceleration enabled (flash_attn=true)");
+    }
+
+    #[cfg(not(any(feature = "whisper-cuda", feature = "whisper-hipblas", feature = "whisper-vulkan")))]
+    {
+        params.use_gpu(false);
+        debug!("Whisper: using CPU mode");
+    }
+
+    let context = WhisperContext::new_with_params(model_path, params).map_err(|error| SttError::StateCreation(error.to_string()))?;
     debug!("Whisper model loaded successfully");
     Ok(Arc::new(context))
 }
@@ -54,6 +66,9 @@ pub fn transcribe(whisper_context: &WhisperContext, samples: &[f32], language: &
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
 
+    let n_threads = std::thread::available_parallelism().map(|n| n.get() as i32).unwrap_or(4);
+    params.set_n_threads(n_threads);
+
     debug!(
         "Starting Whisper transcription: {} samples ({}s), language={}",
         samples.len(),
@@ -64,11 +79,13 @@ pub fn transcribe(whisper_context: &WhisperContext, samples: &[f32], language: &
     state.full(params, samples).map_err(|error| SttError::ModelRun(error.to_string()))?;
 
     let mut transcript = String::new();
-    let num_segments = state.full_n_segments().map_err(|error| SttError::SegmentRetrieval(error.to_string()))?;
+    let num_segments = state.full_n_segments();
     for index in 0..num_segments {
-        let segment_text = state
-            .full_get_segment_text(index)
-            .map_err(|error| SttError::SegmentRetrieval(error.to_string()))?;
+        let segment = match state.get_segment(index) {
+            Some(seg) => seg,
+            None => continue,
+        };
+        let segment_text = segment.to_str().map_err(|error| SttError::SegmentRetrieval(error.to_string()))?;
         if !transcript.is_empty() {
             transcript.push(' ');
         }

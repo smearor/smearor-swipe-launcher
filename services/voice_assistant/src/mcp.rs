@@ -9,11 +9,17 @@ use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use tracing::debug;
 
+use crate::memory::FactCategory;
 use crate::service::VoiceAssistantService;
 
 impl VoiceAssistantService {
     /// Registers MCP resources and tools for the voice assistant service.
     pub fn register_mcp_capabilities(&self) {
+        if !self.config.mcp_enabled {
+            debug!("Voice Assistant Service: MCP tool registration disabled by config");
+            return;
+        }
+
         let broadcaster = self.get_broadcaster();
 
         let status_resource = RegisterResourceMessage::new(
@@ -52,6 +58,56 @@ impl VoiceAssistantService {
             r#"{ "type": "object", "properties": { "text": { "type": "string", "description": "The text command to submit" } }, "required": ["text"] }"#,
         );
         broadcaster.broadcast_message_to_topic(submit_text_tool);
+
+        let entities_resource = RegisterResourceMessage::new(
+            "memory://entities",
+            "Entity States",
+            "Current states of all tracked entities (devices, apps, media).",
+            "application/json",
+        );
+        broadcaster.broadcast_message_to_topic(entities_resource);
+
+        let memory_query_tool = RegisterToolMessage::new(
+            "memory_query",
+            "Queries a specific entity by name or tool name from the entity state store.",
+            r#"{ "type": "object", "properties": { "query": { "type": "string", "description": "Entity name or tool name to look up" } }, "required": ["query"] }"#,
+        );
+        broadcaster.broadcast_message_to_topic(memory_query_tool);
+
+        let memory_store_tool = RegisterToolMessage::new(
+            "memory_store",
+            "Stores a fact in long-term semantic memory.",
+            r#"{ "type": "object", "properties": { "key": { "type": "string", "description": "Short key for the fact" }, "value": { "type": "string", "description": "The fact content" }, "category": { "type": "string", "description": "Category: fact, preference, or habit" } }, "required": ["key", "value"] }"#,
+        );
+        broadcaster.broadcast_message_to_topic(memory_store_tool);
+
+        let memory_store_batch_tool = RegisterToolMessage::new(
+            "memory_store_batch",
+            "Stores multiple facts in long-term semantic memory in a single batch call.",
+            r#"{ "type": "object", "properties": { "facts": { "type": "array", "items": { "type": "object", "properties": { "key": { "type": "string", "description": "Short key for the fact" }, "value": { "type": "string", "description": "The fact content" }, "category": { "type": "string", "description": "Category: fact, preference, or habit" } }, "required": ["key", "value"] }, "description": "Array of facts to store" } }, "required": ["facts"] }"#,
+        );
+        broadcaster.broadcast_message_to_topic(memory_store_batch_tool);
+
+        let memory_recall_tool = RegisterToolMessage::new(
+            "memory_recall",
+            "Recalls facts from long-term semantic memory by semantic similarity.",
+            r#"{ "type": "object", "properties": { "query": { "type": "string", "description": "Natural language query to find related facts" }, "limit": { "type": "integer", "description": "Max number of facts to return (default: 3)" } }, "required": ["query"] }"#,
+        );
+        broadcaster.broadcast_message_to_topic(memory_recall_tool);
+
+        let memory_list_tool = RegisterToolMessage::new(
+            "memory_list",
+            "Lists all stored fact keys in long-term memory.",
+            r#"{ "type": "object", "properties": { "category": { "type": "string", "description": "Optional category filter: fact, preference, or habit" } }, "required": [] }"#,
+        );
+        broadcaster.broadcast_message_to_topic(memory_list_tool);
+
+        let memory_forget_tool = RegisterToolMessage::new(
+            "memory_forget",
+            "Deletes a fact from long-term memory by key.",
+            r#"{ "type": "object", "properties": { "key": { "type": "string", "description": "The key of the fact to delete" } }, "required": ["key"] }"#,
+        );
+        broadcaster.broadcast_message_to_topic(memory_forget_tool);
     }
 }
 
@@ -85,6 +141,160 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                         let response = InvokeToolResponse::error(&message.0.correlation_id, "Missing required parameter: text");
                         broadcaster.broadcast_message_to_topic(response);
                     }
+                }
+            }
+            "memory_query" => {
+                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
+                let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+                let store = self.entity_store.read().unwrap_or_else(|e| e.into_inner());
+                let result = store
+                    .iter()
+                    .find(|(_, state)| state.name.to_lowercase().contains(&query.to_lowercase()) || state.tool.to_lowercase().contains(&query.to_lowercase()))
+                    .map(|(_, state)| serde_json::to_string(state).unwrap_or_default());
+                match result {
+                    Some(json) => {
+                        let response = InvokeToolResponse::success(&message.0.correlation_id, &json);
+                        broadcaster.broadcast_message_to_topic(response);
+                    }
+                    None => {
+                        let response = InvokeToolResponse::error(&message.0.correlation_id, &format!("Entity not found: {query}"));
+                        broadcaster.broadcast_message_to_topic(response);
+                    }
+                }
+            }
+            "memory_store" => {
+                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
+                let key = args.get("key").and_then(|v| v.as_str()).unwrap_or("");
+                let value = args.get("value").and_then(|v| v.as_str()).unwrap_or("");
+                let category_str = args.get("category").and_then(|v| v.as_str()).unwrap_or("fact");
+                let category = category_str.parse().unwrap_or(FactCategory::Fact);
+                if key.is_empty() || value.is_empty() {
+                    let response = InvokeToolResponse::error(&message.0.correlation_id, "Missing required parameters: key and value");
+                    broadcaster.broadcast_message_to_topic(response);
+                } else if let Ok(mut memory) = self.semantic_memory.write() {
+                    match memory.store(key, value, category) {
+                        Ok(id) => {
+                            let response = InvokeToolResponse::success(&message.0.correlation_id, &format!("Fact stored with id: {id}"));
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                        Err(error) => {
+                            let response = InvokeToolResponse::error(&message.0.correlation_id, &format!("Store failed: {error}"));
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                    }
+                } else {
+                    let response = InvokeToolResponse::error(&message.0.correlation_id, "Memory lock poisoned");
+                    broadcaster.broadcast_message_to_topic(response);
+                }
+            }
+            "memory_recall" => {
+                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
+                let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+                let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
+                if let Ok(mut memory) = self.semantic_memory.write() {
+                    match memory.recall(query, limit) {
+                        Ok(facts) => {
+                            let json = serde_json::to_string(
+                                &facts
+                                    .iter()
+                                    .map(|f| serde_json::json!({"key": f.key, "value": f.value, "category": f.category.to_string()}))
+                                    .collect::<Vec<_>>(),
+                            )
+                            .unwrap_or_default();
+                            let response = InvokeToolResponse::success(&message.0.correlation_id, &json);
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                        Err(error) => {
+                            let response = InvokeToolResponse::error(&message.0.correlation_id, &format!("Recall failed: {error}"));
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                    }
+                } else {
+                    let response = InvokeToolResponse::error(&message.0.correlation_id, "Memory lock poisoned");
+                    broadcaster.broadcast_message_to_topic(response);
+                }
+            }
+            "memory_list" => {
+                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
+                let category_str = args.get("category").and_then(|v| v.as_str());
+                let category = category_str.and_then(|s| s.parse().ok());
+                if let Ok(memory) = self.semantic_memory.read() {
+                    match memory.list_keys(category.as_ref()) {
+                        Ok(keys) => {
+                            let json = serde_json::to_string(&keys).unwrap_or_default();
+                            let response = InvokeToolResponse::success(&message.0.correlation_id, &json);
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                        Err(error) => {
+                            let response = InvokeToolResponse::error(&message.0.correlation_id, &format!("List failed: {error}"));
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                    }
+                } else {
+                    let response = InvokeToolResponse::error(&message.0.correlation_id, "Memory lock poisoned");
+                    broadcaster.broadcast_message_to_topic(response);
+                }
+            }
+            "memory_forget" => {
+                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
+                let key = args.get("key").and_then(|v| v.as_str()).unwrap_or("");
+                if key.is_empty() {
+                    let response = InvokeToolResponse::error(&message.0.correlation_id, "Missing required parameter: key");
+                    broadcaster.broadcast_message_to_topic(response);
+                } else if let Ok(memory) = self.semantic_memory.read() {
+                    match memory.forget(key) {
+                        Ok(()) => {
+                            let response = InvokeToolResponse::success(&message.0.correlation_id, &format!("Fact '{key}' forgotten"));
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                        Err(error) => {
+                            let response = InvokeToolResponse::error(&message.0.correlation_id, &format!("Forget failed: {error}"));
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                    }
+                } else {
+                    let response = InvokeToolResponse::error(&message.0.correlation_id, "Memory lock poisoned");
+                    broadcaster.broadcast_message_to_topic(response);
+                }
+            }
+            "memory_store_batch" => {
+                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
+                let facts_json = match args.get("facts").and_then(|v| v.as_array()) {
+                    Some(arr) if !arr.is_empty() => arr,
+                    _ => {
+                        let response = InvokeToolResponse::error(&message.0.correlation_id, "Missing required parameter: facts (non-empty array)");
+                        broadcaster.broadcast_message_to_topic(response);
+                        return;
+                    }
+                };
+                let facts: Vec<(String, String, FactCategory)> = facts_json
+                    .iter()
+                    .filter_map(|item| {
+                        let key = item.get("key").and_then(|v| v.as_str())?;
+                        let value = item.get("value").and_then(|v| v.as_str())?;
+                        let category_str = item.get("category").and_then(|v| v.as_str()).unwrap_or("fact");
+                        let category = category_str.parse().unwrap_or(FactCategory::Fact);
+                        Some((key.to_string(), value.to_string(), category))
+                    })
+                    .collect();
+                if facts.is_empty() {
+                    let response = InvokeToolResponse::error(&message.0.correlation_id, "No valid facts in array");
+                    broadcaster.broadcast_message_to_topic(response);
+                } else if let Ok(mut memory) = self.semantic_memory.write() {
+                    match memory.store_batch(&facts) {
+                        Ok(ids) => {
+                            let json = serde_json::to_string(&ids).unwrap_or_default();
+                            let response = InvokeToolResponse::success(&message.0.correlation_id, &json);
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                        Err(error) => {
+                            let response = InvokeToolResponse::error(&message.0.correlation_id, &format!("Batch store failed: {error}"));
+                            broadcaster.broadcast_message_to_topic(response);
+                        }
+                    }
+                } else {
+                    let response = InvokeToolResponse::error(&message.0.correlation_id, "Memory lock poisoned");
+                    broadcaster.broadcast_message_to_topic(response);
                 }
             }
             _ => {
@@ -121,6 +331,13 @@ impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for VoiceAssistan
                             "input_schema": t.input_schema,
                         })
                     }).collect::<Vec<_>>(),
+                });
+                InvokeResourceResponse::success(&message.0.correlation_id, &json.to_string())
+            }
+            "memory://entities" => {
+                let store = self.entity_store.read().unwrap_or_else(|e| e.into_inner());
+                let json = serde_json::json!({
+                    "entities": store.values().collect::<Vec<_>>(),
                 });
                 InvokeResourceResponse::success(&message.0.correlation_id, &json.to_string())
             }
