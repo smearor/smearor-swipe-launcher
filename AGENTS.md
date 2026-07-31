@@ -183,6 +183,10 @@
 12. Services must use `tokio::sync::mpsc` instead of `std::sync::mpsc` and spawn async tasks via `PluginExecutor`
 13. Widgets must use `glib::MainContext::spawn_local` for GTK updates and `tokio::sync::mpsc` for message reception
 14. Polling loops (`timeout_add_local`) are forbidden; use event-driven `recv().await` instead
+15. All message types in `model` crates must derive `Serialize, Deserialize` from `serde`. The `stabby` dependency must include the `serde` feature
+    (`stabby = { workspace = true, features = ["serde"] }`). JSON converters must use `impl_json_convertible!` with
+    `serde_json::from_value(json).unwrap_or_default()` — manual `parse_*` functions in `json_converters.rs` are forbidden. Structs used as deserialization
+    fallbacks must also derive `Default`.
 
 ### Examples
 
@@ -193,11 +197,13 @@
     - config.rs: Struct for the config file part (+ parsing)
     - widget.rs: Widget struct (+ implementation of MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef<Option<FfiCoreContext>>)
     - lib.rs: Implement widget_plugin! macro
-- Example for Model: model/app-launcher
+- Example for Model: model/audio
     - Message system topics
-    - Enums for Actions
-    - Structs for message system payload
-    - All FFI-relevant types with `#[stabby::stabby]`
+    - Enums for Actions (with `Serialize, Deserialize`)
+    - Structs for message system payload (with `Serialize, Deserialize, Default`)
+        - All FFI-relevant types with `#[stabby::stabby]`
+    - `lib.rs`: `impl_json_convertible!(...Converter, ...Message, |json: serde_json::Value| serde_json::from_value(json).unwrap_or_default())`
+    - `lib.rs`: `register_json_converters(context)` function calling `Converter::register_in_host(context)`
 
 ### Rust Implementation Standards
 
@@ -207,6 +213,9 @@
 - **Panic-Free Code**: Avoid `unwrap()`, `expect()`, and panicking code
 - **English Comments**: All source code comments in English
 - **No Abbreviations**: Use descriptive variable names without abbreviations
+- **Prefer Trait Implementations over Free Functions**: Avoid standalone free functions (e.g. `parse_*`, `derive_*`, `serialize_*`) when a standard trait
+  implementation such as `FromStr`, `Serialize`, `Deserialize`, or `Display` can encapsulate the same logic. This keeps parsing, serialization, and conversion
+  logic co-located with the type definition and ensures a consistent API across the codebase.
 
 ### Documentation Standards
 
@@ -242,7 +251,7 @@
 - `clap`: Command line argument parsing
 - `gtk4`: GTK4 framework for UI widgets
 - `glib`: GLib utilities and patterns
-- `stabby`: ABI-stable types and FFI trait objects
+- `stabby`: ABI-stable types and FFI trait objects (enable `serde` feature for JSON serialization of stabby types)
 - `tokio`: Async runtime for services
 - `libloading`: Dynamic library loading (used with stabby ABI verification)
 
@@ -254,6 +263,8 @@
 - **Async I/O**: Use `tokio::sync::mpsc` for message passing; spawn async tasks via `PluginExecutor`
 - **ABI Stability**: Use `#[stabby::stabby]` for FFI-relevant types; use `stabby::libloading::StabbyLibrary` for verified plugin loading
 - **Zero-Copy Messages**: Pass messages via raw pointers with `type_id` for type-safe downcasting (no serialization overhead)
+- **JSON Serialization**: Use `serde` derives (`Serialize, Deserialize`) with `serde_json::from_value` for JSON conversion; enable `stabby` `serde` feature for
+  stabby type compatibility
 
 ### Testing Requirements
 
