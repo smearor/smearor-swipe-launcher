@@ -1,0 +1,828 @@
+# MacroPad launcher config for Razer Stream Controller X
+# Device: Razer Stream Controller X (1532:0d09)
+# 15 keys (5x3), 96x96 px per key
+# Discovered via serial port by the loupedeck service (loupedeck-driver crate)
+
+areas = ["main_menu"]
+
+[launcher]
+rotation = 0
+layer = "top"
+namespace = "smearor-swipe-launcher"
+
+[layout]
+orientation = "horizontal"
+spacing = 0
+
+# --- Area 1: Hauptmenü ---
+# 15 keys: first 2 buttons navigate to sub-areas, rest blank/placeholder
+
+[main_menu]
+area_type = "fixed"
+width = 480
+plugins = [
+    { id = "scx_light_office_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_light_livingroom_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_weather_widget", path = "target/release/libsmearor_weather_widget.so", widget = "weather" },
+    { id = "scx_audio_widget", path = "target/release/libsmearor_audio_widget.so", widget = "audio" },
+    { id = "scx_mpris_widget", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris" },
+    { id = "scx_clock_widget", path = "target/release/libsmearor_clock_widget.so", widget = "clock" },
+    { id = "scx_sysinfo_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_network_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_power_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_wallpaper_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_notifications_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_voice_assistant_menu_button", path = "target/release/libsmearor_button_widget.so" },
+]
+
+[scx_light_office_button]
+main_text = "Licht Büro"
+icon = "nf-md-monitor"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "office_area" }
+
+[scx_light_livingroom_button]
+main_text = "Licht Wohnzimmer"
+icon = "nf-md-sofa"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "livingroom_area" }
+
+[scx_weather_widget]
+width = 96
+height = 96
+views = ["Current", "ForecastToday", "ForecastTomorrow", "Wind", "Humidity", "Sunrise", "Sunset", "AirPollution", "Pressure", "UvIndex", "CloudCover", "Sunshine", "PrecipitationProbability", "PrecipitationAmount", "Precipitation"]
+longpress_topic = "area.open"
+longpress_payload = { area_id = "weather_area" }
+
+[scx_audio_widget]
+width = 96
+height = 96
+longpress_topic = "area.open"
+longpress_payload = { area_id = "audio_area" }
+
+[scx_mpris_widget]
+width = 96
+height = 96
+longpress_topic = "area.open"
+longpress_payload = { area_id = "mpris_area" }
+
+[scx_clock_widget]
+width = 72
+height = 72
+mode = "compact"
+click_topic = "area.open"
+click_payload = { area_id = "clock_area" }
+
+# --- Area 2: office_area ---
+# Reuses the same Shelly light buttons from the main config
+
+[office_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_office_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_office_desk_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_office_window_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_office_kommode_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_office_fan", path = "target/release/libsmearor_button_widget.so" },
+]
+
+[scx_office_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "office_area" }
+
+[scx_office_desk_light]
+main_text = "Desk"
+icon = "nf-md-lamp"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.64/relay/0?turn=on", response_topic = "service.http.response.shelly.office.desk.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.64/relay/0?turn=off", response_topic = "service.http.response.shelly.office.desk.light.scx" }
+state_topic = "service.http.response.shelly.office.desk.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.64/relay/0", response_topic = "service.http.response.shelly.office.desk.light.scx" }
+state_icon = "{ison?nf-md-lamp:nf-md-lamp_outline}"
+state_css_class = "light-active"
+
+[scx_office_window_light]
+main_text = "Window"
+icon = "nf-md-ceiling_light_multiple"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.71/relay/0?turn=on", response_topic = "service.http.response.shelly.office.window.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.71/relay/0?turn=off", response_topic = "service.http.response.shelly.office.window.light.scx" }
+state_topic = "service.http.response.shelly.office.window.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.71/relay/0", response_topic = "service.http.response.shelly.office.window.light.scx" }
+state_icon = "{ison?nf-md-ceiling_light_multiple:nf-md-ceiling_light_multiple_outline}"
+state_css_class = "light-active"
+
+[scx_office_kommode_light]
+main_text = "Kommode"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.office.kommode.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=off", response_topic = "service.http.response.shelly.office.kommode.light.scx" }
+state_topic = "service.http.response.shelly.office.kommode.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.31/color/0", response_topic = "service.http.response.shelly.office.kommode.light.scx" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+
+[scx_office_fan]
+main_text = "Fan"
+icon = "nf-md-fan"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=on", response_topic = "service.http.response.shelly.fan.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=off", response_topic = "service.http.response.shelly.fan.scx" }
+state_topic = "service.http.response.shelly.fan.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.39/relay/0", response_topic = "service.http.response.shelly.fan.scx" }
+state_icon = "{ison?nf-md-fan:nf-md-fan_off}"
+state_css_class = "fan-active"
+
+# --- Area 3: livingroom_area ---
+
+[livingroom_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_livingroom_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_livingroom_couch_floor_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_livingroom_couch_wall_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_livingroom_vitrine_light", path = "target/release/libsmearor_button_widget.so" },
+]
+
+[scx_livingroom_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "livingroom_area" }
+
+[scx_livingroom_couch_floor_light]
+main_text = "Couch Floor"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.25/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.livingroom.couch.floor.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.25/color/0?turn=off", response_topic = "service.http.response.shelly.livingroom.couch.floor.light.scx" }
+state_topic = "service.http.response.shelly.livingroom.couch.floor.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.25/color/0", response_topic = "service.http.response.shelly.livingroom.couch.floor.light.scx" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+
+[scx_livingroom_couch_wall_light]
+main_text = "Couch Wall"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.30/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.livingroom.couch.wall.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.30/color/0?turn=off", response_topic = "service.http.response.shelly.livingroom.couch.wall.light.scx" }
+state_topic = "service.http.response.shelly.livingroom.couch.wall.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.30/color/0", response_topic = "service.http.response.shelly.livingroom.couch.wall.light.scx" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+
+[scx_livingroom_vitrine_light]
+main_text = "Vitrine"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.livingroom.vitrine.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=off", response_topic = "service.http.response.shelly.livingroom.vitrine.light.scx" }
+state_topic = "service.http.response.shelly.livingroom.vitrine.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.29/color/0", response_topic = "service.http.response.shelly.livingroom.vitrine.light.scx" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+
+# --- Area 4: weather_area ---
+# Atomic weather widgets — each shows a single weather view
+
+[weather_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_weather_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_weather_today", path = "target/release/libsmearor_weather_widget.so", widget = "weather_today" },
+    { id = "scx_weather_forecast", path = "target/release/libsmearor_weather_widget.so", widget = "weather_forecast" },
+    { id = "scx_weather_tomorrow", path = "target/release/libsmearor_weather_widget.so", widget = "weather_tomorrow" },
+    { id = "scx_weather_uv_index", path = "target/release/libsmearor_weather_widget.so", widget = "weather_uv_index" },
+    { id = "scx_weather_sunrise", path = "target/release/libsmearor_weather_widget.so", widget = "weather_sunrise" },
+    { id = "scx_weather_sunset", path = "target/release/libsmearor_weather_widget.so", widget = "weather_sunset" },
+    { id = "scx_weather_wind", path = "target/release/libsmearor_weather_widget.so", widget = "weather_wind" },
+    { id = "scx_weather_humidity", path = "target/release/libsmearor_weather_widget.so", widget = "weather_humidity" },
+    { id = "scx_weather_air_pollution", path = "target/release/libsmearor_weather_widget.so", widget = "weather_air_pollution" },
+    { id = "scx_weather_pressure", path = "target/release/libsmearor_weather_widget.so", widget = "weather_pressure" },
+    { id = "scx_weather_more_button", path = "target/release/libsmearor_button_widget.so" },
+]
+
+[scx_weather_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "weather_area" }
+
+[scx_weather_more_button]
+main_text = "More"
+icon = "nf-md-chevron_right"
+icon_only = true
+click_topic = "area.open"
+click_payload = { area_id = "weather_details_area" }
+
+# --- Area 4b: weather_details_area ---
+# Atomic weather widgets page 2 — precipitation, sunshine, cloud cover
+
+[weather_details_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_weather_details_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_weather_cloud_cover", path = "target/release/libsmearor_weather_widget.so", widget = "weather_cloud_cover" },
+    { id = "scx_weather_sunshine", path = "target/release/libsmearor_weather_widget.so", widget = "weather_sunshine" },
+    { id = "scx_weather_precipitation", path = "target/release/libsmearor_weather_widget.so", widget = "weather_precipitation" },
+    { id = "scx_weather_precipitation_probability", path = "target/release/libsmearor_weather_widget.so", widget = "weather_precipitation_probability" },
+    { id = "scx_weather_precipitation_amount", path = "target/release/libsmearor_weather_widget.so", widget = "weather_precipitation_amount" },
+]
+
+[scx_weather_details_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "weather_details_area" }
+
+# --- Area 5: audio_area ---
+# Atomic audio widgets — each shows a single audio view
+
+[audio_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_audio_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_audio_volume", path = "target/release/libsmearor_audio_widget.so", widget = "audio_volume" },
+    { id = "scx_audio_volume_up", path = "target/release/libsmearor_audio_widget.so", widget = "audio_volume_up" },
+    { id = "scx_audio_volume_down", path = "target/release/libsmearor_audio_widget.so", widget = "audio_volume_down" },
+    { id = "scx_audio_mute", path = "target/release/libsmearor_audio_widget.so", widget = "audio_mute" },
+    { id = "scx_audio_rotate_device", path = "target/release/libsmearor_audio_widget.so", widget = "audio_rotate_device" },
+    { id = "scx_audio_volume_span_0", path = "target/release/libsmearor_audio_widget.so", widget = "audio_volume_span", span_group = "scx_audio_vol_span", span_index = 0 },
+    { id = "scx_audio_volume_span_1", path = "target/release/libsmearor_audio_widget.so", widget = "audio_volume_span", span_group = "scx_audio_vol_span", span_index = 1 },
+]
+
+[scx_audio_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "audio_area" }
+
+[scx_audio_volume]
+click_topic = "service.audio.command"
+click_payload = { action = "ToggleMute" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "audio_area" }
+
+[scx_audio_volume_up]
+click_topic = "service.audio.command"
+click_payload = { action = "VolumeUp" }
+longpress_topic = "service.audio.command"
+longpress_payload = { action = "VolumeUp" }
+
+[scx_audio_volume_down]
+click_topic = "service.audio.command"
+click_payload = { action = "VolumeDown" }
+longpress_topic = "service.audio.command"
+longpress_payload = { action = "VolumeDown" }
+
+[scx_audio_mute]
+click_topic = "service.audio.command"
+click_payload = { action = "ToggleMute" }
+
+[scx_audio_rotate_device]
+click_topic = "service.audio.command"
+click_payload = { action = "NextDevice" }
+
+[scx_audio_volume_span_0]
+render_mode = "graphic_only"
+click_topic = "service.audio.command"
+click_payload = { action = "VolumeDown" }
+longpress_topic = "service.audio.command"
+longpress_payload = { action = "VolumeUp" }
+compound_longpress_topic = "service.audio.command"
+compound_longpress_payload = { action = "ToggleMute" }
+
+[scx_audio_volume_span_1]
+render_mode = "graphic_only"
+click_topic = "service.audio.command"
+click_payload = { action = "VolumeUp" }
+longpress_topic = "service.audio.command"
+longpress_payload = { action = "VolumeDown" }
+compound_longpress_topic = "service.audio.command"
+compound_longpress_payload = { action = "ToggleMute" }
+
+# --- Area 5b: clock_area ---
+# Multi-span clock widgets — each spans 2 buttons horizontally
+
+[clock_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_clock_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_clock_big_digital_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "scx_clock_big_digital", span_index = 0 },
+    { id = "scx_clock_big_digital_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "scx_clock_big_digital", span_index = 1 },
+    { id = "scx_clock_big_date_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_date", span_group = "scx_clock_big_date", span_index = 0 },
+    { id = "scx_clock_big_date_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_date", span_group = "scx_clock_big_date", span_index = 1 },
+    { id = "scx_clock_countdown_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_countdown", span_group = "scx_clock_countdown", span_index = 0 },
+    { id = "scx_clock_countdown_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_countdown", span_group = "scx_clock_countdown", span_index = 1 },
+    { id = "scx_clock_timer_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_timer", span_group = "scx_clock_timer", span_index = 0 },
+    { id = "scx_clock_timer_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_timer", span_group = "scx_clock_timer", span_index = 1 },
+]
+
+[scx_clock_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "clock_area" }
+
+[scx_clock_big_digital_0]
+render_mode = "graphic_only"
+longpress_topic = "area.close"
+longpress_payload = { area_id = "clock_area" }
+
+[scx_clock_big_digital_1]
+render_mode = "graphic_only"
+longpress_topic = "area.close"
+longpress_payload = { area_id = "clock_area" }
+
+[scx_clock_big_date_0]
+render_mode = "graphic_only"
+longpress_topic = "area.close"
+longpress_payload = { area_id = "clock_area" }
+
+[scx_clock_big_date_1]
+render_mode = "graphic_only"
+longpress_topic = "area.close"
+longpress_payload = { area_id = "clock_area" }
+
+[scx_clock_countdown_0]
+render_mode = "graphic_only"
+click_topic = "area.close"
+click_payload = { area_id = "clock_area" }
+
+[scx_clock_countdown_1]
+render_mode = "graphic_only"
+click_topic = "area.close"
+click_payload = { area_id = "clock_area" }
+
+[scx_clock_timer_0]
+render_mode = "graphic_only"
+click_topic = "area.close"
+click_payload = { area_id = "clock_area" }
+
+[scx_clock_timer_1]
+render_mode = "graphic_only"
+click_topic = "area.close"
+click_payload = { area_id = "clock_area" }
+
+# --- Area 6: mpris_area ---
+# Atomic MPRIS widgets — each shows a single media view
+
+[mpris_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_mpris_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_mpris_play_pause", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_play_pause" },
+    { id = "scx_mpris_next", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_next" },
+    { id = "scx_mpris_previous", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_previous" },
+    { id = "scx_mpris_stop", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_stop" },
+    { id = "scx_mpris_song", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_song" },
+    { id = "scx_mpris_artist", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_artist" },
+    { id = "scx_mpris_album", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_album" },
+    { id = "scx_mpris_switch_player", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_switch_player" },
+    { id = "scx_mpris_seek_forward", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_seek_forward" },
+    { id = "scx_mpris_seek_backward", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_seek_backward" },
+    { id = "scx_mpris_shuffle", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_shuffle" },
+    { id = "scx_mpris_repeat", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris_repeat" },
+]
+
+[scx_mpris_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "mpris_area" }
+
+[scx_mpris_play_pause]
+click_topic = "service.mpris.command"
+click_payload = { action = "TogglePlayPause" }
+
+[scx_mpris_next]
+click_topic = "service.mpris.command"
+click_payload = { action = "NextTrack" }
+
+[scx_mpris_previous]
+click_topic = "service.mpris.command"
+click_payload = { action = "PreviousTrack" }
+
+[scx_mpris_stop]
+click_topic = "service.mpris.command"
+click_payload = { action = "Stop" }
+
+[scx_mpris_song]
+click_topic = "service.mpris.command"
+click_payload = { action = "TogglePlayPause" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "mpris_area" }
+
+[scx_mpris_artist]
+click_topic = "service.mpris.command"
+click_payload = { action = "TogglePlayPause" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "mpris_area" }
+
+[scx_mpris_album]
+click_topic = "service.mpris.command"
+click_payload = { action = "TogglePlayPause" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "mpris_area" }
+
+[scx_mpris_switch_player]
+click_topic = "service.mpris.command"
+click_payload = { action = "NextPlayer" }
+
+[scx_mpris_seek_forward]
+click_topic = "service.mpris.command"
+click_payload = { action = "Seek", seek_offset = 10000000 }
+longpress_topic = "service.mpris.command"
+longpress_payload = { action = "Seek", seek_offset = 30000000 }
+
+[scx_mpris_seek_backward]
+click_topic = "service.mpris.command"
+click_payload = { action = "Seek", seek_offset = -10000000 }
+longpress_topic = "service.mpris.command"
+longpress_payload = { action = "Seek", seek_offset = -30000000 }
+
+# --- Area 7: sysinfo_area ---
+# Atomic sysinfo widgets — each shows a single system metric
+
+[scx_sysinfo_menu_button]
+main_text = "Sysinfo"
+icon = "nf-fa-microchip"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "sysinfo_area" }
+
+[scx_network_menu_button]
+main_text = "Network"
+icon = "nf-md-wifi"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "network_area" }
+
+[sysinfo_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_sysinfo_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_sysinfo_cpu", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo_cpu" },
+    { id = "scx_sysinfo_cpu_temperature", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo_cpu_temperature" },
+    { id = "scx_sysinfo_memory", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo_memory" },
+    { id = "scx_sysinfo_battery", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo_battery" },
+    { id = "scx_sysinfo_disk", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo_disk" },
+    { id = "scx_sysinfo_network_download", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo_network_download" },
+    { id = "scx_sysinfo_network_upload", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo_network_upload" },
+    { id = "scx_sysinfo_uptime", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo_uptime" },
+    { id = "scx_sysinfo_load", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo_load" },
+]
+
+[scx_sysinfo_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "sysinfo_area" }
+
+[scx_mpris_shuffle]
+click_topic = "service.mpris.command"
+click_payload = { action = "ToggleShuffle" }
+
+[scx_mpris_repeat]
+click_topic = "service.mpris.command"
+click_payload = { action = "CycleLoop" }
+
+# --- Area 7b: network_area ---
+# Atomic network widgets — each shows a single network view
+
+[network_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_network_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_network_wifi_status", path = "target/release/libsmearor_network_widget.so", widget = "network_wifi_status" },
+    { id = "scx_network_wifi_connect", path = "target/release/libsmearor_network_widget.so", widget = "network_wifi_connect" },
+    { id = "scx_network_ethernet_status", path = "target/release/libsmearor_network_widget.so", widget = "network_ethernet_status" },
+    { id = "scx_network_vpn_toggle", path = "target/release/libsmearor_network_widget.so", widget = "network_vpn_toggle" },
+]
+
+[scx_network_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "network_area" }
+
+[scx_network_wifi_status]
+click_topic = "service.network.command"
+click_payload = { action = "Refresh" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "network_area" }
+
+[scx_network_wifi_connect]
+click_topic = "service.network.command"
+click_payload = { action = "ScanWifi" }
+
+[scx_network_ethernet_status]
+click_topic = "service.network.command"
+click_payload = { action = "Refresh" }
+
+[scx_network_vpn_toggle]
+click_topic = "service.network.command"
+click_payload = { action = "ToggleVpn" }
+
+# --- Area 8: power_area ---
+# Atomic power widgets — each shows a single power action
+
+[scx_power_menu_button]
+main_text = "Power"
+icon = "nf-md-power"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "power_area" }
+
+[power_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_power_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_power_shutdown", path = "target/release/libsmearor_power_widget.so", widget = "power_shutdown" },
+    { id = "scx_power_reboot", path = "target/release/libsmearor_power_widget.so", widget = "power_reboot" },
+    { id = "scx_power_suspend", path = "target/release/libsmearor_power_widget.so", widget = "power_suspend" },
+    { id = "scx_power_hibernate", path = "target/release/libsmearor_power_widget.so", widget = "power_hibernate" },
+    { id = "scx_power_lock", path = "target/release/libsmearor_power_widget.so", widget = "power_lock" },
+    { id = "scx_power_logout", path = "target/release/libsmearor_power_widget.so", widget = "power_logout" },
+    { id = "scx_power_standby", path = "target/release/libsmearor_power_widget.so", widget = "power_standby" },
+]
+
+[scx_power_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "power_area" }
+
+[scx_power_shutdown]
+click_topic = "service.power.command"
+click_payload = { action = "Execute", power_action = "shutdown" }
+
+[scx_power_reboot]
+click_topic = "service.power.command"
+click_payload = { action = "Execute", power_action = "reboot" }
+
+[scx_power_suspend]
+click_topic = "service.power.command"
+click_payload = { action = "Execute", power_action = "suspend" }
+
+[scx_power_hibernate]
+click_topic = "service.power.command"
+click_payload = { action = "Execute", power_action = "hibernate" }
+
+[scx_power_lock]
+click_topic = "service.power.command"
+click_payload = { action = "Execute", power_action = "lock" }
+
+[scx_power_logout]
+click_topic = "service.power.command"
+click_payload = { action = "Execute", power_action = "logout" }
+
+[scx_power_standby]
+click_topic = "service.power.command"
+click_payload = { action = "Execute", power_action = "suspend" }
+
+# --- Area 9: wallpaper_area ---
+# Atomic wallpaper widgets — each shows a single wallpaper action
+
+[scx_wallpaper_menu_button]
+main_text = "Wallpaper"
+icon = "nf-md-wallpaper"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "wallpaper_area" }
+
+[scx_notifications_menu_button]
+main_text = "Notifications"
+icon = "nf-fa-bell"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "notifications_area" }
+
+# --- Area 10: notifications_area ---
+# Atomic notifications widgets — each shows a single notifications view
+
+[notifications_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_notifications_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_notifications_count", path = "target/release/libsmearor_notifications_widget.so", widget = "notifications_count" },
+    { id = "scx_notifications_latest", path = "target/release/libsmearor_notifications_widget.so", widget = "notifications_latest" },
+    { id = "scx_notifications_dnd", path = "target/release/libsmearor_notifications_widget.so", widget = "notifications_dnd" },
+]
+
+[scx_notifications_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "notifications_area" }
+
+[scx_notifications_count]
+click_topic = "service.notifications.command"
+click_payload = { action = "DismissLast" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "notifications_area" }
+
+[scx_notifications_latest]
+click_topic = "service.notifications.command"
+click_payload = { action = "DismissLast" }
+longpress_topic = "service.notifications.command"
+longpress_payload = { action = "DismissAll" }
+
+[scx_notifications_dnd]
+click_topic = "service.notifications.command"
+click_payload = { action = "ToggleDoNotDisturb" }
+
+# --- Area 11: voice_assistant_area ---
+# Atomic voice assistant widgets — each shows a single voice assistant view
+
+[scx_voice_assistant_menu_button]
+main_text = "Voice"
+icon = "nf-md-microphone"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "voice_assistant_area" }
+
+[voice_assistant_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_voice_assistant_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_voice_assistant_listen", path = "target/release/libsmearor_voice_assistant_widget.so", widget = "voice_assistant_listen" },
+    { id = "scx_voice_assistant_push_to_talk", path = "target/release/libsmearor_voice_assistant_widget.so", widget = "voice_assistant_push_to_talk" },
+    { id = "scx_voice_assistant_stop", path = "target/release/libsmearor_voice_assistant_widget.so", widget = "voice_assistant_stop" },
+    { id = "scx_voice_assistant_status", path = "target/release/libsmearor_voice_assistant_widget.so", widget = "voice_assistant_status" },
+]
+
+[scx_voice_assistant_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "voice_assistant_area" }
+
+[scx_voice_assistant_listen]
+click_topic = "service.voice_assistant.command"
+click_payload = { action = "Activate" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "voice_assistant_area" }
+
+[scx_voice_assistant_push_to_talk]
+hold_topic = "service.voice_assistant.command"
+hold_payload = { action = "Activate" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "voice_assistant_area" }
+
+[scx_voice_assistant_stop]
+click_topic = "service.voice_assistant.command"
+click_payload = { action = "Deactivate" }
+
+[scx_voice_assistant_status]
+click_topic = "service.voice_assistant.command"
+click_payload = { action = "ClearConversation" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "voice_assistant_area" }
+
+[wallpaper_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_wallpaper_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_wallpaper_current", path = "target/release/libsmearor_wallpaper_widget.so", widget = "wallpaper_current" },
+    { id = "scx_wallpaper_selector", path = "target/release/libsmearor_wallpaper_widget.so", widget = "wallpaper_selector" },
+    { id = "scx_wallpaper_next", path = "target/release/libsmearor_wallpaper_widget.so", widget = "wallpaper_next" },
+    { id = "scx_wallpaper_previous", path = "target/release/libsmearor_wallpaper_widget.so", widget = "wallpaper_previous" },
+    { id = "scx_wallpaper_random", path = "target/release/libsmearor_wallpaper_widget.so", widget = "wallpaper_random" },
+]
+
+[scx_wallpaper_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "wallpaper_area" }
+
+[scx_wallpaper_current]
+render_mode = "graphic_only"
+click_topic = "service.wallpaper.command"
+click_payload = { action = "StartSelected" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "wallpaper_area" }
+
+[scx_wallpaper_selector]
+click_topic = "service.wallpaper.command"
+click_payload = { action = "StartSelected" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "wallpaper_area" }
+
+[scx_wallpaper_next]
+click_topic = "service.wallpaper.command"
+click_payload = { action = "StartSelected" }
+
+[scx_wallpaper_previous]
+click_topic = "service.wallpaper.command"
+click_payload = { action = "StartSelected" }
+
+[scx_wallpaper_random]
+click_topic = "service.wallpaper.command"
+click_payload = { action = "StartSelected" }

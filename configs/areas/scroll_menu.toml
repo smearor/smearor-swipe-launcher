@@ -3,7 +3,7 @@
 #
 # Usage in config.toml:
 # [my_area]
-# include = "areas/scroll_menu.toml"
+# include = "../areas/scroll_menu.toml"
 # open_transition = "SlideUp"  # optionally override
 # plugins = [
 #     { id = "my_area_close", path = "target/release/libsmearor_button_widget.so" },

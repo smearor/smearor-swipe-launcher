@@ -1,7 +1,7 @@
 [[themes]]
 name = "Smearor"
 description = "Die schönsten Hintergründe für den Tisch"
-preview_image_path = ""
+preview_image_path = "/home/aschaeffer/Bilder/Preview/smearor-backgrounds.png"
 preview_icon = "nf-weather-stars"
 wallpaper_type = "Video"
 config.Video.directory = "/home/aschaeffer/Videos/Backgrounds"
@@ -16,7 +16,7 @@ config.Video.extra_arguments = []
 [[themes]]
 name = "Nature"
 description = "Panoramic nature videos"
-preview_image_path = ""
+preview_image_path = "/home/aschaeffer/Bilder/Preview/nature-backgrounds.png"
 preview_icon = "nf-md-pine_tree"
 wallpaper_type = "Video"
 config.Video.directory = "/home/aschaeffer/Videos/Nature"

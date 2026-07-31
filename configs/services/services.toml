@@ -11,6 +11,22 @@ port = 8765
 # Optional bearer token for authentication.
 # auth_token = "my-secret-token"
 
+# Embedded web server for browser-based launcher instances.
+# Access via http://127.0.0.1:8080/instances/{id}
+[web]
+enabled = true
+# Address to bind to. Use "127.0.0.1" (default) for localhost-only access.
+# Use "0.0.0.0" to allow access from other machines on the network.
+#bind_address = "127.0.0.1"
+bind_address = "0.0.0.0"
+port = 8080
+# Optional bearer token required for all HTTP and WebSocket requests.
+# If set, clients must send Authorization: Bearer <token> or ?token=<token>.
+# auth_token = "my-web-secret"
+# Allowed CORS origins. If empty, defaults to localhost only.
+# Use ["*"] to allow all origins (not recommended for production).
+# allowed_origins = ["http://localhost:8080", "http://127.0.0.1:8080"]
+
 [[services]]
 id = "app_launcher"
 path = "target/release/libsmearor_app_launcher_service.so"
@@ -56,9 +72,9 @@ path = "target/release/libsmearor_network_service.so"
 id = "wayland"
 path = "target/release/libsmearor_wayland_service.so"
 
-[[services]]
-id = "gnome"
-path = "target/release/libsmearor_gnome_service.so"
+#[[services]]
+#id = "gnome"
+#path = "target/release/libsmearor_gnome_service.so"
 
 [[services]]
 id = "terminal_command"
@@ -69,8 +85,20 @@ id = "wallpaper"
 path = "target/release/libsmearor_wallpaper_service.so"
 
 [[services]]
-id = "voice_assistant"
-path = "target/release/libsmearor_voice_assistant_service.so"
+id = "streamdeck"
+path = "target/release/libsmearor_streamdeck_service.so"
+
+[[services]]
+id = "streamcontrollerx"
+path = "target/release/libsmearor_loupedeck_service.so"
+
+[[services]]
+id = "personalization"
+path = "target/release/libsmearor_personalization_service.so"
+
+#[[services]]
+#id = "voice_assistant"
+#path = "target/release/libsmearor_voice_assistant_service.so"
 
 [http]
 allowed_urls = ["192.168.178.*", "https://api.open-meteo.com/*", "https://api.sunrise-sunset.org/*"]
@@ -103,7 +131,7 @@ timezone = "auto"
 forecast_days = 2
 
 [power]
-countdown_seconds = 3
+countdown_seconds = 10
 enable_inhibitor_detection = true
 enable_scheduled_actions = true
 mcp_enabled = false
@@ -126,7 +154,7 @@ public_ip_url = "https://api.ipify.org?format=json"
 [wallpaper]
 default_theme = "Smearor"
 auto_start = false
-config_path = "wallpaper.toml"
+config_path = "configs/services/wallpaper.toml"
 kill_grace_period_ms = 3000
 
 [wayland]
@@ -162,16 +190,35 @@ args = [
 ]
 env = { }
 
+[streamdeck]
+brightness = 50
+poll_interval_ms = 50
+
+[streamcontrollerx]
+brightness = 50
+poll_interval_ms = 50
+
+[personalization]
+latitude = 47.55
+longitude = 9.70
+#locale = "de-DE"
+locale = "de-DE"
+timezone = "Europe/Berlin"
+update_interval_seconds = 300
+
 [voice_assistant]
 #whisper_model_path = "models/ggml-tiny.bin"
 #whisper_model_path = "models/ggml-base.bin"
 #whisper_model_path = "models/ggml-small.bin"
 whisper_model_path = "models/ggml-large-v3-turbo-q5_0.bin"
-#llm_model_path = "models/gemma-4-E4B-it-Q4_K_M.gguf"
-llm_model_path = "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+llm_model_path = "models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf"
+#llm_model_path = "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+#llm_model_path = "models/qwen2.5-3b-instruct-q4_k_m.gguf"
 llm_threads = 4
 #llm_context_size = 4096
 llm_context_size = 8192
+llm_batch_size = 512
+llm_max_tokens = 2048
 max_catalog_chars = 8000
 max_react_iterations = 8
 llm_temperature = 0.1
@@ -194,3 +241,53 @@ auto_enable = false
 #context_keep_ratio = 0.8
 # Minimum tokens to preserve during shifting, e.g. system prompt (default: 512)
 #min_preserve_tokens = 512
+
+# GBNF grammar enforcement constrains LLM output to valid ReAct JSON.
+# Disable if the GPU backend (Vulkan) crashes with grammar samplers.
+use_grammar = false
+
+# Embedding model for semantic memory (fastembed).
+# BGEM3 is multilingual (100+ languages, 8192 context, 1024-dim).
+embedding_model = "BGEM3"
+
+# Minimum cosine similarity for semantic tool/resource/prompt selection.
+# Tools below this threshold are excluded from the LLM prompt.
+# Lower = more tools included, higher = stricter selection.
+tool_selection_threshold = 0.3
+
+# Silero VAD (Voice Activity Detection) post-processing.
+# Trims leading/trailing non-speech from captured audio before Whisper
+# transcription, reducing hallucinations from background noise.
+# Download silero_vad.onnx from https://github.com/snakers4/silero-vad
+vad_enabled = true
+vad_model_path = "models/silero_vad.onnx"
+# Speech probability threshold (0.0–1.0). Frames below this are non-speech.
+vad_threshold = 0.5
+
+# TTS (Text-to-Speech) configuration
+# Download a Piper model from https://github.com/rhasspy/piper/releases
+# Required files: .onnx model + .onnx.json config
+[voice_assistant.tts]
+enabled = true
+tts_enabled_mcp = true
+#model_path = "models/de_DE-thorsten-medium.onnx"
+model_path = "models/de_DE-thorsten-high.onnx"
+#config_path = "models/de_DE-thorsten-medium.onnx.json"
+config_path = "models/de_DE-thorsten-high.onnx.json"
+model_type = "Piper"
+model_sample_rate = 22050
+voice = ""
+# conversion_step = false -> use specialized text-processing-rs to convert text to IPA
+# conversion_step = true -> LLM converts text to IPA
+conversion_step = false
+phonemize_enabled = true
+disable_pad_id = false
+
+[voice_assistant.tts.phonemizer_config]
+language = "de"
+
+[voice_assistant.wake_word]
+auto_enable = true
+model = "Alexa"
+# model = "HeyMycroft"
+threshold = 0.1

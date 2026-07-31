@@ -1,0 +1,161 @@
+# HTML launcher config for browser-based instances
+# Access via http://127.0.0.1:8080/instances/{id}
+# Start with: smearor-swipe-launcher --config configs/launcher/web.toml
+
+areas = ["scroll_band"]
+
+[defaults.menu_button]
+click_topic = "area.open"
+longpress_topic = "area.close"
+enabled = true
+active = false
+css_classes = ["menu-button", "glow-blue"]
+
+[defaults.close_button]
+main_text = ""
+info_text = "Zurück"
+icon = "nf-md-undo"
+click_topic = "area.close"
+enabled = true
+active = false
+css_classes = ["close-button"]
+
+[defaults.app_launcher]
+
+[launcher]
+rotation = 0
+layer = "top"
+namespace = "smearor-swipe-launcher"
+exclusive_zone = 105
+max_width = 1080
+show_decorations = false
+instance_type = "web"
+
+[layout]
+orientation = "horizontal"
+spacing = 0
+
+[scroll_band]
+area_type = "scroll"
+spacing = 0
+plugins = [
+    { id = "clock_widget", path = "target/release/libsmearor_clock_widget.so" },
+    { id = "weather_widget", path = "target/release/libsmearor_weather_widget.so", widget = "weather" },
+    { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
+]
+
+[clock_widget]
+mode = "compact"
+timezone = "local"
+click_topic = "area.open"
+click_payload = { area_id = "clock_area" }
+longpress_topic = "area.close"
+longpress_payload = { area_id = "clock_area" }
+
+[weather_widget]
+views = ["Current", "ForecastToday", "ForecastTomorrow", "Wind", "Humidity", "Sunrise", "Sunset", "AirPollution", "Pressure", "UvIndex"]
+click_topic = "service.app_launcher.command"
+click_payload = { desktop_file = "/var/lib/flatpak/exports/share/applications/io.github.amit9838.mousam.desktop", action = "Exec" }
+
+[shelly_fan_button]
+main_text = "Fan"
+info_text = "Office"
+description = "Schaltet den Ventilator im Büro an (click) oder aus (longpress)"
+icon = "nf-md-fan"
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=on", response_topic = "service.http.response.shelly.fan" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=off", response_topic = "service.http.response.shelly.fan" }
+state_topic = "service.http.response.shelly.fan"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.39/relay/0", response_topic = "service.http.response.shelly.fan" }
+state_icon = "{ison?nf-md-fan:nf-md-fan_off}"
+state_css_class = "fan-active"
+
+# Button widget configuration
+[games_menu_button]
+defaults = "menu_button"
+main_text = "Games"
+icon = "nf-fa-gamepad"
+tooltip = "Games"
+css_classes = ["menu-button", "games-icon-color"]
+click_payload = { area_id = "games_area" }
+longpress_payload = { area_id = "games_area" }
+
+# Games submenu area configuration
+[games_area]
+include = "../areas/scroll_menu.toml"
+open_transition = "SlideUp"
+css_classes = ["games-area-bg"]
+plugins = [
+    { id = "games_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "puzzle_games_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "board_games_menu_button", path = "target/release/libsmearor_button_widget.so" }
+]
+
+[games_close_button]
+defaults = "close_button"
+click_payload = { area_id = "games_area" }
+
+[puzzle_games_menu_button]
+defaults = "menu_button"
+main_text = "Puzzle"
+icon = "nf-md-puzzle"
+tooltip = "Puzzle Games"
+click_payload = { area_id = "puzzle_games_area" }
+longpress_payload = { area_id = "puzzle_games_area" }
+
+[puzzle_games_area]
+include = "../areas/scroll_menu.toml"
+plugins = [
+    { id = "puzzle_games_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "gnome_2048", path = "target/release/libsmearor_app_launcher_widget.so" },
+    { id = "gnome_mines", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[puzzle_games_close_button]
+defaults = "close_button"
+click_payload = { area_id = "puzzle_games_area" }
+
+[gnome_2048]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.TwentyFortyEight.desktop"
+click_topic = "area.close"
+click_payload = { area_id = "puzzle_games_area" }
+click_mode = "supplement"
+[gnome_2048.wrapper]
+follows_rotation = true
+auto_color_mask = true
+
+[gnome_mines]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Mines.desktop"
+[gnome_mines.wrapper]
+follows_rotation = true
+
+[board_games_menu_button]
+defaults = "menu_button"
+main_text = "Board"
+icon = "nf-fa-chess_board"
+tooltip = "Board Games"
+click_payload = { area_id = "board_games_area" }
+longpress_payload = { area_id = "board_games_area" }
+
+[board_games_area]
+include = "../areas/scroll_menu.toml"
+plugins = [
+    { id = "board_games_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "gnome_chess", path = "target/release/libsmearor_app_launcher_widget.so" }
+]
+
+[board_games_close_button]
+defaults = "close_button"
+click_payload = { area_id = "board_games_area" }
+
+[gnome_chess]
+defaults = "app_launcher"
+desktop_file_path = "/usr/share/applications/org.gnome.Chess.desktop"
+[gnome_chess.wrapper]
+follows_rotation = true
+auto_color_mask = true
