@@ -1,0 +1,15 @@
+# Loupedeck and Razer Stream Controller udev rules
+# Copy to /etc/udev/rules.d/ and reload with:
+#   sudo udevadm control --reload-rules
+# Then unplug and replug the device.
+
+# Loupedeck Live
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2ec2", ATTRS{idProduct}=="0001", TAG+="uaccess"
+# Loupedeck Live S
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2ec2", ATTRS{idProduct}=="0006", TAG+="uaccess"
+# Loupedeck CT
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2ec2", ATTRS{idProduct}=="0004", TAG+="uaccess"
+# Razer Stream Controller
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="0d06", TAG+="uaccess"
+# Razer Stream Controller X
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1532", ATTRS{idProduct}=="0d09", TAG+="uaccess"
