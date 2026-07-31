@@ -1,0 +1,24 @@
+<component name="ProjectRunConfigurationManager">
+    <configuration default="false" name="Run smearor-swipe-launcher" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+        <option name="buildProfileId" value="release"/>
+        <option name="command"
+                value="run --package smearor-swipe-launcher --bin smearor-swipe-launcher -- --config configs/launcher/config.toml --config configs/launcher/web.toml --services-config configs/services/services.toml"/>
+        <option name="workingDirectory" value="file://$PROJECT_DIR$"/>
+        <envs>
+            <env name="GTK_DEBUG" value="icon-theme"/>
+        </envs>
+        <option name="emulateTerminal" value="true"/>
+        <option name="channel" value="DEFAULT"/>
+        <option name="requiredFeatures" value="true"/>
+        <option name="allFeatures" value="false"/>
+        <option name="withSudo" value="false"/>
+        <option name="buildTarget" value="REMOTE"/>
+        <option name="backtrace" value="SHORT"/>
+        <option name="isRedirectInput" value="false"/>
+        <option name="redirectInputPath" value=""/>
+        <method v="2">
+            <option name="RunConfigurationTask" enabled="true" run_configuration_name="build ryzen-9-9950x3d-hipblas"
+                    run_configuration_type="CargoCommandRunConfiguration"/>
+        </method>
+    </configuration>
+</component>
