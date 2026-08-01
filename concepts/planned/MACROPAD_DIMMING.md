@@ -458,22 +458,21 @@ No new external dependencies. All required types (`tokio::time::Instant`, `tokio
 
 ---
 
-## 10. Open Questions
+## 10. Resolved Questions
 
-1. **Should `SetButtonImage` commands reset the idle timer?** — *Proposed: No. Only physical button presses and explicit brightness commands reset the idle
-   timer. Animations running in the background do not count as user activity.*
+1. **Should `SetButtonImage` commands reset the idle timer?** — **No.** Only physical button presses and explicit brightness commands reset the idle timer.
+   Animations running in the background do not count as user activity.
 
-2. **Should the dimming be pauseable via MCP at runtime?** — *Out of scope for this concept. Can be added later as an MCP tool (e.g.
-   `streamdeck_set_auto_dimming` with `enabled` and `timeout_ms` parameters).*
+2. **Should the dimming be pauseable via MCP at runtime?** — **No.** Auto-dimming is config-only. Runtime toggling via MCP is out of scope.
 
-3. **Should there be a "wake on touch" mode that only dims the display but does not process button events?** — *Out of scope. Button events are always
-   processed; dimming only affects brightness.*
+3. **Should there be a "wake on touch" mode that only dims the display but does not process button events?** — **No.** Button events are always processed;
+   dimming only affects brightness.
 
-4. **Should the Loupedeck brightness config migration be automatic?** — *Proposed: No. Document the breaking change. Users update their config manually. The
-   default value changes from 5 to 50, which is equivalent.*
+4. **Should the Loupedeck brightness config migration be automatic?** — **No.** Document the breaking change. Users update their config manually. The default
+   value changes from 5 to 50, which is equivalent.
 
-5. **Should fading use linear interpolation or an easing curve?** — *Proposed: Linear for simplicity. Easing curves (e.g. ease-in-out) can be added later by
-   replacing the constant step with a computed step based on the current position in the fade.*
+5. **Should fading use linear interpolation or an easing curve?** — **Linear.** Linear interpolation for simplicity. Easing curves can be added later by
+   replacing the constant step with a computed step based on the current position in the fade.
 
 ---
 
