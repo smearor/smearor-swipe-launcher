@@ -80,9 +80,19 @@ Both services accept brightness as 0-100 in all configuration and MCP paths. The
 
 ```rust
 fn scale_to_loupedeck(percent: u8) -> u8 {
-    (percent as u16 * 10 / 100) as u8
+    // Rounding: ((percent * 10) + 50) / 100
+    (((percent as u16 * 10) + 50) / 100) as u8
 }
 ```
+
+Rounding is used instead of truncation to avoid the dim brightness dropping to 0 at low percentages. Example values:
+
+| `percent` | Calculation       | Result |
+|-----------|-------------------|--------|
+| 0         | (0 + 50) / 100    | 0      |
+| 5         | (50 + 50) / 100   | 1      |
+| 50        | (500 + 50) / 100  | 5      |
+| 100       | (1000 + 50) / 100 | 10     |
 
 This mapping is applied at the point where `device.set_brightness()` is called — not at the config or MCP layer. The `LoupedeckConfig.brightness` field changes
 from 0-10 to 0-100, with a default of 50 (matching StreamDeck).
@@ -111,6 +121,36 @@ serial = "AL32G2B67890"
 auto_dim_timeout_ms = 60000
 auto_dim_brightness = 10
 ```
+
+### 4.2.1 Serial Number Matching
+
+Device override matching uses the device serial number as reported by the USB/HID driver. To handle edge cases robustly:
+
+1. **Whitespace trimming**: Both the device serial and the `device_overrides[].serial` config value are trimmed (`str::trim()`) before comparison. This avoids
+   mismatches caused by trailing whitespace or newlines in firmware-reported serials.
+2. **Empty or missing serial**: If the device reports an empty or whitespace-only serial, no override is applied — the device falls back to the global config
+   defaults.
+3. **No match**: If no `device_overrides` entry matches the trimmed serial, the device uses the global config defaults.
+
+```rust
+fn resolve_device_config(
+    serial: &str,
+    global: &ServiceConfig,
+) -> ResolvedDeviceConfig {
+    let trimmed = serial.trim();
+    let override_entry = global.device_overrides
+        .iter()
+        .find(|o| o.serial.trim() == trimmed);
+
+    match override_entry {
+        Some(o) => ResolvedDeviceConfig::merge(global, o),
+        None => ResolvedDeviceConfig::from_global(global),
+    }
+}
+```
+
+If `trimmed` is empty, `find()` will not match any entry (unless an override has an empty serial, which is a misconfiguration), so the device safely falls back
+to defaults.
 
 ### 4.3 Dimming State Machine
 
@@ -219,16 +259,33 @@ The `device_event_loop` `tokio::select!` gains a third branch for the dimming ti
 
 ### 4.5 Dimming Timer
 
-The dimming timer fires at the `fade_step_duration` interval (default 50 ms). On each tick:
+Instead of a fixed 50 ms interval, the dimming timer uses `tokio::time::sleep_until` with a **dynamic deadline** computed per phase. This eliminates unnecessary
+CPU wakeups in the `Active` and `Dimmed` phases:
 
-- **Active**: Check if `now - last_activity > idle_timeout`. If so, transition to `FadingDown`.
+```rust
+let timer_deadline = match dimming.phase {
+DimmingPhase::Active => dimming.last_activity + dimming.idle_timeout,
+DimmingPhase::FadingDown | DimmingPhase::FadingUp => {
+tokio::time::Instant::now() + dimming.fade_step_duration
+}
+DimmingPhase::Dimmed => {
+// No animation needed — sleep until an event arrives (command or button press)
+tokio::time::Instant::now() + std::time::Duration::from_secs(86400 * 365)
+}
+};
+```
+
+On each timer tick:
+
+- **Active**: The deadline is `last_activity + idle_timeout`. When the timer fires, transition to `FadingDown`. CPU wakeups: **1** per idle period (not 600).
 - **FadingDown**: Decrease `current_brightness` by `fade_step_percent`. Call `device.set_brightness()`. If `current_brightness <= dim_brightness`, transition to
-  `Dimmed`.
-- **Dimmed**: No action (wait for button press or command).
+  `Dimmed`. Deadline: `now + fade_step_duration` (default 50 ms / 20 fps).
+- **Dimmed**: The deadline is effectively infinite (1 year). The `tokio::select!` wakes on command or button press instead. CPU wakeups: **0**.
 - **FadingUp**: Increase `current_brightness` by `fade_step_percent`. Call `device.set_brightness()`. If `current_brightness >= target_brightness`, transition
-  to `Active`.
+  to `Active`. Deadline: `now + fade_step_duration`.
 
-The timer is always active when auto-dimming is enabled. In `Active` and `Dimmed` phases, the tick is lightweight (just a time check or no-op).
+When a command or button press arrives in the `tokio::select!` (before the timer deadline), the timer is cancelled and recomputed on the next loop iteration
+with the updated phase. This is the standard `tokio::select!` pattern — each iteration creates a fresh `sleep_until` future.
 
 ### 4.6 Button Press Handling
 
