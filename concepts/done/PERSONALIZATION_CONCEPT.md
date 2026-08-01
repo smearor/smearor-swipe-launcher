@@ -35,32 +35,28 @@ users to pin specific values if automatic detection is undesired.
 
 ## 2. System Architecture & Data Flow
 
-```mermaid
-flowchart TD
-    subgraph System["System APIs"]
-        TZ["iana_time_zone::get_timezone()"]
-        LC["sys_locale::get_locale()"]
-        ASHPD["ashpd::LocationProxy\n(XDG Desktop Portal)"]
-    end
-
-    subgraph Service["Personalization Service (Singleton)"]
-        Q["1. Query timezone\n2. Query locale\n3. Query location\n4. Apply config overrides\n5. Apply runtime overrides"]
-        B["Broadcast status"]
-    end
-
-    TZ --> Q
-    LC --> Q
-    ASHPD --> Q
-    Q --> B
-
-    B -- "PersonalizationStatusMessage\nTopic: service.personalization.status" --> Clock["Clock Widget"]
-    B --> Weather["Weather Service"]
-    B --> Voice["Voice Assistant"]
-    B --> Sysinfo["Sysinfo Widget"]
-    B --> Power["Power Widget"]
-
-    Clock -- "PersonalizationCommandMessage\n(UpdateLocation / UpdateLocale / Refresh)" --> Q
-    Voice -- "PersonalizationCommandMessage\n(UpdateLocation / UpdateLocale / Refresh)" --> Q
+```
++--------------------------+                 +--------------------------------+
+| Personalization Service  |                 | System APIs                    |
+| (Singleton)              |                 |                                |
+|                          |                 |  iana_time_zone::get_timezone()|
+|  1. Query timezone       |<================|  sys_locale::get_locale()      |
+|  2. Query locale         |                 |  ashpd::LocationProxy          |
+|  3. Query location       |                 |    (XDG Desktop Portal)        |
+|  4. Apply config overrides                 +--------------------------------+
+|  5. Broadcast status     |
++--------------------------+
+         |
+         |  PersonalizationStatusMessage
+         |  Topic: "service.personalization.status"
+         |
+    +----+----+----+----+----+
+    |    |    |    |    |    |
+    v    v    v    v    v    v
++-------+ +-------+ +-------+ +-------+ +-------+
+| Clock | |Weather| | Voice | | Sysinfo| | Power |
+|Widget | |Service| | Assist| | Widget | | Widget|
++-------+ +-------+ +-------+ +-------+ +-------+
 ```
 
 The service also registers **MCP resources** so that AI clients can query personalization data at any time.
@@ -89,28 +85,7 @@ pub const TOPIC_COMMAND: &str = "service.personalization.command";
 pub const TOPIC_STATUS: &str = "service.personalization.status";
 ```
 
-### 4.2 Module Structure
-
-Following the `AGENTS.md` convention of one enum per file, each enum resides in its own module. The `lib.rs` re-exports all types via `pub use`.
-
-```
-model/personalization/
-├── Cargo.toml
-└── src/
-    ├── lib.rs                    # Module declarations, pub use re-exports, topics
-    ├── coordinates.rs            # GeoCoordinates struct
-    ├── temperature_unit.rs       # TemperatureUnit enum
-    ├── wind_speed_unit.rs        # WindSpeedUnit enum
-    ├── time_format.rs            # TimeFormat enum
-    ├── date_format.rs            # DateFormat enum
-    ├── first_day_of_week.rs      # FirstDayOfWeek enum
-    ├── measurement_system.rs     # MeasurementSystem enum
-    ├── color_scheme.rs           # ColorScheme enum
-    ├── status_message.rs         # PersonalizationStatusMessage struct
-    └── command_message.rs        # PersonalizationCommandMessage + PersonalizationCommandAction
-```
-
-### 4.3 `coordinates.rs` — GeoCoordinates
+### 4.2 Personalization Data Struct
 
 ```rust
 /// Geographic coordinates of the user's current location.
@@ -125,11 +100,7 @@ pub struct GeoCoordinates {
     /// Human-readable location name (reverse-geocoded or configured).
     pub location_name: stabby::option::Option<stabby::string::String>,
 }
-```
 
-### 4.4 `temperature_unit.rs` — TemperatureUnit
-
-```rust
 /// The user's preferred temperature unit.
 #[repr(u8)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -141,11 +112,7 @@ pub enum TemperatureUnit {
     /// Degrees Fahrenheit.
     Fahrenheit,
 }
-```
 
-### 4.5 `wind_speed_unit.rs` — WindSpeedUnit
-
-```rust
 /// The user's preferred wind speed unit.
 #[repr(u8)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -159,11 +126,7 @@ pub enum WindSpeedUnit {
     /// Meters per second.
     Ms,
 }
-```
 
-### 4.6 `time_format.rs` — TimeFormat
-
-```rust
 /// The user's preferred time format.
 #[repr(u8)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -175,11 +138,7 @@ pub enum TimeFormat {
     /// 12-hour format with AM/PM (e.g. 2:30 PM).
     Hour12,
 }
-```
 
-### 4.7 `date_format.rs` — DateFormat
-
-```rust
 /// The user's preferred date format.
 #[repr(u8)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -193,11 +152,7 @@ pub enum DateFormat {
     /// Year-Month-Day (e.g. 2026-07-26) — ISO 8601.
     Ymd,
 }
-```
 
-### 4.8 `first_day_of_week.rs` — FirstDayOfWeek
-
-```rust
 /// The user's preferred first day of the week.
 #[repr(u8)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -209,11 +164,7 @@ pub enum FirstDayOfWeek {
     /// Sunday as the first day (common in the US).
     Sunday,
 }
-```
 
-### 4.9 `measurement_system.rs` — MeasurementSystem
-
-```rust
 /// The user's preferred measurement system.
 #[repr(u8)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -225,11 +176,7 @@ pub enum MeasurementSystem {
     /// Imperial system.
     Imperial,
 }
-```
 
-### 4.10 `color_scheme.rs` — ColorScheme
-
-```rust
 /// The user's preferred color scheme.
 #[repr(u8)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -243,19 +190,6 @@ pub enum ColorScheme {
     /// Dark mode.
     Dark,
 }
-```
-
-### 4.11 `status_message.rs` — PersonalizationStatusMessage
-
-```rust
-use crate::coordinates::GeoCoordinates;
-use crate::color_scheme::ColorScheme;
-use crate::date_format::DateFormat;
-use crate::first_day_of_week::FirstDayOfWeek;
-use crate::measurement_system::MeasurementSystem;
-use crate::temperature_unit::TemperatureUnit;
-use crate::time_format::TimeFormat;
-use crate::wind_speed_unit::WindSpeedUnit;
 
 /// Complete personalization profile broadcast by the service.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -288,17 +222,13 @@ pub struct PersonalizationStatusMessage {
 }
 ```
 
-### 4.12 `command_message.rs` — PersonalizationCommandMessage
-
-The command message supports both refresh requests and **runtime overrides** for location and locale. This allows consumers (e.g. Voice Assistant, Clock Widget)
-to update the user's personalization data at runtime without restarting the service or editing config files.
+### 4.3 Command Message (Consumer -> Service)
 
 ```rust
-use crate::coordinates::GeoCoordinates;
-
 /// Actions the personalization service can perform on request.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[repr(C, u8)]
 #[stabby::stabby]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PersonalizationCommandAction {
     /// Force an immediate refresh of all personalization data from system APIs.
     /// Clears all runtime overrides and re-queries system APIs.
@@ -307,59 +237,28 @@ pub enum PersonalizationCommandAction {
     /// The service stores the new coordinates and broadcasts an updated status.
     /// This overrides any config or auto-detected value until a `Refresh` is triggered
     /// or the service is restarted.
-    UpdateLocation {
-        /// New geographic coordinates.
-        coordinates: GeoCoordinates,
-    },
+    UpdateLocation(GeoCoordinates),
     /// Update the user's locale at runtime.
     /// The service stores the new locale, re-derives unit/format preferences,
     /// and broadcasts an updated status.
     /// This overrides any config or auto-detected value until a `Refresh` is triggered
     /// or the service is restarted.
-    UpdateLocale {
-        /// New locale string (e.g. "de-DE", "en-US").
-        locale: stabby::string::String,
-    },
+    UpdateLocale(stabby::string::String),
+    /// Request an immediate status re-broadcast without clearing runtime overrides.
+    /// Used by widgets that are lazily loaded after the initial status broadcast.
+    RequestStatus,
 }
 
 /// Command message sent by consumers to the personalization service.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[stabby::stabby]
+#[stabby::stabby(no_opt)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersonalizationCommandMessage {
     /// The action to execute.
     pub action: PersonalizationCommandAction,
 }
 ```
 
-### 4.13 `lib.rs` — Module Declarations & Re-exports
-
-```rust
-pub mod command_message;
-pub mod color_scheme;
-pub mod coordinates;
-pub mod date_format;
-pub mod first_day_of_week;
-pub mod measurement_system;
-pub mod status_message;
-pub mod temperature_unit;
-pub mod time_format;
-pub mod wind_speed_unit;
-
-pub use command_message::PersonalizationCommandAction;
-pub use command_message::PersonalizationCommandMessage;
-pub use color_scheme::ColorScheme;
-pub use coordinates::GeoCoordinates;
-pub use date_format::DateFormat;
-pub use first_day_of_week::FirstDayOfWeek;
-pub use measurement_system::MeasurementSystem;
-pub use status_message::PersonalizationStatusMessage;
-pub use temperature_unit::TemperatureUnit;
-pub use time_format::TimeFormat;
-pub use wind_speed_unit::WindSpeedUnit;
-
-pub const TOPIC_COMMAND: &str = "service.personalization.command";
-pub const TOPIC_STATUS: &str = "service.personalization.status";
-```
+The `PersonalizationCommandMessage` provides convenience constructors: `refresh()`, `update_location(coords)`, `update_locale(locale)`, `request_status()`.
 
 ---
 
@@ -368,65 +267,82 @@ pub const TOPIC_STATUS: &str = "service.personalization.status";
 ### 5.1 Configuration
 
 ```rust
-/// Configuration for the personalization service.
-#[derive(Clone, Debug, Deserialize)]
+/// Configuration overrides for personalization data.
+///
+/// All fields are optional. When present, they override the auto-detected
+/// system values. Runtime overrides (via command messages) take priority
+/// over these config values.
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct PersonalizationServiceConfig {
-    /// Override the automatically detected latitude.
-    pub override_latitude: Option<f64>,
-    /// Override the automatically detected longitude.
-    pub override_longitude: Option<f64>,
-    /// Override the automatically detected timezone (IANA identifier).
-    pub override_timezone: Option<String>,
-    /// Override the automatically detected locale (e.g. "de-DE").
-    pub override_locale: Option<String>,
-    /// Override the location name (human-readable).
-    pub override_location_name: Option<String>,
-    /// Override the temperature unit.
-    pub override_temperature_unit: Option<TemperatureUnit>,
-    /// Override the wind speed unit.
-    pub override_wind_speed_unit: Option<WindSpeedUnit>,
-    /// Override the time format.
-    pub override_time_format: Option<TimeFormat>,
-    /// Override the date format.
-    pub override_date_format: Option<DateFormat>,
-    /// Override the first day of week.
-    pub override_first_day_of_week: Option<FirstDayOfWeek>,
-    /// Override the measurement system.
-    pub override_measurement_system: Option<MeasurementSystem>,
-    /// Override the color scheme.
-    pub override_color_scheme: Option<ColorScheme>,
-    /// Location accuracy for XDG Desktop Portal (e.g. "Street", "City").
-    /// Defaults to "City" to minimize privacy impact.
-    #[serde(default = "default_location_accuracy")]
-    pub location_accuracy: String,
-    /// Update interval for location queries in seconds.
-    /// Timezone and locale are checked at start and on each refresh;
-    /// location is polled at this interval.
-    #[serde(default = "default_update_interval_seconds")]
-    pub update_interval_seconds: u64,
-    /// Whether to enable XDG Desktop Portal location queries.
-    /// If false, only timezone and locale are queried; coordinates remain None.
+    /// Fixed latitude override.
+    #[serde(default)]
+    pub latitude: Option<f64>,
+    /// Fixed longitude override.
+    #[serde(default)]
+    pub longitude: Option<f64>,
+    /// Fixed location name override.
+    #[serde(default)]
+    pub location_name: Option<String>,
+    /// Fixed timezone override (IANA identifier, e.g. "Europe/Berlin").
+    #[serde(default)]
+    pub timezone: Option<String>,
+    /// Fixed locale override (e.g. "de-DE", "en-US").
+    #[serde(default)]
+    pub locale: Option<String>,
+    /// Fixed temperature unit override (parsed via FromStr).
+    #[serde(default)]
+    pub temperature_unit: Option<String>,
+    /// Fixed wind speed unit override (parsed via FromStr).
+    #[serde(default)]
+    pub wind_speed_unit: Option<String>,
+    /// Fixed time format override (parsed via FromStr).
+    #[serde(default)]
+    pub time_format: Option<String>,
+    /// Fixed date format override (parsed via FromStr).
+    #[serde(default)]
+    pub date_format: Option<String>,
+    /// Fixed first day of week override (parsed via FromStr).
+    #[serde(default)]
+    pub first_day_of_week: Option<String>,
+    /// Fixed measurement system override (parsed via FromStr).
+    #[serde(default)]
+    pub measurement_system: Option<String>,
+    /// Fixed color scheme override (parsed via FromStr).
+    #[serde(default)]
+    pub color_scheme: Option<String>,
+    /// Whether to enable location detection via XDG Desktop Portal.
+    /// Currently not yet wired up (marked `#[allow(dead_code)]`).
     #[serde(default = "default_enable_location")]
     pub enable_location: bool,
+    /// Update interval in seconds for periodic system API re-queries.
+    #[serde(default = "default_update_interval_seconds")]
+    pub update_interval_seconds: u64,
 }
 ```
+
+**Note:** Unit/format override fields are stored as `Option<String>` and parsed via `FromStr` at query time, not as strongly-typed enums. This allows invalid
+values to gracefully fall back to locale-derived defaults.
 
 ### 5.2 Data Sources & Priority
 
 The service queries data in the following priority order:
 
-1. **Config Override** — If a config field is set, it takes absolute precedence.
-2. **System API** — Automatic detection via the appropriate library.
-3. **Fallback Default** — Sensible defaults if detection fails.
+1. **Runtime Override** — Set via command message (`UpdateLocation`, `UpdateLocale`). Takes absolute precedence.
+2. **Config Override** — If a config field is set, it takes precedence over auto-detection.
+3. **System API** — Automatic detection via the appropriate library.
+4. **Fallback Default** — Sensible defaults if detection fails.
 
-| Data          | Library              | Sync/Async | Fallback     |
-|---------------|----------------------|------------|--------------|
-| Timezone      | `iana_time_zone`     | Sync       | `UTC`        |
-| Locale        | `sys_locale`         | Sync       | `en-US`      |
-| Coordinates   | `ashpd` (XDG Portal) | Async      | `None`       |
-| Location Name | Reverse geocoding    | Async      | `None`       |
-| Units/Formats | Derived from locale  | Sync       | Metric / 24h |
-| Color Scheme  | `ashpd` (Settings)   | Async      | `System`     |
+| Data          | Library                    | Sync/Async | Fallback     | Status                                      |
+|---------------|----------------------------|------------|--------------|---------------------------------------------|
+| Timezone      | `iana_time_zone`           | Sync       | `UTC`        | ✅ Implemented                              |
+| Locale        | `sys_locale`               | Sync       | `en-US`      | ✅ Implemented                              |
+| Coordinates   | `ashpd` (XDG Portal)       | Async      | `None`       | ✅ Implemented (gated by `enable_location`) |
+| Location Name | Reverse geocoding (Photon) | Async      | `None`       | ✅ Implemented                              |
+| Units/Formats | Derived from locale        | Sync       | Metric / 24h | ✅ Implemented                              |
+| Color Scheme  | `ashpd` (Settings)         | Async      | `System`     | ✅ Implemented                              |
+
+**Implemented:** `ashpd` integration for XDG Desktop Portal location queries (gated by `enable_location` config field), color-scheme detection via the Settings
+portal, and reverse geocoding via the Photon API (photon.komoot.io) for automatic location name resolution.
 
 ### 5.3 Service Implementation
 
@@ -448,53 +364,26 @@ The service implements the standard service plugin traits:
    a. Query timezone via iana_time_zone::get_timezone() (sync)
    b. Query locale via sys_locale::get_locale() (sync)
    c. Derive units/formats from locale
-   d. If enable_location: start async location session via ashpd
-   e. Broadcast initial PersonalizationStatusMessage
+   d. If enable_location: query coordinates via ashpd (one-shot session)
+   e. If coordinates resolved: reverse geocode via Photon API for location_name
+   f. Broadcast initial PersonalizationStatusMessage
 
 2. Periodic (every update_interval_seconds):
    a. Re-query timezone and locale (detect system changes)
-   b. If enable_location: re-query coordinates via ashpd
-   c. If no runtime override is active for a field, apply the new value
-   d. If any value changed: broadcast updated PersonalizationStatusMessage
+   b. Re-query color scheme via ashpd Settings portal
+   c. If enable_location and location_update_interval_seconds elapsed:
+      - Re-query coordinates via ashpd
+      - If change > location_change_threshold: update cached coords + reverse geocode
+      - If change <= threshold: keep cached coords (skip reverse geocoding)
+   d. Broadcast updated PersonalizationStatusMessage
 
 3. On Refresh command:
-   a. Clear all runtime overrides
-   b. Immediately re-query all system APIs
+   a. Clear runtime overrides + cached portal coords
+   b. Immediately re-query all sources (including location)
    c. Broadcast updated PersonalizationStatusMessage
-
-4. On UpdateLocation command:
-   a. Store runtime override for coordinates
-   b. Broadcast updated PersonalizationStatusMessage with new coordinates
-   c. Runtime override persists until a Refresh is received or service restarts
-
-5. On UpdateLocale command:
-   a. Store runtime override for locale
-   b. Re-derive unit/format preferences from new locale
-   c. Broadcast updated PersonalizationStatusMessage with new locale and derived values
-   d. Runtime override persists until a Refresh is received or service restarts
 ```
 
-### 5.5 Runtime Override Semantics
-
-Runtime overrides allow consumers to change personalization data dynamically. The override priority is:
-
-1. **Runtime Override** — Set via `UpdateLocation` or `UpdateLocale` command. Highest priority.
-2. **Config Override** — Set in `config.toml`. Used if no runtime override is active.
-3. **System API** — Auto-detected value. Used if no override is active.
-4. **Fallback Default** — Used if all else fails.
-
-A `Refresh` command clears all runtime overrides and re-queries system APIs. This allows consumers to temporarily change the location (e.g. for a travel
-scenario) and later restore automatic detection.
-
-**Use Cases:**
-
-- **Voice Assistant:** User says "I'm in Bregenz now" → Voice Assistant sends `UpdateLocation` with Bregenz coordinates → Weather Service receives updated
-  status and fetches weather for Bregenz.
-- **Clock Widget:** User manually switches locale → Clock sends `UpdateLocale` → Weekday language changes immediately.
-- **Travel Mode:** User travels to a different timezone → Voice Assistant detects timezone change via location query and sends `UpdateLocation` → Clock adjusts
-  automatically.
-
-### 5.6 MCP Integration
+### 5.5 MCP Integration
 
 The service registers the following MCP capabilities:
 
@@ -506,15 +395,15 @@ The service registers the following MCP capabilities:
 
 **Tools:**
 
-| Tool Name                 | Description                                                                  |
-|---------------------------|------------------------------------------------------------------------------|
-| `get_current_location`    | Returns latitude, longitude, and location name.                              |
-| `get_timezone`            | Returns the current IANA timezone identifier.                                |
-| `get_locale`              | Returns the current system locale string.                                    |
-| `get_personalization`     | Returns the full personalization profile.                                    |
-| `set_current_location`    | Sets a runtime override for the user's location. Accepts latitude/longitude. |
-| `set_locale`              | Sets a runtime override for the user's locale. Accepts a locale string.      |
-| `refresh_personalization` | Clears all runtime overrides and re-queries system APIs.                     |
+| Tool Name                 | Description                                                                             |
+|---------------------------|-----------------------------------------------------------------------------------------|
+| `get_current_location`    | Returns latitude, longitude, and location name.                                         |
+| `get_timezone`            | Returns the current IANA timezone identifier.                                           |
+| `get_locale`              | Returns the current system locale string.                                               |
+| `get_personalization`     | Returns the full personalization profile as JSON.                                       |
+| `set_current_location`    | Sets a runtime override for the user's location. Persists until a refresh is triggered. |
+| `set_locale`              | Sets a runtime override for the user's locale. Persists until a refresh is triggered.   |
+| `refresh_personalization` | Clears all runtime overrides and re-queries system APIs.                                |
 
 ---
 
@@ -522,10 +411,12 @@ The service registers the following MCP capabilities:
 
 ```toml
 [dependencies]
-ashpd = "0.9"
+ashpd = { version = "0.13", default-features = false, features = ["location", "settings", "tokio"] }
+futures-util = "0.3"
 iana-time-zone = "0.1"
 sys-locale = "0.3"
 stabby = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
@@ -543,132 +434,135 @@ smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 
 ## 7. Phase Implementation Plan
 
-### Phase 1: Model Crate (`model/personalization`)
+### Phase 1: Model Crate (`model/personalization`) — ✅ Completed
 
 **Goal:** Create the shared data structures and message formats.
 
-**Tasks:**
+**Implemented:**
 
-- Create `model/personalization/Cargo.toml` with `stabby`, `serde`, `serde_json` dependencies.
-- Create `model/personalization/src/lib.rs` with:
+- `model/personalization/Cargo.toml` with `stabby`, `serde`, `serde_json` dependencies.
+- `model/personalization/src/lib.rs` with:
     - Topic constants (`TOPIC_COMMAND`, `TOPIC_STATUS`).
     - `GeoCoordinates` struct.
     - Enum types: `TemperatureUnit`, `WindSpeedUnit`, `TimeFormat`, `DateFormat`, `FirstDayOfWeek`, `MeasurementSystem`, `ColorScheme`.
     - `PersonalizationStatusMessage` struct.
-    - `PersonalizationCommandMessage` and `PersonalizationCommandAction` structs.
-    - All FFI-relevant types annotated with `#[stabby::stabby]`.
-    - `impl_json_convertible!` macro for `PersonalizationStatusMessage` and `PersonalizationCommandMessage`.
-- Add `model/personalization` to workspace `Cargo.toml`.
-- Add `register_json_converters()` function.
+    - `PersonalizationCommandMessage` and `PersonalizationCommandAction` (with `Refresh`, `UpdateLocation`, `UpdateLocale`, `RequestStatus`).
+        - All FFI-relevant types annotated with `#[stabby::stabby]`.
+        - `impl_json_convertible!` macro for `PersonalizationStatusMessage` and `PersonalizationCommandMessage`.
+    - `register_json_converters()` function.
+- Each type in its own file under `model/personalization/src/messages/`.
+- MCP tool/resource enums in `model/personalization/src/mcp/`.
+- Added to workspace `Cargo.toml`.
 
 **Verification:** `cargo build -p smearor-model-personalization` succeeds.
 
 ---
 
-### Phase 2: Service Crate (`services/personalization`)
+### Phase 2: Service Crate (`services/personalization`) — ✅ Completed
 
 **Goal:** Implement the personalization service with system API queries.
 
-**Tasks:**
+**Implemented:**
 
-- Create `services/personalization/Cargo.toml` with dependencies (see Section 6).
-- Create `services/personalization/src/config.rs`:
-    - `PersonalizationServiceConfig` struct with override fields and defaults.
-- Create `services/personalization/src/service.rs`:
-    - `PersonalizationService` struct with `meta`, `core_context`, `config`, `latest_state`.
-    - `new()` constructor: parse config, spawn update loop thread.
-    - `register_mcp_capabilities()`: register resources and tools.
-    - `start()`: initial data query and broadcast.
-    - Update loop: periodic re-query, change detection, broadcast on change.
-    - `MessageHandler` impls for command, tool, and resource messages.
-    - `ServicePlugin` impl with `on_message` routing.
-- Create `services/personalization/src/lib.rs`:
-    - Module declarations.
-    - `service_plugin!(PersonalizationService);`
-- Add `services/personalization` to workspace `Cargo.toml`.
+- `services/personalization/Cargo.toml` with dependencies.
+- `services/personalization/src/config.rs` — `PersonalizationServiceConfig` with override fields and defaults.
+- `services/personalization/src/service.rs`:
+    - `PersonalizationService` struct with `meta`, `core_context`, `config`, `command_sender`, `latest_state`.
+        - `new()` constructor: parse config, spawn update loop thread.
+    - `register_mcp_capabilities()`: registers 1 resource + 7 tools.
+    - Update loop via `tokio::select!` on interval tick + command channel.
+    - `build_status()`: queries timezone/locale, derives units from locale, applies config + runtime overrides.
+        - `MessageHandler` impls for command, tool, and resource messages.
+        - `ServicePlugin` impl with `on_message` routing.
+- `services/personalization/src/command.rs` — Internal `PersonalizationCommand` enum for async loop.
+- `services/personalization/src/state.rs` — `LatestPersonalizationState` shared between loop and MCP handlers.
+- `services/personalization/src/mcp/` — MCP capabilities registration and handlers (tools, resources).
+- `services/personalization/src/lib.rs` — `service_plugin!(PersonalizationService);`
+- Added to workspace `Cargo.toml`.
 
-**Data Query Logic:**
+**Data Query Logic (implemented):**
 
 - Timezone: `iana_time_zone::get_timezone()` → `Ok("Europe/Berlin")` / `Err` → fallback `"UTC"`.
 - Locale: `sys_locale::get_locale()` → `Some("de-DE")` / `None` → fallback `"en-US"`.
-- Coordinates: `ashpd::desktop::location::LocationProxy::new().await` → create session → `locate()` → extract lat/lon.
-- Derived values: locale prefix determines defaults (e.g. `de-*` → Celsius, 24h, DMY, Metric; `en-US` → Fahrenheit, 12h, MDY, Imperial).
+- Derived values: `Locale::from_str()` + `FromLocale` trait determines defaults (e.g. `de-*` → Celsius, 24h, DMY, Metric; `en-US` → Fahrenheit, 12h, MDY,
+  Imperial).
+- Unit/format overrides parsed via `FromStr` on each enum type.
+
+**ashpd integration (implemented):**
+
+- `services/personalization/src/portal.rs` — Async helpers for XDG Desktop Portal queries:
+    - `query_location()`: Creates a one-shot `LocationProxy` session with street-level accuracy, waits for the first location update, then closes the session.
+      Returns `Option<GeoCoordinates>`.
+    - `query_color_scheme()`: Queries the system's preferred color scheme via `Settings::color_scheme()`. Maps `NoPreference` → `System`, `PreferDark` → `Dark`,
+      `PreferLight` → `Light`.
+    - `reverse_geocode()`: Reverse geocodes coordinates to a location name via the Photon API (photon.komoot.io/reverse). Preference order: city > name >
+      street + housenumber > state > country.
+- `build_status()` is now `async` and calls `portal::query_location()` when `enable_location` is true and no runtime/config override exists.
+- After coordinates are resolved, `portal::reverse_geocode()` is called if no `location_name` is set.
+- Color scheme queries `portal::query_color_scheme()` when no config override is set.
+- `enable_location` config field is now wired up (removed `#[allow(dead_code)]`).
+
+**Not yet implemented:**
+
+- None — all planned features are implemented.
 
 **Verification:** `cargo build -p smearor-personalization-service` succeeds. Service loads and broadcasts initial status.
 
 ---
 
-### Phase 3: Clock Widget Integration
+### Phase 3: Clock Widget Integration — ✅ Completed
 
 **Goal:** Clock widget consumes `PersonalizationStatusMessage` for timezone and locale.
 
-**Tasks:**
+**Implemented:**
 
-- Add `smearor-model-personalization` dependency to `plugins/clock/Cargo.toml`.
-- Update `plugins/clock/src/widget.rs`:
-    - Add `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl.
-    - Store latest personalization status in `Arc<RwLock<Option<PersonalizationStatusMessage>>>`.
-    - On status update: override `config.timezone` with personalization timezone.
-    - On status update: use `locale` to determine weekday language (German for `de-*`, English for `en-*`, etc.).
-- Update `plugins/clock/src/localized_weekday.rs`:
-    - Add `from_locale(locale: &str) -> Self` method to `LocalizedWeekday`.
-    - Map locale prefixes to supported languages.
-    - Add additional languages as needed (e.g. French, Spanish, Italian).
-- Update `plugins/clock/src/clock.rs`:
-    - `get_timezone()` uses personalization timezone if available, falls back to config timezone.
-    - `get_weekday_localized()` uses locale from personalization status.
-- Update `plugins/clock/src/config.rs`:
-    - `timezone` field becomes a fallback/override (still respected if personalization service is not running).
+- `smearor-model-personalization` dependency added to `plugins/clock/Cargo.toml`.
+- `plugins/clock/src/widget.rs` — `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl, stores personalization status, overrides timezone and
+  weekday language on update.
+- `plugins/clock/src/atomic.rs` — Atomic widget also handles `PersonalizationStatusMessage`.
+- `plugins/clock/src/clock.rs` — Uses personalization timezone if available, falls back to config.
+- Config `timezone` field remains as fallback when personalization service is not running.
 
 **Behavior:**
 
 - If personalization service is running: Clock uses detected timezone and locale.
-- If personalization service is not running: Clock falls back to `config.timezone` and German weekdays (current behavior).
+- If personalization service is not running: Clock falls back to `config.timezone` and German weekdays.
 
 **Verification:** Clock displays correct time for detected timezone. Weekday language matches system locale.
 
 ---
 
-### Phase 4: Weather Service Integration
+### Phase 4: Weather Service Integration — ✅ Completed
 
 **Goal:** Weather service consumes `PersonalizationStatusMessage` for coordinates.
 
-**Tasks:**
+**Implemented:**
 
-- Add `smearor-model-personalization` dependency to `services/weather/Cargo.toml`.
-- Update `services/weather/src/service.rs`:
-    - Add `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl.
-    - Store latest personalization status in `Arc<RwLock<Option<PersonalizationStatusMessage>>>`.
-    - In `run_update_loop`: use personalization coordinates if available, fall back to config coordinates.
-    - On personalization update: if coordinates changed, trigger immediate weather refresh.
-- Update `services/weather/src/config.rs`:
-    - `latitude`, `longitude`, `location_name`, `timezone` become fallback values.
-    - Add `use_personalization` flag (default: `true`) to allow disabling auto-detection.
+- `smearor-model-personalization` dependency added to `services/weather/Cargo.toml`.
+- `services/weather/src/service.rs` — `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl.
+- `services/weather/src/personalization_coordinates.rs` — `PersonalizationCoordinates` struct for storing coords.
+- On personalization update: if coordinates changed, triggers immediate weather refresh via `WeatherCommandAction::Refresh`.
+- Weather widget (`plugins/weather`) also handles `PersonalizationStatusMessage` for locale-aware display.
 
 **Behavior:**
 
-- If personalization service is running and `use_personalization = true`: Weather uses detected coordinates.
-- If personalization service is not running: Weather falls back to config coordinates (current behavior).
-- Weather response data uses `temperature_unit` and `wind_speed_unit` from personalization for display formatting.
+- If personalization service is running: Weather uses detected coordinates.
+- If personalization service is not running: Weather falls back to config coordinates.
 
 **Verification:** Weather widget shows data for the user's actual location. Temperature and wind speed use preferred units.
 
 ---
 
-### Phase 5: Voice Assistant Integration
+### Phase 5: Voice Assistant Integration — ✅ Completed
 
 **Goal:** Voice Assistant service consumes `PersonalizationStatusMessage` for locale-aware responses.
 
-**Tasks:**
+**Implemented:**
 
-- Add `smearor-model-personalization` dependency to `services/voice_assistant/Cargo.toml`.
-- Update `services/voice_assistant/src/service.rs` (or relevant module):
-    - Add `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl.
-    - Store latest personalization status.
-    - Inject locale and timezone into LLM system prompts.
-    - Use locale to select response language (e.g. `de-DE` → German responses, `en-US` → English responses).
-    - Use timezone for time-related queries (e.g. "What time is it?").
-    - Use coordinates for location-aware queries (e.g. "What's the weather?") by passing them to the weather service tools.
+- `smearor-model-personalization` dependency added to `services/voice_assistant/Cargo.toml`.
+- `services/voice_assistant/src/service.rs` — `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl, stores personalization status.
+- `services/voice_assistant/src/tool_catalog.rs` — Personalization data used in tool catalog.
+- Voice Assistant widget (`plugins/voice_assistant`) also handles `PersonalizationStatusMessage`.
 
 **Behavior:**
 
@@ -680,361 +574,75 @@ smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 
 ---
 
-## 8. Widget Localization Phases
+## 8. Consumer Widget Integration Status
 
-The following sections describe localization plans for each widget that consumes `PersonalizationStatusMessage`. Each phase follows the same pattern established
-by the Clock and Weather widget integrations:
+The following widgets have been integrated with personalization data:
 
-1. **Dependency & Infrastructure** — Add `smearor-personalization-model` dependency, implement `PersonalizationOverride` struct, `MessageHandler` impl,
-   `AcceptTopic` extension.
-2. **Unit/Format Conversion** — Use personalization fields (`MeasurementSystem`, `TimeFormat`, etc.) to convert raw API values into display strings.
-3. **Label Translation** — Replace hardcoded English strings with locale-aware labels via a `localized_label()` method on a label enum.
-4. **Fallback Behavior** — Without personalization service, fall back to current defaults.
+### 8.1 Sysinfo Widget — ✅ Integrated
 
-### Rendering Scope
+- All sub-widgets (CPU, Memory, Disks, Network, Temperature, Uptime) handle `PersonalizationStatusMessage`.
+- **Locale:** Used for label localization and unit formatting.
+- **Measurement System:** Switches between metric and imperial units for disk/network speeds.
+- **Temperature Unit:** Celsius vs Fahrenheit for temperature widget.
 
-Localization must be applied across **all rendering surfaces** of each widget, using the Weather widget as the reference implementation:
+### 8.2 Notifications Widget — ✅ Integrated
 
-- **Main Widget** (`widget.rs`) — The primary widget implementation. Stores `PersonalizationOverride` in `Rc<RefCell<PersonalizationOverride>>`, uses it in
-  `render_view()` for unit conversion and label translation.
-- **Atomic Widgets** (`atomic.rs`) — Compact variants shown in bars and panels. Each atomic widget stores its own `PersonalizationOverride` and applies it in
-  `render_atomic_view()`. Uses `extra_message_types` in `atomic_widget_impl!` macro to subscribe to `PersonalizationStatusMessage`.
-- **Graphic Renderer** (`graphic.rs`) — Renders pixel-based graphics via `GraphicRenderer` trait. Reads `PersonalizationOverride` from the widget's
-  `personalization` field and passes it to `render_view()` to ensure icon selection and text labels respect locale and units.
-- **HTML Renderer** (`html.rs`) — Renders HTML output via `WebRenderer` trait. Reads `PersonalizationOverride` from the widget's `personalization` field and
-  passes it to `render_view()` for consistent locale-aware output.
+- Both main widget and atomic widget handle `PersonalizationStatusMessage`.
+- **Locale:** Used for timestamp formatting and label localization.
 
-### Transient Area Pattern
+### 8.3 Power Widget — ✅ Integrated
 
-Atomic widgets often live in **transient areas** (e.g. dropdown panels, overlays) that are created on-demand and may not exist yet when the personalization
-service broadcasts its initial status. Therefore, each atomic widget must:
+- Both main widget and atomic widget handle `PersonalizationStatusMessage`.
+- **Locale:** Used for countdown text localization.
+- **Time Format:** 12h/24h for scheduled action timestamps.
 
-1. **Request personalization status on construction** — Call `request_personalization_status()` in `new()` to broadcast a
-   `PersonalizationCommandMessage::request_status()`, which triggers the personalization service to re-broadcast the current status.
-2. **Handle `PersonalizationStatusMessage` in `on_message`** — Store the received data in `Rc<RefCell<PersonalizationOverride>>` and trigger a UI update.
-3. **Fall back to defaults** — If no personalization data arrives (service not running), use `PersonalizationOverride::default()` which provides sensible
-   defaults (English, metric, 24h, etc.).
+### 8.4 MPRIS Widget — ✅ Integrated
 
-This pattern is already implemented in the Weather atomic widget (`plugins/weather/src/atomic.rs`) and serves as the template for all other atomic widgets.
+- Both main widget and atomic widget handle `PersonalizationStatusMessage`.
+- **Locale:** Used for progress bar timestamp formatting and fallback string localization.
 
-### 8.1 Button Widget
+### 8.5 Wallpaper Widget — ✅ Integrated
 
-#### Infrastructure
+- Both main widget and atomic widget handle `PersonalizationStatusMessage`.
+- **Locale:** Used for label localization.
+- **Color Scheme:** Automatic light/dark wallpaper selection based on `color_scheme` — now powered by `ashpd` Settings integration.
 
-- **`plugins/button/Cargo.toml`** — Add `smearor-personalization-model` dependency.
-- **`PersonalizationOverride` struct** — Store `time_format`, `date_format`, `locale`.
-- **`MessageHandler<PersonalizationStatusMessage>`** impl.
-- **`AcceptTopic`** — Extend with `TOPIC_PERSONALIZATION_STATUS`.
+### 8.6 Network Widget — ✅ Integrated
 
-#### Format Conversion
+- Both main widget and atomic widget handle `PersonalizationStatusMessage`.
+- **Measurement System:** Bandwidth display in metric or imperial units.
+- **Locale:** Connection status string localization.
 
-**Embedded Timestamps** — `TimeFormat` + `DateFormat` from personalization:
+### 8.7 App Launcher Widget — ✅ Integrated
 
-- If `main_text` or `info_text` contains date/time template variables (e.g. `{time}`, `{date}`), format them according to personalization preferences.
-- `Hour24` + `Dmy` → `DD.MM.YYYY HH:MM`
-- `Hour12` + `Mdy` → `MM/DD/YYYY h:MM AM/PM`
-- Affects: Buttons that display dynamic time/date values.
+- Main widget handles `PersonalizationStatusMessage`.
+- **Locale:** Used for label localization.
 
-#### Fallback
+### 8.8 Audio Widget — ✅ Integrated
 
-Without personalization service → `Hour24`, `Dmy`, current template behavior.
+- Both main widget and atomic widget handle `PersonalizationStatusMessage`.
+- **Locale:** Used for label localization.
 
----
+### 8.9 Weather Widget — ✅ Integrated
 
-### 8.2 Audio Widget
+- Both main widget and atomic widget handle `PersonalizationStatusMessage`.
+- **Locale:** Used for temperature unit and wind speed unit display.
 
-#### Infrastructure
+### 8.10 Voice Assistant Widget — ✅ Integrated
 
-- **`plugins/audio/Cargo.toml`** — Add `smearor-personalization-model` dependency.
-- **`PersonalizationOverride` struct** — Store `locale`.
-- **`MessageHandler<PersonalizationStatusMessage>`** impl.
-- **`AcceptTopic`** — Extend with `TOPIC_PERSONALIZATION_STATUS`.
-- **`on_message`** — Dispatch `PersonalizationStatusMessage`.
+- Both main widget and atomic widget handle `PersonalizationStatusMessage`.
+- **Locale:** Used for response language selection.
 
-#### Label Translation
+### 8.11 Workspace Switcher Widget — ✅ Integrated
 
-| Label Key  | English (en) | German (de)    | French (fr)          | Spanish (es)          | Italian (it)           |
-|------------|--------------|----------------|----------------------|-----------------------|------------------------|
-| Volume     | Volume       | Lautstärke     | Volume               | Volumen               | Volume                 |
-| Muted      | Muted        | Stumm          | Muet                 | Silenciado            | Muto                   |
-| Mute       | Mute         | Stumm          | Muet                 | Silenciar             | Muto                   |
-| VolumeUp   | Volume Up    | Lauter         | Augmenter            | Subir volumen         | Aumenta volume         |
-| VolumeDown | Volume Down  | Leiser         | Diminuer             | Bajar volumen         | Abbassa volume         |
-| NextDevice | Next Device  | Nächstes Gerät | Périphérique suivant | Dispositivo siguiente | Dispositivo successivo |
-| NoDevice   | No device    | Kein Gerät     | Aucun périphérique   | Sin dispositivo       | Nessun dispositivo     |
+- Main widget handles `PersonalizationStatusMessage`.
+- **Locale:** Locale-aware sorting of workspace names (via `sort_workspaces` helper).
 
-#### Fallback
+### 8.12 Button Widget — ✅ Integrated
 
-Without personalization service → English labels.
-
----
-
-### 8.3 MPRIS Widget
-
-#### Infrastructure
-
-- **`plugins/mpris/Cargo.toml`** — Add `smearor-personalization-model` dependency.
-- **`PersonalizationOverride` struct** — Store `time_format`, `locale`.
-- **`MessageHandler<PersonalizationStatusMessage>`** impl.
-- **`AcceptTopic`** — Extend with `TOPIC_PERSONALIZATION_STATUS`.
-- **`on_message`** — Dispatch `PersonalizationStatusMessage`.
-
-#### Format Conversion
-
-**Progress Timestamps** — `TimeFormat` from personalization:
-
-- `Hour24` → `MM:SS` / `HH:MM:SS` for elapsed/total time
-- `Hour12` → `M:SS` / `H:MM:SS` for elapsed/total time (rarely >1h, but supported)
-- Affects: Progress bar elapsed/remaining time display.
-
-#### Label Translation
-
-| Label Key     | English (en)   | German (de)          | French (fr)     | Spanish (es)        | Italian (it)        |
-|---------------|----------------|----------------------|-----------------|---------------------|---------------------|
-| UnknownArtist | Unknown artist | Unbekannter Künstler | Artiste inconnu | Artista desconocido | Artista sconosciuto |
-| UnknownTitle  | Unknown title  | Unbekannter Titel    | Titre inconnu   | Título desconocido  | Titolo sconosciuto  |
-| UnknownAlbum  | Unknown album  | Unbekanntes Album    | Album inconnu   | Álbum desconocido   | Album sconosciuto   |
-| NoPlayer      | No player      | Kein Player          | Aucun lecteur   | Sin reproductor     | Nessun lettore      |
-| Playing       | Playing        | Wiedergabe           | Lecture         | Reproduciendo       | In riproduzione     |
-| Paused        | Paused         | Pausiert             | En pause        | En pausa            | In pausa            |
-| Stopped       | Stopped        | Gestoppt             | Arrêté          | Detenido            | Fermato             |
-
-#### Fallback
-
-Without personalization service → `Hour24`, English fallback strings.
-
----
-
-### 8.4 Power Widget
-
-#### Infrastructure
-
-- **`plugins/power/Cargo.toml`** — Add `smearor-personalization-model` dependency.
-- **`PersonalizationOverride` struct** — Store `time_format`, `locale`.
-- **`MessageHandler<PersonalizationStatusMessage>`** impl.
-- **`AcceptTopic`** — Extend with `TOPIC_PERSONALIZATION_STATUS`.
-
-#### Format Conversion
-
-**Countdown Timer** — `TimeFormat` from personalization:
-
-- `Hour24` → `HH:MM:SS` countdown display
-- `Hour12` → `h:MM:SS AM/PM` countdown display (if countdown spans midnight)
-- Affects: Scheduled shutdown/reboot countdown text.
-
-#### Label Translation
-
-| Label Key    | English (en)          | German (de)            | French (fr)      | Spanish (es)     | Italian (it)        |
-|--------------|-----------------------|------------------------|------------------|------------------|---------------------|
-| Shutdown     | Shutdown              | Herunterfahren         | Arrêter          | Apagar           | Spegni              |
-| Reboot       | Reboot                | Neustart               | Redémarrer       | Reiniciar        | Riavvia             |
-| Suspend      | Suspend               | Ruhezustand            | Mettre en veille | Suspender        | Sospendi            |
-| Hibernate    | Hibernate             | Tiefschlaf             | Hibernation      | Hibernar         | Iberna              |
-| Cancel       | Cancel                | Abbrechen              | Annuler          | Cancelar         | Annulla             |
-| ShuttingDown | Shutting down in {n}s | Herunterfahren in {n}s | Arrêt dans {n}s  | Apagando en {n}s | Spegnimento in {n}s |
-
-#### Fallback
-
-Without personalization service → `Hour24`, English labels.
-
----
-
-### 8.5 Network Widget
-
-#### Infrastructure
-
-- **`plugins/network/Cargo.toml`** — Add `smearor-personalization-model` dependency.
-- **`PersonalizationOverride` struct** — Store `measurement_system`, `locale`.
-- **`MessageHandler<PersonalizationStatusMessage>`** impl.
-- **`AcceptTopic`** — Extend with `TOPIC_PERSONALIZATION_STATUS`.
-
-#### Unit Conversion
-
-**Bandwidth** — `MeasurementSystem` from personalization:
-
-- `Metric` → `{:.1} Mbps`, `{:.1} MB/s` (current behavior)
-- `Imperial` → `{:.1} MiB/s` (binary prefixes for imperial)
-- Affects: Download/upload speed display.
-
-**Signal Strength** — `MeasurementSystem` from personalization:
-
-- `Metric` → `{:.0} dBm` (current behavior, no conversion needed)
-- `Imperial` → `{:.0} dBm` (same — dBm is unit-agnostic)
-
-#### Label Translation
-
-| Label Key    | English (en) | German (de) | French (fr)    | Spanish (es) | Italian (it) |
-|--------------|--------------|-------------|----------------|--------------|--------------|
-| Connected    | Connected    | Verbunden   | Connecté       | Conectado    | Connesso     |
-| Disconnected | Disconnected | Getrennt    | Déconnecté     | Desconectado | Disconnesso  |
-| Signal       | Signal       | Signal      | Signal         | Señal        | Segnale      |
-| Strength     | Strength     | Stärke      | Force          | Intensidad   | Intensità    |
-| Download     | Download     | Download    | Téléchargement | Descarga     | Download     |
-| Upload       | Upload       | Upload      | Envoi          | Subida       | Upload       |
-| WiFi         | WiFi         | WLAN        | WiFi           | WiFi         | WiFi         |
-
-#### Fallback
-
-Without personalization service → `Metric`, English labels.
-
----
-
-### 8.6 Wallpaper Widget
-
-#### Infrastructure
-
-- **`plugins/wallpaper/Cargo.toml`** — Add `smearor-personalization-model` dependency.
-- **`PersonalizationOverride` struct** — Store `color_scheme`, `locale`.
-- **`MessageHandler<PersonalizationStatusMessage>`** impl.
-- **`AcceptTopic`** — Extend with `TOPIC_PERSONALIZATION_STATUS`.
-
-#### Format Conversion
-
-**Color Scheme** — `ColorScheme` from personalization:
-
-- `Light` → Select light wallpaper theme.
-- `Dark` → Select dark wallpaper theme.
-- `System` → React to system dark mode changes (via `gsettings` or D-Bus).
-- Affects: Which wallpaper set is displayed.
-
-#### Label Translation
-
-| Label Key | English (en) | German (de) | French (fr) | Spanish (es) | Italian (it) |
-|-----------|--------------|-------------|-------------|--------------|--------------|
-| Light     | Light        | Hell        | Clair       | Claro        | Chiaro       |
-| Dark      | Dark         | Dunkel      | Sombre      | Oscuro       | Scuro        |
-| System    | System       | System      | Système     | Sistema      | Sistema      |
-| Next      | Next         | Weiter      | Suivant     | Siguiente    | Avanti       |
-| Previous  | Previous     | Zurück      | Précédent   | Anterior     | Indietro     |
-
-#### Fallback
-
-Without personalization service → `System` color scheme, English labels.
-
----
-
-<!-- NOTE: Between 8.6 and 8.7, ICON_RENDERING.md must be finalized first. -->
-
-### 8.7 App Launcher Widget
-
-#### Infrastructure
-
-- **`plugins/app-launcher/Cargo.toml`** — Add `smearor-personalization-model` dependency.
-- **`PersonalizationOverride` struct** — Store `locale`.
-- **`MessageHandler<PersonalizationStatusMessage>`** impl.
-- **`AcceptTopic`** — Extend with `TOPIC_PERSONALIZATION_STATUS`.
-
-#### Label Translation
-
-**Category Names** — `Locale` from personalization:
-
-| Label Key   | English (en)     | German (de)      | French (fr)    | Spanish (es)   | Italian (it)     |
-|-------------|------------------|------------------|----------------|----------------|------------------|
-| Development | Development      | Entwicklung      | Développement  | Desarrollo     | Sviluppo         |
-| Games       | Games            | Spiele           | Jeux           | Juegos         | Giochi           |
-| Graphics    | Graphics         | Grafik           | Graphisme      | Gráficos       | Grafica          |
-| Internet    | Internet         | Internet         | Internet       | Internet       | Internet         |
-| Multimedia  | Multimedia       | Multimedia       | Multimédia     | Multimedia     | Multimedia       |
-| Office      | Office           | Büro             | Bureau         | Oficina        | Ufficio          |
-| Settings    | Settings         | Einstellungen    | Paramètres     | Configuración  | Impostazioni     |
-| System      | System           | System           | Système        | Sistema        | Sistema          |
-| Utilities   | Utilities        | Dienstprogramme  | Utilitaires    | Utilidades     | Utilità          |
-| Search      | Search           | Suchen           | Rechercher     | Buscar         | Cerca            |
-| NoResults   | No results found | Keine Ergebnisse | Aucun résultat | Sin resultados | Nessun risultato |
-
-**Sort Order** — `Locale` from personalization:
-
-- Use locale-aware collation for alphabetical app sorting (e.g. `de` sorts "ä" after "a", `sv` sorts "ä" after "z").
-
-#### Fallback
-
-Without personalization service → English category names, default sort order.
-
----
-
-### 8.8 Sysinfo Widget
-
-#### Infrastructure
-
-- **`plugins/sysinfo/Cargo.toml`** — Add `smearor-personalization-model` dependency.
-- **`PersonalizationOverride` struct** — Store `measurement_system`, `temperature_unit`, `locale`.
-- **`MessageHandler<PersonalizationStatusMessage>`** impl — Receive personalization data, store in `Rc<RefCell<PersonalizationOverride>>`.
-- **`AcceptTopic`** — Extend with `TOPIC_PERSONALIZATION_STATUS`.
-- **`on_message`** — Dispatch `PersonalizationStatusMessage`.
-
-#### Unit Conversion
-
-**Temperature** — `TemperatureUnit` from personalization:
-
-- `Celsius` → `{:.0}°C` (no conversion, API delivers °C)
-- `Fahrenheit` → `{:.0}°F` (conversion: `°F = °C * 9/5 + 32`)
-- Affects: CPU temperature, GPU temperature, disk temperature sensors.
-
-**Disk/Network Speeds** — `MeasurementSystem` from personalization:
-
-- `Metric` → `{:.1} MB/s`, `{:.1} GB` (current behavior)
-- `Imperial` → `{:.1} MiB/s`, `{:.1} GiB` (use binary prefixes)
-- Affects: Disk read/write speeds, network throughput, disk capacity.
-
-#### Label Translation
-
-**`Locale`** from personalization — hardcoded strings replaced with locale-aware labels:
-
-| Label Key   | English (en) | German (de)     | French (fr) | Spanish (es) | Italian (it) |
-|-------------|--------------|-----------------|-------------|--------------|--------------|
-| CPU         | CPU          | Prozessor       | Processeur  | Procesador   | Processore   |
-| Memory      | Memory       | Arbeitsspeicher | Mémoire     | Memoria      | Memoria      |
-| Disk        | Disk         | Festplatte      | Disque      | Disco        | Disco        |
-| Network     | Network      | Netzwerk        | Réseau      | Red          | Rete         |
-| Temperature | Temp         | Temp            | Temp        | Temp         | Temp         |
-| Upload      | Upload       | Upload          | Envoi       | Subida       | Upload       |
-| Download    | Download     | Download        | Réception   | Descarga     | Download     |
-
-- Implementation as `fn localized_label(key: SysinfoLabel, locale: Locale) -> &'static str` via `SysinfoLabel` enum.
-
-#### Fallback
-
-Without personalization service → current defaults: `Celsius`, `Metric`, English labels.
-
----
-
-### 8.9 Notifications Widget
-
-#### Infrastructure
-
-- **`plugins/notifications/Cargo.toml`** — Add `smearor-personalization-model` dependency.
-- **`PersonalizationOverride` struct** — Store `time_format`, `date_format`, `locale`.
-- **`MessageHandler<PersonalizationStatusMessage>`** impl.
-- **`AcceptTopic`** — Extend with `TOPIC_PERSONALIZATION_STATUS`.
-
-#### Format Conversion
-
-**Timestamps** — `TimeFormat` + `DateFormat` from personalization:
-
-- `Hour24` + `Dmy` → `DD.MM.YYYY HH:MM`
-- `Hour12` + `Mdy` → `MM/DD/YYYY h:MM AM/PM`
-- `Hour24` + `Ymd` → `YYYY-MM-DD HH:MM`
-- Affects: Notification timestamps in list view.
-
-**Relative Time** — `Locale` from personalization:
-
-- `en` → "5 minutes ago", "just now", "1 hour ago"
-- `de` → "vor 5 Minuten", "gerade eben", "vor 1 Stunde"
-- `fr` → "il y a 5 minutes", "à l'instant", "il y a 1 heure"
-- `es` → "hace 5 minutos", "ahora mismo", "hace 1 hora"
-- `it` → "5 minuti fa", "adesso", "1 ora fa"
-
-#### Label Translation
-
-| Label Key       | English (en)     | German (de)              | French (fr)         | Spanish (es)       | Italian (it)     |
-|-----------------|------------------|--------------------------|---------------------|--------------------|------------------|
-| Clear           | Clear            | Leeren                   | Effacer             | Borrar             | Cancella         |
-| NoNotifications | No notifications | Keine Benachrichtigungen | Aucune notification | Sin notificaciones | Nessuna notifica |
-| Notifications   | Notifications    | Benachrichtigungen       | Notifications       | Notificaciones     | Notifiche        |
-
-#### Fallback
-
-Without personalization service → `Hour24`, `Dmy`, English relative time strings.
+- Main widget handles `PersonalizationStatusMessage`.
+- **Time Format / Date Format:** Locale-aware formatting for dynamic label values.
+- **Locale:** Available for label localization.
 
 ---
 
@@ -1046,20 +654,26 @@ type = "personalization"
 id = "personalization"
 display_name = "Personalization"
 
-[services.config]
+[personalization]
 # Automatic detection (no overrides needed for most users)
-enable_location = true
-location_accuracy = "City"
+enable_location = false  # Set to true to enable XDG Desktop Portal location queries
 update_interval_seconds = 300
+location_update_interval_seconds = 1800  # Re-query location every 30 minutes (min 300)
+location_change_threshold = 0.01  # Skip update if coords change < ~1.1 km
 
 # Optional overrides (uncomment to pin specific values)
-# override_latitude = 47.5031
-# override_longitude = 9.7471
-# override_location_name = "Bregenz"
-# override_timezone = "Europe/Vienna"
-# override_locale = "de-DE"
-# override_temperature_unit = "celsius"
-# override_time_format = "24h"
+# latitude = 47.5031
+# longitude = 9.7471
+# location_name = "Bregenz"
+# timezone = "Europe/Vienna"
+# locale = "de-DE"
+# temperature_unit = "celsius"
+# time_format = "24h"
+# date_format = "dmy"
+# first_day_of_week = "monday"
+# measurement_system = "metric"
+# color_scheme = "system"
+# wind_speed_unit = "kmh"
 ```
 
 ---
@@ -1067,10 +681,12 @@ update_interval_seconds = 300
 ## 10. Advantages of This Design
 
 - **Single Source of Truth:** All personalization data is managed in one service, eliminating redundant configuration.
-- **Automatic Adaptation:** The system detects location, timezone, and language automatically. Users do not need to configure each plugin separately.
+- **Automatic Adaptation:** The system detects timezone and language automatically. Users do not need to configure each plugin separately.
 - **Graceful Degradation:** If the personalization service is not running, each consumer falls back to its own config values. No hard dependency.
-- **Privacy-Conscious:** Location queries use XDG Desktop Portal, which requires user consent. Location can be disabled entirely via config.
-- **MCP-Integrated:** AI clients can query personalization data to provide locale-aware responses without hardcoded assumptions.
+- **Privacy-Conscious:** Location queries use XDG Desktop Portal (requires user consent). Location can be disabled entirely via config
+  (`enable_location = false`).
+- **MCP-Integrated:** AI clients can query and override personalization data via 7 MCP tools and 1 resource.
 - **Extensible:** New personalization fields can be added to `PersonalizationStatusMessage` without breaking existing consumers (all fields are `Option` or have
   defaults).
 - **ABI-Stable:** All FFI-relevant types use `#[stabby::stabby]`, ensuring stable cross-plugin communication.
+
