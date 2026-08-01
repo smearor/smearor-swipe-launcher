@@ -376,7 +376,68 @@ The web rendering functions check `icon_config.icon_color` and, if set and no se
 
 ---
 
-## 7. File Changes Summary
+## 7. Implementation Status
+
+### Phase 1: Core Infrastructure — ✅ Done
+
+- `Color` struct with `a` (alpha) field: `plugin-api/src/widget/icon.rs`
+- `ColorParseError` + `FromStr` for `Color` (`#rgb`, `#rrggbb`, `#rrggbbaa`): `plugin-api/src/widget/icon.rs`
+- `to_hex_string()` + `to_rgba()` with alpha: `plugin-api/src/widget/icon.rs`
+- Unit tests (parsing, roundtrip, alpha, constants): `plugin-api/src/widget/icon.rs`
+- `WidgetIcon.icon_color` field + `deserialize_hex_color` / `serialize_hex_color`: `plugin-api/src/widget/icons.rs`
+- `apply_icon_color` GTK helper (display-scoped CSS provider): `plugin-api/src/nerd_font.rs`
+
+### Phase 2: GTK Integration — ✅ Done
+
+Implemented in: **app-launcher**, **audio**, **button**, **power**, **wallpaper**, **workspace-switcher**.
+
+Each widget checks `icon_config.icon_color()` and calls `apply_icon_color()` when set.
+
+#### Intentional Design Decisions
+
+The following widgets have **deliberately different** GTK icon color behaviour:
+
+- **clock** — Has no icon at all; renders a digital clock instead of an icon. `icon_color` is not applicable.
+- **weather** — Renders icons based on weather data (semantic colors via `css_class()`). The local `apply_icon_color` in
+  `plugins/weather/src/widget.rs` uses predefined CSS classes for semantic colors. Configured `icon_color` is **not** applied on the GTK path because weather
+  icons are always data-driven. The headless and web paths do support configured color as a fallback (see Phase 3/4).
+- **network** (multi-view GTK widget) — **No semantic color** is used on the GTK path. `update_icon_display()` applies only the configured
+  `icon_color` (if set). This is intentional — the atomic network widgets do use semantic colors, but the multi-view GTK widget does not.
+- **sysinfo** (multi-view GTK widget) — Same as network: **no semantic color** on the GTK path. Only configured `icon_color` is applied. Individual atomic
+  sysinfo widgets do use semantic colors.
+
+### Phase 3: Headless Integration — ✅ Done
+
+- `draw_nerd_font_icon` extended with `icon_color: Option<Color>` parameter: `plugins/render-utils/src/drawing.rs`
+- All `GraphicRenderer` implementations pass configured color: app-launcher, audio, button, mpris, network, power, wallpaper, weather, workspace-switcher
+- Weather and network use correct priority: `view_data.icon_color.or(configured_icon_color)` (semantic first, then configured)
+- Centralised atomic pipeline accepts `icon_color: Option<[u8;4]>`: `plugin-api/src/atomic/graphic.rs`
+- Atomic widgets pass semantic color via `AtomicGraphicData`; configured color is not yet passed through `AtomicWidgetConfig` (see Open Items)
+
+### Phase 4: Web Integration — ✅ Done
+
+- All HTML renderers with icons inject inline CSS `rgba()` color
+- Weather and network use correct priority: `view_data.icon_color.or(self.config.icon_config.icon_color())`
+
+### Phase 5: Documentation & Examples — ✅ Done
+
+- `icon_color = "#dc0073ff"` in `configs/launcher/config.toml`, `configs/launcher/streamdeck.toml`, `configs/launcher/streamcontrollerx.toml`
+
+### Open Items
+
+The following atomic-only widgets do **not** support `icon_color` because they use `AtomicWidgetConfig` (not `WidgetIcon`), and
+`AtomicWidgetConfig` does not have an `icon_color` field:
+
+- **notifications** — Atomic-only widget (`plugins/notifications/src/atomic.rs`). No `WidgetIcon` or `icon_config` in config.
+- **voice_assistant** — Atomic-only widget (`plugins/voice_assistant/src/atomic.rs`). No `WidgetIcon` or `icon_config` in config.
+
+To support `icon_color` for these widgets, `AtomicWidgetConfig` (`plugin-api/src/atomic/config.rs`) needs an optional `icon_color` field with the same serde
+deserializer (`deserialize_hex_color`). The atomic rendering pipeline already accepts `icon_color: Option<[u8;4]>`, so the widgets would pass
+`self.config.icon_color.map(|c| c.to_rgba())` in `render_atomic_graphic_data()`.
+
+---
+
+## 8. File Changes Summary (Original Plan)
 
 | File                                    | Change                                                                               |
 |-----------------------------------------|--------------------------------------------------------------------------------------|
@@ -392,14 +453,14 @@ The web rendering functions check `icon_config.icon_color` and, if set and no se
 
 ---
 
-## 8. Dependencies
+## 9. Dependencies
 
 No new external dependencies. All required types (`Color`, `WidgetIcon`, `ViewData`, `AtomicGraphicData`) already exist in `plugin-api`. The `thiserror` crate
 is already a workspace dependency.
 
 ---
 
-## 9. Risks and Considerations
+## 10. Risks and Considerations
 
 1. **Semantic vs. Configured Priority**: The configured color is a fallback, not an override. If a widget returns a semantic color (e.g. temperature = blue),
    the user's `icon_color` is ignored. This is intentional — semantic colors convey important information. Users who want to force a color can set
@@ -423,12 +484,13 @@ is already a workspace dependency.
 
 ---
 
-## 10. Resolved Questions
+## 11. Resolved Questions
 
 1. **Does `icon_color` support CSS color names** (e.g. `"red"`, `"blue"`)? — **No.** Hex strings only. They are unambiguous and locale-independent.
 
-2. **Does the configured color apply to `main_text` and `info_text` as well?** — **No.** `icon_color` applies to the icon only. `text_color` will become a
-   separate concept.
+2. **Does the configured color apply to `main_text` and `info_text` as well?** — **No.** `icon_color` applies to the icon only. Text colors are handled by a
+   separate concept: `concepts/planned/TEXT_COLORS.md` (now implemented — see `WidgetTextColors` struct and the "Text Color Configuration" section in
+   `docs/ICON_RENDERING.md`).
 
 3. **Should there be a `background_color` for the icon area?** — **No.** This is covered by a separate concept:
    `concepts/planned/MACRO_PAD_ANIMATIONS_AND_BACKGROUND.md`.
@@ -438,7 +500,7 @@ is already a workspace dependency.
 
 ---
 
-## 11. References
+## 12. References
 
 - `plugin-api/src/widget/icon.rs` — `Color` struct, `WidgetIconRendering` trait
 - `plugin-api/src/widget/icons.rs` — `WidgetIcon` struct
