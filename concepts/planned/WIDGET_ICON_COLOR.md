@@ -272,6 +272,53 @@ fn build_view_data(&self) -> ViewData {
 }
 ```
 
+### 5.2b Direct GraphicRenderer Path (render-utils)
+
+Some widgets (e.g. `plugins/button`) implement `GraphicRenderer::render_graphic()` directly rather than going through the atomic pipeline. These widgets draw
+icons via `smearor_render_utils::draw_nerd_font_icon()`, which currently determines the icon color internally via `text_color(is_active)` and does not accept an
+external color parameter.
+
+To support `icon_color` on this path, `draw_nerd_font_icon()` in `plugins/render-utils/src/drawing.rs` must be extended with an optional color override:
+
+```rust
+pub fn draw_nerd_font_icon(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    icon_name: &str,
+    is_active: bool,
+    resolve_codepoint: impl Fn(&str) -> Option<char>,
+    icon_color: Option<Color>,
+) {
+    // ...
+    let color = icon_color.unwrap_or_else(|| crate::colors::text_color(is_active));
+    // ...
+}
+```
+
+The caller in `render_graphic()` passes the configured color as a fallback:
+
+```rust
+fn render_graphic(&self, width: u32, height: u32) -> FfiGraphic {
+    // ...
+    let icon_color = self.config.icon_config.icon_color()
+        .map(|c| smearor_render_utils::Color::from_rgba(c.to_rgba()));
+
+    draw_nerd_font_icon(
+        &mut pixels, width, height, icon, is_active,
+        resolve_icon_codepoint, icon_color,
+    );
+    // ...
+}
+```
+
+**Priority**: The `icon_color` parameter is a fallback — if `Some`, it overrides the default `text_color(is_active)`. Semantic colors from
+`WidgetIconRendering` (if the widget implements it) take priority and are applied before calling `draw_nerd_font_icon()`.
+
+**Note**: `draw_nerd_font_icon` is shared across all widgets that use the direct `GraphicRenderer` path. Adding the parameter is a breaking signature change for
+all callers. All call sites must be updated simultaneously. The `icon_color` parameter should be `Option<Color>` with `None` as the default to preserve existing
+behaviour for widgets that do not yet support configured colors.
+
 ### 5.3 Web Rendering (WebRenderer)
 
 Web widgets render HTML fragments. The configured color is applied as an inline CSS `color` style on the icon element, using `rgba()` to support the alpha
@@ -311,6 +358,8 @@ The web rendering functions check `icon_config.icon_color` and, if set and no se
 |-----------------------------------------------------|-----------------------------------------------------|------------------------------------------------|
 | Pass configured color as fallback in atomic widgets | Each atomic widget's `render_atomic_graphic_data()` | Set `icon_color` when semantic color is `None` |
 | Pass configured color in multi-view `ViewData`      | Each widget's `build_view_data()` or equivalent     | Set `icon_color` when semantic color is `None` |
+| Extend `draw_nerd_font_icon` with optional color    | `plugins/render-utils/src/drawing.rs`               | Add `icon_color: Option<Color>` parameter      |
+| Pass configured color in direct `GraphicRenderer`   | Each widget's `graphic.rs` (`render_graphic()`)     | Pass `icon_color` to `draw_nerd_font_icon()`   |
 
 ### Phase 4: Web Integration
 
@@ -335,6 +384,8 @@ The web rendering functions check `icon_config.icon_color` and, if set and no se
 | `plugin-api/src/widget/icons.rs`        | Add `icon_color: Option<Color>` field, `deserialize_hex_color` serde helper          |
 | `plugins/*/src/widget.rs`               | Apply configured color as fallback after semantic color check (GTK path)             |
 | `plugins/*/src/atomic.rs`               | Apply configured color as fallback in `render_atomic_graphic_data()` (headless path) |
+| `plugins/render-utils/src/drawing.rs`   | Extend `draw_nerd_font_icon()` with `icon_color: Option<Color>` parameter            |
+| `plugins/*/src/graphic.rs`              | Pass configured color to `draw_nerd_font_icon()` in direct `GraphicRenderer` path    |
 | `plugins/*/src/widget.rs` (WebRenderer) | Inject inline CSS color in `render_html()` output                                    |
 | `resources/style.css`                   | Verify no conflicts with dynamic icon color overrides                                |
 | `configs/launcher/*.toml`               | Add commented `icon_color` examples                                                  |
