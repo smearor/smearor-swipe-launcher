@@ -374,6 +374,35 @@ additional Atomic Widgets can be derived from any Multi-View Widget as needed.
 
 The App Launcher is already atomic by nature — each button is a separate app. This is listed for completeness.
 
+#### Workspace Switcher Atomic Widgets
+
+| Atomic Widget      | Icon                                               | Text                                | Click                                       | Longpress                           |
+|--------------------|----------------------------------------------------|-------------------------------------|---------------------------------------------|-------------------------------------|
+| Workspace-Next     | Next icon (e.g. `nf-md-chevron_right`)             | —                                   | Switch to next workspace                    | Create new workspace after current  |
+| Workspace-Previous | Previous icon (e.g. `nf-md-chevron_left`)          | —                                   | Switch to previous workspace                | Create new workspace before current |
+| Workspace-Name     | Workspace icon (from `icon_map` or `default_icon`) | Current workspace name              | Configurable (e.g. open workspace overview) | Configurable                        |
+| Workspace-Select   | Configurable icon                                  | Workspace name at `workspace_index` | Switch to workspace at `workspace_index`    | Configurable                        |
+
+**Configuration**:
+
+- **Workspace-Next** / **Workspace-Previous**: No additional config needed. Click cycles to next/previous workspace, longpress creates a new workspace at the
+  end/beginning.
+- **Workspace-Name**: Displays the current workspace name and icon. Supports `icon_map`, `default_icon`, and `show_label` config fields. Click/longpress actions
+  are configurable via standard `click_topic`/`longpress_topic` fields.
+- **Workspace-Select**: Switches to a specific workspace by index. Requires `workspace_index` (0-based) in the config. The icon and label are resolved from the
+  workspace at that index. Supports `icon_map`, `default_icon`, and `show_label` config fields.
+
+```toml
+[ws_next]
+click_topic = ""  # Built-in: switches to next workspace
+
+[ws_select_2]
+workspace_index = 2
+icon = "nf-md-numeric-3"
+default_icon = "nf-md-monitor"
+icon_map = { "1" = "nf-md-numeric-1", "2" = "nf-md-numeric-2", "3" = "nf-md-numeric-3" }
+```
+
 ---
 
 ## 6. Atomic Widgets in GTK Context
@@ -928,6 +957,26 @@ on top of the existing service.
 **Exit Criteria**: All Multi-Span Widget variants render correctly across multiple buttons with working per-button and compound actions, each using their
 domain's single `.so` file.
 
+### Phase 8b: Workspace Switcher Atomic Widgets
+
+**Status**: ✅ Implemented.
+
+**Order**: After Phase 2. Can be done in parallel with Phase 3–8.
+
+**Changes**:
+
+- Add `WorkspaceAtomicWidget` struct in `plugins/workspace-switcher/src/atomic.rs`.
+- Add `WorkspaceAtomicView` enum with variants: `Next`, `Previous`, `Name`, `Select`.
+- Add `WorkspaceAtomicConfig` in `config.rs` with `workspace_index`, `icon`, `icon_map`, `default_icon`, `show_label` fields.
+- Add `GraphicRenderer` impl in `atomic_graphic.rs`.
+- Register all variants in `widget_factory_plugin_graphic!` macro in `lib.rs`: `workspace_next`, `workspace_previous`, `workspace_name`, `workspace_select`.
+- Each variant subscribes to `compositor::workspace_snapshot`, `compositor::workspace_changed`, and `compositor::workspace_lifecycle` topics.
+- `WorkspaceNext` / `WorkspacePrevious`: Click switches to next/previous workspace, longpress creates new workspace.
+- `WorkspaceName`: Displays current workspace name and icon, configurable click/longpress actions.
+- `WorkspaceSelect`: Click switches to workspace at configured `workspace_index`.
+
+**Exit Criteria**: All Workspace Switcher Atomic Widget variants render and respond to Click/Longpress triggers using a single `.so` file.
+
 ### Phase 9: Integration and Testing
 
 **Status**: ❌ Not implemented.
@@ -986,6 +1035,11 @@ correctly.
 | `plugins/wallpaper/src/lib.rs`              | Register Wallpaper Atomic Widget variants in `widget_factory_plugin_graphic!` macro                      |
 | `plugins/wallpaper/src/atomic.rs`           | **New** — Wallpaper atomic widget structs + trait impls                                                  |
 | `plugins/wallpaper/src/atomic_graphic.rs`   | **New** — `GraphicRenderer` impls for wallpaper atomic widgets                                           |
+| `plugins/workspace-switcher/src/lib.rs`     | Register Workspace Atomic Widget variants in `widget_factory_plugin_graphic!` macro                      |
+| `plugins/workspace-switcher/src/atomic.rs`  | **New** — `WorkspaceAtomicWidget` struct + trait impls                                                   |
+| `plugins/workspace-switcher/src/config.rs`  | Add `WorkspaceAtomicConfig` struct                                                                       |
+| `plugins/workspace-switcher/Cargo.toml`     | Add `smearor-model-widget` dependency                                                                    |
+| `plugin-api/src/graphic/factory.rs`         | Add `@first_name` helper: fallback to first registered widget when `widget` field is empty or missing    |
 
 ---
 
@@ -1021,3 +1075,7 @@ correctly.
 8. **Hyprland Atomic Widgets**: The Hyprland Service is fully implemented and operational, but no `plugins/hyprland/` widget crate exists yet. The Hyprland
    Atomic Widgets listed in Section 5.5 require a new plugin crate that subscribes to `service.hyprland.dispatch` and sends dispatch messages on
    click/longpress. This is a future implementation task.
+
+9. **Default Widget Fallback**: The `widget_factory_plugin_graphic!` macro falls back to the first registered widget variant when the `widget` field is empty or
+   missing from the TOML plugin entry. This ensures backward compatibility with existing configurations that predate the factory macro, where a single widget
+   type was the only option. Plugin authors should register the "primary" widget (e.g. the Multi-View Widget) as the first entry in the macro invocation.
