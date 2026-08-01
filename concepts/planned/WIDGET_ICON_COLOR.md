@@ -156,7 +156,11 @@ pub struct WidgetIcon {
 
     /// Optional icon color, parsed from a hex string (e.g. "#ff6600", "#f60", "#ff660080").
     /// Acts as a fallback when no semantic color is provided by the widget.
-    #[serde(deserialize_with = "deserialize_hex_color", default)]
+    #[serde(
+        deserialize_with = "deserialize_hex_color",
+        serialize_with = "serialize_hex_color",
+        default
+    )]
     #[builder(default, setter(into, strip_option))]
     pub icon_color: Option<Color>,
 }
@@ -178,7 +182,22 @@ where
 }
 ```
 
-For serialisation, `Color` serialises back to a hex string via a custom `Serialize` impl (or `serialize_with`), ensuring round-trip consistency.
+For serialisation, `Color` serialises back to a hex string via a symmetric `serialize_hex_color` helper, ensuring round-trip consistency:
+
+```rust
+fn serialize_hex_color<S>(color: &Option<Color>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match color {
+        Some(c) => serializer.serialize_str(&c.to_hex_string()),
+        None => serializer.serialize_none(),
+    }
+}
+```
+
+The `Color` struct needs a `to_hex_string()` method (e.g. `format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)`) that produces the canonical hex representation.
+Together, `deserialize_hex_color` and `serialize_hex_color` provide symmetric serde support for `Option<Color>`.
 
 ---
 
@@ -255,13 +274,15 @@ fn build_view_data(&self) -> ViewData {
 
 ### 5.3 Web Rendering (WebRenderer)
 
-Web widgets render HTML fragments. The configured color is applied as an inline CSS `color` style on the icon element:
+Web widgets render HTML fragments. The configured color is applied as an inline CSS `color` style on the icon element, using `rgba()` to support the alpha
+channel:
 
 ```html
-<i class="nf nf-weather-day_sunny" style="color: #ff6600;"></i>
+<i class="nf nf-weather-day_sunny" style="color: rgba(255, 102, 0, 0.5);"></i>
 ```
 
-The web rendering functions check `icon_config.icon_color` and, if set and no semantic color is present, inject the inline style.
+The web rendering functions check `icon_config.icon_color` and, if set and no semantic color is present, inject the inline style as
+`rgba(r, g, b, a)`.
 
 ---
 
@@ -361,7 +382,8 @@ is already a workspace dependency.
 3. **Should there be a `background_color` for the icon area?** — **No.** This is covered by a separate concept:
    `concepts/planned/MACRO_PAD_ANIMATIONS_AND_BACKGROUND.md`.
 
-4. **Should the parsed color be cached?** — **No.** Lazy parsing on every render call. The string is short and parsing is trivial.
+4. **Should the parsed color be cached?** — **N/A.** The color is parsed once at config load time via the serde deserializer and stored as `Option<Color>`
+   in `WidgetIcon`. No caching or lazy parsing is needed.
 
 ---
 
