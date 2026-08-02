@@ -70,6 +70,4 @@ assets = [
     ["../configs/launcher/streamcontrollerx.toml", "/usr/share/smearor/examples/launcher/", "644"],
     ["../configs/launcher/web.toml", "/usr/share/smearor/examples/launcher/", "644"],
     ["../configs/areas/scroll_menu.toml", "/usr/share/smearor/examples/areas/", "644"],
-    ["../resources/udev/52-loupedeck.rules", "/usr/lib/udev/rules.d/", "644"],
-    ["../resources/udev/52-streamdeck.rules", "/usr/lib/udev/rules.d/", "644"],
 ]
