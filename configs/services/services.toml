@@ -72,9 +72,9 @@ path = "target/release/libsmearor_network_service.so"
 id = "wayland"
 path = "target/release/libsmearor_wayland_service.so"
 
-#[[services]]
-#id = "gnome"
-#path = "target/release/libsmearor_gnome_service.so"
+[[services]]
+id = "gnome"
+path = "target/release/libsmearor_gnome_service.so"
 
 [[services]]
 id = "terminal_command"
@@ -191,29 +191,50 @@ args = [
 env = { }
 
 [streamdeck]
-brightness = 50
+brightness = 100
 poll_interval_ms = 50
+auto_dimming_enabled = true
+auto_dim_timeout_ms = 60000
+auto_dim_brightness = 15
+auto_dim_fade_step_ms = 50
+auto_dim_fade_step_percent = 2
+auto_dim_fade_up_step_percent = 10
 
 [streamcontrollerx]
-brightness = 50
+brightness = 100
 poll_interval_ms = 50
+auto_dimming_enabled = true
+auto_dim_timeout_ms = 60000
+auto_dim_brightness = 15
+auto_dim_fade_step_ms = 50
+auto_dim_fade_step_percent = 10
+auto_dim_fade_up_step_percent = 25
 
 [personalization]
-latitude = 47.55
-longitude = 9.70
+#latitude = 47.55
+#longitude = 9.70
 #locale = "de-DE"
 locale = "de-DE"
 timezone = "Europe/Berlin"
+enable_location = true
 update_interval_seconds = 300
+# Re-query location every 30 minutes (min 300)
+location_update_interval_seconds = 1800
+# Skip update if coords change < ~1.1 km
+location_change_threshold = 0.01
 
 [voice_assistant]
-#whisper_model_path = "models/ggml-tiny.bin"
-#whisper_model_path = "models/ggml-base.bin"
-#whisper_model_path = "models/ggml-small.bin"
-whisper_model_path = "models/ggml-large-v3-turbo-q5_0.bin"
-llm_model_path = "models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf"
-#llm_model_path = "models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
-#llm_model_path = "models/qwen2.5-3b-instruct-q4_k_m.gguf"
+#whisper_model_path = "~/.local/share/smearor/models/ggml-tiny.bin"
+#whisper_model_path = "~/.local/share/smearor/models/ggml-base.bin"
+#whisper_model_path = "~/.local/share/smearor/models/ggml-small.bin"
+whisper_model_path = "~/.local/share/smearor/models/ggml-large-v3-turbo-q5_0.bin"
+# HuggingFace repo for auto-download (empty = hardcoded fallback mapping)
+#whisper_model_repo = "openai/whisper-large-v3-turbo"
+llm_model_path = "~/.local/share/smearor/models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf"
+#llm_model_path = "~/.local/share/smearor/models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+#llm_model_path = "~/.local/share/smearor/models/qwen2.5-3b-instruct-q4_k_m.gguf"
+# HuggingFace repo for auto-download (empty = hardcoded fallback mapping)
+#llm_model_repo = "unsloth/gemma-4-E4B-it-GGUF"
 llm_threads = 4
 #llm_context_size = 4096
 llm_context_size = 8192
@@ -260,7 +281,9 @@ tool_selection_threshold = 0.3
 # transcription, reducing hallucinations from background noise.
 # Download silero_vad.onnx from https://github.com/snakers4/silero-vad
 vad_enabled = true
-vad_model_path = "models/silero_vad.onnx"
+vad_model_path = "~/.local/share/smearor/models/silero_vad.onnx"
+# HuggingFace repo for auto-download (empty = hardcoded fallback mapping)
+#vad_model_repo = "snakers4/silero-vad"
 # Speech probability threshold (0.0–1.0). Frames below this are non-speech.
 vad_threshold = 0.5
 
@@ -270,10 +293,12 @@ vad_threshold = 0.5
 [voice_assistant.tts]
 enabled = true
 tts_enabled_mcp = true
-#model_path = "models/de_DE-thorsten-medium.onnx"
-model_path = "models/de_DE-thorsten-high.onnx"
-#config_path = "models/de_DE-thorsten-medium.onnx.json"
-config_path = "models/de_DE-thorsten-high.onnx.json"
+#model_path = "~/.local/share/smearor/models/de_DE-thorsten-medium.onnx"
+model_path = "~/.local/share/smearor/models/de_DE-thorsten-high.onnx"
+# HuggingFace repo for auto-download (empty = hardcoded fallback mapping)
+#model_repo = "rhasspy/piper-voices"
+#config_path = "~/.local/share/smearor/models/de_DE-thorsten-medium.onnx.json"
+config_path = "~/.local/share/smearor/models/de_DE-thorsten-high.onnx.json"
 model_type = "Piper"
 model_sample_rate = 22050
 voice = ""

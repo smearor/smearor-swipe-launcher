@@ -3,11 +3,24 @@
 ### Define the layout order
 
 #areas = ["left_area", "scroll_band", "right_area"]
+#areas = ["scroll_band", "right_area"]
 areas = ["scroll_band"]
+
+# Per-workspace layout profiles
+[[profiles]]
+trigger = { Workspace = 2 }
+#areas = ["development_band", "right_area"]
+areas = ["development_band"]
 
 # Global default templates for plugin configs.
 # Individual plugins reference a template with: defaults = "template_name"
 # Instance-specific values always override the template values.
+#
+# Text color configuration (optional, supported by all widgets):
+#   main_text_color = "#RRGGBBAA"  - Color for the primary text line
+#   info_text_color = "#RRGGBBAA"  - Color for the secondary/info text line
+# Both accept hex color strings (e.g. "#ff6600", "#f60", "#ff660080").
+# If omitted, the default text color from the theme is used.
 
 [defaults.menu_button]
 click_topic = "area.open"
@@ -20,6 +33,7 @@ css_classes = ["menu-button", "glow-blue"]
 main_text = ""
 info_text = "Zurück"
 icon = "nf-md-undo"
+icon_color = "#dc0073ff"
 click_topic = "area.close"
 enabled = true
 active = false
@@ -66,7 +80,7 @@ width = 200
 align = "left"
 plugins = [
     #    { id = "notifications", path = "target/release/libsmearor_notifications_widget.so", disabled = true },
-    #    { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
+    { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
 ]
 
 [clock_widget]
@@ -96,7 +110,7 @@ plugins = [
     { id = "video_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "music_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "web_menu_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "sysinfo_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sysinfo_menu_button", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo" },
     { id = "smarthome_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "system_tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "graphics_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -111,7 +125,31 @@ plugins = [
     { id = "wallpaper_widget", path = "target/release/libsmearor_wallpaper_widget.so" },
     { id = "network_menu_widget", path = "target/release/libsmearor_network_widget.so" },
     { id = "voice_assistant_widget", path = "target/release/libsmearor_voice_assistant_widget.so" },
-    { id = "workspace_switcher", path = "target/release/libsmearor_workspace_switcher.so", disabled = true },
+    { id = "workspace_switcher", path = "target/release/libsmearor_workspace_switcher.so", widget = "workspace_switcher", disabled = false },
+    { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
+    { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
+]
+
+# Plugins in the center scroll band
+[development_band]
+area_type = "scroll"
+spacing = 0
+plugins = [
+    { id = "previous_workspace", path = "target/release/libsmearor_button_widget.so" },
+    { id = "clock_widget", path = "target/release/libsmearor_clock_widget.so" },
+    { id = "toggle_floating", path = "target/release/libsmearor_button_widget.so" },
+    { id = "close_active_window", path = "target/release/libsmearor_button_widget.so" },
+    { id = "toggle_fullscreen", path = "target/release/libsmearor_button_widget.so" },
+    { id = "games_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sysinfo_menu_button", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo" },
+    { id = "smarthome_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "system_tools_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "audio", path = "target/release/libsmearor_audio_widget.so", widget = "audio" },
+    { id = "mpris", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris" },
+    { id = "power_widget", path = "target/release/libsmearor_power_widget.so" },
+    { id = "network_menu_widget", path = "target/release/libsmearor_network_widget.so" },
+    { id = "voice_assistant_widget", path = "target/release/libsmearor_voice_assistant_widget.so" },
+    { id = "workspace_switcher", path = "target/release/libsmearor_workspace_switcher.so", widget = "workspace_switcher", disabled = false },
     { id = "next_workspace", path = "target/release/libsmearor_button_widget.so" },
     { id = "close_launcher", path = "target/release/libsmearor_button_widget.so" }
 ]
@@ -206,6 +244,8 @@ defaults = "menu_button"
 main_text = "Games"
 #info_text = "Touch Optimized"
 icon = "nf-fa-gamepad"
+#main_text_color = "#dc0073ff"
+#info_text_color = "#00cc00ff"
 tooltip = "Games"
 css_classes = ["menu-button", "games-icon-color"]
 click_payload = { area_id = "games_area" }
@@ -235,7 +275,7 @@ info_text = "System"
 icon = "nf-fae-chip"
 tooltip = "System Information"
 css_classes = ["menu-button", "sysinfo-icon-color"]
-click_payload = { area_id = "sysinfo_area" }
+longpress_topic = "area.open"
 longpress_payload = { area_id = "sysinfo_area" }
 
 [sysinfo_area]
@@ -307,6 +347,7 @@ defaults = "menu_button"
 main_text = "Office"
 info_text = "Smart Home"
 icon = "nf-md-monitor"
+icon_color = "#dc0073ff"
 tooltip = "Office"
 css_classes = ["menu-button", "glow-blue"]
 click_payload = { area_id = "office_area" }
@@ -347,6 +388,7 @@ plugins = [
     { id = "shelly_office_desk_light_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_office_window_light_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_office_kommode_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_office_floor_light_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" }
 ]
 
@@ -362,7 +404,8 @@ plugins = [
     { id = "livingroom_area_close_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_livingroom_couch_floor_light_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_livingroom_couch_wall_light_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "shelly_livingroom_vitrine_light_button", path = "target/release/libsmearor_button_widget.so" }
+    { id = "shelly_livingroom_vitrine_light_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "shelly_livingroom_vorhang_light_button", path = "target/release/libsmearor_button_widget.so" }
 ]
 
 [livingroom_area_close_button]
@@ -1215,14 +1258,18 @@ icon = "nf-md-clock_start"
 views = ["Current", "ForecastToday", "ForecastTomorrow", "Wind", "Humidity", "Sunrise", "Sunset", "AirPollution", "Pressure", "UvIndex"]
 click_topic = "service.app_launcher.command"
 click_payload = { desktop_file = "/var/lib/flatpak/exports/share/applications/io.github.amit9838.mousam.desktop", action = "Exec" }
+#main_text_color = "#ffffffdd"
+#info_text_color = "#aaaaaacc"
 
 [workspace_switcher]
 width = 120
 height = 80
 show_label = true
-show_dot_indicator = true
+show_scrollbar = true
 default_icon = "nf-md-monitor"
 # icon_map = { "1" = "nf-md-numeric-1", "2" = "nf-md-numeric-2", "3" = "nf-md-numeric-3" }
+#main_text_color = "#ffffffff"
+#info_text_color = "#888888ff"
 
 [power_widget]
 width = 100
@@ -1376,6 +1423,20 @@ swipe_up_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=o
 swipe_down_topic = "service.http.request"
 swipe_down_payload = { method = "Get", url = "http://192.168.178.31/color/0?turn=on&red=255&green=0&blue=0&gain={gain-10}", response_topic = "service.http.response.shelly.office.kommode.light" }
 
+[shelly_office_floor_light_button]
+main_text = "Floor"
+info_text = "Office"
+icon = "nf-md-floor_lamp"
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=on", response_topic = "service.http.response.shelly.office.floor.light" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=off", response_topic = "service.http.response.shelly.office.floor.light" }
+state_topic = "service.http.response.shelly.office.floor.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.34/relay/0", response_topic = "service.http.response.shelly.office.floor.light" }
+state_icon = "{ison?nf-md-floor_lamp:nf-md-floor_lamp_outline}"
+state_css_class = "light-active"
+
 [shelly_livingroom_couch_floor_light_button]
 main_text = "Couch Floor"
 info_text = "Living Room"
@@ -1443,6 +1504,29 @@ swipe_up_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=o
 swipe_up_description = "Erhöht die Helligkeit"
 swipe_down_topic = "service.http.request"
 swipe_down_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=on&red=255&green=0&blue=0&gain={gain-10}", response_topic = "service.http.response.shelly.livingroom.vitrine.light" }
+swipe_down_description = "Verringert die Helligkeit"
+
+[shelly_livingroom_vorhang_light_button]
+main_text = "Vorhang"
+info_text = "Living Room"
+icon = "nf-md-led_strip"
+description = "Steuert das Vorhang-Licht im Wohnzimmer"
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.74/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.livingroom.vorhang.light" }
+click_description = "Schaltet das Licht ein (rot)"
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.74/color/0?turn=off", response_topic = "service.http.response.shelly.livingroom.vorhang.light" }
+longpress_description = "Schaltet das Licht aus"
+state_topic = "service.http.response.shelly.livingroom.vorhang.light"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.74/color/0", response_topic = "service.http.response.shelly.livingroom.vorhang.light" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+swipe_up_topic = "service.http.request"
+swipe_up_payload = { method = "Get", url = "http://192.168.178.74/color/0?turn=on&red=255&green=0&blue=0&gain={gain+10}", response_topic = "service.http.response.shelly.livingroom.vorhang.light" }
+swipe_up_description = "Erhöht die Helligkeit"
+swipe_down_topic = "service.http.request"
+swipe_down_payload = { method = "Get", url = "http://192.168.178.74/color/0?turn=on&red=255&green=0&blue=0&gain={gain-10}", response_topic = "service.http.response.shelly.livingroom.vorhang.light" }
 swipe_down_description = "Verringert die Helligkeit"
 
 [shelly_bathroom_main_light_button]

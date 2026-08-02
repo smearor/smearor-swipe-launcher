@@ -49,10 +49,13 @@ plugins = [
 [clock]
 format = "%H:%M"
 show_seconds = false
+#main_text_color = "#ffffffff"
+#info_text_color = "#aaaaaaff"
 
 [app-launcher]
 icon_size = 48
 show_descriptions = true
+#main_text_color = "#ff6600ff"
 
 [battery]
 show_percentage = true

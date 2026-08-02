@@ -19,16 +19,18 @@ spacing = 0
 
 [main_menu]
 area_type = "fixed"
-width = 480
+width = 360
+#width = 480
 plugins = [
     { id = "scx_light_office_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "scx_light_livingroom_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_light_bedroom_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "scx_weather_widget", path = "target/release/libsmearor_weather_widget.so", widget = "weather" },
     { id = "scx_audio_widget", path = "target/release/libsmearor_audio_widget.so", widget = "audio" },
     { id = "scx_mpris_widget", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris" },
     { id = "scx_clock_widget", path = "target/release/libsmearor_clock_widget.so", widget = "clock" },
-    { id = "scx_sysinfo_menu_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "scx_network_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_sysinfo_menu_button", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo" },
+    { id = "scx_network_menu_button", path = "target/release/libsmearor_network_widget.so", widget = "network" },
     { id = "scx_power_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "scx_wallpaper_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "scx_notifications_menu_button", path = "target/release/libsmearor_button_widget.so" },
@@ -38,6 +40,7 @@ plugins = [
 [scx_light_office_button]
 main_text = "Licht Büro"
 icon = "nf-md-monitor"
+icon_color = "#dc0073ff"
 icon_only = false
 click_topic = "area.open"
 click_payload = { area_id = "office_area" }
@@ -49,22 +52,29 @@ icon_only = false
 click_topic = "area.open"
 click_payload = { area_id = "livingroom_area" }
 
+[scx_light_bedroom_button]
+main_text = "Licht Schlafzimmer"
+icon = "nf-md-bed"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "bedroom_area" }
+
 [scx_weather_widget]
-width = 96
-height = 96
+width = 72
+height = 72
 views = ["Current", "ForecastToday", "ForecastTomorrow", "Wind", "Humidity", "Sunrise", "Sunset", "AirPollution", "Pressure", "UvIndex", "CloudCover", "Sunshine", "PrecipitationProbability", "PrecipitationAmount", "Precipitation"]
 longpress_topic = "area.open"
 longpress_payload = { area_id = "weather_area" }
 
 [scx_audio_widget]
-width = 96
-height = 96
+width = 72
+height = 72
 longpress_topic = "area.open"
 longpress_payload = { area_id = "audio_area" }
 
 [scx_mpris_widget]
-width = 96
-height = 96
+width = 72
+height = 72
 longpress_topic = "area.open"
 longpress_payload = { area_id = "mpris_area" }
 
@@ -90,6 +100,7 @@ plugins = [
     { id = "scx_office_desk_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "scx_office_window_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "scx_office_kommode_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_office_floor_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "scx_office_fan", path = "target/release/libsmearor_button_widget.so" },
 ]
 
@@ -142,6 +153,20 @@ init_payload = { method = "Get", url = "http://192.168.178.31/color/0", response
 state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
 state_css_class = "light-active"
 
+[scx_office_floor_light]
+main_text = "Floor"
+icon = "nf-md-floor_lamp"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=on", response_topic = "service.http.response.shelly.office.floor.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=off", response_topic = "service.http.response.shelly.office.floor.light.scx" }
+state_topic = "service.http.response.shelly.office.floor.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.34/relay/0", response_topic = "service.http.response.shelly.office.floor.light.scx" }
+state_icon = "{ison?nf-md-floor_lamp:nf-md-floor_lamp_outline}"
+state_css_class = "light-active"
+
 [scx_office_fan]
 main_text = "Fan"
 icon = "nf-md-fan"
@@ -170,6 +195,7 @@ plugins = [
     { id = "scx_livingroom_couch_floor_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "scx_livingroom_couch_wall_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "scx_livingroom_vitrine_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_livingroom_vorhang_light", path = "target/release/libsmearor_button_widget.so" },
 ]
 
 [scx_livingroom_close_button]
@@ -218,6 +244,100 @@ longpress_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=
 state_topic = "service.http.response.shelly.livingroom.vitrine.light.scx"
 init_topic = "service.http.request"
 init_payload = { method = "Get", url = "http://192.168.178.29/color/0", response_topic = "service.http.response.shelly.livingroom.vitrine.light.scx" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+
+[scx_livingroom_vorhang_light]
+main_text = "Vorhang"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.74/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.livingroom.vorhang.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.74/color/0?turn=off", response_topic = "service.http.response.shelly.livingroom.vorhang.light.scx" }
+state_topic = "service.http.response.shelly.livingroom.vorhang.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.74/color/0", response_topic = "service.http.response.shelly.livingroom.vorhang.light.scx" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+
+# --- Area 3b: bedroom_area ---
+
+[bedroom_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_bedroom_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_bedroom_main_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_bedroom_henna_large_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_bedroom_henna_small_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_bedroom_kommode_light", path = "target/release/libsmearor_button_widget.so" },
+]
+
+[scx_bedroom_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
+click_topic = "area.close"
+click_payload = { area_id = "bedroom_area" }
+
+[scx_bedroom_main_light]
+main_text = "Main"
+icon = "nf-md-ceiling_light"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.26/relay/0?turn=on", response_topic = "service.http.response.shelly.bedroom.main.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.26/relay/0?turn=off", response_topic = "service.http.response.shelly.bedroom.main.light.scx" }
+state_topic = "service.http.response.shelly.bedroom.main.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.26/relay/0", response_topic = "service.http.response.shelly.bedroom.main.light.scx" }
+state_icon = "{ison?nf-md-ceiling_light:nf-md-ceiling_light_outline}"
+state_css_class = "light-active"
+
+[scx_bedroom_henna_large_light]
+main_text = "Henna Large"
+icon = "nf-md-floor_lamp"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=on", response_topic = "service.http.response.shelly.bedroom.henna.large.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=off", response_topic = "service.http.response.shelly.bedroom.henna.large.light.scx" }
+state_topic = "service.http.response.shelly.bedroom.henna.large.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.34/relay/0", response_topic = "service.http.response.shelly.bedroom.henna.large.light.scx" }
+state_icon = "{ison?nf-md-floor_lamp:nf-md-floor_lamp_outline}"
+state_css_class = "light-active"
+
+[scx_bedroom_henna_small_light]
+main_text = "Henna Small"
+icon = "nf-md-desk_lamp"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.32/relay/0?turn=on", response_topic = "service.http.response.shelly.bedroom.henna.small.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.32/relay/0?turn=off", response_topic = "service.http.response.shelly.bedroom.henna.small.light.scx" }
+state_topic = "service.http.response.shelly.bedroom.henna.small.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.32/relay/0", response_topic = "service.http.response.shelly.bedroom.henna.small.light.scx" }
+state_icon = "{ison?nf-md-desk_lamp:nf-md-lamp_outline}"
+state_css_class = "light-active"
+
+[scx_bedroom_kommode_light]
+main_text = "Kommode"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.bedroom.kommode.light.scx" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=off", response_topic = "service.http.response.shelly.bedroom.kommode.light.scx" }
+state_topic = "service.http.response.shelly.bedroom.kommode.light.scx"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.33/color/0", response_topic = "service.http.response.shelly.bedroom.kommode.light.scx" }
 state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
 state_css_class = "light-active"
 
@@ -359,7 +479,7 @@ compound_longpress_topic = "service.audio.command"
 compound_longpress_payload = { action = "ToggleMute" }
 
 # --- Area 5b: clock_area ---
-# Multi-span clock widgets — each spans 2 buttons horizontally
+# Multi-span clock widgets — BigDigital/BigDate span 2 buttons, Timer/Countdown span 3 buttons
 
 [clock_area]
 area_type = "scroll"
@@ -376,8 +496,11 @@ plugins = [
     { id = "scx_clock_big_date_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_date", span_group = "scx_clock_big_date", span_index = 1 },
     { id = "scx_clock_countdown_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_countdown", span_group = "scx_clock_countdown", span_index = 0 },
     { id = "scx_clock_countdown_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_countdown", span_group = "scx_clock_countdown", span_index = 1 },
+    { id = "scx_clock_countdown_2", path = "target/release/libsmearor_clock_widget.so", widget = "clock_countdown", span_group = "scx_clock_countdown", span_index = 2 },
     { id = "scx_clock_timer_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_timer", span_group = "scx_clock_timer", span_index = 0 },
     { id = "scx_clock_timer_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_timer", span_group = "scx_clock_timer", span_index = 1 },
+    { id = "scx_clock_timer_2", path = "target/release/libsmearor_clock_widget.so", widget = "clock_timer", span_group = "scx_clock_timer", span_index = 2 },
+    { id = "scx_clock_2d_button", path = "target/release/libsmearor_button_widget.so" },
 ]
 
 [scx_clock_close_button]
@@ -386,6 +509,13 @@ icon = "nf-md-undo"
 icon_only = true
 click_topic = "area.close"
 click_payload = { area_id = "clock_area" }
+
+[scx_clock_2d_button]
+main_text = "2D"
+icon = "nf-md-grid"
+icon_only = true
+click_topic = "area.open"
+click_payload = { area_id = "clock_2d_area" }
 
 [scx_clock_big_digital_0]
 render_mode = "graphic_only"
@@ -407,25 +537,70 @@ render_mode = "graphic_only"
 longpress_topic = "area.close"
 longpress_payload = { area_id = "clock_area" }
 
+# Countdown: Click@0 = +1min, Click@1 = +1s, Click@2 = reset, Longpress@0 = start, Longpress@1 = pause
 [scx_clock_countdown_0]
 render_mode = "graphic_only"
-click_topic = "area.close"
-click_payload = { area_id = "clock_area" }
 
 [scx_clock_countdown_1]
 render_mode = "graphic_only"
-click_topic = "area.close"
-click_payload = { area_id = "clock_area" }
 
+[scx_clock_countdown_2]
+render_mode = "graphic_only"
+
+# Timer: Click@0 = start, Click@1 = pause, Click@2 = reset
 [scx_clock_timer_0]
 render_mode = "graphic_only"
-click_topic = "area.close"
-click_payload = { area_id = "clock_area" }
 
 [scx_clock_timer_1]
 render_mode = "graphic_only"
+
+[scx_clock_timer_2]
+render_mode = "graphic_only"
+
+# --- Area 5b: clock_2d_area ---
+# 2D span group example: 2×2 grid span using clock_big_digital
+
+[clock_2d_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "scx_clock_2d_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "scx_clock_2d_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "scx_clock_2d_grid", span_index = 0, span_rows = 2, span_cols = 2 },
+    { id = "scx_clock_2d_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "scx_clock_2d_grid", span_index = 1, span_rows = 2, span_cols = 2 },
+    { id = "scx_clock_2d_2", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "scx_clock_2d_grid", span_index = 2, span_rows = 2, span_cols = 2 },
+    { id = "scx_clock_2d_3", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "scx_clock_2d_grid", span_index = 3, span_rows = 2, span_cols = 2 },
+]
+
+[scx_clock_2d_close_button]
+main_text = "Zurück"
+icon = "nf-md-undo"
+icon_only = true
 click_topic = "area.close"
-click_payload = { area_id = "clock_area" }
+click_payload = { area_id = "clock_2d_area" }
+
+[scx_clock_2d_0]
+render_mode = "graphic_only"
+longpress_topic = "area.close"
+longpress_payload = { area_id = "clock_2d_area" }
+
+[scx_clock_2d_1]
+render_mode = "graphic_only"
+longpress_topic = "area.close"
+longpress_payload = { area_id = "clock_2d_area" }
+
+[scx_clock_2d_2]
+render_mode = "graphic_only"
+longpress_topic = "area.close"
+longpress_payload = { area_id = "clock_2d_area" }
+
+[scx_clock_2d_3]
+render_mode = "graphic_only"
+longpress_topic = "area.close"
+longpress_payload = { area_id = "clock_2d_area" }
 
 # --- Area 6: mpris_area ---
 # Atomic MPRIS widgets — each shows a single media view
@@ -517,15 +692,15 @@ longpress_payload = { action = "Seek", seek_offset = -30000000 }
 main_text = "Sysinfo"
 icon = "nf-fa-microchip"
 icon_only = false
-click_topic = "area.open"
-click_payload = { area_id = "sysinfo_area" }
+longpress_topic = "area.open"
+longpress_payload = { area_id = "sysinfo_area" }
 
 [scx_network_menu_button]
 main_text = "Network"
 icon = "nf-md-wifi"
 icon_only = false
-click_topic = "area.open"
-click_payload = { area_id = "network_area" }
+longpress_topic = "area.open"
+longpress_payload = { area_id = "network_area" }
 
 [sysinfo_area]
 area_type = "scroll"

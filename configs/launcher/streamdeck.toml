@@ -5,6 +5,21 @@
 
 areas = ["main_menu"]
 
+# Per-workspace layout profiles
+[[profiles]]
+trigger = { Workspace = 2 }
+areas = ["development_menu"]
+
+[defaults.close_button]
+main_text = ""
+info_text = "Zurück"
+icon = "nf-md-undo"
+icon_color = "#dc0073ff"
+click_topic = "area.close"
+enabled = true
+active = false
+css_classes = ["close-button"]
+
 [launcher]
 rotation = 0
 layer = "top"
@@ -21,24 +36,36 @@ spacing = 0
 area_type = "fixed"
 width = 360
 plugins = [
+    { id = "workspace_switcher", path = "target/release/libsmearor_workspace_switcher.so", widget = "workspace_switcher" },
     { id = "sd_light_office_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_light_livingroom_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_light_bedroom_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_weather_widget", path = "target/release/libsmearor_weather_widget.so", widget = "weather" },
     { id = "sd_audio_widget", path = "target/release/libsmearor_audio_widget.so", widget = "audio" },
     { id = "sd_mpris_widget", path = "target/release/libsmearor_mpris_widget.so", widget = "mpris" },
     { id = "sd_clock_widget", path = "target/release/libsmearor_clock_widget.so", widget = "clock" },
     { id = "sd_games_menu_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "sd_sysinfo_menu_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "sd_network_menu_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_sysinfo_menu_button", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo" },
+    { id = "sd_network_menu_button", path = "target/release/libsmearor_network_widget.so", widget = "network" },
     { id = "sd_power_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_wallpaper_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_notifications_menu_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_voice_assistant_menu_button", path = "target/release/libsmearor_button_widget.so" },
 ]
 
+# Plugins in the center scroll band
+[development_menu]
+area_type = "fixed"
+width = 360
+plugins = [
+    { id = "workspace_switcher", path = "target/release/libsmearor_workspace_switcher.so", widget = "workspace_switcher" },
+    { id = "sd_sysinfo_menu_button", path = "target/release/libsmearor_sysinfo_widget.so", widget = "sysinfo" },
+]
+
 [sd_light_office_button]
 main_text = "Licht Büro"
 icon = "nf-md-monitor"
+icon_color = "#dc0073ff"
 icon_only = false
 click_topic = "area.open"
 click_payload = { area_id = "office_area" }
@@ -49,6 +76,13 @@ icon = "nf-md-sofa"
 icon_only = false
 click_topic = "area.open"
 click_payload = { area_id = "livingroom_area" }
+
+[sd_light_bedroom_button]
+main_text = "Licht Schlafzimmer"
+icon = "nf-md-bed"
+icon_only = false
+click_topic = "area.open"
+click_payload = { area_id = "bedroom_area" }
 
 [sd_weather_widget]
 width = 72
@@ -91,14 +125,12 @@ plugins = [
     { id = "sd_office_desk_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_office_window_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_office_kommode_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_office_floor_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_office_fan", path = "target/release/libsmearor_button_widget.so" },
 ]
 
 [sd_office_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "office_area" }
 
 [sd_office_desk_light]
@@ -143,6 +175,20 @@ init_payload = { method = "Get", url = "http://192.168.178.31/color/0", response
 state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
 state_css_class = "light-active"
 
+[sd_office_floor_light]
+main_text = "Floor"
+icon = "nf-md-floor_lamp"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=on", response_topic = "service.http.response.shelly.office.floor.light.sd" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=off", response_topic = "service.http.response.shelly.office.floor.light.sd" }
+state_topic = "service.http.response.shelly.office.floor.light.sd"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.34/relay/0", response_topic = "service.http.response.shelly.office.floor.light.sd" }
+state_icon = "{ison?nf-md-floor_lamp:nf-md-floor_lamp_outline}"
+state_css_class = "light-active"
+
 [sd_office_fan]
 main_text = "Fan"
 icon = "nf-md-fan"
@@ -171,17 +217,16 @@ plugins = [
     { id = "sd_livingroom_couch_floor_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_livingroom_couch_wall_light", path = "target/release/libsmearor_button_widget.so" },
     { id = "sd_livingroom_vitrine_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_livingroom_vorhang_light", path = "target/release/libsmearor_button_widget.so" },
 ]
 
 [sd_livingroom_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "livingroom_area" }
 
 [sd_livingroom_couch_floor_light]
 main_text = "Couch Floor"
+info_text = "Wohnzimmer"
 icon = "nf-md-led_strip"
 icon_only = false
 click_topic = "service.http.request"
@@ -195,7 +240,8 @@ state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
 state_css_class = "light-active"
 
 [sd_livingroom_couch_wall_light]
-main_text = "Couch Wall"
+main_text = "Couch wall"
+info_text = "Wohnzimmer"
 icon = "nf-md-led_strip"
 icon_only = false
 click_topic = "service.http.request"
@@ -210,6 +256,7 @@ state_css_class = "light-active"
 
 [sd_livingroom_vitrine_light]
 main_text = "Vitrine"
+info_text = "Wohnzimmer"
 icon = "nf-md-led_strip"
 icon_only = false
 click_topic = "service.http.request"
@@ -219,6 +266,102 @@ longpress_payload = { method = "Get", url = "http://192.168.178.29/color/0?turn=
 state_topic = "service.http.response.shelly.livingroom.vitrine.light.sd"
 init_topic = "service.http.request"
 init_payload = { method = "Get", url = "http://192.168.178.29/color/0", response_topic = "service.http.response.shelly.livingroom.vitrine.light.sd" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+
+[sd_livingroom_vorhang_light]
+main_text = "Vorhang"
+info_text = "Wohnzimmer"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.74/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.livingroom.vorhang.light.sd" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.74/color/0?turn=off", response_topic = "service.http.response.shelly.livingroom.vorhang.light.sd" }
+state_topic = "service.http.response.shelly.livingroom.vorhang.light.sd"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.74/color/0", response_topic = "service.http.response.shelly.livingroom.vorhang.light.sd" }
+state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
+state_css_class = "light-active"
+
+# --- Area 3b: bedroom_area ---
+
+[bedroom_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "sd_bedroom_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_bedroom_main_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_bedroom_henna_large_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_bedroom_henna_small_light", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_bedroom_kommode_light", path = "target/release/libsmearor_button_widget.so" },
+]
+
+[sd_bedroom_close_button]
+defaults = "close_button"
+click_payload = { area_id = "bedroom_area" }
+
+[sd_bedroom_main_light]
+main_text = "Main"
+info_text = "Schlafzimmer"
+icon = "nf-md-ceiling_light"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.26/relay/0?turn=on", response_topic = "service.http.response.shelly.bedroom.main.light.sd" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.26/relay/0?turn=off", response_topic = "service.http.response.shelly.bedroom.main.light.sd" }
+state_topic = "service.http.response.shelly.bedroom.main.light.sd"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.26/relay/0", response_topic = "service.http.response.shelly.bedroom.main.light.sd" }
+state_icon = "{ison?nf-md-ceiling_light:nf-md-ceiling_light_outline}"
+state_css_class = "light-active"
+
+[sd_bedroom_henna_large_light]
+main_text = "Henna Large"
+info_text = "Schlafzimmer"
+icon = "nf-md-floor_lamp"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=on", response_topic = "service.http.response.shelly.bedroom.henna.large.light.sd" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.34/relay/0?turn=off", response_topic = "service.http.response.shelly.bedroom.henna.large.light.sd" }
+state_topic = "service.http.response.shelly.bedroom.henna.large.light.sd"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.34/relay/0", response_topic = "service.http.response.shelly.bedroom.henna.large.light.sd" }
+state_icon = "{ison?nf-md-floor_lamp:nf-md-floor_lamp_outline}"
+state_css_class = "light-active"
+
+[sd_bedroom_henna_small_light]
+main_text = "Henna Small"
+info_text = "Schlafzimmer"
+icon = "nf-md-desk_lamp"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.32/relay/0?turn=on", response_topic = "service.http.response.shelly.bedroom.henna.small.light.sd" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.32/relay/0?turn=off", response_topic = "service.http.response.shelly.bedroom.henna.small.light.sd" }
+state_topic = "service.http.response.shelly.bedroom.henna.small.light.sd"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.32/relay/0", response_topic = "service.http.response.shelly.bedroom.henna.small.light.sd" }
+state_icon = "{ison?nf-md-desk_lamp:nf-md-lamp_outline}"
+state_css_class = "light-active"
+
+[sd_bedroom_kommode_light]
+main_text = "Kommode"
+info_text = "Schlafzimmer"
+icon = "nf-md-led_strip"
+icon_only = false
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=on&red=255&green=0&blue=0&gain=100", response_topic = "service.http.response.shelly.bedroom.kommode.light.sd" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=off", response_topic = "service.http.response.shelly.bedroom.kommode.light.sd" }
+state_topic = "service.http.response.shelly.bedroom.kommode.light.sd"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.33/color/0", response_topic = "service.http.response.shelly.bedroom.kommode.light.sd" }
 state_icon = "{ison?nf-md-led_strip:nf-md-led_strip_variant_off}"
 state_css_class = "light-active"
 
@@ -248,10 +391,7 @@ plugins = [
 ]
 
 [sd_weather_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "weather_area" }
 
 [sd_weather_more_button]
@@ -281,10 +421,7 @@ plugins = [
 ]
 
 [sd_weather_details_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "weather_details_area" }
 
 # --- Area 5: audio_area ---
@@ -309,10 +446,7 @@ plugins = [
 ]
 
 [sd_audio_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "audio_area" }
 
 [sd_audio_volume]
@@ -360,7 +494,7 @@ compound_longpress_topic = "service.audio.command"
 compound_longpress_payload = { action = "ToggleMute" }
 
 # --- Area 5b: clock_area ---
-# Multi-span clock widgets — each spans 2 buttons horizontally
+# Multi-span clock widgets — BigDigital/BigDate span 2 buttons, Timer/Countdown span 3 buttons
 
 [clock_area]
 area_type = "scroll"
@@ -377,16 +511,23 @@ plugins = [
     { id = "sd_clock_big_date_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_date", span_group = "sd_clock_big_date", span_index = 1 },
     { id = "sd_clock_countdown_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_countdown", span_group = "sd_clock_countdown", span_index = 0 },
     { id = "sd_clock_countdown_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_countdown", span_group = "sd_clock_countdown", span_index = 1 },
+    { id = "sd_clock_countdown_2", path = "target/release/libsmearor_clock_widget.so", widget = "clock_countdown", span_group = "sd_clock_countdown", span_index = 2 },
     { id = "sd_clock_timer_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_timer", span_group = "sd_clock_timer", span_index = 0 },
     { id = "sd_clock_timer_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_timer", span_group = "sd_clock_timer", span_index = 1 },
+    { id = "sd_clock_timer_2", path = "target/release/libsmearor_clock_widget.so", widget = "clock_timer", span_group = "sd_clock_timer", span_index = 2 },
+    { id = "sd_clock_2d_button", path = "target/release/libsmearor_button_widget.so" },
 ]
 
 [sd_clock_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "clock_area" }
+
+[sd_clock_2d_button]
+main_text = "2D"
+icon = "nf-md-grid"
+icon_only = true
+click_topic = "area.open"
+click_payload = { area_id = "clock_2d_area" }
 
 [sd_clock_big_digital_0]
 render_mode = "graphic_only"
@@ -408,25 +549,68 @@ render_mode = "graphic_only"
 longpress_topic = "area.close"
 longpress_payload = { area_id = "clock_area" }
 
+# Countdown: Click@0 = +1min, Click@1 = +1s, Click@2 = reset, Longpress@0 = start, Longpress@1 = pause
 [sd_clock_countdown_0]
 render_mode = "graphic_only"
-click_topic = "area.close"
-click_payload = { area_id = "clock_area" }
 
 [sd_clock_countdown_1]
 render_mode = "graphic_only"
-click_topic = "area.close"
-click_payload = { area_id = "clock_area" }
 
+[sd_clock_countdown_2]
+render_mode = "graphic_only"
+
+# Timer: Click@0 = start, Click@1 = pause, Click@2 = reset
 [sd_clock_timer_0]
 render_mode = "graphic_only"
-click_topic = "area.close"
-click_payload = { area_id = "clock_area" }
 
 [sd_clock_timer_1]
 render_mode = "graphic_only"
-click_topic = "area.close"
-click_payload = { area_id = "clock_area" }
+
+[sd_clock_timer_2]
+render_mode = "graphic_only"
+
+# --- Area 5b: clock_2d_area ---
+# 2D span group example: 2×2 grid span using clock_big_digital
+
+[clock_2d_area]
+area_type = "scroll"
+align = "center"
+open_transition = "SlideLeft"
+close_transition = "SlideRight"
+auto_close = false
+close_on_escape = true
+plugins = [
+    { id = "sd_clock_2d_big_date_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_date", span_group = "sd_clock_big_date_grid", span_index = 0, span_rows = 2, span_cols = 2 },
+    { id = "sd_clock_2d_big_date_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_date", span_group = "sd_clock_big_date_grid", span_index = 1, span_rows = 2, span_cols = 2 },
+    { id = "sd_clock_2d_big_date_2", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_date", span_group = "sd_clock_big_date_grid", span_index = 2, span_rows = 2, span_cols = 2 },
+    { id = "sd_clock_2d_big_date_3", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_date", span_group = "sd_clock_big_date_grid", span_index = 3, span_rows = 2, span_cols = 2 },
+    { id = "sd_clock_2d_close_button", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_clock_2d_big_digital_0", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "sd_clock_big_digital_grid", span_index = 0, span_rows = 3, span_cols = 2 },
+    { id = "sd_clock_2d_big_digital_1", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "sd_clock_big_digital_grid", span_index = 1, span_rows = 3, span_cols = 2 },
+    { id = "sd_clock_2d_big_digital_2", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "sd_clock_big_digital_grid", span_index = 2, span_rows = 3, span_cols = 2 },
+    { id = "sd_clock_2d_big_digital_3", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "sd_clock_big_digital_grid", span_index = 3, span_rows = 3, span_cols = 2 },
+    { id = "sd_clock_2d_big_digital_4", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "sd_clock_big_digital_grid", span_index = 4, span_rows = 3, span_cols = 2 },
+    { id = "sd_clock_2d_big_digital_5", path = "target/release/libsmearor_clock_widget.so", widget = "clock_big_digital", span_group = "sd_clock_big_digital_grid", span_index = 5, span_rows = 3, span_cols = 2 },
+    { id = "sd_clock_2d_close_button_2", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_clock_2d_close_button_3", path = "target/release/libsmearor_button_widget.so" },
+    { id = "sd_clock_2d_close_button_4", path = "target/release/libsmearor_button_widget.so" },
+]
+
+[sd_clock_2d_close_button]
+defaults = "close_button"
+click_payload = { area_id = "clock_2d_area" }
+
+[sd_clock_2d_close_button_2]
+defaults = "close_button"
+click_payload = { area_id = "clock_2d_area" }
+
+[sd_clock_2d_close_button_3]
+defaults = "close_button"
+click_payload = { area_id = "clock_2d_area" }
+
+[sd_clock_2d_close_button_4]
+defaults = "close_button"
+click_payload = { area_id = "clock_2d_area" }
 
 # --- Area 6: mpris_area ---
 # Atomic MPRIS widgets — each shows a single media view
@@ -458,10 +642,7 @@ plugins = [
 ]
 
 [sd_mpris_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "mpris_area" }
 
 [sd_mpris_album_art]
@@ -536,15 +717,15 @@ click_payload = { action = "CycleLoop" }
 main_text = "Sysinfo"
 icon = "nf-fa-microchip"
 icon_only = false
-click_topic = "area.open"
-click_payload = { area_id = "sysinfo_area" }
+longpress_topic = "area.open"
+longpress_payload = { area_id = "sysinfo_area" }
 
 [sd_network_menu_button]
 main_text = "Network"
 icon = "nf-md-wifi"
 icon_only = false
-click_topic = "area.open"
-click_payload = { area_id = "network_area" }
+longpress_topic = "area.open"
+longpress_payload = { area_id = "network_area" }
 
 # --- Area 7b: network_area ---
 # Atomic network widgets — each shows a single network view
@@ -565,10 +746,7 @@ plugins = [
 ]
 
 [sd_network_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "network_area" }
 
 [sd_network_wifi_status]
@@ -613,10 +791,7 @@ plugins = [
 ]
 
 [sd_sysinfo_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "sysinfo_area" }
 
 [sd_games_menu_button]
@@ -640,10 +815,7 @@ plugins = [
 ]
 
 [sd_games_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "games_area" }
 
 # --- Area 7a: puzzle_games_area ---
@@ -669,10 +841,7 @@ plugins = [
 ]
 
 [sd_puzzle_games_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "puzzle_games_area" }
 
 [sd_gnome_2048]
@@ -711,10 +880,7 @@ plugins = [
 ]
 
 [sd_board_games_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "board_games_area" }
 
 [sd_gnome_chess]
@@ -752,10 +918,7 @@ plugins = [
 ]
 
 [sd_power_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "power_area" }
 
 [sd_power_shutdown]
@@ -821,10 +984,7 @@ plugins = [
 ]
 
 [sd_notifications_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "notifications_area" }
 
 [sd_notifications_count]
@@ -869,10 +1029,7 @@ plugins = [
 ]
 
 [sd_voice_assistant_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "voice_assistant_area" }
 
 [sd_voice_assistant_listen]
@@ -914,10 +1071,7 @@ plugins = [
 ]
 
 [sd_wallpaper_close_button]
-main_text = "Zurück"
-icon = "nf-md-undo"
-icon_only = true
-click_topic = "area.close"
+defaults = "close_button"
 click_payload = { area_id = "wallpaper_area" }
 
 [sd_wallpaper_current]
