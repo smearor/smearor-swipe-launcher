@@ -7,7 +7,7 @@ areas = ["left_area", "scroll_band", "right_area"]
 
 # Launcher settings
 [launcher]
-rotation = "Bottom"
+rotation = 0
 animation_speed = 300
 animation_overshoot = 0.1
 animations_enabled = true

@@ -1,7 +1,7 @@
 [Unit]
 Description=Smearor Swipe Launcher (Hyprland)
-After=hyprland-session.target
-Requires=hyprland-session.target
+After=graphical-session.target
+Requires=graphical-session.target
 
 [Service]
 Type=simple
@@ -10,4 +10,4 @@ Restart=on-failure
 RestartSec=5
 
 [Install]
-WantedBy=hyprland-session.target
+WantedBy=graphical-session.target
