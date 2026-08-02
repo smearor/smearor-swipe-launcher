@@ -31,6 +31,7 @@ tracing-subscriber = { workspace = true }
 [package.metadata.deb]
 name = "smearor-service-streamdeck"
 depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
+maintainer-scripts = "debian"
 assets = [
     ["target/release/libsmearor_streamdeck_service.so", "/usr/lib/smearor/", "644"],
     ["../../resources/udev/52-streamdeck.rules", "/usr/lib/udev/rules.d/", "644"],
