@@ -36,7 +36,7 @@ impl LoadedPlugin {
             let library = Arc::new(Library::new(&path)?);
 
             trace!("load plugin: {:?}", config);
-            let constructor = library
+            let constructor = (&*library)
                 .get_stabbied::<WidgetPluginConstructor>(b"smearor_plugin_create")
                 .map_err(|e| LauncherError::PluginStabbiedLoadError(e.to_string()))?;
 
