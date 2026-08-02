@@ -47,7 +47,6 @@ glib-build-tools = { workspace = true }
 [package.metadata.deb]
 name = "smearor-swipe-launcher"
 maintainer = "Andreas Schaeffer"
-license = "MIT"
 extended-description = "Smearor Swipe Launcher — a GTK4 layer-shell launcher for Wayland compositors"
 depends = "$auto, gtk4-layer-shell"
 maintainer-scripts = "debian"

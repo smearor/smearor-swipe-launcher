@@ -9,7 +9,6 @@ authors.workspace = true
 [package.metadata.deb]
 name = "smearor-swipe-launcher-full"
 maintainer = "Andreas Schaeffer"
-license = "MIT"
 extended-description = "Metapackage that installs the Smearor Swipe Launcher with all standard widgets and services"
 depends = """\
 smearor-swipe-launcher (>= 0.1.0), \
