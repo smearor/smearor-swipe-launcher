@@ -21,9 +21,7 @@ active = false
 css_classes = ["close-button"]
 
 [launcher]
-rotation = 0
-layer = "top"
-namespace = "smearor-swipe-launcher"
+instance_type = "headless"
 
 [layout]
 orientation = "horizontal"

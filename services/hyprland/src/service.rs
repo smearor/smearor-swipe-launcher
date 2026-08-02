@@ -87,7 +87,6 @@ use smearor_hyprland_model::SystemDispatchOps;
 use smearor_hyprland_model::ToggleDispatchKind;
 use smearor_hyprland_model::ToggleDispatchOps;
 use smearor_hyprland_model::ToggleDpmsDispatchMessage;
-use smearor_hyprland_model::ToggleFloatingDispatchMessage;
 use smearor_hyprland_model::ToggleFullscreenDispatchMessage;
 use smearor_hyprland_model::ToggleSpecialWorkspaceDispatchMessage;
 use smearor_hyprland_model::WindowDispatchKind;
@@ -589,13 +588,7 @@ async fn handle_toggle_dispatch(kind: ToggleDispatchKind, ops: ToggleDispatchOps
             }
         }
         ToggleDispatchKind::ToggleFakeFullscreen => Dispatch::call_async(DispatchType::ToggleFakeFullscreen).await,
-        ToggleDispatchKind::ToggleFloating => {
-            let opt: Option<ToggleFloatingDispatchMessage> = ops.toggle_floating.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(_payload) => handle_toggle_floating().await,
-                None => Ok(()),
-            }
-        }
+        ToggleDispatchKind::ToggleFloating => handle_toggle_floating().await,
         ToggleDispatchKind::ToggleFullscreen => {
             let opt = ops.toggle_fullscreen.match_owned(|value| Some(value.into()), || None);
             match opt {

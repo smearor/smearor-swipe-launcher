@@ -29,6 +29,7 @@ pub const TOPIC_SYSTEM_DISPATCH: &str = "service.hyprland.dispatch.system";
 /// Window-related dispatch message sent by widgets.
 #[stabby::stabby(no_opt)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct HyprlandWindowDispatchMessage {
     /// The dispatch kind selector.
     pub kind: WindowDispatchKind,
@@ -64,6 +65,7 @@ impl SharedMessage for HyprlandWindowDispatchMessage {
 /// Workspace-related dispatch message sent by widgets.
 #[stabby::stabby(no_opt)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct HyprlandWorkspaceDispatchMessage {
     /// The dispatch kind selector.
     pub kind: WorkspaceDispatchKind,
@@ -99,6 +101,7 @@ impl SharedMessage for HyprlandWorkspaceDispatchMessage {
 /// Toggle-related dispatch message sent by widgets.
 #[stabby::stabby(no_opt)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct HyprlandToggleDispatchMessage {
     /// The dispatch kind selector.
     pub kind: ToggleDispatchKind,
@@ -134,6 +137,7 @@ impl SharedMessage for HyprlandToggleDispatchMessage {
 /// System-related dispatch message sent by widgets.
 #[stabby::stabby(no_opt)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct HyprlandSystemDispatchMessage {
     /// The dispatch kind selector.
     pub kind: SystemDispatchKind,

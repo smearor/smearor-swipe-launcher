@@ -160,10 +160,10 @@ main_text = "Previous"
 info_text = "Workspace"
 icon = "nf-md-skip_previous"
 tooltip = "Previous Workspace"
-click_topic = "service.hyprland.dispatch"
-click_payload = { kind = "Workspace", identifier = { kind = "Relative", id = -1 } }
-longpress_topic = "service.hyprland.dispatch"
-longpress_payload = { kind = "MoveToWorkspace", identifier = { kind = "RelativeOpen", id = -1 } }
+click_topic = "service.hyprland.dispatch.workspace"
+click_payload = { kind = "Workspace", ops = { workspace = { identifier = { kind = "Relative", id = -1 } } } }
+longpress_topic = "service.hyprland.dispatch.workspace"
+longpress_payload = { kind = "MoveToWorkspace", ops = { move_to_workspace = { identifier = { kind = "RelativeOpen", id = -1 } } } }
 
 [next_workspace]
 defaults = "menu_button"
@@ -171,10 +171,10 @@ main_text = "Next"
 info_text = "Workspace"
 icon = "nf-md-skip_next"
 tooltip = "Next Workspace"
-click_topic = "service.hyprland.dispatch"
-click_payload = { kind = "Workspace", identifier = { kind = "Relative", id = 1 } }
-longpress_topic = "service.hyprland.dispatch"
-longpress_payload = { kind = "MoveToWorkspace", identifier = { kind = "RelativeOpen", id = 1 } }
+click_topic = "service.hyprland.dispatch.workspace"
+click_payload = { kind = "Workspace", ops = { workspace = { identifier = { kind = "Relative", id = 1 } } } }
+longpress_topic = "service.hyprland.dispatch.workspace"
+longpress_payload = { kind = "MoveToWorkspace", ops = { move_to_workspace = { identifier = { kind = "RelativeOpen", id = 1 } } } }
 
 [toggle_floating]
 defaults = "menu_button"
@@ -182,7 +182,7 @@ main_text = "Toggle Floating"
 info_text = "Window"
 icon = "nf-md-window_restore"
 tooltip = "Toggle Floating"
-click_topic = "service.hyprland.dispatch"
+click_topic = "service.hyprland.dispatch.toggle"
 click_payload = { kind = "ToggleFloating" }
 
 [close_active_window]
@@ -191,7 +191,7 @@ main_text = "Close"
 info_text = "Window"
 icon = "nf-md-window_close"
 tooltip = "Close Active Window"
-click_topic = "service.hyprland.dispatch"
+click_topic = "service.hyprland.dispatch.window"
 click_payload = { kind = "KillActiveWindow" }
 
 [toggle_fullscreen]
@@ -200,10 +200,10 @@ main_text = "Fullscreen"
 info_text = "Window"
 icon = "nf-md-fullscreen"
 tooltip = "Toggle Fullscreen"
-click_topic = "service.hyprland.dispatch"
-click_payload = { kind = "ToggleFullscreen", fullscreen_type = "Maximize" }
-longpress_topic = "service.hyprland.dispatch"
-longpress_payload = { kind = "ToggleFullscreen", fullscreen_type = "Real" }
+click_topic = "service.hyprland.dispatch.toggle"
+click_payload = { kind = "ToggleFullscreen", ops = { toggle_fullscreen = { fullscreen_type = "Maximize" } } }
+longpress_topic = "service.hyprland.dispatch.toggle"
+longpress_payload = { kind = "ToggleFullscreen", ops = { toggle_fullscreen = { fullscreen_type = "Real" } } }
 
 [mpris]
 max_width_chars = 18
