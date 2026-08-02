@@ -128,7 +128,7 @@ User Query → Nucleo-Matcher → Tool Catalog → Selected Tools → Execution
 #### **Current Storage Location**
 
 ```
-/home/aschaeffer/git/smearor-swipe-launcher/models/
+$HOME/git/smearor-swipe-launcher/models/
 ├── qwen2.5-1.5b-instruct-q4_k_m.gguf (1.04 GB)
 ├── qwen2.5-3b-instruct-q4_k_m.gguf (1.96 GB)
 ├── gemma-4-E4B-it-Q4_K_M.gguf (4.96 GB)

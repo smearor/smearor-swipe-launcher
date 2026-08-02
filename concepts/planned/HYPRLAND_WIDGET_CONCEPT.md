@@ -2,10 +2,10 @@ Basierend auf den implementierten Dispatch- und CTL-Handlern im Hyprland Service
 
 ## Bereits implementiert (Workspace Switcher)
 
-- **Workspace wechseln** ([SwitchWorkspaceMessage](cci:2://file:///home/aschaeffer/git/smearor-swipe-launcher/model/workspace/src/switcher.rs:101:0-104:1)) -
-  Swipe-Gesten zum Wechseln zwischen Workspaces
-- **Workspace erstellen** ([CreateWorkspaceMessage](cci:2://file:///home/aschaeffer/git/smearor-swipe-launcher/model/workspace/src/switcher.rs:141:0-146:1)) -
-  Wispen über den Rand hinaus erstellt neuen Workspace
+- **Workspace wechseln** ([SwitchWorkspaceMessage](cci:2://file:///$HOME/git/smearor-swipe-launcher/model/workspace/src/switcher.rs:101:0-104:1)) - Swipe-Gesten
+  zum Wechseln zwischen Workspaces
+- **Workspace erstellen** ([CreateWorkspaceMessage](cci:2://file:///$HOME/git/smearor-swipe-launcher/model/workspace/src/switcher.rs:141:0-146:1)) - Wispen über
+  den Rand hinaus erstellt neuen Workspace
 - **Workspace-Snapshot** - Aktuelle Workspace-Liste und aktiver Workspace anzeigen
 
 ## Geeignete weitere Widget-Ideen
