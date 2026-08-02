@@ -21,3 +21,10 @@ tracing-subscriber = { workspace = true }
 zbus = { workspace = true }
 smearor-model-compositor = { path = "../../model/workspace" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+
+[package.metadata.deb]
+name = "smearor-service-gnome"
+depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
+assets = [
+    ["target/release/libsmearor_gnome_service.so", "/usr/lib/smearor/", "644"],
+]

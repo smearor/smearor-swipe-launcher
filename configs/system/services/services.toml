@@ -1,0 +1,172 @@
+# System-wide default services configuration
+# Installed to /usr/share/smearor/services/services.toml
+# Uses name= entries instead of path= for service resolution
+
+[mcp]
+bind_address = "127.0.0.1"
+port = 8765
+
+[web]
+enabled = false
+bind_address = "127.0.0.1"
+port = 8080
+
+[[services]]
+id = "app_launcher"
+name = "app_launcher_service"
+
+[[services]]
+id = "audio"
+name = "audio_service"
+
+[[services]]
+id = "mpris"
+name = "mpris_service"
+
+[[services]]
+id = "notifications"
+name = "notifications_service"
+
+[[services]]
+id = "hyprland"
+name = "hyprland_service"
+
+[[services]]
+id = "sysinfo"
+name = "sysinfo_service"
+cpu_temperature_source = "hwmon"
+
+[[services]]
+id = "http"
+name = "http_service"
+
+[[services]]
+id = "weather"
+name = "weather_service"
+
+[[services]]
+id = "power"
+name = "power_service"
+
+[[services]]
+id = "network"
+name = "network_service"
+
+[[services]]
+id = "wayland"
+name = "wayland_service"
+
+[[services]]
+id = "gnome"
+name = "gnome_service"
+
+[[services]]
+id = "terminal_command"
+name = "terminal_command_service"
+
+[[services]]
+id = "wallpaper"
+name = "wallpaper_service"
+
+[[services]]
+id = "streamdeck"
+name = "streamdeck_service"
+
+[[services]]
+id = "streamcontrollerx"
+name = "loupedeck_service"
+
+[[services]]
+id = "personalization"
+name = "personalization_service"
+
+#[[services]]
+#id = "voice_assistant"
+#name = "voice_assistant_service"
+
+[http]
+allowed_urls = ["https://api.open-meteo.com/*", "https://api.sunrise-sunset.org/*"]
+default_timeout_ms = 10000
+max_response_bytes = 1048576
+
+[app_launcher]
+smearor_wrot_path = "smearor-wrot"
+rotation = 0
+
+[sysinfo]
+update_interval_ms = 5000
+enable_cpu_temperature = true
+enable_battery = true
+enable_disks = true
+enable_network = true
+cpu_temperature_component = "Tctl"
+
+[weather]
+latitude = 0.0
+longitude = 0.0
+update_interval_minutes = 30
+enable_air_quality = true
+timezone = "auto"
+forecast_days = 2
+
+[power]
+countdown_seconds = 10
+enable_inhibitor_detection = true
+enable_scheduled_actions = true
+mcp_enabled = false
+refresh_interval_seconds = 30
+lock_command = ""
+logout_command = ""
+
+[network]
+refresh_interval_seconds = 5
+enable_wifi_scan = true
+enable_vpn_management = true
+enable_throughput_monitoring = true
+throughput_sample_interval_seconds = 2
+public_ip_url = "https://api.ipify.org?format=json"
+
+[wallpaper]
+default_theme = "Smearor"
+auto_start = false
+kill_grace_period_ms = 3000
+
+[wayland]
+enable_workspace_tracking = true
+
+[gnome]
+enable_workspace_tracking = true
+poll_interval_ms = 500
+
+[terminal_command.commands.btop]
+command = "smearor-wrot"
+args = ["--auto-color-mask", "--background-color", "#f5b70033", "--decorated", "alacritty", "--command", "btop"]
+env = { }
+
+[streamdeck]
+brightness = 100
+poll_interval_ms = 50
+auto_dimming_enabled = true
+auto_dim_timeout_ms = 60000
+auto_dim_brightness = 15
+auto_dim_fade_step_ms = 50
+auto_dim_fade_step_percent = 2
+auto_dim_fade_up_step_percent = 10
+
+[streamcontrollerx]
+brightness = 100
+poll_interval_ms = 50
+auto_dimming_enabled = true
+auto_dim_timeout_ms = 60000
+auto_dim_brightness = 15
+auto_dim_fade_step_ms = 50
+auto_dim_fade_step_percent = 10
+auto_dim_fade_up_step_percent = 25
+
+[personalization]
+locale = "en-US"
+timezone = "UTC"
+enable_location = true
+update_interval_seconds = 300
+location_update_interval_seconds = 1800
+location_change_threshold = 0.01

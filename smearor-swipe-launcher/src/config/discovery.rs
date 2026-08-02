@@ -3,6 +3,7 @@ use miette::miette;
 use std::path::Path;
 use std::path::PathBuf;
 use tracing::debug;
+use tracing::info;
 
 /// Filenames excluded from launcher config auto-discovery in the working directory.
 const EXCLUDED_TOML_FILES: &[&str] = &["services.toml", "wallpaper.toml"];
@@ -153,6 +154,55 @@ impl ConfigDiscoveryService {
             }
         }
         Ok(())
+    }
+
+    /// Bootstraps user config files from system-wide defaults on first run.
+    ///
+    /// Copies default configs from `/usr/share/smearor/` to `~/.config/smearor/`
+    /// if they don't already exist. This ensures a fresh user account gets working
+    /// configs after first launch without requiring manual setup.
+    pub fn bootstrap_user_configs(&self) {
+        let Some(xdg_dir) = Self::xdg_config_dir() else {
+            debug!("Cannot determine XDG config directory, skipping bootstrap");
+            return;
+        };
+
+        let system_dir = Path::new("/usr/share/smearor");
+
+        Self::bootstrap_file(system_dir.join("launcher/config.toml"), xdg_dir.join("launcher/config.toml"));
+
+        Self::bootstrap_file(system_dir.join("services/services.toml"), xdg_dir.join("services/services.toml"));
+
+        Self::bootstrap_file(system_dir.join("services/wallpaper.toml"), xdg_dir.join("services/wallpaper.toml"));
+    }
+
+    /// Copies a file from `source` to `destination` if the destination does not exist.
+    /// Creates parent directories as needed.
+    fn bootstrap_file(source: PathBuf, destination: PathBuf) {
+        if destination.is_file() {
+            return;
+        }
+
+        if !source.is_file() {
+            debug!("System default not found, skipping bootstrap: {}", source.display());
+            return;
+        }
+
+        if let Some(parent) = destination.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                debug!("Failed to create directory {}: {}", parent.display(), e);
+                return;
+            }
+        }
+
+        match std::fs::copy(&source, &destination) {
+            Ok(_) => {
+                info!("Bootstrapped config: {} -> {}", source.display(), destination.display());
+            }
+            Err(e) => {
+                debug!("Failed to bootstrap config {} -> {}: {}", source.display(), destination.display(), e);
+            }
+        }
     }
 
     /// Collects all `*.toml` files in a directory, sorted alphabetically by filename.

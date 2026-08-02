@@ -13,7 +13,7 @@ const LIBRARY_EXTENSION: &str = "dylib";
 const LIBRARY_EXTENSION: &str = "dll";
 
 /// System-wide plugin directory.
-const SYSTEM_LIB_DIR: &str = "/usr/local/lib/smearor";
+const SYSTEM_LIB_DIR: &str = "/usr/lib/smearor";
 
 /// Resolves a plugin library path from either an explicit `path` or a `name`.
 ///
@@ -21,7 +21,7 @@ const SYSTEM_LIB_DIR: &str = "/usr/local/lib/smearor";
 /// When `name` is provided, the host searches for
 /// `libsmearor_<name>.<ext>` in the following directories (first match wins):
 /// - `~/.local/lib/smearor/` (user-local)
-/// - `/usr/local/lib/smearor/` (system-wide)
+/// - `/usr/lib/smearor/` (system-wide)
 ///
 /// Returns an error when neither `path` nor `name` is provided, or when
 /// a `name`-based lookup finds no matching file in any search directory.

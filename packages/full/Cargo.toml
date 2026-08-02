@@ -1,0 +1,46 @@
+[package]
+name = "smearor-swipe-launcher-full"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[package.metadata.deb]
+name = "smearor-swipe-launcher-full"
+maintainer = "Andreas Schaeffer"
+license = "MIT"
+extended-description = "Metapackage that installs the Smearor Swipe Launcher with all standard widgets and services"
+depends = """\
+smearor-swipe-launcher (>= 0.1.0), \
+smearor-plugin-app-launcher (>= 0.1.0), \
+smearor-plugin-audio (>= 0.1.0), \
+smearor-plugin-button (>= 0.1.0), \
+smearor-plugin-clock (>= 0.1.0), \
+smearor-plugin-mpris (>= 0.1.0), \
+smearor-plugin-network (>= 0.1.0), \
+smearor-plugin-notifications (>= 0.1.0), \
+smearor-plugin-power (>= 0.1.0), \
+smearor-plugin-sysinfo (>= 0.1.0), \
+smearor-plugin-voice-assistant (>= 0.1.0), \
+smearor-plugin-wallpaper (>= 0.1.0), \
+smearor-plugin-weather (>= 0.1.0), \
+smearor-plugin-workspace-switcher (>= 0.1.0), \
+smearor-service-app-launcher (>= 0.1.0), \
+smearor-service-audio (>= 0.1.0), \
+smearor-service-gnome (>= 0.1.0), \
+smearor-service-http (>= 0.1.0), \
+smearor-service-hyprland (>= 0.1.0), \
+smearor-service-mpris (>= 0.1.0), \
+smearor-service-network (>= 0.1.0), \
+smearor-service-notifications (>= 0.1.0), \
+smearor-service-personalization (>= 0.1.0), \
+smearor-service-power (>= 0.1.0), \
+smearor-service-sysinfo (>= 0.1.0), \
+smearor-service-terminal-command (>= 0.1.0), \
+smearor-service-voice-assistant (>= 0.1.0), \
+smearor-service-wallpaper (>= 0.1.0), \
+smearor-service-wayland (>= 0.1.0), \
+smearor-service-weather (>= 0.1.0)"""
+recommends = "smearor-service-loupedeck (>= 0.1.0), smearor-service-streamdeck (>= 0.1.0)"
+assets = []

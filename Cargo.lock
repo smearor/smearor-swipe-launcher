@@ -7113,6 +7113,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "smearor-swipe-launcher-full"
+version = "0.1.0"
+
+[[package]]
 name = "smearor-swipe-launcher-plugin-api"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,12 @@
+[Unit]
+Description=Smearor Swipe Launcher
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/smearor-swipe-launcher
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

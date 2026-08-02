@@ -43,3 +43,34 @@ toml = { workspace = true }
 
 [build-dependencies]
 glib-build-tools = { workspace = true }
+
+[package.metadata.deb]
+name = "smearor-swipe-launcher"
+maintainer = "Andreas Schaeffer"
+license = "MIT"
+extended-description = "Smearor Swipe Launcher — a GTK4 layer-shell launcher for Wayland compositors"
+depends = "$auto, gtk4-layer-shell"
+maintainer-scripts = "debian"
+assets = [
+    ["target/release/smearor-swipe-launcher", "/usr/bin/", "755"],
+    ["resources/systemd/smearor-swipe-launcher.service", "/usr/lib/systemd/user/", "644"],
+    ["resources/systemd/smearor-swipe-launcher-hyprland.service", "/usr/lib/systemd/user/", "644"],
+    ["resources/systemd/smearor-swipe-launcher-gnome.service", "/usr/lib/systemd/user/", "644"],
+    ["configs/system/launcher/config.toml", "/usr/share/smearor/launcher/config.toml", "644"],
+    ["configs/system/services/services.toml", "/usr/share/smearor/services/services.toml", "644"],
+    ["configs/system/services/wallpaper.toml", "/usr/share/smearor/services/wallpaper.toml", "644"],
+    ["configs/launcher/config.toml", "/usr/share/smearor/examples/launcher/config.toml", "644"],
+    ["configs/launcher/example-bottom.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/launcher/example-left.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/launcher/example-right.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/launcher/example-top.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/launcher/layout_profiles.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/launcher/minimal.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/launcher/rotated-90.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/launcher/streamdeck.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/launcher/streamcontrollerx.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/launcher/web.toml", "/usr/share/smearor/examples/launcher/", "644"],
+    ["configs/areas/scroll_menu.toml", "/usr/share/smearor/examples/areas/", "644"],
+    ["resources/udev/52-loupedeck.rules", "/usr/lib/udev/rules.d/", "644"],
+    ["resources/udev/52-streamdeck.rules", "/usr/lib/udev/rules.d/", "644"],
+]

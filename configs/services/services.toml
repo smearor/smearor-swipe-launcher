@@ -155,7 +155,7 @@ public_ip_url = "https://api.ipify.org?format=json"
 default_theme = "Smearor"
 auto_start = false
 # config_path is optional. If omitted, the launcher resolves wallpaper.toml via:
-# working dir > ~/.config/smearor/services/wallpaper.toml > /usr/local/share/smearor/services/wallpaper.toml
+# working dir > ~/.config/smearor/services/wallpaper.toml > /usr/share/smearor/services/wallpaper.toml
 #config_path = "configs/services/wallpaper.toml"
 kill_grace_period_ms = 3000
 

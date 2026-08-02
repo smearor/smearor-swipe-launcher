@@ -1,0 +1,13 @@
+[Unit]
+Description=Smearor Swipe Launcher (GNOME)
+After=gnome-session.target
+Requires=gnome-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/smearor-swipe-launcher
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=gnome-session.target

@@ -64,6 +64,7 @@ members = [
     "services/wayland",
     "services/weather",
     "smearor-swipe-launcher",
+    "packages/full",
 ]
 
 default-members = [
@@ -129,6 +130,7 @@ default-members = [
     "services/wayland",
     "services/weather",
     "smearor-swipe-launcher",
+    "packages/full",
 ]
 
 [workspace.package]

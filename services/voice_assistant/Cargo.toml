@@ -60,3 +60,11 @@ whisper-cuda = ["whisper-rs/cuda"]
 whisper-hipblas = ["whisper-rs/hipblas"]
 whisper-tracing = ["whisper-rs/tracing_backend"]
 whisper-vulkan = ["whisper-rs/vulkan"]
+
+[package.metadata.deb]
+name = "smearor-service-voice-assistant"
+depends = "$auto, smearor-swipe-launcher (>= 0.1.0), smearor-service-personalization (>= 0.1.0)"
+recommends = "libllama0"
+assets = [
+    ["target/release/libsmearor_voice_assistant_service.so", "/usr/lib/smearor/", "644"],
+]

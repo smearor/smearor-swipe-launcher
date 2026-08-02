@@ -1,0 +1,61 @@
+# System-wide default launcher configuration
+# Installed to /usr/share/smearor/launcher/config.toml
+# Uses name= entries instead of path= for plugin resolution
+
+# Define the order of areas in the layout
+areas = ["left_area", "scroll_band", "right_area"]
+
+# Launcher settings
+[launcher]
+rotation = "Bottom"
+animation_speed = 300
+animation_overshoot = 0.1
+animations_enabled = true
+
+# Layout configuration
+[layout]
+orientation = "Horizontal"
+spacing = 0
+
+# Area configurations
+[left_area]
+area_type = "Fixed"
+width = 200
+transition = "FadeIn"
+auto_close = false
+close_on_escape = false
+plugins = [
+    { id = "clock", name = "clock_widget" }
+]
+
+[scroll_band]
+area_type = "Scroll"
+transition = "SlideLeft"
+auto_close = false
+close_on_escape = false
+plugins = [
+    { id = "app-launcher", name = "app_launcher_widget" }
+]
+
+[right_area]
+area_type = "Fixed"
+width = 150
+transition = "None"
+auto_close = false
+close_on_escape = false
+plugins = [
+    { id = "battery", name = "sysinfo_widget", widget = "battery" }
+]
+
+# Plugin-specific configurations
+[clock]
+format = "%H:%M"
+show_seconds = false
+
+[app-launcher]
+icon_size = 48
+show_descriptions = true
+
+[battery]
+show_percentage = true
+low_battery_threshold = 20

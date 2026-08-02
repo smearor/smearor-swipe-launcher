@@ -20,7 +20,7 @@ pub struct PluginEntry {
     /// The host searches for `libsmearor_<name>.so` in the following
     /// directories (first match wins):
     /// - `~/.local/lib/smearor/` (user-local)
-    /// - `/usr/local/lib/smearor/` (system-wide)
+    /// - `/usr/lib/smearor/` (system-wide)
     ///
     /// Either `path` or `name` must be specified.
     #[serde(default)]

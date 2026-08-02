@@ -25,3 +25,10 @@ smearor-hyprland-status = { path = "../../model/hyprland-status" }
 smearor-hyprland-command = { path = "../../model/hyprland-command" }
 smearor-model-compositor = { path = "../../model/workspace" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+
+[package.metadata.deb]
+name = "smearor-service-hyprland"
+depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
+assets = [
+    ["target/release/libsmearor_hyprland_service.so", "/usr/lib/smearor/", "644"],
+]

@@ -66,8 +66,11 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber).into_diagnostic()?;
     tracing_log::LogTracer::init().into_diagnostic()?;
 
-    // Discover launcher config files (CLI > working dir > XDG config dir)
+    // Bootstrap user configs from system defaults on first run
     let discovery_service = crate::config::discovery::ConfigDiscoveryService::new();
+    discovery_service.bootstrap_user_configs();
+
+    // Discover launcher config files (CLI > working dir > XDG config dir > system default)
     let config_paths = discovery_service.discover_launcher_configs(&args.config)?;
     if config_paths.is_empty() {
         return Err(miette::miette!(

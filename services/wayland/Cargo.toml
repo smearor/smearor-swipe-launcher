@@ -21,3 +21,10 @@ wayland-client = { workspace = true }
 wayland-protocols = { workspace = true }
 smearor-model-compositor = { path = "../../model/workspace" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+
+[package.metadata.deb]
+name = "smearor-service-wayland"
+depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
+assets = [
+    ["target/release/libsmearor_wayland_service.so", "/usr/lib/smearor/", "644"],
+]

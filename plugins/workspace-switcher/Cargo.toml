@@ -27,3 +27,10 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 typed-builder = { workspace = true }
+
+[package.metadata.deb]
+name = "smearor-plugin-workspace-switcher"
+depends = "$auto, smearor-swipe-launcher (>= 0.1.0), smearor-service-hyprland (>= 0.1.0) | smearor-service-gnome (>= 0.1.0) | smearor-service-wayland (>= 0.1.0), smearor-service-personalization (>= 0.1.0)"
+assets = [
+    ["target/release/libsmearor_workspace_switcher.so", "/usr/lib/smearor/", "644"],
+]

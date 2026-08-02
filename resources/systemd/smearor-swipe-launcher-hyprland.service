@@ -1,0 +1,13 @@
+[Unit]
+Description=Smearor Swipe Launcher (Hyprland)
+After=hyprland-session.target
+Requires=hyprland-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/smearor-swipe-launcher
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=hyprland-session.target

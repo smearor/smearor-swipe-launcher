@@ -1,0 +1,18 @@
+# System-wide default wallpaper themes
+# Installed to /usr/share/smearor/services/wallpaper.toml
+# Users can override by creating ~/.config/smearor/services/wallpaper.toml
+
+[[themes]]
+name = "Smearor"
+description = "Default smearor backgrounds"
+preview_image_path = ""
+preview_icon = "nf-weather-stars"
+wallpaper_type = "Video"
+config.Video.directory = "~/Videos/Backgrounds"
+config.Video.outputs = ["ALL"]
+config.Video.loop_playlist = true
+config.Video.shuffle = false
+config.Video.muted = true
+config.Video.volume = 0
+config.Video.speed_percentage = 100
+config.Video.extra_arguments = []
