@@ -30,5 +30,5 @@ smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 name = "smearor-service-hyprland"
 depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
 assets = [
-    ["target/release/libsmearor_hyprland_service.so", "/usr/lib/smearor/", "644"],
+    ["../../target/release/libsmearor_hyprland_service.so", "/usr/lib/smearor/", "644"],
 ]

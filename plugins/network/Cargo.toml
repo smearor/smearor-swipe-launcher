@@ -33,5 +33,5 @@ typed-builder = { workspace = true }
 name = "smearor-plugin-network"
 depends = "$auto, smearor-swipe-launcher (>= 0.1.0), smearor-service-network (>= 0.1.0), smearor-service-personalization (>= 0.1.0)"
 assets = [
-    ["target/release/libsmearor_network_widget.so", "/usr/lib/smearor/", "644"],
+    ["../../target/release/libsmearor_network_widget.so", "/usr/lib/smearor/", "644"],
 ]

@@ -32,5 +32,5 @@ zbus = { workspace = true }
 name = "smearor-service-network"
 depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
 assets = [
-    ["target/release/libsmearor_network_service.so", "/usr/lib/smearor/", "644"],
+    ["../../target/release/libsmearor_network_service.so", "/usr/lib/smearor/", "644"],
 ]
