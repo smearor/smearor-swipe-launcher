@@ -12,14 +12,14 @@ const NERD_FONT_RELATIVE: &str = "resources/NerdFontsSymbolsOnly/SymbolsNerdFont
 /// Relative path to the JetBrains Mono Nerd Font (WOFF2, for labels with full character set).
 const LABEL_FONT_RELATIVE: &str = "resources/JetBrainsMonoNLNerdFont/JetBrainsMonoNLNerdFont-Regular.woff2";
 
-/// System-wide font directory (Debian package install location).
-const SYSTEM_FONT_DIR: &str = "/usr/share/smearor/resources";
+/// System-wide base directory (Debian package install location).
+const SYSTEM_BASE_DIR: &str = "/usr/share/smearor";
 
 /// Search candidate paths for a font file: CWD-relative, system-wide, and executable-relative.
 fn candidate_font_paths(relative: &str) -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
     paths.push(std::path::PathBuf::from(relative));
-    paths.push(std::path::PathBuf::from(SYSTEM_FONT_DIR).join(relative));
+    paths.push(std::path::PathBuf::from(SYSTEM_BASE_DIR).join(relative));
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             paths.push(dir.join(relative));
@@ -37,8 +37,7 @@ fn read_font_file(relative: &str) -> Result<Vec<u8>, std::io::Error> {
                 trace!("render-utils: loaded font from {}", path.display());
                 return Ok(data);
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e),
+            Err(_) => continue,
         }
     }
     Err(std::io::Error::new(
