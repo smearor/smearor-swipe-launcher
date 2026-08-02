@@ -1,183 +1,150 @@
-# `smearor-swipe-launcher`: Swipe-Driven Scrolling App Launcher
+# Smearor Swipe Launcher
 
-## Vision
+A swipe-driven, touch-optimized application launcher for Wayland desktops. Built in Rust with native GTK 4 widgets, multi-instance support, rotation, and a
+plugin-based architecture.
 
-A small ribbon at the bottom of the screen that you can swipe left and right with your fingers to navigate a
+Originally designed for the Smearor touch table, but works on any Wayland desktop — tablets, convertibles, or traditional monitors.
 
-longer list of apps. Clicking on an app launches it. Supports rotation.
+---
 
-## Window
+## Quickstart
 
-- Rust
+### Prerequisites
 
-- GTK-4 Window
+- Rust (Edition 2024, `rustc >= 1.95`)
+- GTK 4 development headers
+- `gtk4-layer-shell`
+- Wayland compositor (Hyprland, GNOME on Wayland, etc.)
+- `libpulse` (for audio plugin)
+- `zbus` (for MPRIS, notifications, GNOME integration)
 
-    - Layer-Shell-Layer
+### From Debian packages
 
-    - No Decorations
-
-    - Rotation also determines the position of the layer:
-
-        - 0 Degrees: bottom
-
-        - 90 Degrees: left
-
-        - 180 Degrees: top
-
-        - 270 Degrees: right
-
-        - Child: RotationWidget
-
-            - Child: SwipeWidget
-
-                - Swipe Left (Touch or Mouse or SUPER+ARROW-KEY): Scroll left
-
-                - Swipe Right (Touch or Mouse or SUPER+ARROW-KEY): Scroll right
-
-                - Swipe Up (Touch or Mouse or SUPER+ARROW-KEY): Parent Menu
-
-                - Swipe Down (Touch or Mouse or SUPER+ARROW-KEY): Scroll
-
-                - Child: MenuEntryWidget (Persistent, left of scrollable)
-
-                    - Child: MenuEntryWidget (Dynamic)
-
-                        - Shows the desktop entry icon
-
-                        - Shows the desktop entry name
-
-                        - Shows the desktop entry description
-
-                        - Click or Touch: Execute Primary Action
-
-                            - Launch menu entry (if smearor-wrot: with --rotation parameter)
-
-                        - Longpress or Longtouch: Execute Secondary Action
-
-                - Child: MenuEntryWidget (Persistent, left of scrollable)
-
-## MenuEntryWidget
-
-In principle, the MenuEntryWidget renders a single GTK widget.
-
-Challenge:
-
-- Widget: Launch-Desktop-Entry
-
-- Widget: Date / Time
-
-- Widget: Notification
-
-- Widget: MPRIS
-
-These widgets should not be hard-coded, but loaded from a configuration file.
-
-This is a fantastic and extremely well thought-out concept! A touch-optimized, rotatable launcher with smooth scrolling fills a real gap in the Wayland
-ecosystem (especially for Linux tablets or convertibles).
-
-Since you want to load the widgets completely dynamically via a configuration file, a simple match on predefined enums is not enough. You need a plugin or
-component system where each type of widget encapsulates its own logic.
-
-Here is the architectural plan and the concrete implementation of how to build this system in Rust and GTK 4.
-
-## Flexible Layout System
-
-The launcher now features a flexible layout system that allows dynamic area management through configuration and runtime API.
-
-### Configuration Format
-
-The layout is defined in `config.toml` with the following structure:
-
-```toml
-# Define the order of areas
-areas = ["left_area", "scroll_band", "right_area"]
-
-# Area configurations
-[left_area]
-area_type = "Fixed"
-width = 200
-transition = "Fade"
-plugins = [{ id = "clock" }]
-
-[scroll_band]
-area_type = "Scroll"
-transition = "SlideLeft"
-plugins = [{ id = "app-launcher" }]
-
-[right_area]
-area_type = "Fixed"
-width = 150
-transition = "None"
-plugins = [{ id = "battery" }]
+```bash
+sudo apt install smearor-swipe-launcher-full
+systemctl --user enable --now smearor-swipe-launcher-hyprland
 ```
 
-### Area Types
+On first launch, default configs are copied from `/usr/share/smearor/` to `~/.config/smearor/`.
 
-- **Fixed**: Static area with fixed width
-    - `width`: Fixed width in pixels
-    - `width_percent`: Alternative width as percentage (optional)
+### From source
 
-- **Scroll**: Scrollable area with drag gesture
-    - `hexpand`: Horizontal expansion (default: true)
-    - `vexpand`: Vertical expansion (default: true)
-
-### Transition Animations
-
-Areas support smooth transition animations:
-
-- `None` - No animation
-- `Fade` - Fade in/out effect
-- `SlideLeft` - Slide from left
-- `SlideRight` - Slide from right
-- `SlideUp` - Slide from top
-- `SlideDown` - Slide from bottom
-- `Pop` - Pop in/out effect
-- `Scale` - Scale in/out effect
-
-### Dynamic Area API
-
-The `AreaManager` provides runtime area management:
-
-```rust
-// Add a static area
-area_manager.add_area_from_config("my_area", area_config, & main_container) ?;
-
-// Add a transient area (auto-closing)
-area_manager.add_transient_area("popup_menu", area_config, & main_container) ?;
-
-// Remove an area
-area_manager.remove_area("my_area", & main_container) ?;
-
-// Pop from area stack (for nested sub-menus)
-area_manager.pop_area( & main_container) ?;
-
-// Get area information
-if let Some(area) = area_manager.get_area("my_area") {
-println ! ("Area: {}", area.id);
-}
+```bash
+cargo build --release
+cargo run --release
 ```
 
-### Transient Areas
+Plugin `.so` files are placed in `target/release/`. Configuration lives in `configs/launcher/config.toml` (areas and plugins) and
+`configs/services/services.toml` (services).
 
-Transient areas automatically close when:
+---
 
-- User clicks outside the area
-- Escape key is pressed (if `close_on_escape` is enabled)
+## Motivation
 
-### Nested Sub-Menus
+Touch-optimized launchers are rare in the Wayland ecosystem. Most existing launchers are keyboard-driven or web-based. The Smearor Swipe Launcher fills this gap
+with:
 
-The `AreaStack` manages nested sub-menus:
+- **Touch-first interaction** — swipe gestures, long-press, double-press as native patterns
+- **Multi-instance** — each side of a table or monitor runs its own instance, sharing a single host process
+- **Rotation** — 0°, 90°, 180°, 270° with automatic layer-shell positioning
+- **Native GTK 4** — full control over rendering and gesture handling, no web view
+- **MacroPad support** — Elgato Stream Deck and Loupedeck integration with headless instances rendering widgets as pixel buffers
+- **Deep system integration** — Hyprland, GNOME, MPRIS, NetworkManager, PulseAudio, XDG Desktop Portal
 
-- Push areas onto the stack when opening sub-menus
-- Pop areas when closing sub-menus
-- Supports unlimited nesting depth
+---
 
-### Plugin Integration
+## Features
 
-Plugins are automatically loaded into areas:
+- **Swipe and touch navigation** — scroll left/right, swipe up/down for sub-menus
+- **Multi-instance** — multiple launcher windows from a single host process
+- **Rotation** — visual rotation with automatic layer-shell position adjustment
+- **Dynamic area management** — fixed, scroll, and transient areas with transition animations
+- **Layout profiles** — per-workspace layout configurations
+- **MacroPad integration** — Stream Deck and Loupedeck with LCD key rendering
+- **Action bindings** — configurable input-to-message mappings
+- **Icon rendering** — freedesktop icon themes with fallback support
+- **MCP server** — Model Context Protocol server for AI integration
+- **Web interface** — browser-based control
+- **Inter-instance events** — message broker routes events between instances
 
-- Each area can contain multiple plugins
-- Plugins are loaded from the configuration
-- Plugin lifecycle is managed by the `PluginManager`
+---
 
+## Architecture
 
+The launcher is a single-process **LauncherHost** that manages multiple **LauncherInstance** children. A central **message broker** (tokio unbounded channel)
+routes `FfiEnvelope` messages between instances and services.
+
+```
+LauncherHost
+├── Message Broker
+├── Service Manager       (services loaded once, shared across instances)
+├── MCP Registry
+├── Web Server
+└── Launcher Instances
+    ├── Instance A (GTK)  — PluginManager + AreaManager + GTK Window
+    ├── Instance B (Headless) — PluginManager + AreaManager (MacroPad)
+    └── Instance C (Web)  — PluginManager + AreaManager
+```
+
+### Crate types
+
+- **Widget plugins** (`plugins/`) — GTK widgets, loaded per-instance as `.so` dynamic libraries
+- **Service plugins** (`services/`) — business logic, loaded once and shared
+- **Model crates** (`model/`) — shared structs, enums, and message types with `#[stabby::stabby]` FFI support
+
+Plugins communicate via the message broker using typed messages defined in model crates. ABI stability is provided by `stabby`.
+
+> For full architecture details, see the [book](book/src/SUMMARY.md).
+
+---
+
+## Services
+
+| Service              | Description                                                                      |
+|----------------------|----------------------------------------------------------------------------------|
+| **app-launcher**     | Scans `.desktop` files, provides application search and launch                   |
+| **audio**            | PulseAudio volume control, mute toggling, sink management                        |
+| **gnome**            | GNOME Shell integration via D-Bus (settings, extensions)                         |
+| **http**             | Generic HTTP client for outbound requests from plugins                           |
+| **hyprland**         | Hyprland IPC: workspace tracking, window management, dispatch                    |
+| **loupedeck**        | Loupedeck MacroPad USB HID driver (CT, Live, Live S, Razer Stream Controller)    |
+| **mpris**            | Media player control via D-Bus MPRIS interface                                   |
+| **network**          | NetworkManager integration: WiFi, Ethernet, VPN, airplane mode                   |
+| **notifications**    | D-Bus notification daemon listener                                               |
+| **personalization**  | Reads desktop settings for adaptive theming (accent color, font)                 |
+| **power**            | Power management via systemd-logind (shutdown, reboot, suspend, etc.)            |
+| **streamdeck**       | Elgato Stream Deck USB HID driver (all models)                                   |
+| **sysinfo**          | System metrics: CPU, memory, disk, network, temperature, uptime, load            |
+| **terminal_command** | Launches and manages terminal commands from widgets                              |
+| **voice_assistant**  | Local LLM voice assistant with ReAct tool selection, STT (whisper-rs), TTS       |
+| **wallpaper**        | Wallpaper theme scanning and application                                         |
+| **wayland**          | Wayland compositor integration: layer-shell, monitor events, workspace lifecycle |
+| **weather**          | Weather data from Open-Meteo API with geocoding                                  |
+
+---
+
+## Plugins
+
+| Plugin                 | Description                                                                             |
+|------------------------|-----------------------------------------------------------------------------------------|
+| **app-launcher**       | Displays and launches applications from `.desktop` files                                |
+| **audio**              | Volume control widget with dynamic icon, click-to-mute, scroll-to-adjust                |
+| **button**             | Generic configurable button — icon, text, colors, and action bindings from config       |
+| **clock**              | Clock widget with configurable formats and timezones                                    |
+| **mpris**              | Media player control: album art, track info, play/pause/next/previous                   |
+| **network**            | Network status with 7 views: WiFi, Ethernet, throughput, scan, VPN, airplane mode, QR   |
+| **notifications**      | Notification badge counter and slide-in banners                                         |
+| **power**              | Power actions: shutdown, reboot, suspend, hibernate, lock, logout, firmware reboot      |
+| **sysinfo**            | Real-time system monitoring sub-widgets (CPU, memory, disk, network, temperature, etc.) |
+| **voice_assistant**    | Voice assistant UI with microphone icon and state feedback                              |
+| **wallpaper**          | Wallpaper theme browser with preview images                                             |
+| **weather**            | Weather forecast with 15 views (current, forecast, wind, UV, sunrise/sunset, etc.)      |
+| **workspace-switcher** | Visual workspace switching for Hyprland                                                 |
+
+---
+
+## License
+
+MIT License — see [LICENSE.md](LICENSE.md).
+
+Copyright (c) 2026 Andreas Schaeffer, the Reactive Graph Contributors and the Smearor Contributors.
