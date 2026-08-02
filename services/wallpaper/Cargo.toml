@@ -34,5 +34,5 @@ which = { workspace = true }
 name = "smearor-service-wallpaper"
 depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
 assets = [
-    ["../../target/release/libsmearor_wallpaper_service.so", "/usr/lib/smearor/", "644"],
+    ["target/release/libsmearor_wallpaper_service.so", "/usr/lib/smearor/", "644"],
 ]

@@ -29,5 +29,5 @@ tracing-subscriber = { workspace = true }
 name = "smearor-service-http"
 depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
 assets = [
-    ["../../target/release/libsmearor_http_service.so", "/usr/lib/smearor/", "644"],
+    ["target/release/libsmearor_http_service.so", "/usr/lib/smearor/", "644"],
 ]

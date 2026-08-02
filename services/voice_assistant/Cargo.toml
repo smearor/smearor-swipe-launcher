@@ -68,4 +68,5 @@ depends = "$auto, smearor-swipe-launcher (>= 0.1.0), smearor-service-personaliza
 recommends = "libllama0"
 assets = [
     ["../../target/release/libsmearor_voice_assistant_service.so", "/usr/lib/smearor/", "644"],
+    ["target/release/libsmearor_voice_assistant_service.so", "/usr/lib/smearor/", "755"],
 ]
