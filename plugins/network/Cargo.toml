@@ -1,6 +1,7 @@
 [package]
 name = "smearor-network-widget"
 version = "0.1.0"
+description = "Network status widget plugin for the Smearor Swipe Launcher"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

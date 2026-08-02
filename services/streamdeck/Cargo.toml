@@ -1,6 +1,7 @@
 [package]
 name = "smearor-streamdeck-service"
 version = "0.1.0"
+description = "Stream Deck MacroPad service plugin for the Smearor Swipe Launcher"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

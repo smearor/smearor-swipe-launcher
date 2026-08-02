@@ -1,6 +1,7 @@
 [package]
 name = "smearor-http-service"
 version = "0.1.0"
+description = "HTTP web server service plugin for the Smearor Swipe Launcher"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
