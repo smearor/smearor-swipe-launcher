@@ -63,12 +63,24 @@ impl SwipeLauncherConfig {
         })
     }
 
-    /// Get plugin config for plugin API (legacy method for compatibility)
+    /// Get plugin config for plugin API.
+    ///
+    /// If the plugin config contains a `wrapper.follows_rotation` flag set to `true`
+    /// and no explicit `wrapper.rotation` is set, the launcher's rotation is injected
+    /// so that the app-launcher service starts the app with the correct rotation.
     pub fn plugin_config(&self, id: &str) -> PluginConfig {
-        let config = self.get_plugin_config(id).cloned().unwrap_or_else(|| {
+        let mut config = self.get_plugin_config(id).cloned().unwrap_or_else(|| {
             trace!("No config found for plugin {id}, using empty config");
             json!({})
         });
+        let launcher_rotation = self.launcher.rotation.rotation().to_degrees();
+        if let Some(wrapper) = config.get_mut("wrapper").and_then(|w| w.as_object_mut()) {
+            let follows_rotation = wrapper.get("follows_rotation").and_then(|v| v.as_bool()).unwrap_or(false);
+            let has_explicit_rotation = wrapper.get("rotation").is_some();
+            if follows_rotation && !has_explicit_rotation && launcher_rotation != 0.0 {
+                wrapper.insert("rotation".to_string(), json!(launcher_rotation));
+            }
+        }
         PluginConfig { config }
     }
 
