@@ -1,0 +1,3 @@
+value ::= string | number | object | array | "true" | "false" | "null"
+object ::= "{" ws (string ws ":" ws value (ws "," ws string ws ":" ws value)*)? ws "}"
+array ::= "[" ws (value (ws "," ws value)*)? ws "]"
