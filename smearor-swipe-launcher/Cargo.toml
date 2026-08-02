@@ -70,4 +70,9 @@ assets = [
     ["../configs/launcher/streamcontrollerx.toml", "/usr/share/smearor/examples/launcher/", "644"],
     ["../configs/launcher/web.toml", "/usr/share/smearor/examples/launcher/", "644"],
     ["../configs/areas/scroll_menu.toml", "/usr/share/smearor/examples/areas/", "644"],
+    ["../resources/NerdFontsSymbolsOnly/SymbolsNerdFont-Regular.ttf", "/usr/share/smearor/resources/NerdFontsSymbolsOnly/", "644"],
+    ["../resources/NerdFontsSymbolsOnly/SymbolsNerdFontMono-Regular.ttf", "/usr/share/smearor/resources/NerdFontsSymbolsOnly/", "644"],
+    ["../resources/JetBrainsMonoNLNerdFont/JetBrainsMonoNLNerdFont-Regular.woff2", "/usr/share/smearor/resources/JetBrainsMonoNLNerdFont/", "644"],
+    ["../resources/JetBrainsMonoNLNerdFont/JetBrainsMonoNLNerdFont-Bold.woff2", "/usr/share/smearor/resources/JetBrainsMonoNLNerdFont/", "644"],
+    ["../resources/JetBrainsMonoNLNerdFont/JetBrainsMonoNLNerdFont-Thin.woff2", "/usr/share/smearor/resources/JetBrainsMonoNLNerdFont/", "644"],
 ]
