@@ -27,11 +27,22 @@ const SYSTEM_LIB_DIR: &str = "/usr/lib/smearor";
 /// a `name`-based lookup finds no matching file in any search directory.
 pub fn resolve_library_path(path: &Option<String>, name: &Option<String>) -> Result<PathBuf, LibraryPathError> {
     if let Some(path) = path {
-        return Ok(expand_tilde(path));
+        let expanded = expand_tilde(path);
+        if expanded.is_file() {
+            return Ok(expanded);
+        }
+        if !path.contains(std::path::MAIN_SEPARATOR) && !path.contains('/') {
+            debug!("Path '{}' is not a file and has no path separator, trying name-based resolution", path);
+            return resolve_by_name(path);
+        }
+        return Ok(expanded);
     }
 
     let name = name.as_ref().ok_or(LibraryPathError::NeitherPathNorName)?;
+    resolve_by_name(name)
+}
 
+fn resolve_by_name(name: &str) -> Result<PathBuf, LibraryPathError> {
     let filename = format!("{LIBRARY_PREFIX}{name}.{LIBRARY_EXTENSION}");
 
     let user_dir = dirs::home_dir().map(|home| home.join(".local/lib/smearor"));
@@ -46,7 +57,7 @@ pub fn resolve_library_path(path: &Option<String>, name: &Option<String>) -> Res
     }
 
     Err(LibraryPathError::NotFound {
-        name: name.clone(),
+        name: name.to_string(),
         filename,
         searched_dirs: search_dirs.iter().map(|d| d.display().to_string()).collect(),
     })
