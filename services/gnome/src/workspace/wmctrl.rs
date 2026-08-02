@@ -17,7 +17,9 @@ pub fn detect_active_workspace() -> Option<(i32, i32)> {
     let output = Command::new("wmctrl").arg("-d").output().ok()?;
 
     if !output.status.success() {
-        debug!("wmctrl -d failed with status {}", output.status);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = stderr.trim();
+        debug!("wmctrl -d failed with status {} (stderr: {})", output.status, stderr);
         return None;
     }
 
@@ -46,13 +48,14 @@ pub fn switch_workspace(workspace_id: i32) -> bool {
     }
 }
 
-/// Check whether `wmctrl` is available on the system.
+/// Check whether `wmctrl` is available and functional on the system.
+///
+/// Tests `wmctrl -d` (the actual command used for workspace detection) and
+/// requires it to exit successfully. On Wayland, `wmctrl` may be installed
+/// but unable to communicate with the compositor, so a mere exit-code-1
+/// tolerance is insufficient.
 pub fn is_available() -> bool {
-    Command::new("wmctrl")
-        .arg("-m")
-        .output()
-        .map(|o| o.status.success() || o.status.code() == Some(1))
-        .unwrap_or(false)
+    Command::new("wmctrl").arg("-d").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
 /// Parse `wmctrl -d` output to find the active workspace and max workspace index.

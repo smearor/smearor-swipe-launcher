@@ -177,6 +177,8 @@ fn poll_workspace_loop(
                 if let Some((active, max)) = wmctrl::detect_active_workspace() {
                     (Some(active), max)
                 } else {
+                    debug!("GNOME workspace tracking: wmctrl -d failed, disabling wmctrl fallback");
+                    wmctrl_available = false;
                     let count = gsettings::read_workspace_count();
                     (Some(0), count.saturating_sub(1))
                 }
