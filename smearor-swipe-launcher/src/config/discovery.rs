@@ -169,7 +169,10 @@ impl ConfigDiscoveryService {
 
         let system_dir = Path::new("/usr/share/smearor");
 
-        Self::bootstrap_file(system_dir.join("launcher/config.toml"), xdg_dir.join("launcher/config.toml"));
+        let launcher_dir = xdg_dir.join("launcher");
+        if Self::collect_toml_files(&launcher_dir, &[]).is_empty() {
+            Self::bootstrap_file(system_dir.join("launcher/config.toml"), launcher_dir.join("config.toml"));
+        }
 
         Self::bootstrap_file(system_dir.join("services/services.toml"), xdg_dir.join("services/services.toml"));
 
