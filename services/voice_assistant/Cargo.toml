@@ -64,9 +64,15 @@ whisper-vulkan = ["whisper-rs/vulkan"]
 
 [package.metadata.deb]
 name = "smearor-service-voice-assistant"
-depends = "$auto, smearor-swipe-launcher (>= 0.1.0), smearor-service-personalization (>= 0.1.0)"
-recommends = "libllama0"
+depends = "libstdc++6, libssl3t64, libglib2.0-0t64, libasound2t64, libgomp1, smearor-swipe-launcher (>= 0.1.0), smearor-service-personalization (>= 0.1.0)"
 assets = [
-    ["../../target/release/libsmearor_voice_assistant_service.so", "/usr/lib/smearor/", "644"],
     ["target/release/libsmearor_voice_assistant_service.so", "/usr/lib/smearor/", "755"],
+    ["target/release/libllama.so.0", "/usr/lib/smearor/", "644"],
+    ["target/release/libllama.so", "/usr/lib/smearor/", "644"],
+    ["target/release/libggml.so.0", "/usr/lib/smearor/", "644"],
+    ["target/release/libggml.so", "/usr/lib/smearor/", "644"],
+    ["target/release/libggml-base.so.0", "/usr/lib/smearor/", "644"],
+    ["target/release/libggml-base.so", "/usr/lib/smearor/", "644"],
+    ["target/release/libggml-cpu.so.0", "/usr/lib/smearor/", "644"],
+    ["target/release/libggml-cpu.so", "/usr/lib/smearor/", "644"],
 ]
