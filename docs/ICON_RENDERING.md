@@ -302,3 +302,50 @@ These widgets already have an inverse `show_icon` flag, use the icon as a second
 - **voice_assistant**: Uses `show_icon` (inverse semantics)
 - **notifications**: Dynamic content, icon is a header element
 - **wallpaper**: Preview image is the primary element, icon is fallback only
+
+## Text Color Configuration
+
+All widgets support optional text color configuration via the `WidgetTextColors` struct, which is flattened into each widget's config via `#[serde(flatten)]`.
+
+### Configuration Fields
+
+| Field             | Type             | Description                                                       |
+|-------------------|------------------|-------------------------------------------------------------------|
+| `main_text_color` | `Option<String>` | Hex color string for the primary text line (e.g. `"#ff6600"`)     |
+| `info_text_color` | `Option<String>` | Hex color string for the secondary/info text line (e.g. `"#f60"`) |
+
+Both fields accept hex color strings in the formats `#RGB`, `#RRGGBB`, or `#RRGGBBAA`. If omitted, the default text color from the theme is used.
+
+### Priority Model
+
+Text colors are resolved with the following priority (highest to lowest):
+
+1. **`text_color_override`** — explicit override passed to `draw_label_text()` in graphic rendering
+2. **Configured colors** — `main_text_color` / `info_text_color` from `WidgetTextColors` in the widget config
+3. **Default colors** — `text_color()` from `render-utils`, based on the active/inactive theme state
+
+### Rendering Pipelines
+
+Text colors are applied across all three rendering pipelines:
+
+- **GTK (`build_widget()` / `update_ui()`)**: The `apply_text_color()` function sets the CSS `color` property on `Label` widgets via `add_css_class` with inline
+  style overrides.
+- **Graphic (`render_graphic()`)**: The `draw_text_centered()` and `draw_label_text()` functions receive the resolved color as a `Color` (`[u8; 4]`) parameter.
+- **HTML (`render_html()`)**: Inline `style="color: rgba(r, g, b, a);"` attributes are injected on text elements.
+- **Atomic (`render_atomic_graphic_data()` / `update_ui()`)**: Text colors are transferred from `ViewData` (via `with_text_colors()`) to `AtomicGraphicData`
+  fields, and `apply_text_color()` is called on GTK labels.
+
+### `ViewData` Integration
+
+The `ViewData` struct carries `main_text_color` and `info_text_color` as `Option<Color>` fields. The `with_text_colors(&self.config.text_colors)` method injects
+configured colors as fallback when no semantic color is already set (i.e. from `WidgetIconRendering::get_icon_color()`).
+
+### `AtomicGraphicData` Integration
+
+The `AtomicGraphicData` struct carries `main_text_color` and `info_text_color` as `Option<[u8; 4]>` fields. Atomic widgets set these from either the `ViewData`
+colors (after `with_text_colors()`) or directly from `self.config.text_colors.main_text_color().map(|c| c.to_rgba())`.
+
+### Supported Widgets
+
+All widgets support text color configuration: **button**, **app-launcher**, **weather**, **audio**, **mpris**, **power**, **network**, **wallpaper**, **clock**,
+**workspace-switcher**, and **sysinfo** (including **sysinfo-multi**).
