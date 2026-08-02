@@ -1,6 +1,13 @@
+pub mod area_info;
 pub mod area_manager;
+pub mod area_source;
 pub mod area_stack;
+pub mod backend;
+pub mod container;
 pub mod error;
+pub mod instance_area_manager;
 pub mod layout_transition;
 pub mod managed_area;
 pub mod messages;
+pub mod overlay;
+pub mod widget;

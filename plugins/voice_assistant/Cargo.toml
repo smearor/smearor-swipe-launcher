@@ -17,6 +17,10 @@ miette = { workspace = true }
 paste = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+smearor-model-mcp = { path = "../../model/mcp" }
+smearor-model-widget = { path = "../../model/widget" }
+smearor-personalization-model = { path = "../../model/personalization" }
+smearor-render-utils = { path = "../render-utils" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 smearor-voice-assistant-model = { path = "../../model/voice_assistant" }
 stabby = { workspace = true }

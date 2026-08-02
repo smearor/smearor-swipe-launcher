@@ -1,5 +1,6 @@
 pub(crate) mod config;
 pub(crate) mod dbus;
+pub(crate) mod mcp;
 pub(crate) mod service;
 pub(crate) mod throughput;
 

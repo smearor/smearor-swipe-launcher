@@ -1,5 +1,7 @@
 use crate::AreaConfig;
 use crate::AreaConfigStabby;
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -7,7 +9,7 @@ use smearor_swipe_launcher_plugin_api::generate_type_id;
 
 pub const TOPIC_ADD_AREA: &str = "area.add";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AddAreaMessage {
     pub area_id: String,
     pub area_config: AreaConfig,
@@ -15,7 +17,7 @@ pub struct AddAreaMessage {
 
 /// ABI-stable version of `AddAreaMessage` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AddAreaMessageStabby {
     pub area_id: stabby::string::String,
     pub area_config: AreaConfigStabby,

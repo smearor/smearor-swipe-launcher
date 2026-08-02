@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -9,7 +11,7 @@ pub const TOPIC_MONITOR_CHANGED: &str = "compositor::monitor_changed";
 /// Type of monitor change.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MonitorChangeType {
     /// Monitor was connected.
     #[default]
@@ -22,7 +24,7 @@ pub enum MonitorChangeType {
 ///
 /// Launcher instances use this to re-evaluate monitor mappings and rebuild areas.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MonitorChangedEvent {
     /// The monitor index (0-based, matching GDK display order).
     pub monitor_index: u32,

@@ -17,7 +17,10 @@ paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }
+smearor-model-widget = { path = "../../model/widget" }
+smearor-personalization-model = { path = "../../model/personalization" }
 smearor-power-model = { path = "../../model/power" }
+smearor-render-utils = { path = "../render-utils" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 stabby = { workspace = true }
 tokio = { workspace = true }

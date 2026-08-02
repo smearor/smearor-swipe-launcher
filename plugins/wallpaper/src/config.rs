@@ -1,9 +1,14 @@
 use serde::Deserialize;
-use serde_json::Value;
+use smearor_swipe_launcher_plugin_api::ActionBindings;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DispatchableBinding;
+use smearor_swipe_launcher_plugin_api::WidgetDimensions;
+use smearor_swipe_launcher_plugin_api::WidgetIcon;
+use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMode;
+use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use typed_builder::TypedBuilder;
 
-pub const DEFAULT_WIDTH: i32 = 100;
-pub const DEFAULT_HEIGHT: i32 = 100;
 pub const DEFAULT_PREVIEW_WIDTH: i32 = 100;
 pub const DEFAULT_PREVIEW_HEIGHT: i32 = 100;
 pub const DEFAULT_FALLBACK_ICON: &str = "nf-md-wallpaper";
@@ -12,13 +17,30 @@ pub const DEFAULT_FALLBACK_ICON: &str = "nf-md-wallpaper";
 #[derive(Debug, Clone, Deserialize, TypedBuilder)]
 #[serde(default)]
 pub struct WallpaperWidgetConfig {
-    /// The width of the widget in pixels.
-    #[builder(default, setter(into))]
-    pub(crate) width: Option<i32>,
+    /// Widget dimensions (width, height) for GTK layout.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) dimensions: WidgetDimensions,
 
-    /// The height of the widget in pixels.
-    #[builder(default, setter(into))]
-    pub(crate) height: Option<i32>,
+    /// Widget layout (spacing) for GTK container.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) layout: WidgetLayout,
+
+    /// Widget icon configuration (icon_size, icon_only).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) icon_config: WidgetIcon,
+
+    /// Text color configuration (main_text_color, info_text_color).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) text_colors: WidgetTextColors,
+
+    /// Widget layout mode (compact or wide).
+    #[builder(default)]
+    #[serde(default)]
+    pub(crate) mode: WidgetMode,
 
     /// Whether to show the theme name as a label overlay.
     #[builder(default)]
@@ -45,48 +67,34 @@ pub struct WallpaperWidgetConfig {
     #[serde(default = "default_fallback_icon")]
     pub(crate) fallback_icon: String,
 
-    /// Message topic for single-click action.
-    #[serde(default)]
-    pub click_topic: Option<String>,
+    /// Action bindings for all input triggers.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub actions: ActionBindings,
+}
 
-    /// Message payload for single-click action (JSON/TOML).
-    #[serde(default)]
-    pub click_payload: Option<Value>,
-
-    /// Target instance for single-click message
-    #[serde(default)]
-    pub click_instance: Option<String>,
-
-    /// Message topic for long-press.
-    #[serde(default)]
-    pub longpress_topic: Option<String>,
-
-    /// Message payload for long-press (JSON/TOML).
-    #[serde(default)]
-    pub longpress_payload: Option<Value>,
-
-    /// Target instance for long-press message
-    #[serde(default)]
-    pub longpress_instance: Option<String>,
+impl WallpaperWidgetConfig {
+    /// Returns the binding for the given action kind as a `&dyn DispatchableBinding`.
+    pub fn binding_for_kind(&self, kind: ActionKind) -> &dyn DispatchableBinding {
+        self.actions.binding_for_kind(kind)
+    }
 }
 
 impl Default for WallpaperWidgetConfig {
     fn default() -> Self {
         Self {
-            width: Some(DEFAULT_WIDTH),
-            height: Some(DEFAULT_HEIGHT),
+            dimensions: WidgetDimensions::default(),
+            layout: WidgetLayout::default(),
+            icon_config: WidgetIcon::default(),
+            text_colors: WidgetTextColors::default(),
+            mode: WidgetMode::default(),
             show_theme_name: true,
             show_type_icon: true,
             show_status_indicator: true,
             preview_width: Some(DEFAULT_PREVIEW_WIDTH),
             preview_height: Some(DEFAULT_PREVIEW_HEIGHT),
             fallback_icon: DEFAULT_FALLBACK_ICON.to_string(),
-            click_topic: None,
-            click_payload: None,
-            click_instance: None,
-            longpress_topic: None,
-            longpress_payload: None,
-            longpress_instance: None,
+            actions: ActionBindings::default(),
         }
     }
 }

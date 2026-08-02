@@ -1,7 +1,10 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 /// Type of a network interface as reported by NetworkManager.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetworkInterfaceType {
     /// Ethernet (wired) connection.
     Ethernet,

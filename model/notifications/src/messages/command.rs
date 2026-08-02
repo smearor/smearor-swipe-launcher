@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -8,7 +10,7 @@ pub const TOPIC_COMMAND: &str = "service.notifications.command";
 /// Actions that can be sent from the widget to the notifications service.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum NotificationCommandAction {
     #[default]
     /// Dismiss a single notification by ID
@@ -21,11 +23,13 @@ pub enum NotificationCommandAction {
     InvokeAction,
     /// Toggle Do Not Disturb mode
     ToggleDoNotDisturb,
+    /// Request a status refresh from the notifications service
+    Refresh,
 }
 
 /// Command message sent from the notifications widget to the notifications service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct NotificationCommandMessage {
     /// The action to execute
     pub action: NotificationCommandAction,
@@ -70,6 +74,10 @@ impl NotificationCommandMessage {
 
     pub fn toggle_do_not_disturb() -> Self {
         Self::new(NotificationCommandAction::ToggleDoNotDisturb, stabby::option::Option::None(), stabby::option::Option::None())
+    }
+
+    pub fn refresh() -> Self {
+        Self::new(NotificationCommandAction::Refresh, stabby::option::Option::None(), stabby::option::Option::None())
     }
 }
 

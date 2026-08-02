@@ -22,7 +22,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -151,10 +151,16 @@ async fn handle_switch_workspace(message: SwitchWorkspaceMessage) {
         Ok((success, result)) => {
             if !success {
                 warn!("GNOME service: Shell.Eval returned failure for switch (enable unsafe mode): {result}");
+                if !crate::workspace::wmctrl::switch_workspace(message.workspace_id) {
+                    error!("GNOME service: wmctrl fallback for switch also failed");
+                }
             }
         }
         Err(error) => {
-            error!("GNOME service: failed to switch workspace: {error}");
+            warn!("GNOME service: Shell.Eval failed for switch: {error}, trying wmctrl fallback");
+            if !crate::workspace::wmctrl::switch_workspace(message.workspace_id) {
+                error!("GNOME service: wmctrl fallback for switch also failed");
+            }
         }
     }
 }
@@ -229,14 +235,26 @@ async fn handle_snapshot_request(_message: WorkspaceSnapshotRequestMessage, core
                     (Some(active), count.saturating_sub(1))
                 }
                 _ => {
-                    debug!("GNOME service: Shell.Eval blocked for snapshot, using GSettings-only");
-                    let count = crate::workspace::gsettings::read_workspace_count();
-                    (Some(0), count.saturating_sub(1))
+                    debug!("GNOME service: Shell.Eval blocked for snapshot, trying wmctrl fallback");
+                    if let Some((active, max)) = crate::workspace::wmctrl::detect_active_workspace() {
+                        debug!("GNOME service: snapshot using wmctrl (active={}, max={})", active, max);
+                        (Some(active), max)
+                    } else {
+                        debug!("GNOME service: wmctrl also unavailable for snapshot, using GSettings-only");
+                        let count = crate::workspace::gsettings::read_workspace_count();
+                        (Some(0), count.saturating_sub(1))
+                    }
                 }
             }
         } else {
-            let count = crate::workspace::gsettings::read_workspace_count();
-            (Some(0), count.saturating_sub(1))
+            debug!("GNOME service: Shell.Eval proxy unavailable for snapshot, trying wmctrl fallback");
+            if let Some((active, max)) = crate::workspace::wmctrl::detect_active_workspace() {
+                debug!("GNOME service: snapshot using wmctrl (active={}, max={})", active, max);
+                (Some(active), max)
+            } else {
+                let count = crate::workspace::gsettings::read_workspace_count();
+                (Some(0), count.saturating_sub(1))
+            }
         }
     } else {
         (active_workspace, max_workspace)
@@ -361,7 +379,7 @@ impl AsRef<Option<FfiCoreContext>> for GnomeWorkspaceService {
     }
 }
 
-impl Service for GnomeWorkspaceService {
+impl ServicePlugin for GnomeWorkspaceService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if message.is_null() {
             return;

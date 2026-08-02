@@ -1,5 +1,7 @@
 use crate::SmearorWindowRotationWrapper;
 use crate::SmearorWindowRotationWrapperStabby;
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -9,7 +11,7 @@ pub const TOPIC_COMMAND: &str = "service.app_launcher.command";
 
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum DesktopFileCommandAction {
     #[default]
     Exec,
@@ -18,7 +20,7 @@ pub enum DesktopFileCommandAction {
     Terminate,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DesktopFileCommandMessage {
     /// The canonical path of the desktop file
     pub desktop_file: String,
@@ -38,7 +40,7 @@ pub struct DesktopFileCommandMessage {
 
 /// ABI-stable version of `DesktopFileCommandMessage` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DesktopFileCommandMessageStabby {
     pub desktop_file: stabby::string::String,
     pub wrapper: stabby::option::Option<SmearorWindowRotationWrapperStabby>,

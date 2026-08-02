@@ -1,4 +1,6 @@
 use crate::config::NotificationWidgetConfig;
+use crate::labels::NotificationLabel;
+use crate::personalization::PersonalizationOverride;
 use adw::gdk;
 use adw::gdk::pango::EllipsizeMode;
 use adw::gdk::pango::WrapMode;
@@ -16,17 +18,29 @@ use gtk4::ScrolledWindow;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::*;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
+use smearor_model_widget::WidgetUpdateMessage;
 use smearor_notifications_model::NotificationCommandMessage;
 use smearor_notifications_model::NotificationInfo;
 use smearor_notifications_model::NotificationStatusMessage;
+use smearor_notifications_model::TOPIC_STATUS;
+use smearor_personalization_model::PersonalizationCommandMessage;
+use smearor_personalization_model::PersonalizationStatusMessage;
+use smearor_personalization_model::TOPIC_STATUS as TOPIC_PERSONALIZATION_STATUS;
+use smearor_swipe_launcher_plugin_api::AcceptTopic;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DefaultFallback;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::GestureHandler;
+use smearor_swipe_launcher_plugin_api::GestureHandlersConfiguration;
+use smearor_swipe_launcher_plugin_api::Locale;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopicBroadcaster;
-use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -34,8 +48,23 @@ use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
+use smearor_swipe_launcher_plugin_api::WidgetPlugin;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::str::FromStr;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
+
+/// View state for the notifications widget's multi-view rendering.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum NotificationView {
+    /// Compact: bell icon + count.
+    #[default]
+    Compact,
+    /// Expanded: notification list with details.
+    Expanded,
+}
 
 /// Widget that displays system notifications.
 pub struct NotificationWidget {
@@ -43,7 +72,10 @@ pub struct NotificationWidget {
     pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) config: NotificationWidgetConfig,
     pub(crate) status_sender: tokio::sync::mpsc::UnboundedSender<NotificationStatusMessage>,
-    pub(crate) status_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<NotificationStatusMessage>>,
+    pub(crate) status_receiver: Rc<RefCell<Option<tokio::sync::mpsc::UnboundedReceiver<NotificationStatusMessage>>>>,
+    pub(crate) last_status: Rc<RefCell<Option<NotificationStatusMessage>>>,
+    pub(crate) current_view: Rc<RefCell<NotificationView>>,
+    pub(crate) personalization: Rc<RefCell<PersonalizationOverride>>,
 }
 
 impl NotificationWidget {
@@ -52,17 +84,61 @@ impl NotificationWidget {
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         let meta = PluginMeta::try_from(&config)?;
         let (status_sender, status_receiver) = tokio::sync::mpsc::unbounded_channel();
-        Ok(NotificationWidget {
+        let widget = NotificationWidget {
             meta,
             core_context,
             config: notification_config,
             status_sender,
-            status_receiver: Some(status_receiver),
-        })
+            status_receiver: Rc::new(RefCell::new(Some(status_receiver))),
+            last_status: Rc::new(RefCell::new(None)),
+            current_view: Rc::new(RefCell::new(NotificationView::Compact)),
+            personalization: Rc::new(RefCell::new(PersonalizationOverride::default())),
+        };
+        widget.request_initial_status();
+        widget.request_personalization_status();
+        Ok(widget)
     }
 
-    fn start_status_listener(&mut self, list_box: Box, count_label: Label, dnd_badge: Label, broadcaster: MessageBroadcasterInner) {
-        if let Some(mut receiver) = self.status_receiver.take() {
+    fn request_initial_status(&self) {
+        let broadcaster = self.get_broadcaster();
+        broadcaster.broadcast_message_to_topic(NotificationCommandMessage::refresh());
+    }
+
+    fn request_personalization_status(&self) {
+        self.get_broadcaster()
+            .broadcast_message_to_topic(PersonalizationCommandMessage::request_status());
+    }
+
+    fn broadcast_widget_update(&self) {
+        let plugin_id = self.meta.id.to_string();
+        let msg = WidgetUpdateMessage::new(&plugin_id, "");
+        self.get_broadcaster().broadcast_message_to_topic(msg);
+    }
+
+    /// Switches the current view and triggers a re-render notification.
+    pub(crate) fn set_view(&self, view: NotificationView) {
+        let mut current = self.current_view.borrow_mut();
+        if *current == view {
+            return;
+        }
+        *current = view;
+        drop(current);
+        self.broadcast_widget_update();
+    }
+
+    /// Toggles between Compact and Expanded views.
+    pub(crate) fn toggle_view(&self) {
+        let new_view = match *self.current_view.borrow() {
+            NotificationView::Compact => NotificationView::Expanded,
+            NotificationView::Expanded => NotificationView::Compact,
+        };
+        self.set_view(new_view);
+    }
+
+    fn start_status_listener(&self, list_box: Box, count_label: Label, dnd_badge: Label, broadcaster: MessageBroadcasterInner) {
+        let icon_size = self.config.icon_size;
+        let locale = self.personalization.borrow().effective_locale();
+        if let Some(mut receiver) = self.status_receiver.borrow_mut().take() {
             MainContext::default().spawn_local(async move {
                 while let Some(status) = receiver.recv().await {
                     count_label.set_text(&format!("{}", status.unread_count));
@@ -73,14 +149,20 @@ impl NotificationWidget {
                     }
 
                     if status.do_not_disturb {
-                        let label = Label::builder().label("Do Not Disturb").css_classes(["title"]).build();
+                        let label = Label::builder()
+                            .label(NotificationLabel::DoNotDisturb.localized_label(locale))
+                            .css_classes(["title"])
+                            .build();
                         list_box.append(&label);
                     } else if status.notifications.is_empty() {
-                        let label = Label::builder().label("No notifications").css_classes(["subtitle"]).build();
+                        let label = Label::builder()
+                            .label(NotificationLabel::NoNotifications.localized_label(locale))
+                            .css_classes(["subtitle"])
+                            .build();
                         list_box.append(&label);
                     } else {
                         for notification in status.notifications.iter().take(5) {
-                            let card = Self::create_notification_card(notification, &broadcaster);
+                            let card = Self::create_notification_card(notification, &broadcaster, icon_size);
                             list_box.append(&card);
                         }
                     }
@@ -89,7 +171,7 @@ impl NotificationWidget {
         }
     }
 
-    fn create_notification_card(notification: &NotificationInfo, broadcaster: &MessageBroadcasterInner) -> Box {
+    fn create_notification_card(notification: &NotificationInfo, broadcaster: &MessageBroadcasterInner, icon_size: i32) -> Box {
         let card = Box::builder()
             .orientation(Orientation::Vertical)
             .spacing(2)
@@ -102,7 +184,7 @@ impl NotificationWidget {
 
         let icon_name = notification.icon.as_ref().map(|s| s.as_str()).unwrap_or("dialog-information-symbolic");
         let icon = Image::from_icon_name(icon_name);
-        icon.set_pixel_size(16);
+        icon.set_pixel_size(icon_size);
         header.append(&icon);
 
         let app_label = Label::builder()
@@ -202,11 +284,54 @@ impl NotificationWidget {
     }
 }
 
+impl DefaultFallback for NotificationWidget {
+    fn default_fallback(&self, kind: &ActionKind, broadcaster: &MessageBroadcasterInner) {
+        match kind {
+            ActionKind::Click | ActionKind::DoublePress | ActionKind::RightClick => {
+                broadcaster.broadcast_message_to_topic(NotificationCommandMessage::dismiss_all());
+            }
+            ActionKind::Longpress | ActionKind::MiddleClick => {
+                broadcaster.broadcast_message_to_topic(NotificationCommandMessage::dismiss_last());
+            }
+            ActionKind::SwipeUp | ActionKind::ScrollUp => {
+                broadcaster.broadcast_message_to_topic(NotificationCommandMessage::toggle_do_not_disturb());
+            }
+            ActionKind::SwipeDown | ActionKind::ScrollDown | ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init => {}
+        }
+    }
+}
+
 impl MessageHandler<FfiEnvelopePayload<NotificationStatusMessage>> for NotificationWidget {
     fn handle_message(&self, message: FfiEnvelopePayload<NotificationStatusMessage>, _sender_id: &str) {
+        *self.last_status.borrow_mut() = Some(message.0.clone());
         if let Err(e) = self.status_sender.send(message.0) {
             error!("NotificationWidget: Failed to send status to UI thread: {}", e);
         }
+        self.broadcast_widget_update();
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>> for NotificationWidget {
+    fn handle_message(&self, message: FfiEnvelopePayload<PersonalizationStatusMessage>, _sender_id: &str) {
+        trace!("NotificationWidget: received personalization status");
+        let status = message.0;
+        let locale = status
+            .locale
+            .as_ref()
+            .map(|l| Locale::from_str(l.as_str()).unwrap_or_default())
+            .unwrap_or_default();
+        let override_data = PersonalizationOverride {
+            time_format: status.time_format,
+            date_format: status.date_format,
+            locale,
+        };
+        *self.personalization.borrow_mut() = override_data;
+    }
+}
+
+impl AcceptTopic<FfiEnvelope> for NotificationWidget {
+    fn accept_topic(&self, topic: &str) -> bool {
+        topic == TOPIC_STATUS || topic == TOPIC_MCP_INVOKE_TOOL || topic == TOPIC_PERSONALIZATION_STATUS
     }
 }
 
@@ -223,13 +348,17 @@ impl AsRef<Option<FfiCoreContext>> for NotificationWidget {
     }
 }
 
-impl Plugin for NotificationWidget {
+impl WidgetPlugin for NotificationWidget {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
                 if envelope.type_id == FfiEnvelopePayload::<NotificationStatusMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<NotificationStatusMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == <FfiEnvelopePayload<PersonalizationStatusMessage> as TypedMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<PersonalizationStatusMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }
@@ -238,20 +367,31 @@ impl Plugin for NotificationWidget {
 
 impl WidgetBuilder for NotificationWidget {
     fn build_widget(&mut self) -> Widget {
-        let main_box = Box::builder().orientation(Orientation::Vertical).spacing(self.config.spacing).build();
+        let locale = self.personalization.borrow().effective_locale();
+        let main_box = Box::builder()
+            .orientation(Orientation::Vertical)
+            .spacing(self.config.layout.spacing_or_default())
+            .build();
 
         let header = Box::builder().orientation(Orientation::Horizontal).spacing(4).build();
 
         let count_label = Label::builder().label("0").css_classes(["title"]).build();
         header.append(&count_label);
 
-        let dnd_badge = Label::builder().label("DND").css_classes(["badge"]).visible(false).build();
+        let dnd_badge = Label::builder()
+            .label(NotificationLabel::Dnd.localized_label(locale))
+            .css_classes(["badge"])
+            .visible(false)
+            .build();
         header.append(&dnd_badge);
 
         main_box.append(&header);
 
         let notification_list = Box::builder().orientation(Orientation::Vertical).spacing(4).build();
-        let empty_label = Label::builder().label("No notifications").css_classes(["subtitle"]).build();
+        let empty_label = Label::builder()
+            .label(NotificationLabel::NoNotifications.localized_label(locale))
+            .css_classes(["subtitle"])
+            .build();
         notification_list.append(&empty_label);
 
         let scrolled = ScrolledWindow::builder()
@@ -264,42 +404,31 @@ impl WidgetBuilder for NotificationWidget {
 
         let button = Button::builder()
             .css_classes(["scroll-item", "menu-button"])
-            .width_request(self.config.width)
-            .height_request(self.config.height)
+            .width_request(self.config.dimensions.width_or_default())
+            .height_request(self.config.dimensions.height_or_default())
             .child(&main_box)
             .build();
 
-        let click_gesture = GestureClick::builder().button(0).propagation_phase(PropagationPhase::Bubble).build();
-        let broadcaster_click = self.get_broadcaster();
-        click_gesture.connect_released(move |gesture, _n_press, _x, _y| {
-            if let Some(seq) = gesture.current_sequence() {
-                let state = gesture.sequence_state(&seq);
-                if state == EventSequenceState::Claimed || state == EventSequenceState::Denied {
-                    return;
-                }
-            }
-            let button = gesture.current_button();
-            debug!("Button = {button}");
-            match button {
-                gdk::BUTTON_PRIMARY => {
-                    debug!("NotificationWidget: Primary click (dismiss all)");
-                    broadcaster_click.broadcast_message_to_topic(NotificationCommandMessage::dismiss_all());
-                }
-                gdk::BUTTON_SECONDARY => {
-                    debug!("NotificationWidget: Right click (dismiss all)");
-                    broadcaster_click.broadcast_message_to_topic(NotificationCommandMessage::dismiss_all());
-                }
-                _ => {}
-            }
-            gesture.set_state(EventSequenceState::Claimed);
-        });
-        button.add_controller(click_gesture);
+        let broadcaster = self.get_broadcaster();
+        let button_widget = button.upcast::<Widget>();
 
-        if self.status_receiver.is_some() {
+        let widget_self = Rc::new(Self {
+            meta: self.meta.clone(),
+            core_context: self.core_context,
+            config: self.config.clone(),
+            status_sender: self.status_sender.clone(),
+            status_receiver: self.status_receiver.clone(),
+            last_status: Rc::clone(&self.last_status),
+            current_view: Rc::clone(&self.current_view),
+            personalization: Rc::clone(&self.personalization),
+        });
+        widget_self.attach_gesture_handlers(&button_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());
+
+        if self.status_receiver.borrow().is_some() {
             let broadcaster = self.get_broadcaster();
             self.start_status_listener(notification_list, count_label, dnd_badge, broadcaster);
         }
 
-        button.clone().upcast::<Widget>()
+        button_widget
     }
 }

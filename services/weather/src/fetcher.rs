@@ -56,6 +56,10 @@ impl WeatherFetcher {
                 CurrentVar::UvIndex,
                 CurrentVar::WeatherCode,
                 CurrentVar::IsDay,
+                CurrentVar::Showers,
+                CurrentVar::Snowfall,
+                CurrentVar::Rain,
+                CurrentVar::Precipitation,
             ])
             .daily([
                 DailyVar::WeatherCode,
@@ -67,6 +71,10 @@ impl WeatherFetcher {
                 DailyVar::UvIndexMax,
                 DailyVar::WindSpeed10mMax,
                 DailyVar::PrecipitationSum,
+                DailyVar::DaylightDuration,
+                DailyVar::SunshineDuration,
+                DailyVar::PrecipitationHours,
+                DailyVar::PrecipitationProbabilityMax,
             ])
             .wind_speed_unit(WindSpeedUnit::Kmh)
             .timeformat(TimeFormat::Iso8601)
@@ -165,6 +173,10 @@ pub fn map_current_weather(response: &ForecastResponse) -> CurrentWeather {
         uv_index: extract_current_value_f32(current, CurrentVar::UvIndex),
         weather_code: extract_current_value_u16(current, CurrentVar::WeatherCode),
         is_day: extract_current_bool(current, CurrentVar::IsDay),
+        showers: extract_current_value_f32(current, CurrentVar::Showers),
+        snowfall: extract_current_value_f32(current, CurrentVar::Snowfall),
+        rain: extract_current_value_f32(current, CurrentVar::Rain),
+        precipitation: extract_current_value_f32(current, CurrentVar::Precipitation),
     }
 }
 
@@ -208,6 +220,10 @@ fn map_daily_forecast(daily: &openmeteo_rs::DailyData, index: usize) -> DailyFor
         wind_speed_max: extract_daily_value_f32(daily, DailyVar::WindSpeed10mMax, index),
         precipitation_sum: extract_daily_value_f32(daily, DailyVar::PrecipitationSum, index),
         weather_code: extract_daily_value_u16(daily, DailyVar::WeatherCode, index),
+        daylight_duration: extract_daily_value_f32(daily, DailyVar::DaylightDuration, index),
+        sunshine_duration: extract_daily_value_f32(daily, DailyVar::SunshineDuration, index),
+        precipitation_hours: extract_daily_value_f32(daily, DailyVar::PrecipitationHours, index),
+        precipitation_probability_max: extract_daily_value_f32(daily, DailyVar::PrecipitationProbabilityMax, index),
     }
 }
 
@@ -245,9 +261,50 @@ fn map_air_quality(current: &openmeteo_rs::CurrentData) -> AirQualityData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use smearor_weather_model::VoiceDescribable;
 
     #[test]
     fn weather_fetcher_new_creates_client() {
         let _fetcher = WeatherFetcher::new();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires network access to Open-Meteo API"]
+    async fn live_fetch_prints_new_fields() {
+        let config = WeatherServiceConfig {
+            latitude: 47.50311,
+            longitude: 9.7471,
+            timezone: "Europe/Vienna".to_string(),
+            forecast_days: 2,
+            ..Default::default()
+        };
+
+        let fetcher = WeatherFetcher::new();
+        let result = fetcher.fetch(&config).await.expect("fetch failed");
+        let current = map_current_weather(&result.forecast);
+        let daily = map_daily_forecast_data(&result.forecast);
+
+        println!("elevation: {:?}", result.forecast.elevation);
+        println!("current.showers: {:?}", current.showers.as_ref().copied());
+        println!("current.snowfall: {:?}", current.snowfall.as_ref().copied());
+        println!("current.rain: {:?}", current.rain.as_ref().copied());
+        println!("current.precipitation: {:?}", current.precipitation.as_ref().copied());
+        println!("daily.today.daylight_duration: {:?}", daily.today.daylight_duration.as_ref().copied());
+        println!("daily.today.sunshine_duration: {:?}", daily.today.sunshine_duration.as_ref().copied());
+        println!("daily.today.precipitation_hours: {:?}", daily.today.precipitation_hours.as_ref().copied());
+        println!("daily.today.precipitation_probability_max: {:?}", daily.today.precipitation_probability_max.as_ref().copied());
+        println!(
+            "daily.tomorrow.precipitation_probability_max: {:?}",
+            daily.tomorrow.precipitation_probability_max.as_ref().copied()
+        );
+
+        println!("\n--- Voice Summaries ---");
+        println!("Current: {}", current.voice_summary());
+        println!("Today:   {}", daily.today.voice_summary());
+        if let Some(aq) = &result.air_quality {
+            println!("Air:     {}", aq.voice_summary());
+        }
+
+        assert!(current.showers.is_some() || current.precipitation.is_some());
     }
 }

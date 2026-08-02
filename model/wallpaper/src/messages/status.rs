@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -9,7 +11,7 @@ use crate::WallpaperThemeInfo;
 
 /// Status message broadcast by the wallpaper service to widgets.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WallpaperStatusMessage {
     /// Name of the currently running theme (`None` if stopped).
     pub current_theme: stabby::option::Option<stabby::string::String>,

@@ -1,0 +1,43 @@
+//! Widget plugin types: FFI wrappers, traits, VTable, container, and macros.
+
+mod container;
+mod dimensions;
+mod factory;
+mod icon;
+mod icons;
+mod layout;
+mod r#macro;
+mod mode;
+mod plugin;
+mod text_colors;
+mod view_data;
+mod vtable;
+mod widget;
+
+pub use container::WidgetPluginContainer;
+pub use dimensions::DEFAULT_WIDE_MODE_WIDGET_WIDTH;
+pub use dimensions::DEFAULT_WIDGET_HEIGHT;
+pub use dimensions::DEFAULT_WIDGET_WIDTH;
+pub use dimensions::WidgetDimensions;
+pub use icon::Color;
+pub use icon::ColorParseError;
+pub use icon::WidgetIconRendering;
+pub use icons::DEFAULT_ICON_COLOR;
+pub use icons::DEFAULT_ICON_ONLY;
+pub use icons::DEFAULT_ICON_SIZE;
+pub use icons::WidgetIcon;
+pub use layout::DEFAULT_WIDGET_SPACING;
+pub use layout::WidgetLayout;
+pub use mode::DEFAULT_WIDGET_MODE;
+pub use mode::WidgetMode;
+pub use plugin::WidgetPlugin;
+pub use plugin::WidgetPluginConstructor;
+pub use text_colors::DEFAULT_INFO_TEXT_COLOR;
+pub use text_colors::DEFAULT_MAIN_TEXT_COLOR;
+pub use text_colors::WidgetTextColors;
+pub use view_data::ViewData;
+pub use vtable::PLUGIN_VTABLE_VERSION;
+pub use vtable::WidgetPluginVTable;
+pub use widget::FfiWidget;
+pub use widget::FfiWidgetBuilder;
+pub use widget::WidgetBuilder;

@@ -1,11 +1,14 @@
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value;
 use smearor_app_launcher_model::SmearorWindowRotationWrapper;
-
-pub const DEFAULT_WIDTH: i32 = 100;
-
-pub const DEFAULT_ICON_SIZE: i32 = 36;
+use smearor_swipe_launcher_plugin_api::ActionBindings;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DispatchableBinding;
+use smearor_swipe_launcher_plugin_api::WidgetDimensions;
+use smearor_swipe_launcher_plugin_api::WidgetIcon;
+use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMode;
+use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppLauncherConfig {
@@ -16,36 +19,29 @@ pub struct AppLauncherConfig {
     pub icon: Option<String>,
     /// The smearor window rotation wrapper configuration
     pub wrapper: Option<SmearorWindowRotationWrapper>,
-    /// Button width
-    #[serde(default = "default_width")]
-    pub width: i32,
-    /// Icon size
-    #[serde(default = "default_icon_size")]
-    pub icon_size: i32,
-    /// Show only icon without text
+    /// Widget dimensions (width, height) for GTK layout.
+    #[serde(flatten)]
+    pub dimensions: WidgetDimensions,
+    /// Widget icon configuration (icon_size, icon_only).
+    #[serde(flatten)]
+    pub icon_config: WidgetIcon,
+    /// Human-readable description of what the app launcher does.
     #[serde(default)]
-    pub icon_only: bool,
-    /// Message topic for single-click
+    pub description: Option<String>,
+    /// Action bindings for all input triggers.
+    #[serde(flatten)]
+    pub actions: ActionBindings,
+    /// Widget layout (spacing) for GTK container.
+    #[serde(flatten)]
+    pub layout: WidgetLayout,
+    /// Text color configuration (main_text_color, info_text_color).
+    #[serde(flatten)]
+    pub text_colors: WidgetTextColors,
+    /// Widget layout mode (compact or wide).
+    /// Compact: vertical layout (icon on top, app name below).
+    /// Wide: horizontal layout (icon on left, app name on right).
     #[serde(default)]
-    pub click_topic: Option<String>,
-    /// Message payload for single-click (JSON/TOML)
-    #[serde(default)]
-    pub click_payload: Option<Value>,
-    /// Target instance for single-click message
-    #[serde(default)]
-    pub click_instance: Option<String>,
-    /// Message topic for long-press
-    #[serde(default)]
-    pub longpress_topic: Option<String>,
-    /// Message payload for long-press (JSON/TOML)
-    #[serde(default)]
-    pub longpress_payload: Option<Value>,
-    /// Target instance for long-press message
-    #[serde(default)]
-    pub longpress_instance: Option<String>,
-    /// Spacing between child widgets inside the app launcher button.
-    #[serde(default)]
-    pub spacing: i32,
+    pub mode: WidgetMode,
     /// Whether the process should be detached (forked) from the launcher.
     /// Forked processes survive launcher exit and cannot be terminated via long-press.
     #[serde(default)]
@@ -57,17 +53,14 @@ pub struct AppLauncherConfig {
 }
 
 impl AppLauncherConfig {
-    pub fn parse(config: &Value) -> Result<Self, serde_json::Error> {
+    pub fn parse(config: &serde_json::Value) -> Result<Self, serde_json::Error> {
         serde_json::from_value(config.clone())
     }
-}
 
-fn default_width() -> i32 {
-    DEFAULT_WIDTH
-}
-
-fn default_icon_size() -> i32 {
-    DEFAULT_ICON_SIZE
+    /// Returns the binding for the given action kind as a `&dyn DispatchableBinding`.
+    pub fn binding_for_kind(&self, kind: ActionKind) -> &dyn DispatchableBinding {
+        self.actions.binding_for_kind(kind)
+    }
 }
 
 fn default_terminate_on_exit() -> bool {

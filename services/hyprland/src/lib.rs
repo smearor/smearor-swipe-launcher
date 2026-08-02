@@ -1,6 +1,8 @@
 pub mod config;
+pub mod event_listener;
 pub mod monitor;
 pub mod service;
+pub mod status;
 pub mod workspace;
 
 use crate::service::HyprlandService;

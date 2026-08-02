@@ -12,6 +12,8 @@ use rust_mcp_sdk::ToMcpServerHandler;
 use rust_mcp_sdk::mcp_server::ServerHandler;
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::CallToolResult;
+use rust_mcp_sdk::schema::GetPromptRequestParams;
+use rust_mcp_sdk::schema::GetPromptResult;
 use rust_mcp_sdk::schema::Implementation;
 use rust_mcp_sdk::schema::InitializeRequestParams;
 use rust_mcp_sdk::schema::InitializeResult;
@@ -43,8 +45,9 @@ use tracing::info;
 use tracing::warn;
 
 mod jsonrpc;
-mod resources;
-mod tools;
+pub mod prompts;
+pub mod resources;
+pub mod tools;
 
 /// Configuration for the MCP server.
 #[derive(Debug, Clone)]
@@ -78,6 +81,8 @@ pub struct McpServerState {
     pub tools: Vec<tools::ToolDefinition>,
     /// Registered core resources.
     pub resources: Vec<resources::ResourceDefinition>,
+    /// Registered core prompts.
+    pub prompts: Vec<prompts::PromptDefinition>,
     /// Dynamic registry populated by plugins.
     pub plugin_registry: McpRegistry,
     /// Monotonic counter for MCP invocation correlation IDs.
@@ -118,6 +123,11 @@ pub enum McpCommand {
         target_instance_id: Option<String>,
         response: oneshot::Sender<Result<String, String>>,
     },
+    /// Send multiple messages to broker topics, with duplicate filtering.
+    SendMultipleMessages {
+        messages: Vec<(String, serde_json::Value, Option<String>)>,
+        response: oneshot::Sender<Result<String, String>>,
+    },
     /// Read a resource by URI.
     ReadResource {
         uri: String,
@@ -148,6 +158,30 @@ pub enum McpCommand {
         correlation_id: String,
         response: oneshot::Sender<Result<String, String>>,
     },
+    /// Invoke a prompt registered by a plugin.
+    InvokePluginPrompt {
+        name: String,
+        plugin_id: String,
+        correlation_id: String,
+        arguments: serde_json::Value,
+        response: oneshot::Sender<Result<String, String>>,
+    },
+    /// Dynamically load a new launcher instance.
+    LoadInstance {
+        instance_id: String,
+        config_path: String,
+        instance_type: String,
+        response: oneshot::Sender<Result<String, String>>,
+    },
+    /// Stop a running launcher instance.
+    StopInstance {
+        instance_id: String,
+        response: oneshot::Sender<Result<String, String>>,
+    },
+    /// List all running launcher instances.
+    ListInstances { response: oneshot::Sender<Result<String, String>> },
+    /// Get the status of the embedded web server.
+    WebServerStatus { response: oneshot::Sender<Result<String, String>> },
 }
 
 /// Builder for the MCP server.
@@ -159,17 +193,14 @@ pub struct McpServer {
 }
 
 impl McpServer {
-    /// Create a new MCP server and the receiver that the launcher core will
-    /// use to consume commands.
-    pub fn new(config: McpServerConfig, plugin_registry: McpRegistry) -> (Self, async_channel::Receiver<McpCommand>) {
-        let (command_sender, receiver) = async_channel::unbounded::<McpCommand>();
-        let server = Self {
+    /// Create a new MCP server using an externally created command sender.
+    pub fn new(config: McpServerConfig, plugin_registry: McpRegistry, command_sender: async_channel::Sender<McpCommand>) -> Self {
+        Self {
             config,
             command_sender,
             plugin_registry,
             task_handle: None,
-        };
-        (server, receiver)
+        }
     }
 
     /// Start the MCP server using rust-mcp-axum's AxumServer in a spawned
@@ -184,6 +215,7 @@ impl McpServer {
             command_sender: self.command_sender.clone(),
             tools: tools::core_tools(),
             resources: resources::core_resources(),
+            prompts: prompts::core_prompts(),
             plugin_registry: self.plugin_registry.clone(),
             correlation_counter: AtomicU64::new(1),
         });
@@ -481,11 +513,75 @@ impl ServerHandler for SwipeLauncherHandler {
         _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
     ) -> std::result::Result<ListPromptsResult, RpcError> {
+        let state = self.state.clone();
+        let mut sdk_prompts: Vec<rust_mcp_sdk::schema::Prompt> = state.prompts.iter().map(prompts::prompt_to_sdk).collect();
+        for plugin_prompt in state.plugin_registry.list_prompts() {
+            sdk_prompts.push(rust_mcp_sdk::schema::Prompt {
+                name: plugin_prompt.name.clone(),
+                description: Some(plugin_prompt.description.clone()),
+                arguments: prompts::schema_to_prompt_arguments(&plugin_prompt.arguments_schema),
+                icons: vec![],
+                meta: None,
+                title: None,
+            });
+        }
         Ok(ListPromptsResult {
-            prompts: vec![],
+            prompts: sdk_prompts,
             next_cursor: None,
             meta: None,
         })
+    }
+
+    async fn handle_get_prompt_request(
+        &self,
+        params: GetPromptRequestParams,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> std::result::Result<GetPromptResult, RpcError> {
+        let state = self.state.clone();
+        let name = params.name.clone();
+        let arguments = params.arguments.clone();
+
+        if let Some(plugin_prompt) = state.plugin_registry.list_prompts().into_iter().find(|p| p.name == name) {
+            let correlation_id = state.correlation_counter.fetch_add(1, Ordering::Relaxed).to_string();
+            let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
+            let arguments_value = arguments
+                .map(|m| {
+                    let map: serde_json::Map<String, serde_json::Value> = m.into_iter().map(|(k, v)| (k, serde_json::Value::String(v))).collect();
+                    serde_json::Value::Object(map)
+                })
+                .unwrap_or(serde_json::Value::Null);
+            let _ = state.command_sender.try_send(McpCommand::InvokePluginPrompt {
+                name: plugin_prompt.name.clone(),
+                plugin_id: plugin_prompt.plugin_id.clone(),
+                correlation_id,
+                arguments: arguments_value,
+                response: response_tx,
+            });
+            match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
+                Ok(Ok(Ok(json))) => {
+                    let result: GetPromptResult = serde_json::from_str(&json).unwrap_or(GetPromptResult {
+                        description: None,
+                        messages: vec![],
+                        meta: None,
+                    });
+                    return Ok(result);
+                }
+                Ok(Ok(Err(message))) => {
+                    return Err(RpcError::internal_error().with_message(message));
+                }
+                Ok(Err(_)) => {
+                    return Err(RpcError::internal_error().with_message("Plugin prompt invocation dropped"));
+                }
+                Err(_) => {
+                    return Err(RpcError::internal_error().with_message("Plugin prompt invocation timed out"));
+                }
+            }
+        }
+
+        match prompts::get_prompt_sdk(&state.prompts, &name, &arguments) {
+            Ok(result) => Ok(result),
+            Err(message) => Err(RpcError::internal_error().with_message(message)),
+        }
     }
 }
 

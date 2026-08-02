@@ -1,27 +1,37 @@
 use crate::clock::Clock;
 use crate::config::ClockConfig;
+use crate::labels::ClockLabels;
+use gtk4::Align;
 use gtk4::Box as GtkBox;
-use gtk4::GestureClick;
+use gtk4::Button;
+use gtk4::CssProvider;
 use gtk4::Label;
 use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
+use gtk4::prelude::BoxExt;
 use gtk4::prelude::WidgetExt;
 use gtk4::prelude::*;
 use serde_json;
 use smearor_model_mcp::InvokeResourceMessage;
-use smearor_model_mcp::InvokeResourceResponse;
 use smearor_model_mcp::InvokeToolMessage;
-use smearor_model_mcp::InvokeToolResponse;
-use smearor_model_mcp::RegisterResourceMessage;
-use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
+use smearor_personalization_model::PersonalizationStatusMessage;
+use smearor_personalization_model::TOPIC_STATUS;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DefaultFallback;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::GestureHandler;
+use smearor_swipe_launcher_plugin_api::GestureHandlersConfiguration;
+use smearor_swipe_launcher_plugin_api::Locale;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
+use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
-use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -29,32 +39,23 @@ use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
+use smearor_swipe_launcher_plugin_api::WidgetPlugin;
+use smearor_swipe_launcher_plugin_api::apply_text_color;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread;
 use std::time::Duration;
-use tracing::debug;
+use tracing::trace;
 
-#[derive(Clone)]
-pub(crate) struct CyberLabels {
-    hour_prev: Label,
-    hour_curr: Label,
-    hour_next: Label,
-    min_prev: Label,
-    min_curr: Label,
-    min_next: Label,
-    sec_prev: Label,
-    sec_curr: Label,
-    sec_next: Label,
-    date_label: Option<Label>,
-}
+use crate::clock::PersonalizationOverride;
 
 pub(crate) struct ClockWidget {
     pub(crate) meta: PluginMeta,
     pub(crate) core_context: Option<FfiCoreContext>,
     pub(crate) config: ClockConfig,
     pub(crate) clock: Arc<Clock>,
-    pub(crate) labels: Arc<RwLock<Option<CyberLabels>>>,
+    pub(crate) labels: Arc<RwLock<Option<ClockLabels>>>,
     pub(crate) time_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<()>>,
 }
 
@@ -74,65 +75,10 @@ impl ClockWidget {
         Ok(widget)
     }
 
-    fn register_mcp_capabilities(&self) {
-        let tool = RegisterToolMessage::new(
-            "get_current_time",
-            "Returns the current local time as a formatted string.",
-            r#"{ "type": "object", "properties": {} }"#,
-        );
-        let broadcaster = self.get_broadcaster();
-        broadcaster.broadcast_message_to_topic(tool);
-        // self.broadcast_message_to_topic(tool);
-
-        let resource = RegisterResourceMessage::new("clock://time", "current_time", "Current time formatted by the clock widget.", "text/plain");
-        broadcaster.broadcast_message_to_topic(resource);
-        // self.broadcast_message_to_topic(resource);
-    }
-
-    fn create_time_column(css_prefix: &str) -> (GtkBox, (Label, Label, Label)) {
-        let col_box = GtkBox::builder().orientation(Orientation::Vertical).spacing(2).build();
-
-        let lbl_prev = Label::builder().css_classes([format!("cyber-clock-{}-prev", css_prefix)]).build();
-        let lbl_curr = Label::builder().css_classes([format!("cyber-clock-{}-curr", css_prefix)]).build();
-        let lbl_next = Label::builder().css_classes([format!("cyber-clock-{}-next", css_prefix)]).build();
-
-        col_box.append(&lbl_prev);
-        col_box.append(&lbl_curr);
-        col_box.append(&lbl_next);
-
-        (col_box, (lbl_prev, lbl_curr, lbl_next))
-    }
-
-    fn create_divider() -> Label {
-        Label::builder()
-            .label(":")
-            .valign(gtk4::Align::Center)
-            .css_classes(["cyber-clock-divider".to_string()])
-            .build()
-    }
-
-    fn update_labels(labels: &CyberLabels, clock: &Clock) {
-        let h = clock.get_hour() as i32;
-        let m = clock.get_minute() as i32;
-        let s = clock.get_second() as i32;
-
-        labels.hour_prev.set_text(&format!("{:02}", (h - 1 + 24) % 24));
-        labels.hour_curr.set_text(&format!("{:02}", h));
-        labels.hour_next.set_text(&format!("{:02}", (h + 1) % 24));
-
-        labels.min_prev.set_text(&format!("{:02}", (m - 1 + 60) % 60));
-        labels.min_curr.set_text(&format!("{:02}", m));
-        labels.min_next.set_text(&format!("{:02}", (m + 1) % 60));
-
-        labels.sec_prev.set_text(&format!("{:02}", (s - 1 + 60) % 60));
-        labels.sec_curr.set_text(&format!("{:02}", s));
-        labels.sec_next.set_text(&format!("{:02}", (s + 1) % 60));
-
-        if let Some(ref date_label) = labels.date_label {
-            if let Some(date_str) = clock.get_current_time_2() {
-                date_label.set_text(&date_str);
-            }
-        }
+    fn update_labels(labels: &ClockLabels, clock: &Clock) {
+        labels.time_label.set_text(&clock.get_time_string());
+        labels.date_label.set_text(&clock.get_date_string());
+        labels.weekday_label.set_text(clock.get_weekday_name());
     }
 
     pub(crate) fn start_time_update(&mut self) {
@@ -164,46 +110,38 @@ impl ClockWidget {
     }
 }
 
+impl DefaultFallback for ClockWidget {
+    fn default_fallback(&self, _kind: &ActionKind, _broadcaster: &MessageBroadcasterInner) {}
+}
+
 impl MessageHandler<FfiEnvelope> for ClockWidget {
     fn handle_message(&self, _message: FfiEnvelope, _sender_id: &str) {}
 }
 
-impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for ClockWidget {
-    fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, _sender_id: &str) {
-        debug!("clock: handle_message name={}", message.0.name);
-        if message.0.name.to_string() != "get_current_time" {
-            return;
-        }
-        let response = if let Some(time_str) = self.clock.get_current_time_2() {
-            debug!("clock: get_current_time responding with {}", time_str);
-            InvokeToolResponse::success(&message.0.correlation_id.to_string(), &time_str)
-        } else {
-            debug!("clock: get_current_time format_2 not ready");
-            InvokeToolResponse::error(&message.0.correlation_id.to_string(), "Clock not ready")
-        };
-        let broadcaster = self.get_broadcaster();
-        broadcaster.broadcast_message_to_topic(response);
-    }
-}
-
-impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for ClockWidget {
-    fn handle_message(&self, message: FfiEnvelopePayload<InvokeResourceMessage>, _sender_id: &str) {
-        if message.0.uri.to_string() != "clock://time" {
-            return;
-        }
-        let response = if let Some(time_str) = self.clock.get_current_time_2() {
-            InvokeResourceResponse::success(&message.0.correlation_id.to_string(), &time_str)
-        } else {
-            InvokeResourceResponse::error(&message.0.correlation_id.to_string(), "Clock not ready")
-        };
-        let broadcaster = self.get_broadcaster();
-        broadcaster.broadcast_message_to_topic(response);
-    }
-}
-
 impl AcceptTopic<FfiEnvelope> for ClockWidget {
-    fn accept_topic(&self, _topic: &str) -> bool {
-        false
+    fn accept_topic(&self, topic: &str) -> bool {
+        topic == TOPIC_STATUS || topic == TOPIC_MCP_INVOKE_TOOL || topic == TOPIC_MCP_INVOKE_RESOURCE
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>> for ClockWidget {
+    fn handle_message(&self, message: FfiEnvelopePayload<PersonalizationStatusMessage>, _sender_id: &str) {
+        trace!("clock: received personalization status");
+        let status = message.0;
+        let timezone = status.timezone.as_ref().map(|t| t.to_string());
+        let locale = status.locale.as_ref().map(|l| Locale::from_str(l).unwrap_or_default()).unwrap_or_default();
+        let override_data = PersonalizationOverride {
+            timezone,
+            locale,
+            time_format: Some(status.time_format),
+            date_format: Some(status.date_format),
+        };
+        self.clock.update_personalization(override_data);
+        if let Ok(guard) = self.labels.read()
+            && let Some(lbls) = guard.as_ref()
+        {
+            Self::update_labels(lbls, &self.clock);
+        }
     }
 }
 
@@ -221,12 +159,14 @@ impl AsRef<Option<FfiCoreContext>> for ClockWidget {
     }
 }
 
-impl Plugin for ClockWidget {
+impl WidgetPlugin for ClockWidget {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
-                if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                if envelope.type_id == FfiEnvelopePayload::<PersonalizationStatusMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<PersonalizationStatusMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
@@ -238,69 +178,96 @@ impl Plugin for ClockWidget {
 
 impl WidgetBuilder for ClockWidget {
     fn build_widget(&mut self) -> Widget {
-        let outer_box = GtkBox::builder()
+        let config = self.config.clone();
+        let show_labels = !config.icon_config.icon_only();
+
+        let content_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
-            .spacing(4)
-            .css_classes(["cyber-clock-main".to_string()])
+            .spacing(config.layout.spacing_or_default())
+            .css_classes(["menu_button_inner"])
+            .halign(Align::Center)
+            .valign(Align::Center)
+            .vexpand(true)
             .build();
 
-        let time_box = GtkBox::builder().orientation(Orientation::Horizontal).spacing(self.config.spacing).build();
+        // Line 0: Time display (replaces icon line)
+        let time_label = Label::builder()
+            .label("")
+            .css_classes(["clock-time"])
+            .halign(Align::Center)
+            .valign(Align::Center)
+            .build();
+        time_label.set_height_request(config.icon_config.icon_size());
+        content_box.append(&time_label);
 
-        if let Some(width) = self.config.width {
-            outer_box.set_width_request(width);
-        }
+        // Line 1: Date (main text)
+        let date_label = Label::builder()
+            .label(if show_labels { "" } else { "" })
+            .css_classes(["widget-main-text"])
+            .halign(Align::Center)
+            .build();
+        date_label.set_height_request(20);
+        apply_text_color(&date_label, config.text_colors.main_text_color());
+        content_box.append(&date_label);
 
-        let (box_hour, hour_labels) = Self::create_time_column("hour");
-        let (box_min, min_labels) = Self::create_time_column("minute");
-        let (box_sec, sec_labels) = Self::create_time_column("second");
+        // Line 2: Weekday (info text)
+        let weekday_label = Label::builder()
+            .label(if show_labels { "" } else { "" })
+            .css_classes(["widget-info-text"])
+            .halign(Align::Center)
+            .build();
+        weekday_label.set_height_request(16);
+        apply_text_color(&weekday_label, config.text_colors.info_text_color());
+        content_box.append(&weekday_label);
 
-        let divider1 = Self::create_divider();
-        let divider2 = Self::create_divider();
+        // Line 3: Spacer
+        let spacer = Label::new(Some(""));
+        spacer.set_height_request(16);
+        content_box.append(&spacer);
 
-        time_box.append(&box_hour);
-        time_box.append(&divider1);
-        time_box.append(&box_min);
-        time_box.append(&divider2);
-        time_box.append(&box_sec);
-
-        outer_box.append(&time_box);
-
-        let mut date_label: Option<Label> = None;
-        if self.config.format_2.is_some() {
-            let date = Label::builder().css_classes(["cyber-clock-date".to_string()]).build();
-            outer_box.append(&date);
-            date_label = Some(date);
-        }
-
-        let labels = CyberLabels {
-            hour_prev: hour_labels.0,
-            hour_curr: hour_labels.1,
-            hour_next: hour_labels.2,
-            min_prev: min_labels.0,
-            min_curr: min_labels.1,
-            min_next: min_labels.2,
-            sec_prev: sec_labels.0,
-            sec_curr: sec_labels.1,
-            sec_next: sec_labels.2,
-            date_label,
+        let labels = ClockLabels {
+            time_label: time_label.clone(),
+            date_label: date_label.clone(),
+            weekday_label: weekday_label.clone(),
         };
 
         Self::update_labels(&labels, &self.clock);
 
-        let click_topic = self.config.click_topic.clone();
-        let click_payload = self.config.click_payload.clone();
-        let message_broadcaster = self.get_broadcaster();
-        let gesture = GestureClick::new();
-        gesture.connect_released(move |_gesture, _, _, _| {
-            if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
-                let payload_str = payload.to_string();
-                message_broadcaster.broadcast_string(&topic, &payload_str);
-            }
-        });
-        outer_box.add_controller(gesture);
-
         *self.labels.write().unwrap() = Some(labels);
+
+        let effective_width = config.dimensions.width_or_default().min(config.dimensions.max_width_or_default(config.mode));
+        let mut button_builder = Button::builder()
+            .css_classes(["scroll-item", "menu-button"])
+            .width_request(effective_width)
+            .height_request(config.dimensions.height_or_default())
+            .child(&content_box);
+        if let Some(max_w) = config.dimensions.max_width {
+            button_builder = button_builder.hexpand(false).halign(Align::Start);
+            let css_class = format!("max-width-{}", max_w);
+            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
+            let css = format!(".max-width-{} {{ max-width: {}px; }}", max_w, max_w);
+            if let Some(display) = gtk4::gdk::Display::default() {
+                let provider = CssProvider::new();
+                provider.load_from_string(&css);
+                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
+            }
+        }
+        let button = button_builder.build();
+
         self.start_time_update();
-        outer_box.upcast::<Widget>()
+
+        let widget_self = std::rc::Rc::new(Self {
+            meta: self.meta.clone(),
+            core_context: self.core_context,
+            config: self.config.clone(),
+            clock: Arc::clone(&self.clock),
+            labels: Arc::clone(&self.labels),
+            time_receiver: self.time_receiver.take(),
+        });
+        let button_widget = button.upcast::<Widget>();
+        let message_broadcaster = self.get_broadcaster();
+        widget_self.attach_gesture_handlers(&button_widget, &self.config.actions, &message_broadcaster, &GestureHandlersConfiguration::default());
+
+        button_widget
     }
 }

@@ -1,0 +1,10 @@
+pub(crate) mod color_scheme;
+pub(crate) mod command;
+pub(crate) mod coordinates;
+pub(crate) mod date_format;
+pub(crate) mod first_day_of_week;
+pub(crate) mod measurement_system;
+pub(crate) mod status;
+pub(crate) mod temperature_unit;
+pub(crate) mod time_format;
+pub(crate) mod wind_speed_unit;

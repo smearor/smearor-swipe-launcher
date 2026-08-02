@@ -2,6 +2,7 @@ use crate::workspace::dbus::GnomeShellEvalProxy;
 use crate::workspace::dbus::GnomeShellIntrospectProxy;
 use crate::workspace::dbus::MutterDisplayConfigProxy;
 use crate::workspace::gsettings;
+use crate::workspace::wmctrl;
 use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_model_compositor::WorkspaceLifecycleEvent;
 use smearor_model_compositor::WorkspaceLifecycleType;
@@ -129,14 +130,21 @@ fn poll_workspace_loop(
             }
         }
 
+        let mut wmctrl_available = false;
         if !introspect_available && !eval_available {
-            warn!("GNOME workspace tracking: both Introspect and Eval are blocked. Using GSettings-only mode (active workspace detection not available). Enable GNOME Shell unsafe mode for full functionality.");
+            wmctrl_available = wmctrl::is_available();
+            if wmctrl_available {
+                debug!("GNOME workspace tracking: using wmctrl fallback for active workspace detection");
+            } else {
+                warn!("GNOME workspace tracking: Introspect, Eval, and wmctrl all unavailable. Using GSettings-only mode (active workspace detection not available). Enable GNOME Shell unsafe mode or install wmctrl for full functionality.");
+            }
         }
 
         let mut last_workspace: Option<i32> = None;
         let mut last_workspace_count: Option<i32> = None;
+        let mut first_iteration = true;
 
-        debug!("GNOME D-Bus polling started (interval: {:?}, introspect={}, eval={})", poll_duration, introspect_available, eval_available);
+        debug!("GNOME D-Bus polling started (interval: {:?}, introspect={}, eval={}, wmctrl={})", poll_duration, introspect_available, eval_available, wmctrl_available);
 
         loop {
             let (active_workspace, max_workspace) = if introspect_available {
@@ -165,6 +173,13 @@ fn poll_workspace_loop(
                 } else {
                     (None, 0)
                 }
+            } else if wmctrl_available {
+                if let Some((active, max)) = wmctrl::detect_active_workspace() {
+                    (Some(active), max)
+                } else {
+                    let count = gsettings::read_workspace_count();
+                    (Some(0), count.saturating_sub(1))
+                }
             } else {
                 // GSettings-only mode: can't detect active workspace
                 let count = gsettings::read_workspace_count();
@@ -172,25 +187,36 @@ fn poll_workspace_loop(
             };
 
             if let Some(ws_index) = active_workspace {
-                let changed = last_workspace.map_or(true, |prev| prev != ws_index);
-                if changed {
-                    let workspace_name = resolve_workspace_name(ws_index, max_workspace);
-                    let monitor_index = if let Some(ref display_proxy) = display_proxy {
-                        resolve_monitor_index(display_proxy).await.unwrap_or(0)
-                    } else {
-                        0
-                    };
-
-                    let event = WorkspaceChangedEvent {
-                        workspace_name: workspace_name.into(),
-                        workspace_id: ws_index,
-                        monitor_index,
-                    };
-
-                    debug!("GNOME workspace changed: {:?}", event);
-                    let _ = sender.send(WorkspaceEvent::Changed(event));
-
+                if first_iteration {
                     last_workspace = Some(ws_index);
+                    let current_count = if gsettings::is_dynamic_workspaces() {
+                        max_workspace + 1
+                    } else {
+                        gsettings::read_workspace_count()
+                    };
+                    last_workspace_count = Some(current_count);
+                    debug!("GNOME workspace tracking: initial workspace={}", ws_index);
+                } else {
+                    let changed = last_workspace.map_or(true, |prev| prev != ws_index);
+                    if changed {
+                        let workspace_name = resolve_workspace_name(ws_index, max_workspace);
+                        let monitor_index = if let Some(ref display_proxy) = display_proxy {
+                            resolve_monitor_index(display_proxy).await.unwrap_or(0)
+                        } else {
+                            0
+                        };
+
+                        let event = WorkspaceChangedEvent {
+                            workspace_name: workspace_name.into(),
+                            workspace_id: ws_index,
+                            monitor_index,
+                        };
+
+                        debug!("GNOME workspace changed: {:?}", event);
+                        let _ = sender.send(WorkspaceEvent::Changed(event));
+
+                        last_workspace = Some(ws_index);
+                    }
                 }
             }
 
@@ -234,6 +260,7 @@ fn poll_workspace_loop(
                 last_workspace_count = Some(current_count);
             }
 
+            first_iteration = false;
             tokio::time::sleep(poll_duration).await;
         }
     });

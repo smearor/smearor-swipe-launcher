@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -7,7 +9,7 @@ pub const TOPIC_STATUS: &str = "service.mpris.status";
 
 /// Information about an available MPRIS player.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct MprisPlayerInfo {
     /// D-Bus bus name of the player (e.g. "org.mpris.MediaPlayer2.spotify")
     pub bus_name: stabby::string::String,
@@ -20,7 +22,7 @@ pub struct MprisPlayerInfo {
 /// Current playback status of an MPRIS player.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum MprisPlaybackStatus {
     /// The player is actively playing
     Playing,
@@ -31,10 +33,24 @@ pub enum MprisPlaybackStatus {
     Stopped,
 }
 
+impl MprisPlaybackStatus {
+    /// Returns the nerd font icon name for a play/pause toggle button.
+    ///
+    /// Shows the action that will be performed on click:
+    /// `Playing` → pause icon, `Paused`/`Stopped` → play icon.
+    pub fn playback_icon_name(&self) -> &'static str {
+        match self {
+            Self::Playing => "nf-fa-pause",
+            Self::Paused => "nf-fa-play",
+            Self::Stopped => "nf-fa-play",
+        }
+    }
+}
+
 /// Loop mode of an MPRIS player.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum MprisLoopStatus {
     /// No looping
     #[default]
@@ -47,7 +63,7 @@ pub enum MprisLoopStatus {
 
 /// Metadata of the currently playing track.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct MprisTrackMetadata {
     /// Track title
     pub title: stabby::string::String,
@@ -63,7 +79,7 @@ pub struct MprisTrackMetadata {
 
 /// Status message broadcast by the MPRIS service to all widgets.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct MprisStatusMessage {
     /// Whether any player is currently active
     pub has_player: bool,

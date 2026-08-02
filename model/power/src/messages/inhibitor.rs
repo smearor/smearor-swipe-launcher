@@ -1,6 +1,9 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 /// Information about a single inhibitor lock that blocks a power action.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InhibitorInfo {
     /// Process name that holds the inhibitor lock.
     pub process_name: stabby::string::String,

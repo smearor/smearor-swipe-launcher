@@ -1,20 +1,22 @@
 use crate::config::NetworkWidgetConfig;
+use crate::labels::NetworkLabel;
+use crate::personalization::PersonalizationOverride;
 use gtk4::Align;
 use gtk4::Box as GtkBox;
+use gtk4::Button;
+use gtk4::CssProvider;
 use gtk4::DrawingArea;
-use gtk4::EventSequenceState;
-use gtk4::GestureClick;
-use gtk4::GestureDrag;
-use gtk4::GestureLongPress;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
-use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
 use gtk4::prelude::WidgetExt;
 use gtk4::prelude::*;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_widget::WidgetUpdateMessage;
+use smearor_network_model::ConnectionStateLevel;
 use smearor_network_model::NetworkCommandMessage;
 use smearor_network_model::NetworkConnectionState;
 use smearor_network_model::NetworkInterfaceType;
@@ -25,24 +27,40 @@ use smearor_network_model::TOPIC_SCAN_RESULTS;
 use smearor_network_model::TOPIC_STATUS;
 use smearor_network_model::TOPIC_VPN_PROFILES;
 use smearor_network_model::VpnProfilesMessage;
+use smearor_network_model::WifiSignalLevel;
+use smearor_personalization_model::PersonalizationCommandMessage;
+use smearor_personalization_model::PersonalizationStatusMessage;
+use smearor_personalization_model::TOPIC_STATUS as TOPIC_PERSONALIZATION_STATUS;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DefaultFallback;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::GestureHandler;
+use smearor_swipe_launcher_plugin_api::GestureHandlersConfiguration;
+use smearor_swipe_launcher_plugin_api::Locale;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
+use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
-use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::ViewData;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
+use smearor_swipe_launcher_plugin_api::WidgetIconRendering;
+use smearor_swipe_launcher_plugin_api::WidgetPlugin;
+use smearor_swipe_launcher_plugin_api::apply_icon_color;
+use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::str::FromStr;
 use tracing::debug;
+use tracing::trace;
 
 type SharedImage = Rc<RefCell<Option<Image>>>;
 type SharedLabel = Rc<RefCell<Option<Label>>>;
@@ -63,12 +81,14 @@ pub struct NetworkWidget {
     pub value_label: SharedLabel,
     pub info_label: SharedLabel,
     pub qr_drawing_area: SharedDrawingArea,
+    pub spacer_label: SharedLabel,
     pub current_view: Rc<RefCell<usize>>,
     pub latest_status: Rc<RefCell<Option<NetworkStatusMessage>>>,
     pub latest_scan: Rc<RefCell<Option<ScanResultsMessage>>>,
     pub latest_vpn: Rc<RefCell<Option<VpnProfilesMessage>>>,
     pub latest_ssid: SharedString,
     pub latest_password: SharedString,
+    pub personalization: Rc<RefCell<PersonalizationOverride>>,
 }
 
 impl NetworkWidget {
@@ -80,7 +100,7 @@ impl NetworkWidget {
         let (scan_sender, scan_receiver) = tokio::sync::mpsc::unbounded_channel::<ScanResultsMessage>();
         let (vpn_sender, vpn_receiver) = tokio::sync::mpsc::unbounded_channel::<VpnProfilesMessage>();
 
-        Ok(NetworkWidget {
+        let widget = NetworkWidget {
             meta: PluginMeta::try_from(&config)?,
             core_context,
             config: widget_config,
@@ -94,208 +114,126 @@ impl NetworkWidget {
             value_label: Rc::new(RefCell::new(None)),
             info_label: Rc::new(RefCell::new(None)),
             qr_drawing_area: Rc::new(RefCell::new(None)),
+            spacer_label: Rc::new(RefCell::new(None)),
             current_view: Rc::new(RefCell::new(0)),
             latest_status: Rc::new(RefCell::new(None)),
             latest_scan: Rc::new(RefCell::new(None)),
             latest_vpn: Rc::new(RefCell::new(None)),
             latest_ssid: Rc::new(RefCell::new(String::new())),
             latest_password: Rc::new(RefCell::new(String::new())),
-        })
+            personalization: Rc::new(RefCell::new(PersonalizationOverride::default())),
+        };
+        widget.request_personalization_status();
+        Ok(widget)
+    }
+
+    fn request_personalization_status(&self) {
+        MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(PersonalizationCommandMessage::request_status());
+    }
+
+    /// Broadcast a WidgetUpdateMessage so headless/Web instances re-render this widget.
+    fn broadcast_widget_update(&self) {
+        let plugin_id = self.meta.id.to_string();
+        let msg = WidgetUpdateMessage::new(&plugin_id, "");
+        let broadcaster = self.get_broadcaster();
+        broadcaster.broadcast_message_to_topic(msg);
     }
 
     fn update_ui(&self, status: &NetworkStatusMessage) {
         let view_index = *self.current_view.borrow();
         let view = self.config.views.get(view_index).copied().unwrap_or(NetworkView::WifiStatus);
 
-        let icon_image = self.icon_image.clone();
-        let value_label = self.value_label.clone();
-        let info_label = self.info_label.clone();
-        let qr_area = self.qr_drawing_area.clone();
-        let config = self.config.clone();
-        let status = status.clone();
-        let latest_scan = self.latest_scan.clone();
-        let latest_vpn = self.latest_vpn.clone();
+        if view == NetworkView::QrCode {
+            show_qr_view(&self.qr_drawing_area, &self.icon_image, &self.value_label, &self.info_label, &self.spacer_label);
+        } else {
+            show_normal_view(&self.qr_drawing_area, &self.icon_image, &self.value_label, &self.info_label, &self.spacer_label);
 
-        MainContext::default().spawn_local(async move {
-            if view == NetworkView::QrCode {
-                if let Some(ref area) = *qr_area.borrow() {
-                    area.set_visible(true);
-                    area.queue_draw();
-                }
-                if let Some(ref img) = *icon_image.borrow() {
-                    img.set_visible(false);
-                }
-                if let Some(ref label) = *value_label.borrow() {
-                    label.set_visible(false);
-                }
-                if let Some(ref label) = *info_label.borrow() {
-                    label.set_visible(false);
-                }
-            } else {
-                if let Some(ref area) = *qr_area.borrow() {
-                    area.set_visible(false);
-                }
-                if let Some(ref img) = *icon_image.borrow() {
-                    img.set_visible(true);
-                }
-                if let Some(ref label) = *value_label.borrow() {
-                    label.set_visible(true);
-                }
-                if let Some(ref label) = *info_label.borrow() {
-                    label.set_visible(true);
-                }
+            let scan = self.latest_scan.borrow().clone();
+            let vpn = self.latest_vpn.borrow().clone();
+            let override_data = self.personalization.borrow().clone();
+            let view_data = render_view(status, scan.as_ref(), vpn.as_ref(), &self.config, view, &override_data);
 
-                let scan = latest_scan.borrow().clone();
-                let vpn = latest_vpn.borrow().clone();
-                let (icon_name, value_text, info_text) = render_view(&status, scan.as_ref(), vpn.as_ref(), &config, view);
-
-                if let Some(ref img) = *icon_image.borrow() {
-                    set_icon_image(img, &icon_name, config.icon_size);
-                }
-                if let Some(ref label) = *value_label.borrow() {
-                    label.set_text(&value_text);
-                }
-                if let Some(ref label) = *info_label.borrow() {
-                    label.set_text(&info_text);
-                }
+            if let Some(ref img) = *self.icon_image.borrow() {
+                update_icon_display(img, &view_data, self.config.icon_config.icon_size(), self.config.icon_config.icon_color());
             }
-        });
+            if let Some(ref label) = *self.value_label.borrow() {
+                label.set_text(&view_data.main_text);
+            }
+            if let Some(ref label) = *self.info_label.borrow() {
+                label.set_text(&view_data.info_text);
+            }
+        }
+        self.broadcast_widget_update();
     }
 
     fn next_view(&self) {
-        let current_view = self.current_view.clone();
-        let latest_status = self.latest_status.clone();
-        let latest_scan = self.latest_scan.clone();
-        let latest_vpn = self.latest_vpn.clone();
-        let icon_image = self.icon_image.clone();
-        let value_label = self.value_label.clone();
-        let info_label = self.info_label.clone();
-        let qr_area = self.qr_drawing_area.clone();
-        let config = self.config.clone();
+        if self.config.views.is_empty() {
+            return;
+        }
+        let mut idx = self.current_view.borrow_mut();
+        *idx = (*idx + 1) % self.config.views.len();
+        let view = self.config.views[*idx];
+        drop(idx);
 
-        MainContext::default().spawn_local(async move {
-            if config.views.is_empty() {
-                return;
-            }
-            let mut idx = current_view.borrow_mut();
-            *idx = (*idx + 1) % config.views.len();
-            let view = config.views[*idx];
-            drop(idx);
+        if let Some(ref status) = *self.latest_status.borrow() {
+            if view == NetworkView::QrCode {
+                show_qr_view(&self.qr_drawing_area, &self.icon_image, &self.value_label, &self.info_label, &self.spacer_label);
+            } else {
+                show_normal_view(&self.qr_drawing_area, &self.icon_image, &self.value_label, &self.info_label, &self.spacer_label);
 
-            if let Some(ref status) = *latest_status.borrow() {
-                if view == NetworkView::QrCode {
-                    if let Some(ref area) = *qr_area.borrow() {
-                        area.set_visible(true);
-                        area.queue_draw();
-                    }
-                    if let Some(ref img) = *icon_image.borrow() {
-                        img.set_visible(false);
-                    }
-                    if let Some(ref label) = *value_label.borrow() {
-                        label.set_visible(false);
-                    }
-                    if let Some(ref label) = *info_label.borrow() {
-                        label.set_visible(false);
-                    }
-                } else {
-                    if let Some(ref area) = *qr_area.borrow() {
-                        area.set_visible(false);
-                    }
-                    if let Some(ref img) = *icon_image.borrow() {
-                        img.set_visible(true);
-                    }
-                    if let Some(ref label) = *value_label.borrow() {
-                        label.set_visible(true);
-                    }
-                    if let Some(ref label) = *info_label.borrow() {
-                        label.set_visible(true);
-                    }
-
-                    let scan = latest_scan.borrow().clone();
-                    let vpn = latest_vpn.borrow().clone();
-                    let (icon_name, value_text, info_text) = render_view(status, scan.as_ref(), vpn.as_ref(), &config, view);
-                    if let Some(ref img) = *icon_image.borrow() {
-                        set_icon_image(img, &icon_name, config.icon_size);
-                    }
-                    if let Some(ref label) = *value_label.borrow() {
-                        label.set_text(&value_text);
-                    }
-                    if let Some(ref label) = *info_label.borrow() {
-                        label.set_text(&info_text);
-                    }
+                let scan = self.latest_scan.borrow().clone();
+                let vpn = self.latest_vpn.borrow().clone();
+                let override_data = self.personalization.borrow().clone();
+                let view_data = render_view(status, scan.as_ref(), vpn.as_ref(), &self.config, view, &override_data);
+                if let Some(ref img) = *self.icon_image.borrow() {
+                    update_icon_display(img, &view_data, self.config.icon_config.icon_size(), self.config.icon_config.icon_color());
+                }
+                if let Some(ref label) = *self.value_label.borrow() {
+                    label.set_text(&view_data.main_text);
+                }
+                if let Some(ref label) = *self.info_label.borrow() {
+                    label.set_text(&view_data.info_text);
                 }
             }
-        });
+        }
+        self.broadcast_widget_update();
     }
 
     fn prev_view(&self) {
-        let current_view = self.current_view.clone();
-        let latest_status = self.latest_status.clone();
-        let latest_scan = self.latest_scan.clone();
-        let latest_vpn = self.latest_vpn.clone();
-        let icon_image = self.icon_image.clone();
-        let value_label = self.value_label.clone();
-        let info_label = self.info_label.clone();
-        let qr_area = self.qr_drawing_area.clone();
-        let config = self.config.clone();
+        if self.config.views.is_empty() {
+            return;
+        }
+        let mut idx = self.current_view.borrow_mut();
+        if *idx == 0 {
+            *idx = self.config.views.len() - 1;
+        } else {
+            *idx -= 1;
+        }
+        let view = self.config.views[*idx];
+        drop(idx);
 
-        MainContext::default().spawn_local(async move {
-            if config.views.is_empty() {
-                return;
-            }
-            let mut idx = current_view.borrow_mut();
-            if *idx == 0 {
-                *idx = config.views.len() - 1;
+        if let Some(ref status) = *self.latest_status.borrow() {
+            if view == NetworkView::QrCode {
+                show_qr_view(&self.qr_drawing_area, &self.icon_image, &self.value_label, &self.info_label, &self.spacer_label);
             } else {
-                *idx -= 1;
-            }
-            let view = config.views[*idx];
-            drop(idx);
+                show_normal_view(&self.qr_drawing_area, &self.icon_image, &self.value_label, &self.info_label, &self.spacer_label);
 
-            if let Some(ref status) = *latest_status.borrow() {
-                if view == NetworkView::QrCode {
-                    if let Some(ref area) = *qr_area.borrow() {
-                        area.set_visible(true);
-                        area.queue_draw();
-                    }
-                    if let Some(ref img) = *icon_image.borrow() {
-                        img.set_visible(false);
-                    }
-                    if let Some(ref label) = *value_label.borrow() {
-                        label.set_visible(false);
-                    }
-                    if let Some(ref label) = *info_label.borrow() {
-                        label.set_visible(false);
-                    }
-                } else {
-                    if let Some(ref area) = *qr_area.borrow() {
-                        area.set_visible(false);
-                    }
-                    if let Some(ref img) = *icon_image.borrow() {
-                        img.set_visible(true);
-                    }
-                    if let Some(ref label) = *value_label.borrow() {
-                        label.set_visible(true);
-                    }
-                    if let Some(ref label) = *info_label.borrow() {
-                        label.set_visible(true);
-                    }
-
-                    let scan = latest_scan.borrow().clone();
-                    let vpn = latest_vpn.borrow().clone();
-                    let (icon_name, value_text, info_text) = render_view(status, scan.as_ref(), vpn.as_ref(), &config, view);
-                    if let Some(ref img) = *icon_image.borrow() {
-                        set_icon_image(img, &icon_name, config.icon_size);
-                    }
-                    if let Some(ref label) = *value_label.borrow() {
-                        label.set_text(&value_text);
-                    }
-                    if let Some(ref label) = *info_label.borrow() {
-                        label.set_text(&info_text);
-                    }
+                let scan = self.latest_scan.borrow().clone();
+                let vpn = self.latest_vpn.borrow().clone();
+                let override_data = self.personalization.borrow().clone();
+                let view_data = render_view(status, scan.as_ref(), vpn.as_ref(), &self.config, view, &override_data);
+                if let Some(ref img) = *self.icon_image.borrow() {
+                    update_icon_display(img, &view_data, self.config.icon_config.icon_size(), self.config.icon_config.icon_color());
+                }
+                if let Some(ref label) = *self.value_label.borrow() {
+                    label.set_text(&view_data.main_text);
+                }
+                if let Some(ref label) = *self.info_label.borrow() {
+                    label.set_text(&view_data.info_text);
                 }
             }
-        });
+        }
+        self.broadcast_widget_update();
     }
 
     fn start_listeners(&mut self) {
@@ -370,9 +308,25 @@ impl MessageHandler<FfiEnvelopePayload<VpnProfilesMessage>> for NetworkWidget {
     }
 }
 
+impl MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>> for NetworkWidget {
+    fn handle_message(&self, message: FfiEnvelopePayload<PersonalizationStatusMessage>, _sender_id: &str) {
+        trace!("Network Widget: received personalization status");
+        let status = message.0;
+        let locale = status.locale.as_ref().map(|l| Locale::from_str(l).unwrap_or_default()).unwrap_or_default();
+        let override_data = PersonalizationOverride {
+            measurement_system: Some(status.measurement_system),
+            locale,
+        };
+        *self.personalization.borrow_mut() = override_data;
+        if let Some(ref status) = *self.latest_status.borrow() {
+            self.update_ui(status);
+        }
+    }
+}
+
 impl AcceptTopic<FfiEnvelope> for NetworkWidget {
     fn accept_topic(&self, topic: &str) -> bool {
-        topic == TOPIC_STATUS || topic == TOPIC_SCAN_RESULTS || topic == TOPIC_VPN_PROFILES
+        topic == TOPIC_STATUS || topic == TOPIC_SCAN_RESULTS || topic == TOPIC_VPN_PROFILES || topic == TOPIC_PERSONALIZATION_STATUS
     }
 }
 
@@ -390,7 +344,7 @@ impl AsRef<Option<FfiCoreContext>> for NetworkWidget {
     }
 }
 
-impl Plugin for NetworkWidget {
+impl WidgetPlugin for NetworkWidget {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
@@ -401,6 +355,10 @@ impl Plugin for NetworkWidget {
                     MessageHandler::<FfiEnvelopePayload<ScanResultsMessage>>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == VpnProfilesMessage::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<VpnProfilesMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == FfiEnvelopePayload::<PersonalizationStatusMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<PersonalizationStatusMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }
@@ -411,38 +369,64 @@ impl WidgetBuilder for NetworkWidget {
     fn build_widget(&mut self) -> Widget {
         let config = self.config.clone();
         let broadcaster = self.get_broadcaster();
+        let show_labels = !config.icon_config.icon_only();
 
-        let outer_box = GtkBox::builder()
+        let content_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
-            .spacing(config.spacing)
-            .css_classes(["network-widget".to_string()])
+            .spacing(config.layout.spacing_or_default())
+            .css_classes(["menu_button_inner"])
             .halign(Align::Center)
             .valign(Align::Center)
+            .vexpand(true)
             .build();
 
-        outer_box.set_width_request(config.width);
-        outer_box.set_height_request(config.height);
+        // Line 0: Icon
+        let icon_image = Image::new();
+        icon_image.set_pixel_size(config.icon_config.icon_size());
+        icon_image.add_css_class("nerd-icon");
+        if let Some(color) = config.icon_config.icon_color() {
+            apply_icon_color(&icon_image, color);
+        }
+        content_box.append(&icon_image);
+        *self.icon_image.borrow_mut() = Some(icon_image);
 
-        let icon_image = Image::builder()
-            .css_classes(["network-icon".to_string()])
-            .halign(Align::Center)
-            .pixel_size(config.icon_size)
+        // Line 1: Main label (value text)
+        let value_label = Label::builder()
+            .label(if show_labels { "Loading..." } else { "" })
+            .css_classes(["widget-main-text"])
             .build();
+        value_label.set_height_request(20);
+        apply_text_color(&value_label, config.text_colors.main_text_color());
+        content_box.append(&value_label);
+        *self.value_label.borrow_mut() = Some(value_label);
 
-        let value_label = Label::builder().css_classes(["network-value".to_string()]).halign(Align::Center).build();
-        value_label.set_text("Loading...");
+        // Line 2: Info label
+        let info_label = Label::builder()
+            .label(if show_labels { "" } else { "" })
+            .css_classes(["widget-info-text"])
+            .build();
+        info_label.set_height_request(16);
+        apply_text_color(&info_label, config.text_colors.info_text_color());
+        content_box.append(&info_label);
+        *self.info_label.borrow_mut() = Some(info_label);
 
-        let info_label = Label::builder().css_classes(["network-info".to_string()]).halign(Align::Center).build();
-        info_label.set_text("");
-
+        // Line 3: Spacer (hidden in QR view) or QR area (square, sized to widget height)
+        let qr_size = config.dimensions.height_or_default() - 10;
         let qr_area = DrawingArea::builder()
-            .css_classes(["network-qr".to_string()])
-            .width_request(128)
-            .height_request(128)
+            .css_classes(["network-qr"])
+            .width_request(qr_size)
+            .height_request(qr_size)
             .halign(Align::Center)
             .valign(Align::Center)
+            .vexpand(false)
+            .hexpand(false)
             .visible(false)
             .build();
+
+        let spacer = Label::new(Some(""));
+        spacer.set_height_request(16);
+        content_box.append(&spacer);
+        *self.spacer_label.borrow_mut() = Some(spacer);
 
         let latest_ssid_for_qr = self.latest_ssid.clone();
         let latest_password_for_qr = self.latest_password.clone();
@@ -467,24 +451,26 @@ impl WidgetBuilder for NetworkWidget {
                 draw_qr_code(cr, w, h, &qr_code);
             }
         });
-
-        outer_box.append(&icon_image);
-        outer_box.append(&value_label);
-        outer_box.append(&info_label);
-        outer_box.append(&qr_area);
-
-        *self.icon_image.borrow_mut() = Some(icon_image);
-        *self.value_label.borrow_mut() = Some(value_label);
-        *self.info_label.borrow_mut() = Some(info_label);
+        content_box.append(&qr_area);
         *self.qr_drawing_area.borrow_mut() = Some(qr_area);
 
-        let click_topic = config.click_topic.clone();
-        let click_payload = config.click_payload.clone();
-        let click_instance = config.click_instance.clone();
-        let longpress_topic = config.longpress_topic.clone();
-        let longpress_payload = config.longpress_payload.clone();
-        let longpress_instance = config.longpress_instance.clone();
-        let message_broadcaster = broadcaster.clone();
+        let effective_width = config.dimensions.width_or_default().min(config.dimensions.max_width_or_default(config.mode));
+        let mut button_builder = Button::builder()
+            .css_classes(["scroll-item", "menu-button"])
+            .width_request(effective_width)
+            .child(&content_box);
+        if let Some(max_w) = config.dimensions.max_width {
+            button_builder = button_builder.hexpand(false).halign(Align::Start);
+            let css_class = format!("max-width-{}", max_w);
+            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
+            let css = format!(".max-width-{} {{ max-width: {}px; }}", max_w, max_w);
+            if let Some(display) = gtk4::gdk::Display::default() {
+                let provider = CssProvider::new();
+                provider.load_from_string(&css);
+                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
+            }
+        }
+        let button = button_builder.build();
 
         let widget_self = Rc::new(Self {
             meta: self.meta.clone(),
@@ -500,94 +486,56 @@ impl WidgetBuilder for NetworkWidget {
             value_label: self.value_label.clone(),
             info_label: self.info_label.clone(),
             qr_drawing_area: self.qr_drawing_area.clone(),
+            spacer_label: self.spacer_label.clone(),
             current_view: self.current_view.clone(),
             latest_status: self.latest_status.clone(),
             latest_scan: self.latest_scan.clone(),
             latest_vpn: self.latest_vpn.clone(),
             latest_ssid: self.latest_ssid.clone(),
             latest_password: self.latest_password.clone(),
+            personalization: self.personalization.clone(),
         });
 
-        let click_gesture = GestureClick::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
-        let broadcaster_for_click = message_broadcaster.clone();
-        let widget_for_click = widget_self.clone();
-        click_gesture.connect_released(move |gesture, _n_press, _x, _y| {
-            if let Some(seq) = gesture.current_sequence() {
-                let state = gesture.sequence_state(&seq);
-                if state == EventSequenceState::Claimed || state == EventSequenceState::Denied {
-                    return;
-                }
-            }
-            if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
-                let payload_str = payload.to_string();
-                if let Some(instance) = click_instance.clone() {
-                    broadcaster_for_click.broadcast_string_to_instance(&instance, &topic, &payload_str);
-                } else {
-                    broadcaster_for_click.broadcast_string(&topic, &payload_str);
-                }
-            }
-            widget_for_click.handle_click();
-            gesture.set_state(EventSequenceState::Claimed);
-        });
-        outer_box.add_controller(click_gesture);
-
-        let drag_gesture = GestureDrag::new();
-        drag_gesture.set_propagation_phase(PropagationPhase::Capture);
-        let widget_for_drag = widget_self.clone();
-        drag_gesture.connect_drag_end(move |gesture, offset_x, offset_y| {
-            const SWIPE_THRESHOLD: f64 = 50.0;
-            if offset_y.abs() > offset_x.abs() && offset_y.abs() > SWIPE_THRESHOLD {
-                gesture.set_state(EventSequenceState::Claimed);
-                if offset_y < 0.0 {
-                    widget_for_drag.next_view();
-                } else {
-                    widget_for_drag.prev_view();
-                }
-            }
-        });
-        outer_box.add_controller(drag_gesture);
-
-        let longpress_gesture = GestureLongPress::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
-        let broadcaster_for_longpress = message_broadcaster.clone();
-        longpress_gesture.connect_pressed(move |gesture, _x, _y| {
-            if let (Some(topic), Some(payload)) = (longpress_topic.clone(), longpress_payload.clone()) {
-                let payload_str = payload.to_string();
-                if let Some(instance) = longpress_instance.clone() {
-                    broadcaster_for_longpress.broadcast_string_to_instance(&instance, &topic, &payload_str);
-                } else {
-                    broadcaster_for_longpress.broadcast_string(&topic, &payload_str);
-                }
-            }
-            let command = NetworkCommandMessage::refresh();
-            broadcaster_for_longpress.broadcast_message_to_topic(command);
-            gesture.set_state(EventSequenceState::Claimed);
-        });
-        outer_box.add_controller(longpress_gesture);
+        let button_widget = button.upcast::<Widget>();
+        widget_self.attach_gesture_handlers(&button_widget, &config.actions, &broadcaster, &GestureHandlersConfiguration::default());
 
         self.start_listeners();
 
-        outer_box.upcast::<Widget>()
+        button_widget
     }
 }
 
-fn render_view(
+pub(crate) fn render_view(
     status: &NetworkStatusMessage,
     _scan: Option<&ScanResultsMessage>,
     _vpn: Option<&VpnProfilesMessage>,
     config: &NetworkWidgetConfig,
     view: NetworkView,
-) -> (String, String, String) {
+    override_data: &PersonalizationOverride,
+) -> ViewData {
+    let locale = override_data.effective_locale();
     match view {
         NetworkView::WifiStatus => {
             let wifi = find_interface(status, NetworkInterfaceType::Wifi);
             if let Some(iface) = wifi {
-                let ssid = iface.ssid.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "Unknown".to_string());
+                let ssid = iface
+                    .ssid
+                    .as_ref()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| NetworkLabel::Unknown.localized_label(locale).to_string());
                 let signal = iface.signal.as_ref().map(|s| *s).unwrap_or(0);
                 let ip = iface.ipv4_address.as_ref().map(|s| s.to_string()).unwrap_or_else(|| "No IP".to_string());
                 let icon_name = wifi_signal_icon_name(signal, config);
-                (icon_name, ssid, format!("{signal}%  {ip}"))
+                let color = WifiSignalLevel::from_percent(signal).get_icon_color();
+                ViewData::with_color(icon_name, ssid, format!("{signal}%  {ip}"), color)
             } else {
-                (config.icon_wifi_strength_off.clone(), "WiFi Off".to_string(), String::new())
+                let color = ConnectionStateLevel::from_state(NetworkConnectionState::Disconnected).get_icon_color();
+                ViewData::with_color(
+                    config.icon_wifi_strength_off.clone(),
+                    NetworkLabel::NoWiFi.localized_label(locale).to_string(),
+                    String::new(),
+                    color,
+                )
             }
         }
         NetworkView::EthernetStatus => {
@@ -600,44 +548,74 @@ fn render_view(
                 } else {
                     config.icon_ethernet_off.clone()
                 };
-                let state_text = if is_connected { "Connected" } else { "Disconnected" };
-                (icon_name, state_text.to_string(), format!("{}  {ip}", iface.interface_name))
+                let state_text = if is_connected {
+                    NetworkLabel::Connected.localized_label(locale)
+                } else {
+                    NetworkLabel::Disconnected.localized_label(locale)
+                };
+                let color = ConnectionStateLevel::from_state(iface.state).get_icon_color();
+                ViewData::with_color(icon_name, state_text.to_string(), format!("{}  {ip}", iface.interface_name), color)
             } else {
-                (config.icon_ethernet_off.clone(), "No Ethernet".to_string(), String::new())
+                let color = ConnectionStateLevel::from_state(NetworkConnectionState::Disconnected).get_icon_color();
+                ViewData::with_color(
+                    config.icon_ethernet_off.clone(),
+                    NetworkLabel::NoEthernet.localized_label(locale).to_string(),
+                    String::new(),
+                    color,
+                )
             }
         }
         NetworkView::Throughput => {
-            let rx = format_bytes(status.received_bytes_per_second);
-            let tx = format_bytes(status.transmitted_bytes_per_second);
-            (config.icon_throughput.clone(), format!("{rx}/s"), format!("{tx}/s"))
+            let rx = override_data.format_bandwidth(status.received_bytes_per_second);
+            let tx = override_data.format_bandwidth(status.transmitted_bytes_per_second);
+            ViewData::new(config.icon_throughput.clone(), rx, tx)
         }
         NetworkView::WifiScan => {
             let count = _scan.map(|s| s.access_points.len()).unwrap_or(0);
             let strongest = _scan
                 .and_then(|s| s.access_points.iter().max_by_key(|ap| ap.signal))
                 .map(|ap| (ap.ssid.to_string(), ap.signal))
-                .unwrap_or_else(|| ("Unknown".to_string(), 0u8));
-            (config.icon_wifi_scan.clone(), format!("{count} networks"), format!("{}  {}%", strongest.0, strongest.1))
+                .unwrap_or_else(|| (NetworkLabel::Unknown.localized_label(locale).to_string(), 0u8));
+            ViewData::new(
+                config.icon_wifi_scan.clone(),
+                format!("{count} {}", NetworkLabel::Networks.localized_label(locale)),
+                format!("{}  {}%", strongest.0, strongest.1),
+            )
         }
         NetworkView::Vpn => {
             let active_profile = _vpn.and_then(|v| v.profiles.iter().find(|p| p.is_active)).map(|p| p.name.to_string());
             let inactive_profile = _vpn.and_then(|v| v.profiles.iter().find(|p| !p.is_active)).map(|p| p.name.to_string());
             if let Some(name) = active_profile {
-                (config.icon_vpn_on.clone(), name, "Active".to_string())
+                let color = ConnectionStateLevel::from_state(NetworkConnectionState::Connected).get_icon_color();
+                ViewData::with_color(config.icon_vpn_on.clone(), name, NetworkLabel::Active.localized_label(locale).to_string(), color)
             } else if let Some(name) = inactive_profile {
-                (config.icon_vpn_off.clone(), name, "Inactive".to_string())
+                let color = ConnectionStateLevel::from_state(NetworkConnectionState::Disconnected).get_icon_color();
+                ViewData::with_color(config.icon_vpn_off.clone(), name, NetworkLabel::Inactive.localized_label(locale).to_string(), color)
             } else {
-                (config.icon_vpn_off.clone(), "No VPN".to_string(), "Not configured".to_string())
+                let color = ConnectionStateLevel::from_state(NetworkConnectionState::Unavailable).get_icon_color();
+                ViewData::with_color(config.icon_vpn_off.clone(), NetworkLabel::NoVpn.localized_label(locale).to_string(), String::new(), color)
             }
         }
         NetworkView::Airplane => {
             if status.airplane_mode {
-                (config.icon_airplane_on.clone(), "ON".to_string(), "Airplane Mode".to_string())
+                let color = ConnectionStateLevel::from_state(NetworkConnectionState::Unavailable).get_icon_color();
+                ViewData::with_color(
+                    config.icon_airplane_on.clone(),
+                    "ON".to_string(),
+                    NetworkLabel::AirplaneMode.localized_label(locale).to_string(),
+                    color,
+                )
             } else {
-                (config.icon_airplane_off.clone(), "OFF".to_string(), "Airplane Mode".to_string())
+                let color = ConnectionStateLevel::from_state(NetworkConnectionState::Connected).get_icon_color();
+                ViewData::with_color(
+                    config.icon_airplane_off.clone(),
+                    "OFF".to_string(),
+                    NetworkLabel::AirplaneMode.localized_label(locale).to_string(),
+                    color,
+                )
             }
         }
-        NetworkView::QrCode => (config.icon_qr_code.clone(), "QR Code".to_string(), String::new()),
+        NetworkView::QrCode => ViewData::new(config.icon_qr_code.clone(), NetworkLabel::QrCode.localized_label(locale).to_string(), String::new()),
     }
 }
 
@@ -659,15 +637,74 @@ fn find_interface<'a>(status: &'a NetworkStatusMessage, iface_type: NetworkInter
     status.interfaces.iter().find(|iface| iface.interface_type == iface_type)
 }
 
+fn show_qr_view(qr_area: &SharedDrawingArea, icon_image: &SharedImage, value_label: &SharedLabel, info_label: &SharedLabel, spacer_label: &SharedLabel) {
+    if let Some(ref area) = *qr_area.borrow() {
+        area.set_visible(true);
+        area.queue_draw();
+    }
+    if let Some(ref img) = *icon_image.borrow() {
+        img.set_visible(false);
+    }
+    if let Some(ref label) = *value_label.borrow() {
+        label.set_visible(false);
+    }
+    if let Some(ref label) = *info_label.borrow() {
+        label.set_visible(false);
+    }
+    if let Some(ref label) = *spacer_label.borrow() {
+        label.set_visible(false);
+    }
+}
+
+fn show_normal_view(qr_area: &SharedDrawingArea, icon_image: &SharedImage, value_label: &SharedLabel, info_label: &SharedLabel, spacer_label: &SharedLabel) {
+    if let Some(ref area) = *qr_area.borrow() {
+        area.set_visible(false);
+    }
+    if let Some(ref img) = *icon_image.borrow() {
+        img.set_visible(true);
+    }
+    if let Some(ref label) = *value_label.borrow() {
+        label.set_visible(true);
+    }
+    if let Some(ref label) = *info_label.borrow() {
+        label.set_visible(true);
+    }
+    if let Some(ref label) = *spacer_label.borrow() {
+        label.set_visible(true);
+    }
+}
+
 fn set_icon_image(img: &Image, icon_name: &str, icon_size: i32) {
     if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(icon_name) {
-        let resource_path = format!("/com/nerd/icons/{}.svg", gtk_icon_name);
-        if gtk4::gio::resources_lookup_data(&resource_path, gtk4::gio::ResourceLookupFlags::NONE).is_ok() {
-            img.set_resource(Some(&resource_path));
-        } else {
-            debug!("Network Widget: GResource not found for icon '{}': {}", icon_name, resource_path);
+        img.set_icon_name(Some(&gtk_icon_name));
+    }
+    img.set_pixel_size(icon_size);
+}
+
+fn update_icon_display(img: &Image, view_data: &ViewData, icon_size: i32, configured_color: Option<smearor_swipe_launcher_plugin_api::Color>) {
+    set_icon_image(img, &view_data.icon_name, icon_size);
+    if let Some(c) = configured_color {
+        apply_icon_color(img, c);
+    }
+}
+
+impl DefaultFallback for NetworkWidget {
+    fn default_fallback(&self, kind: &ActionKind, broadcaster: &MessageBroadcasterInner) {
+        match kind {
+            ActionKind::Click | ActionKind::DoublePress => {
+                self.next_view();
+            }
+            ActionKind::Longpress | ActionKind::RightClick => {
+                broadcaster.broadcast_message_to_topic(NetworkCommandMessage::refresh());
+            }
+            ActionKind::SwipeUp | ActionKind::ScrollUp | ActionKind::MiddleClick => {
+                self.next_view();
+            }
+            ActionKind::SwipeDown | ActionKind::ScrollDown => {
+                self.prev_view();
+            }
+            ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init => {}
         }
-        img.set_pixel_size(icon_size);
     }
 }
 
@@ -769,18 +806,6 @@ impl NetworkWidget {
             }
             NetworkView::Throughput | NetworkView::QrCode => {}
         }
-    }
-}
-
-fn format_bytes(bytes_per_second: u64) -> String {
-    if bytes_per_second >= 1_073_741_824 {
-        format!("{:.1} GB", bytes_per_second as f64 / 1_073_741_824.0)
-    } else if bytes_per_second >= 1_048_576 {
-        format!("{:.1} MB", bytes_per_second as f64 / 1_048_576.0)
-    } else if bytes_per_second >= 1024 {
-        format!("{:.1} KB", bytes_per_second as f64 / 1024.0)
-    } else {
-        format!("{} B", bytes_per_second)
     }
 }
 

@@ -54,8 +54,9 @@ pub enum AreaTransition {
 /// ABI-stable version of `AreaTransition` for cross-plugin messaging.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub enum AreaTransitionStabby {
+    #[default]
     None,
     FadeIn,
     FadeOut,

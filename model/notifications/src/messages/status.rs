@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -8,7 +10,7 @@ pub const TOPIC_STATUS: &str = "service.notifications.status";
 /// Urgency level of a notification.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum UrgencyLevel {
     /// Low urgency (e.g. chat messages, social media)
     Low,
@@ -21,7 +23,7 @@ pub enum UrgencyLevel {
 
 /// An action button exposed by a notification.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct NotificationAction {
     /// Machine-readable action identifier
     pub key: stabby::string::String,
@@ -31,7 +33,7 @@ pub struct NotificationAction {
 
 /// Information about an active notification.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct NotificationInfo {
     /// Unique notification ID
     pub id: u32,
@@ -55,7 +57,7 @@ pub struct NotificationInfo {
 
 /// Status message broadcast by the notifications service to all widgets.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct NotificationStatusMessage {
     /// Whether Do Not Disturb mode is active
     pub do_not_disturb: bool,

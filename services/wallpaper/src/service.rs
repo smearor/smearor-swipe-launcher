@@ -1,18 +1,17 @@
+use crate::command::WallpaperCommand;
 use crate::config::WallpaperServiceConfig;
 use crate::process::spawn_wallpaper;
 use crate::process::to_monitor_processes;
+use crate::state::WallpaperState;
 use nix::sys::signal::Signal;
 use nix::sys::signal::kill;
 use nix::unistd::Pid;
 use smearor_model_mcp::InvokeResourceMessage;
-use smearor_model_mcp::InvokeResourceResponse;
 use smearor_model_mcp::InvokeToolMessage;
-use smearor_model_mcp::InvokeToolResponse;
-use smearor_model_mcp::RegisterResourceMessage;
-use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopicBroadcaster;
@@ -21,10 +20,11 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
-use smearor_wallpaper_model::MonitorProcess;
+use smearor_swipe_launcher_plugin_api::default_clone_payload;
+use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use smearor_wallpaper_model::TOPIC_STATUS;
 use smearor_wallpaper_model::WallpaperCommandAction;
 use smearor_wallpaper_model::WallpaperCommandMessage;
@@ -37,33 +37,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 use tracing::debug;
 use tracing::error;
-
-/// Internal command union for the service event loop.
-pub enum WallpaperCommand {
-    /// Select a theme without starting it.
-    SelectTheme(String),
-    /// Start the currently selected theme (stops any running theme first).
-    StartSelected,
-    /// Stop the currently running wallpaper process.
-    StopCurrent,
-    /// Refresh the status broadcast.
-    Refresh,
-    /// Permanently add a new theme to the configuration store.
-    AddTheme(WallpaperTheme),
-    /// Permanently remove a theme from the configuration store.
-    RemoveTheme(String),
-}
-
-/// Internal state of the wallpaper service.
-#[derive(Clone, Default)]
-pub struct WallpaperState {
-    /// Name of the currently running theme.
-    pub current_theme: Option<String>,
-    /// PIDs of active wallpaper processes per monitor.
-    pub current_processes: Vec<MonitorProcess>,
-    /// Index of the selected theme in the themes list.
-    pub selected_theme_index: usize,
-}
+use tracing::trace;
 
 pub struct WallpaperService {
     pub meta: PluginMeta,
@@ -82,8 +56,11 @@ impl WallpaperService {
 
         // Load themes from the wallpaper config file (wallpaper.toml), not from services.toml.
         // The services.toml [wallpaper] section only provides meta-config (config_path, default_theme, etc.).
+        // If config_path points to a non-existent file, fall back to discovery:
+        //   1. wallpaper.toml in the working directory
+        //   2. ~/.config/smearor/services/wallpaper.toml
         let mut service_config = service_config;
-        service_config.themes = crate::config::load_themes(&service_config.config_path);
+        service_config.themes = service_config.load_or_discover_themes();
 
         let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel::<WallpaperCommand>();
         let meta = PluginMeta::try_from(&config)?;
@@ -118,62 +95,7 @@ impl WallpaperService {
         Ok(service)
     }
 
-    fn register_mcp_capabilities(&self) {
-        let broadcaster = self.get_broadcaster();
-
-        let resource_status = RegisterResourceMessage::new(
-            "wallpaper://status",
-            "Wallpaper Status",
-            "Current wallpaper service status including running theme and configured themes.",
-            "application/json",
-        );
-        broadcaster.broadcast_message_to_topic(resource_status);
-
-        let resource_themes = RegisterResourceMessage::new(
-            "wallpaper://themes",
-            "Wallpaper Themes",
-            "List of all configured wallpaper themes with their configurations.",
-            "application/json",
-        );
-        broadcaster.broadcast_message_to_topic(resource_themes);
-
-        let tool_add = RegisterToolMessage::new(
-            "add_wallpaper_theme",
-            "Permanently appends a new wallpaper theme to the configuration store.",
-            r#"{ "type": "object", "properties": { "name": { "type": "string" }, "type": { "type": "string", "enum": ["Video", "Image", "Application"] }, "config": { "type": "object" }, "description": { "type": "string" }, "preview_image_path": { "type": "string" }, "preview_icon": { "type": "string" } }, "required": ["name", "type", "config"] }"#,
-        );
-        broadcaster.broadcast_message_to_topic(tool_add);
-
-        let tool_remove = RegisterToolMessage::new(
-            "remove_wallpaper_theme",
-            "Deletes a wallpaper theme from the configuration store.",
-            r#"{ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }"#,
-        );
-        broadcaster.broadcast_message_to_topic(tool_remove);
-
-        let tool_select = RegisterToolMessage::new(
-            "select_wallpaper_theme",
-            "Selects a wallpaper theme by name without starting it. Updates the selected_theme state.",
-            r#"{ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }"#,
-        );
-        broadcaster.broadcast_message_to_topic(tool_select);
-
-        let tool_start = RegisterToolMessage::new(
-            "start_selected_wallpaper_process",
-            "Starts the currently selected wallpaper theme. Stops any running theme first, then spawns the engine process.",
-            r#"{ "type": "object", "properties": {} }"#,
-        );
-        broadcaster.broadcast_message_to_topic(tool_start);
-
-        let tool_stop = RegisterToolMessage::new(
-            "stop_current_wallpaper_process",
-            "Stops the currently running wallpaper process immediately.",
-            r#"{ "type": "object", "properties": {} }"#,
-        );
-        broadcaster.broadcast_message_to_topic(tool_stop);
-    }
-
-    fn send_response<T: TypedMessage + SharedMessage + Clone>(&self, message: T, sender_id: &str) {
+    pub(crate) fn send_response<T: TypedMessage + SharedMessage + Clone>(&self, message: T, sender_id: &str) {
         let payload_ptr = Box::into_raw(Box::new(message.clone())) as *mut core::ffi::c_void;
         let sender_id_string = sender_id.to_string();
         let topic = message.topic();
@@ -184,8 +106,8 @@ impl WallpaperService {
             topic: stabby::string::String::from(topic),
             type_id: T::TYPE_ID,
             payload: payload_ptr,
-            destroy_payload: Some(destroy_payload::<T>),
-            clone_payload: Some(clone_payload::<T>),
+            destroy_payload: Some(default_destroy_payload),
+            clone_payload: Some(default_clone_payload::<T>),
         };
         if let Some(context) = &self.core_context {
             context.send_message(envelope);
@@ -207,141 +129,6 @@ impl MessageHandler<FfiEnvelopePayload<WallpaperCommandMessage>> for WallpaperSe
     }
 }
 
-impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for WallpaperService {
-    fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, sender_id: &str) {
-        let tool_name = message.0.name.to_string();
-        let correlation_id = message.0.correlation_id.to_string();
-        let arguments_str = message.0.arguments.to_string();
-        debug!("wallpaper: InvokeToolMessage name={}", tool_name);
-
-        if tool_name == "select_wallpaper_theme" {
-            let args: serde_json::Value = serde_json::from_str(arguments_str.as_str()).unwrap_or_default();
-            let theme_name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            let _ = self.command_sender.send(WallpaperCommand::SelectTheme(theme_name.to_string()));
-            let response = InvokeToolResponse::success(&correlation_id, &format!("Selected theme: {theme_name}"));
-            self.send_response(response, sender_id);
-        } else if tool_name == "start_selected_wallpaper_process" {
-            let _ = self.command_sender.send(WallpaperCommand::StartSelected);
-            let response = InvokeToolResponse::success(&correlation_id, "Start command sent");
-            self.send_response(response, sender_id);
-        } else if tool_name == "stop_current_wallpaper_process" {
-            let _ = self.command_sender.send(WallpaperCommand::StopCurrent);
-            let response = InvokeToolResponse::success(&correlation_id, "Stop command sent");
-            self.send_response(response, sender_id);
-        } else if tool_name == "add_wallpaper_theme" {
-            let args: serde_json::Value = serde_json::from_str(arguments_str.as_str()).unwrap_or_default();
-            match parse_theme_from_json(&args) {
-                Ok(theme) => {
-                    let theme_name = theme.name.clone();
-                    let _ = self.command_sender.send(WallpaperCommand::AddTheme(theme));
-                    let response = InvokeToolResponse::success(&correlation_id, &format!("Added theme: {theme_name}"));
-                    self.send_response(response, sender_id);
-                }
-                Err(e) => {
-                    let response = InvokeToolResponse::error(&correlation_id, &format!("Failed to parse theme: {e}"));
-                    self.send_response(response, sender_id);
-                }
-            }
-        } else if tool_name == "remove_wallpaper_theme" {
-            let args: serde_json::Value = serde_json::from_str(arguments_str.as_str()).unwrap_or_default();
-            let theme_name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            if theme_name.is_empty() {
-                let response = InvokeToolResponse::error(&correlation_id, "Missing required field: name");
-                self.send_response(response, sender_id);
-            } else {
-                let _ = self.command_sender.send(WallpaperCommand::RemoveTheme(theme_name.to_string()));
-                let response = InvokeToolResponse::success(&correlation_id, &format!("Removed theme: {theme_name}"));
-                self.send_response(response, sender_id);
-            }
-        } else {
-            debug!("wallpaper: unknown tool name '{}', ignoring", tool_name);
-        }
-    }
-}
-
-impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for WallpaperService {
-    fn handle_message(&self, message: FfiEnvelopePayload<InvokeResourceMessage>, sender_id: &str) {
-        let uri = message.0.uri.to_string();
-        let correlation_id = message.0.correlation_id.to_string();
-        debug!("wallpaper: InvokeResourceMessage uri={}", uri);
-
-        if uri == "wallpaper://status" {
-            let state_guard = self.state.read();
-            let (selected_index, current_theme, current_processes) = match state_guard {
-                Ok(s) => (s.selected_theme_index, s.current_theme.clone(), s.current_processes.clone()),
-                Err(e) => {
-                    error!("Wallpaper service: state lock poisoned: {e}");
-                    (0, None, Vec::new())
-                }
-            };
-            let config_guard = self.config.read();
-            let themes: Vec<serde_json::Value> = match config_guard {
-                Ok(config) => {
-                    // Reload themes from wallpaper.toml to reflect any external changes
-                    let themes = crate::config::load_themes(&config.config_path);
-                    themes
-                        .iter()
-                        .map(|t| {
-                            serde_json::json!({
-                                "name": t.name,
-                                "description": t.description,
-                                "preview_image_path": t.preview_image_path,
-                                "preview_icon": t.preview_icon,
-                                "wallpaper_type": format!("{:?}", t.wallpaper_type),
-                            })
-                        })
-                        .collect()
-                }
-                Err(e) => {
-                    error!("Wallpaper service: config lock poisoned: {e}");
-                    Vec::new()
-                }
-            };
-            let current_processes_json: Vec<serde_json::Value> = current_processes
-                .iter()
-                .map(|p| serde_json::json!({ "monitor": p.monitor.to_string(), "process_id": p.process_id }))
-                .collect();
-            let json = serde_json::json!({
-                "current_theme": current_theme,
-                "current_processes": current_processes_json,
-                "selected_theme_index": selected_index,
-                "themes": themes,
-            });
-            let response = InvokeResourceResponse::success(&correlation_id, &json.to_string());
-            self.send_response(response, sender_id);
-        } else if uri == "wallpaper://themes" {
-            let config_guard = self.config.read();
-            let themes: Vec<serde_json::Value> = match config_guard {
-                Ok(config) => {
-                    let themes = crate::config::load_themes(&config.config_path);
-                    themes
-                        .iter()
-                        .map(|t| {
-                            serde_json::json!({
-                                "name": t.name,
-                                "description": t.description,
-                                "preview_image_path": t.preview_image_path,
-                                "preview_icon": t.preview_icon,
-                                "wallpaper_type": format!("{:?}", t.wallpaper_type),
-                            })
-                        })
-                        .collect()
-                }
-                Err(e) => {
-                    error!("Wallpaper service: config lock poisoned: {e}");
-                    Vec::new()
-                }
-            };
-            let json = serde_json::json!({ "themes": themes });
-            let response = InvokeResourceResponse::success(&correlation_id, &json.to_string());
-            self.send_response(response, sender_id);
-        } else {
-            let response = InvokeResourceResponse::error(&correlation_id, &format!("Unknown resource uri: {uri}"));
-            self.send_response(response, sender_id);
-        }
-    }
-}
-
 impl MessageBroadcaster for WallpaperService {}
 
 impl MessageTopicBroadcaster<WallpaperStatusMessage> for WallpaperService {}
@@ -358,12 +145,12 @@ impl AsRef<Option<FfiCoreContext>> for WallpaperService {
     }
 }
 
-impl Service for WallpaperService {
+impl ServicePlugin for WallpaperService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
-                debug!("wallpaper: on_message topic={} type_id={}", envelope.topic, envelope.type_id);
+                trace!("wallpaper: on_message topic={} type_id={}", envelope.topic, envelope.type_id);
                 if envelope.type_id == FfiEnvelopePayload::<WallpaperCommandMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<WallpaperCommandMessage>>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
@@ -448,12 +235,12 @@ async fn run_command_loop(
             }
             WallpaperCommand::AddTheme(theme) => {
                 add_theme_to_config(&config.config_path, &theme);
-                config.themes = crate::config::load_themes(&config.config_path);
+                config.themes = config.load_themes();
                 broadcast_status(&meta, &core_context, &config, &state);
             }
             WallpaperCommand::RemoveTheme(name) => {
                 remove_theme_from_config(&config.config_path, &name);
-                config.themes = crate::config::load_themes(&config.config_path);
+                config.themes = config.load_themes();
                 let need_stop = {
                     if let Ok(s) = state.read() {
                         s.current_theme.as_deref() == Some(&name)
@@ -629,7 +416,7 @@ fn remove_theme_from_config(config_path: &str, name: &str) {
     debug!("Wallpaper service: removed theme '{}' from {}", name, config_path);
 }
 
-fn parse_theme_from_json(args: &serde_json::Value) -> Result<WallpaperTheme, String> {
+pub(crate) fn parse_theme_from_json(args: &serde_json::Value) -> Result<WallpaperTheme, String> {
     let name = args.get("name").and_then(|v| v.as_str()).ok_or("Missing required field: name")?;
     let type_str = args.get("type").and_then(|v| v.as_str()).ok_or("Missing required field: type")?;
     let description = args.get("description").and_then(|v| v.as_str()).unwrap_or("");
@@ -700,27 +487,11 @@ fn broadcast_status(meta: &PluginMeta, core_context: &Option<FfiCoreContext>, co
         topic: stabby::string::String::from(TOPIC_STATUS),
         type_id: WallpaperStatusMessage::TYPE_ID,
         payload: payload_ptr,
-        destroy_payload: Some(destroy_payload::<WallpaperStatusMessage>),
-        clone_payload: Some(clone_payload::<WallpaperStatusMessage>),
+        destroy_payload: Some(default_destroy_payload),
+        clone_payload: Some(default_clone_payload::<WallpaperStatusMessage>),
     };
     if let Some(context) = core_context {
         context.send_message(envelope);
-    }
-}
-
-extern "C" fn clone_payload<T: Clone>(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    let value = unsafe { &*(ptr as *const T) };
-    Box::into_raw(Box::new(value.clone())) as *mut core::ffi::c_void
-}
-
-extern "C" fn destroy_payload<T>(ptr: *mut core::ffi::c_void) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = Box::from_raw(ptr as *mut T);
-        }
     }
 }
 

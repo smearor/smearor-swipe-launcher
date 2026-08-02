@@ -1,7 +1,10 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 /// Capabilities of the system as reported by systemd-logind.
 /// Each field corresponds to a `Can*` D-Bus property on `org.freedesktop.login1.Manager`.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PowerCapabilities {
     /// Whether the system can be shut down.
     pub can_shutdown: bool,

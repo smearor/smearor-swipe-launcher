@@ -1,8 +1,11 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 /// All power actions supported by the service.
 /// Each variant maps to a specific D-Bus call on `org.freedesktop.login1`.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PowerAction {
     /// Shut the system down gracefully.
     Shutdown,
@@ -36,6 +39,20 @@ impl PowerAction {
             "logout" => PowerAction::Logout,
             "reboot_to_firmware" => PowerAction::RebootToFirmware,
             _ => PowerAction::Cancel,
+        }
+    }
+
+    /// Returns the inhibitor "what" category string for this action.
+    ///
+    /// Used to filter inhibitor locks that are relevant to the current action.
+    /// Returns an empty string for actions that have no inhibitor category.
+    pub fn inhibitor_what(&self) -> &'static str {
+        match self {
+            PowerAction::Shutdown => "shutdown",
+            PowerAction::Reboot | PowerAction::RebootToFirmware => "reboot",
+            PowerAction::Suspend | PowerAction::Hibernate => "sleep",
+            PowerAction::Lock | PowerAction::Logout => "",
+            PowerAction::Cancel => "",
         }
     }
 }

@@ -15,6 +15,7 @@ mod plugin;
 mod plugin_manager;
 mod service;
 mod service_manager;
+mod web;
 mod window;
 
 pub use application::LauncherHost;
@@ -36,42 +37,22 @@ use miette::Result;
 use smearor_mcp_server::McpCommand;
 use smearor_mcp_server::McpServer;
 use smearor_mcp_server::McpServerConfig;
+use smearor_model_mcp::InvokePromptMessage;
 use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
+use tracing::error;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
-
-/// Destroy a typed payload that was allocated with `Box::into_raw`.
-extern "C" fn destroy_payload<T>(ptr: *mut core::ffi::c_void) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = Box::from_raw(ptr as *mut T);
-        }
-    }
-}
-
-/// Clone a typed payload for safe `FfiEnvelope` cloning across multiple
-/// broker recipients.
-extern "C" fn clone_payload<T: Clone>(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    unsafe {
-        let typed = ptr as *mut T;
-        let cloned = (*typed).clone();
-        Box::into_raw(Box::new(cloned)) as *mut core::ffi::c_void
-    }
-}
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -82,8 +63,19 @@ async fn main() -> Result<()> {
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).into_diagnostic()?;
+    tracing_log::LogTracer::init().into_diagnostic()?;
 
-    debug!("Starting smearor-swipe-launcher with config files: {:?}", args.config);
+    // Discover launcher config files (CLI > working dir > XDG config dir)
+    let discovery_service = crate::config::discovery::ConfigDiscoveryService::new();
+    let config_paths = discovery_service.discover_launcher_configs(&args.config)?;
+    if config_paths.is_empty() {
+        return Err(miette::miette!(
+            "No launcher configuration files found. \
+            Specify via --config, or place *.toml files in the working directory or ~/.config/smearor/launcher/"
+        ));
+    }
+    discovery_service.validate_config_paths(&config_paths)?;
+    debug!("Starting smearor-swipe-launcher with config files: {:?}", config_paths);
 
     let gtk_app = Application::builder().application_id("com.smearor.swipe-launcher").build();
 
@@ -97,14 +89,51 @@ async fn main() -> Result<()> {
     }
 
     // Create one instance per config file
-    for (index, config_path) in args.config.iter().enumerate() {
+    let mut config_watcher = crate::config::watcher::ConfigWatcher::new();
+    for (index, config_path) in config_paths.iter().enumerate() {
         let config = args.load_config_from_file(config_path)?;
         let instance_id = args
             .instance_id
             .get(index)
             .cloned()
             .unwrap_or_else(|| config_path.file_stem().unwrap_or_default().to_string_lossy().to_string());
-        host.create_instance(instance_id, config);
+        let include_paths = config.collect_include_paths(config_path);
+        config_watcher.add_config(config_path, &instance_id, &include_paths);
+        let instance_type = config.launcher.instance_type.to_instance_type();
+        host.create_instance(instance_id.clone(), config, instance_type);
+
+        // For web and headless instances, build areas (no GTK window).
+        if instance_type == crate::instance::InstanceType::Web || instance_type == crate::instance::InstanceType::Headless {
+            if let Ok(instances) = host.instances.lock() {
+                if let Some(instance) = instances.get(&instance_id) {
+                    instance.build_headless();
+                }
+            }
+        }
+    }
+
+    // Register JSON converters for instance-control messages (core.instance.load/stop/reload)
+    smearor_model_instance_control::register_json_converters(None);
+
+    // Register JSON converters for MacroPad messages (input/connection/command)
+    smearor_model_macropad::register_json_converters(None);
+
+    // Register JSON converters for widget update messages
+    smearor_model_widget::register_json_converters(None);
+
+    // Load any persisted dynamic instances from the state file
+    host.load_persisted_instances();
+
+    // Register persisted instance configs with the file watcher
+    let state_path = crate::instance::get_instances_state_path();
+    for entry in crate::instance::read_instances_state(&state_path) {
+        let persisted_config_path = std::path::PathBuf::from(&entry.config_path);
+        if !config_paths.iter().any(|p| *p == persisted_config_path) {
+            if let Ok(config) = args.load_config_from_file(&persisted_config_path) {
+                let include_paths = config.collect_include_paths(&persisted_config_path);
+                config_watcher.add_config(&persisted_config_path, &entry.instance_id, &include_paths);
+            }
+        }
     }
 
     debug!("Application initialized successfully");
@@ -114,9 +143,24 @@ async fn main() -> Result<()> {
         port: services_config.mcp.port,
         auth_token: services_config.mcp.auth_token.clone(),
     };
-    let (mut mcp_server, mcp_receiver) = McpServer::new(mcp_config, host.mcp_registry.clone());
+    let (mcp_command_sender, mcp_receiver) = async_channel::unbounded::<McpCommand>();
+    let mut mcp_server = McpServer::new(mcp_config, host.mcp_registry.clone(), mcp_command_sender.clone());
+    host.set_mcp_command_sender(mcp_command_sender);
     mcp_server.start();
     let _mcp_server = Some(mcp_server);
+
+    // Start the embedded web server if enabled in services config
+    if services_config.web.enabled {
+        let web_config = crate::web::WebServerConfig {
+            port: services_config.web.port,
+            enabled: true,
+            bind_address: services_config.web.bind_address.clone(),
+            auth_token: services_config.web.auth_token.clone(),
+            allowed_origins: services_config.web.allowed_origins.clone(),
+        };
+        host.start_web_server(web_config);
+        debug!("Web server started on {}:{}", services_config.web.bind_address, services_config.web.port);
+    }
 
     host.build_ui()?;
 
@@ -124,7 +168,10 @@ async fn main() -> Result<()> {
     let host_clone = host.clone();
     main_context.spawn_local(async move {
         while let Ok(command) = mcp_receiver.recv().await {
-            if matches!(command, McpCommand::InvokePluginTool { .. } | McpCommand::InvokePluginResource { .. }) {
+            if matches!(
+                command,
+                McpCommand::InvokePluginTool { .. } | McpCommand::InvokePluginResource { .. } | McpCommand::InvokePluginPrompt { .. }
+            ) {
                 let broker_sender = host_clone.broker_sender.clone();
                 let response_tracker = host_clone.mcp_response_tracker.clone();
                 tokio::spawn(async move {
@@ -132,6 +179,19 @@ async fn main() -> Result<()> {
                 });
             } else {
                 process_mcp_command(host_clone.clone(), command).await;
+            }
+        }
+    });
+
+    // Start config file watcher and handle reload requests on the main context
+    let reload_rx = config_watcher.start();
+    let host_clone_for_reload = host.clone();
+    main_context.spawn_local(async move {
+        while let Ok(request) = reload_rx.recv().await {
+            debug!("Reloading instance '{}' from config '{}'", request.instance_id, request.config_path.display());
+            match host_clone_for_reload.reload_instance(&request.instance_id, &request.config_path.to_string_lossy()) {
+                Ok(msg) => debug!("Config reload: {}", msg),
+                Err(e) => error!("Config reload failed for instance '{}': {}", request.instance_id, e),
             }
         }
     });
@@ -210,7 +270,7 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
         } => {
             let result = with_first_area_manager(&host, |area_manager| {
                 let area_config = area_manager
-                    .config
+                    .config()
                     .get_area_config(&area_id)
                     .ok_or_else(|| format!("Area {} not found in config", area_id))?
                     .clone();
@@ -258,6 +318,25 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
             let result = send_mcp_message(&host, topic, payload, target_instance_id);
             let _ = response.send(result);
         }
+        McpCommand::SendMultipleMessages { messages, response } => {
+            let mut seen: Vec<(String, String)> = Vec::new();
+            let mut sent_count: u32 = 0;
+            let mut skipped_count: u32 = 0;
+            for (topic, payload, target_instance_id) in messages {
+                let payload_key = payload.to_string();
+                if seen.iter().any(|(t, p)| t == &topic && p == &payload_key) {
+                    skipped_count += 1;
+                    continue;
+                }
+                seen.push((topic.clone(), payload_key));
+                let result = send_mcp_message(&host, topic, payload, target_instance_id);
+                if result.is_ok() {
+                    sent_count += 1;
+                }
+            }
+            let result = Ok(format!("{} messages sent, {} duplicates skipped", sent_count, skipped_count));
+            let _ = response.send(result);
+        }
         McpCommand::ReadResource { uri, response } => {
             let result = read_mcp_resource(&host, uri);
             let _ = response.send(result);
@@ -269,8 +348,46 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
         McpCommand::GetAreaConfig { area_id, response } => {
             let result = with_first_area_manager(&host, |area_manager| {
                 let config = area_manager.get_area_config(&area_id)?;
-                serde_json::to_string(&config).map_err(|e| e.to_string())
+                let mut config_value = serde_json::to_value(&config).map_err(|e| e.to_string())?;
+                if let Some(plugins) = config_value.get_mut("plugins").and_then(|v| v.as_array_mut()) {
+                    for plugin_value in plugins.iter_mut() {
+                        if let Some(plugin_id) = plugin_value.get("id").and_then(|v| v.as_str()) {
+                            if let Some(plugin_config) = area_manager.config().get_plugin_config(plugin_id) {
+                                if let Some(plugin_object) = plugin_value.as_object_mut() {
+                                    plugin_object.insert("config".to_string(), plugin_config.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                serde_json::to_string(&config_value).map_err(|e| e.to_string())
             });
+            let _ = response.send(result);
+        }
+        McpCommand::LoadInstance {
+            instance_id,
+            config_path,
+            instance_type,
+            response,
+        } => {
+            let parsed_type = match instance_type.as_str() {
+                "headless" => crate::instance::InstanceType::Headless,
+                "web" => crate::instance::InstanceType::Web,
+                _ => crate::instance::InstanceType::Gtk,
+            };
+            let result = host.load_instance(instance_id, &config_path, parsed_type);
+            let _ = response.send(result);
+        }
+        McpCommand::StopInstance { instance_id, response } => {
+            let result = host.stop_instance(&instance_id);
+            let _ = response.send(result);
+        }
+        McpCommand::ListInstances { response } => {
+            let result = host.list_instances();
+            let _ = response.send(result);
+        }
+        McpCommand::WebServerStatus { response } => {
+            let result = host.web_server_status();
             let _ = response.send(result);
         }
         _ => {
@@ -322,6 +439,26 @@ async fn process_plugin_command(broker_sender: UnboundedSender<FfiEnvelope>, res
                 let _ = response.send(send_result.map(|_| String::new()));
             }
         }
+        McpCommand::InvokePluginPrompt {
+            name,
+            plugin_id: _,
+            correlation_id,
+            arguments,
+            response,
+        } => {
+            let receiver = response_tracker.register(correlation_id.clone());
+            let send_result = invoke_plugin_prompt_sender(&broker_sender, &name, &correlation_id, &arguments);
+            if send_result.is_ok() {
+                let response_result = match tokio::time::timeout(tokio::time::Duration::from_secs(10), receiver).await {
+                    Ok(Ok(result)) => result,
+                    Ok(Err(_)) => Err("Plugin prompt invocation dropped".to_string()),
+                    Err(_) => Err("Plugin prompt invocation timed out".to_string()),
+                };
+                let _ = response.send(response_result);
+            } else {
+                let _ = response.send(send_result.map(|_| String::new()));
+            }
+        }
         _ => {
             debug!("process_plugin_command received non-plugin command, ignoring");
         }
@@ -330,7 +467,7 @@ async fn process_plugin_command(broker_sender: UnboundedSender<FfiEnvelope>, res
 
 fn with_first_area_manager<F, T>(host: &LauncherHost, callback: F) -> Result<T, String>
 where
-    F: FnOnce(&crate::area::area_manager::AreaManager) -> Result<T, String>,
+    F: FnOnce(&crate::area::instance_area_manager::InstanceAreaManager) -> Result<T, String>,
 {
     let instances = host.instances.lock().map_err(|_| "Failed to lock instances")?;
     let first_instance = instances.values().next().ok_or("No launcher instance available")?;
@@ -348,7 +485,7 @@ fn send_mcp_message(host: &LauncherHost, topic: String, payload: serde_json::Val
         type_id: smearor_swipe_launcher_plugin_api::generate_type_id("std::string::String"),
         payload: payload_ptr,
         destroy_payload: Some(default_destroy_payload),
-        clone_payload: None,
+        clone_payload: Some(default_clone_payload::<String>),
     };
     host.broker_sender.send(envelope).map_err(|e| format!("Failed to send message: {}", e))?;
     Ok("Message sent".to_string())
@@ -369,7 +506,7 @@ fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String>
         })
     } else if uri == "area://plugins" {
         with_first_area_manager(host, |area_manager| {
-            let config = &area_manager.config;
+            let config = area_manager.config();
             let areas: Vec<serde_json::Value> = config
                 .entries
                 .iter()
@@ -400,7 +537,7 @@ fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String>
         })
     } else if uri == "area://buttons" {
         with_first_area_manager(host, |area_manager| {
-            let config = &area_manager.config;
+            let config = area_manager.config();
             let mut buttons: Vec<serde_json::Value> = Vec::new();
             for (area_id, entry) in &config.entries {
                 let area_config = match entry {
@@ -444,7 +581,7 @@ fn read_plugin_list(host: &LauncherHost) -> Result<String, String> {
     }
 
     with_first_area_manager(host, |area_manager| {
-        let config = &area_manager.config;
+        let config = area_manager.config();
         for (_area_id, entry) in &config.entries {
             let area_config = match entry {
                 config::area::config_entry::ConfigEntry::Area(ac) => ac,
@@ -481,8 +618,8 @@ fn invoke_plugin_tool_sender(
         topic: stabby::string::String::from(InvokeToolMessage::topic()),
         type_id: InvokeToolMessage::TYPE_ID,
         payload: payload_ptr,
-        destroy_payload: Some(destroy_payload::<InvokeToolMessage>),
-        clone_payload: Some(clone_payload::<InvokeToolMessage>),
+        destroy_payload: Some(default_destroy_payload),
+        clone_payload: Some(default_clone_payload::<InvokeToolMessage>),
     };
     broker_sender
         .send(envelope)
@@ -500,11 +637,35 @@ fn invoke_plugin_resource_sender(broker_sender: &UnboundedSender<FfiEnvelope>, u
         topic: stabby::string::String::from(InvokeResourceMessage::topic()),
         type_id: InvokeResourceMessage::TYPE_ID,
         payload: payload_ptr,
-        destroy_payload: Some(destroy_payload::<InvokeResourceMessage>),
-        clone_payload: Some(clone_payload::<InvokeResourceMessage>),
+        destroy_payload: Some(default_destroy_payload),
+        clone_payload: Some(default_clone_payload::<InvokeResourceMessage>),
     };
     broker_sender
         .send(envelope)
         .map_err(|e| format!("Failed to send plugin resource read: {}", e))?;
+    Ok(())
+}
+
+fn invoke_plugin_prompt_sender(
+    broker_sender: &UnboundedSender<FfiEnvelope>,
+    name: &str,
+    correlation_id: &str,
+    arguments: &serde_json::Value,
+) -> Result<(), String> {
+    debug!("invoke_plugin_prompt_sender: name={} correlation_id={}", name, correlation_id);
+    let message = InvokePromptMessage::new(name, correlation_id, &arguments.to_string());
+    let payload_ptr = Box::into_raw(Box::new(message)) as *mut core::ffi::c_void;
+    let envelope = FfiEnvelope {
+        sender_id: stabby::string::String::from("mcp-server"),
+        target_instance_id: stabby::string::String::from("*"),
+        topic: stabby::string::String::from(InvokePromptMessage::topic()),
+        type_id: InvokePromptMessage::TYPE_ID,
+        payload: payload_ptr,
+        destroy_payload: Some(default_destroy_payload),
+        clone_payload: Some(default_clone_payload::<InvokePromptMessage>),
+    };
+    broker_sender
+        .send(envelope)
+        .map_err(|e| format!("Failed to send plugin prompt invocation: {}", e))?;
     Ok(())
 }

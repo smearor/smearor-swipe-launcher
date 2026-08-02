@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::sync::Notify;
-use tracing::debug;
+use tracing::trace;
 
 /// Shared state for the power service.
 pub struct PowerState {
@@ -29,14 +29,15 @@ pub async fn run_countdown(
     lock_command: String,
     logout_command: String,
 ) {
-    debug!("Power Service: starting countdown for {action:?}, {seconds}s");
+    trace!("Power Service: starting countdown for {action:?}, {seconds}s");
     for remaining in (1..=seconds).rev() {
         tokio::select! {
             _ = cancel_token.notified() => {
-                debug!("Power Service: countdown cancelled");
+                trace!("Power Service: countdown cancelled");
                 if let Ok(mut current) = state.lock() {
                     current.status.countdown_active = false;
                     current.status.countdown_remaining_seconds = 0;
+                    current.status.countdown_total_seconds = 0;
                     let cancelled_status = current.status.clone();
                     drop(current);
                     let _ = status_sender.send(cancelled_status);
@@ -47,6 +48,7 @@ pub async fn run_countdown(
                 if let Ok(mut current) = state.lock() {
                     current.status.countdown_active = true;
                     current.status.countdown_remaining_seconds = remaining;
+                    current.status.countdown_total_seconds = seconds;
                     current.status.countdown_action = action.clone();
                     let status = current.status.clone();
                     drop(current);
@@ -56,11 +58,12 @@ pub async fn run_countdown(
         }
     }
 
-    debug!("Power Service: countdown expired, executing action {action:?}");
+    trace!("Power Service: countdown expired, executing action {action:?}");
     crate::dbus::execute_power_action(&connection, &action, &lock_command, &logout_command).await;
     if let Ok(mut current) = state.lock() {
         current.status.countdown_active = false;
         current.status.countdown_remaining_seconds = 0;
+        current.status.countdown_total_seconds = 0;
         let status = current.status.clone();
         drop(current);
         let _ = status_sender.send(status);
@@ -82,14 +85,14 @@ pub async fn run_scheduled_action(
     lock_command: String,
     logout_command: String,
 ) {
-    debug!("Power Service: scheduling {action:?} in {delay_seconds}s");
+    trace!("Power Service: scheduling {action:?} in {delay_seconds}s");
     let start = Instant::now();
     loop {
         let elapsed = start.elapsed().as_secs();
         let remaining = delay_seconds.saturating_sub(elapsed);
 
         if remaining == 0 {
-            debug!("Power Service: scheduled action timer expired, executing {action:?}");
+            trace!("Power Service: scheduled action timer expired, executing {action:?}");
             crate::dbus::execute_power_action(&connection, &action, &lock_command, &logout_command).await;
             if let Ok(mut current) = state.lock() {
                 current.status.scheduled_action = stabby::option::Option::None();
@@ -102,7 +105,7 @@ pub async fn run_scheduled_action(
 
         tokio::select! {
             _ = cancel_token.notified() => {
-                debug!("Power Service: scheduled action cancelled");
+                trace!("Power Service: scheduled action cancelled");
                 if let Ok(mut current) = state.lock() {
                     current.status.scheduled_action = stabby::option::Option::None();
                     let cancelled_status = current.status.clone();

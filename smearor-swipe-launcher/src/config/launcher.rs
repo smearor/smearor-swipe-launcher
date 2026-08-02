@@ -14,7 +14,9 @@ use smearor_model_area::AreaConfig;
 use smearor_model_area::AreaType;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use std::collections::HashMap;
-use tracing::warn;
+use std::str::FromStr;
+use tracing::debug;
+use tracing::trace;
 
 /// Main configuration for the swipe launcher
 #[derive(Debug, Clone, Deserialize)]
@@ -64,7 +66,7 @@ impl SwipeLauncherConfig {
     /// Get plugin config for plugin API (legacy method for compatibility)
     pub fn plugin_config(&self, id: &str) -> PluginConfig {
         let config = self.get_plugin_config(id).cloned().unwrap_or_else(|| {
-            warn!("No config found for plugin {id}, using empty config");
+            trace!("No config found for plugin {id}, using empty config");
             json!({})
         });
         PluginConfig { config }
@@ -236,6 +238,22 @@ impl SwipeLauncherConfig {
         }
     }
 
+    /// Collect all include file paths referenced by area configurations,
+    /// resolved relative to the given base config file path.
+    ///
+    /// Returns absolute paths to all include files. Used by the config
+    /// watcher to also watch include files for changes.
+    pub fn collect_include_paths(&self, base_path: &std::path::Path) -> Vec<std::path::PathBuf> {
+        let base_dir = base_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+        self.entries
+            .values()
+            .filter_map(|entry| match entry {
+                ConfigEntry::Area(area) => area.include.as_ref().map(|inc| base_dir.join(inc)),
+                ConfigEntry::Plugin(_) => None,
+            })
+            .collect()
+    }
+
     /// Resolve `include` directives in area configurations by loading
     /// external TOML files and merging them with the main config.
     ///
@@ -372,6 +390,28 @@ pub struct SwipeLauncherSettings {
     /// Configuration for the rotation
     #[serde(default, flatten)]
     pub rotation: RotationConfigFile,
+
+    /// Whether the launcher window should have window decorations (titlebar, borders).
+    /// Defaults to `true` (GTK default). Set to `false` to hide decorations.
+    /// On wlroots-based compositors (Hyprland, Sway) with layer-shell, decorations
+    /// are already absent regardless of this setting. On GNOME (no layer-shell),
+    /// this can be used to hide the titlebar.
+    #[serde(default)]
+    pub show_decorations: Option<bool>,
+
+    /// Path to a custom HTML template file for web instances.
+    /// If not set, the default template is used.
+    /// See `concepts/WEB_INSTANCE_CONCEPT.md`.
+    #[serde(default)]
+    pub web_template: Option<String>,
+
+    /// The instance type for this launcher.
+    /// Determines whether a GTK window is created (`gtk`),
+    /// the instance runs headless (`headless`), or
+    /// it is served via the embedded web server (`web`).
+    /// Defaults to `gtk`.
+    #[serde(default)]
+    pub instance_type: InstanceTypeConfig,
 }
 
 impl MergeWithArguments<SwipeLauncherArguments> for SwipeLauncherSettings {
@@ -380,5 +420,19 @@ impl MergeWithArguments<SwipeLauncherArguments> for SwipeLauncherSettings {
         config.rotation = config.rotation.merge_with_arguments(&args.rotation);
         config.layer = config.layer.merge_with_arguments(&args.layer);
         config
+    }
+}
+
+/// Config-level instance type, parsed from the `[launcher]` section.
+/// Defaults to `gtk` when not specified.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(transparent)]
+pub struct InstanceTypeConfig(pub String);
+
+impl InstanceTypeConfig {
+    /// Parse the config value into a runtime `InstanceType`.
+    /// Falls back to `Gtk` for unknown or empty values.
+    pub fn to_instance_type(&self) -> crate::instance::InstanceType {
+        crate::instance::InstanceType::from_str(&self.0).unwrap_or(crate::instance::InstanceType::Gtk)
     }
 }

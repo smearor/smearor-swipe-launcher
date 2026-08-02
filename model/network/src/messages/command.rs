@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -8,7 +10,7 @@ pub const TOPIC_COMMAND: &str = "service.network.command";
 /// Actions the network service can perform on request.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetworkCommandAction {
     /// Connect to a WLAN access point.
     #[default]
@@ -31,7 +33,7 @@ pub enum NetworkCommandAction {
 
 /// Command message sent by widgets or MCP clients to the network service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct NetworkCommandMessage {
     /// The action to execute.
     pub action: NetworkCommandAction,

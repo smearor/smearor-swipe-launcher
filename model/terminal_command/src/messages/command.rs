@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -9,7 +11,7 @@ pub const TOPIC_COMMAND: &str = "service.terminal_command.command";
 /// Action to perform on a configured terminal command.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum TerminalCommandAction {
     /// Launch the configured command.
     #[default]
@@ -21,7 +23,7 @@ pub enum TerminalCommandAction {
 }
 
 /// Command control message sent by widgets to the terminal command service.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TerminalCommandMessage {
     /// The configured command identifier to act upon.
     pub command_id: String,
@@ -37,7 +39,7 @@ pub struct TerminalCommandMessage {
 
 /// ABI-stable version of `TerminalCommandMessage` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TerminalCommandMessageStabby {
     pub command_id: stabby::string::String,
     pub action: TerminalCommandAction,

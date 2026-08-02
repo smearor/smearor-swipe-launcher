@@ -52,6 +52,22 @@ pub extern "C" fn default_destroy_payload(ptr: *mut core::ffi::c_void) {
     }
 }
 
+/// A generic `extern "C"` clone function for boxed `Clone` messages.
+///
+/// Pass this as `clone_payload` to `FfiEnvelope` when the message was
+/// allocated with `Box::into_raw` and implements `Clone`.
+/// This ensures that `FfiEnvelope::clone()` produces a valid payload copy
+/// when the host routes the envelope to multiple recipients (e.g. widget instances).
+pub extern "C" fn default_clone_payload<T: Clone>(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe {
+        let value = &*(ptr as *const T);
+        Box::into_raw(Box::new(value.clone())) as *mut core::ffi::c_void
+    }
+}
+
 /// An ABI-safe envelope for a message crossing the FFI boundary.
 ///
 /// The Host constructs this and passes it to plugin/service VTables.
@@ -190,7 +206,7 @@ impl MessageBroadcasterInner {
                 type_id: T::TYPE_ID,
                 payload: payload_ptr,
                 destroy_payload: Some(default_destroy_payload),
-                clone_payload: None,
+                clone_payload: Some(default_clone_payload::<T>),
             };
             ctx.send_message(envelope);
         }
@@ -221,7 +237,7 @@ impl MessageBroadcasterInner {
                 type_id: generate_type_id("std::string::String"),
                 payload: boxed,
                 destroy_payload: Some(default_destroy_payload),
-                clone_payload: None,
+                clone_payload: Some(default_clone_payload::<String>),
             };
             ctx.send_message(envelope);
         }

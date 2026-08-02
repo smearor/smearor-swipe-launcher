@@ -19,5 +19,9 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 smearor-hyprland-model = { path = "../../model/hyprland" }
+smearor-hyprland-shared = { path = "../../model/hyprland-shared" }
+smearor-hyprland-dispatch = { path = "../../model/hyprland-dispatch" }
+smearor-hyprland-status = { path = "../../model/hyprland-status" }
+smearor-hyprland-command = { path = "../../model/hyprland-command" }
 smearor-model-compositor = { path = "../../model/workspace" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }

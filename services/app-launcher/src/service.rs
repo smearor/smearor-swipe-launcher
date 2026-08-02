@@ -9,13 +9,16 @@ use smearor_app_launcher_model::DesktopFileCommandAction;
 use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
 use smearor_app_launcher_model::SmearorWindowRotationWrapper;
+use smearor_model_mcp::InvokePromptMessage;
 use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_PROMPT;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopicBroadcaster;
@@ -24,7 +27,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::ffi::OsString;
 use std::os::unix::process::CommandExt;
@@ -112,19 +115,25 @@ impl AppLauncherService {
         Ok(service)
     }
 
-    pub(crate) fn handle_exec(&self, desktop_file: &str, wrapper: Option<SmearorWindowRotationWrapper>, forked: bool, terminate_on_exit: bool) {
+    pub(crate) fn handle_exec(
+        &self,
+        desktop_file: &str,
+        wrapper: Option<SmearorWindowRotationWrapper>,
+        forked: bool,
+        terminate_on_exit: bool,
+    ) -> Result<(), String> {
         trace!("AppLauncher Service: Launching app: {desktop_file} (forked={forked})");
         trace!("Using wrapper smearor-wrot: {:?}", wrapper);
         let entry = match Entry::parse_file(desktop_file) {
             Ok(entry) => entry,
             Err(e) => {
                 error!("AppLauncher Service: Failed to parse desktop file {desktop_file}: {e}");
-                return;
+                return Err(format!("Failed to parse desktop file {desktop_file}: {e}"));
             }
         };
         let Some(exec) = entry.get("Desktop Entry", "Exec") else {
             error!("Failed to get exec attr");
-            return;
+            return Err("Desktop file has no Exec entry".to_string());
         };
         trace!("Exec: {:?}", exec);
         if let Some(exec_first) = exec.first() {
@@ -133,7 +142,7 @@ impl AppLauncherService {
             trace!("args: {:?}", raw_args);
             let Some(mut program) = raw_args.first().cloned() else {
                 error!("Failed to get program attr");
-                return;
+                return Err("Failed to get program from Exec entry".to_string());
             };
             trace!("raw_args: {:?}", raw_args);
             raw_args.remove(0);
@@ -218,9 +227,11 @@ impl AppLauncherService {
                 }
                 Err(e) => {
                     error!("AppLauncher Service: Failed to spawn Command {}: {}", program, e);
+                    return Err(format!("Failed to spawn {program}: {e}"));
                 }
             }
         }
+        Ok(())
     }
 
     pub(crate) fn handle_terminate(&self, desktop_file: &str) {
@@ -337,7 +348,7 @@ impl AsRef<Option<FfiCoreContext>> for AppLauncherService {
     }
 }
 
-impl Service for AppLauncherService {
+impl ServicePlugin for AppLauncherService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
@@ -349,6 +360,8 @@ impl Service for AppLauncherService {
                     MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_MCP_INVOKE_RESOURCE && envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_PROMPT && envelope.type_id == FfiEnvelopePayload::<InvokePromptMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokePromptMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }

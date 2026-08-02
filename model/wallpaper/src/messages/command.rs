@@ -25,7 +25,7 @@ pub enum WallpaperCommandAction {
 
 /// Command message sent from the wallpaper widget to the wallpaper service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WallpaperCommandMessage {
     /// The action to execute.
     pub action: WallpaperCommandAction,
@@ -55,6 +55,11 @@ impl WallpaperCommandMessage {
     /// Creates a `StopCurrent` command message.
     pub fn stop_current() -> Self {
         Self::new(WallpaperCommandAction::StopCurrent, "")
+    }
+
+    /// Creates a `Refresh` command message to request a status re-broadcast.
+    pub fn refresh() -> Self {
+        Self::new(WallpaperCommandAction::Refresh, "")
     }
 }
 

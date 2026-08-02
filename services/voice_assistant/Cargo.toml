@@ -13,19 +13,30 @@ crate-type = ["cdylib"]
 chrono = { workspace = true }
 cpal = { workspace = true }
 encoding_rs = { workspace = true }
+espeak-ng = { workspace = true }
 fastembed = { workspace = true }
 glob = "0.3"
 glib = { workspace = true }
+hf-hub = { workspace = true }
 llama-cpp-4 = { workspace = true }
+llm_json = "1.0"
 miette = { workspace = true }
 moka = { workspace = true }
-nucleo-matcher = { workspace = true }
+ndarray = { workspace = true }
 ort = { workspace = true }
+oww-rs = { workspace = true }
+gguf = { workspace = true }
 paste = { workspace = true }
+regex = { workspace = true }
+ringbuf = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+shellexpand = { workspace = true }
+smearor-personalization-model = { path = "../../model/personalization" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+text-processing-rs = { workspace = true }
+unicode-normalization = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }
 smearor-voice-assistant-model = { path = "../../model/voice_assistant" }
 stabby = { workspace = true }
@@ -38,11 +49,14 @@ whisper-rs = { workspace = true }
 
 [features]
 default = []
-ryzen-5-8500g = ["llm-vulkan", "whisper-vulkan"]
-ryzen-9-9950x3d = ["llm-vulkan", "whisper-vulkan", "ort-rocm", "whisper-hipblas"]
+ryzen-5-8500g = ["llm-vulkan", "whisper-vulkan", "whisper-tracing"]
+ryzen-9-9950x3d = ["llm-vulkan", "whisper-vulkan", "ort-rocm", "whisper-hipblas", "whisper-tracing"]
+ryzen-9-9950x3d-hipblas = ["llm-hipblas", "whisper-vulkan", "ort-rocm", "whisper-hipblas", "whisper-tracing"]
 llm-vulkan = ["llama-cpp-4/vulkan"]
+llm-hipblas = ["llama-cpp-4/hip"]
 ort-cuda = ["ort/cuda"]
 ort-rocm = ["ort/rocm"]
 whisper-cuda = ["whisper-rs/cuda"]
 whisper-hipblas = ["whisper-rs/hipblas"]
+whisper-tracing = ["whisper-rs/tracing_backend"]
 whisper-vulkan = ["whisper-rs/vulkan"]

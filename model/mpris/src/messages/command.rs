@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -8,7 +10,7 @@ pub const TOPIC_COMMAND: &str = "service.mpris.command";
 /// Actions that can be sent from the widget to the MPRIS service.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum MprisCommandAction {
     #[default]
     /// Start or resume playback
@@ -39,11 +41,13 @@ pub enum MprisCommandAction {
     Raise,
     /// Quit the player application
     Quit,
+    /// Request a status refresh from the MPRIS service
+    Refresh,
 }
 
 /// Command message sent from the MPRIS widget to the MPRIS service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MprisCommandMessage {
     /// The action to execute
     pub action: MprisCommandAction,
@@ -190,6 +194,15 @@ impl MprisCommandMessage {
     pub fn quit() -> Self {
         Self::new(
             MprisCommandAction::Quit,
+            stabby::option::Option::None(),
+            stabby::option::Option::None(),
+            stabby::option::Option::None(),
+        )
+    }
+
+    pub fn refresh() -> Self {
+        Self::new(
+            MprisCommandAction::Refresh,
             stabby::option::Option::None(),
             stabby::option::Option::None(),
             stabby::option::Option::None(),

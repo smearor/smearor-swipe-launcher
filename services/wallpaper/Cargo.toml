@@ -11,12 +11,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 stabby = { workspace = true }
+dirs = { workspace = true }
 glib = { workspace = true }
 miette = { workspace = true }
 nix = { version = "0.29", features = ["signal"] }
 paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+shellexpand = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }
 smearor-wallpaper-model = { path = "../../model/wallpaper" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }

@@ -1,22 +1,27 @@
 use serde::Deserialize;
-use serde_json::Value;
+use smearor_swipe_launcher_plugin_api::ActionBindings;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DispatchableBinding;
+use smearor_swipe_launcher_plugin_api::WidgetDimensions;
+use smearor_swipe_launcher_plugin_api::WidgetIcon;
+use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use smearor_weather_model::WeatherView;
 use typed_builder::TypedBuilder;
-
-pub const DEFAULT_WIDTH: i32 = 120;
-pub const DEFAULT_HEIGHT: i32 = 80;
 
 /// Configuration for the weather widget.
 #[derive(Debug, Clone, Deserialize, TypedBuilder)]
 #[serde(default)]
 pub struct WeatherWidgetConfig {
-    /// The width of the widget in pixels.
-    #[builder(default, setter(into))]
-    pub(crate) width: Option<i32>,
+    /// Widget dimensions (width, height) for GTK layout.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) dimensions: WidgetDimensions,
 
-    /// The height of the widget in pixels.
-    #[builder(default, setter(into))]
-    pub(crate) height: Option<i32>,
+    /// Widget layout (spacing) for GTK container.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) layout: WidgetLayout,
 
     /// The background color of the widget.
     #[builder(default, setter(into))]
@@ -26,34 +31,46 @@ pub struct WeatherWidgetConfig {
     #[builder(default)]
     pub(crate) views: Vec<WeatherView>,
 
-    /// Message topic for single-click action.
-    #[serde(default)]
-    pub click_topic: Option<String>,
+    /// Widget icon configuration (icon_size, icon_only).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) icon_config: WidgetIcon,
 
-    /// Message payload for single-click action (JSON/TOML).
-    #[serde(default)]
-    pub click_payload: Option<Value>,
+    /// Text color configuration (main_text_color, info_text_color).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) text_colors: WidgetTextColors,
 
-    /// Message topic for long-press.
-    #[serde(default)]
-    pub longpress_topic: Option<String>,
+    /// Action bindings for all input triggers.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub actions: ActionBindings,
+}
 
-    /// Message payload for long-press (JSON/TOML).
-    #[serde(default)]
-    pub longpress_payload: Option<Value>,
+impl WeatherWidgetConfig {
+    /// Returns the binding for the given action kind as a `&dyn DispatchableBinding`.
+    pub fn binding_for_kind(&self, kind: ActionKind) -> &dyn DispatchableBinding {
+        self.actions.binding_for_kind(kind)
+    }
 }
 
 impl Default for WeatherWidgetConfig {
     fn default() -> Self {
         Self {
-            width: Some(DEFAULT_WIDTH),
-            height: Some(DEFAULT_HEIGHT),
+            dimensions: WidgetDimensions::default(),
+            layout: WidgetLayout::default(),
             background_color: None,
-            views: vec![WeatherView::Current, WeatherView::ForecastToday, WeatherView::Wind, WeatherView::Humidity],
-            click_topic: None,
-            click_payload: None,
-            longpress_topic: None,
-            longpress_payload: None,
+            views: vec![
+                WeatherView::Current,
+                WeatherView::ForecastToday,
+                WeatherView::Wind,
+                WeatherView::Humidity,
+                WeatherView::Sunshine,
+                WeatherView::PrecipitationProbability,
+            ],
+            icon_config: WidgetIcon::default(),
+            text_colors: WidgetTextColors::default(),
+            actions: ActionBindings::default(),
         }
     }
 }

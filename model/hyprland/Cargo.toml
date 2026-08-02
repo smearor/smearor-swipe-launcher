@@ -7,7 +7,8 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-stabby = { workspace = true }
+smearor-hyprland-shared = { path = "../hyprland-shared" }
+smearor-hyprland-dispatch = { path = "../hyprland-dispatch" }
+smearor-hyprland-status = { path = "../hyprland-status" }
+smearor-hyprland-command = { path = "../hyprland-command" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }

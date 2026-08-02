@@ -12,6 +12,9 @@ pub struct HyprlandServiceConfig {
     /// Enable workspace creation/deletion event broadcasting.
     #[serde(default = "default_enable_workspace_lifecycle")]
     pub enable_workspace_lifecycle: bool,
+    /// Enable Hyprland-specific status event broadcasting (active window, fullscreen, etc.).
+    #[serde(default = "default_enable_status_events")]
+    pub enable_status_events: bool,
 }
 
 fn default_enable_monitor_events() -> bool {
@@ -19,6 +22,10 @@ fn default_enable_monitor_events() -> bool {
 }
 
 fn default_enable_workspace_lifecycle() -> bool {
+    true
+}
+
+fn default_enable_status_events() -> bool {
     true
 }
 

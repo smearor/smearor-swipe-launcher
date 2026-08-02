@@ -5,7 +5,6 @@ use crate::config::services::ServicesConfig;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use miette::Result;
-use miette::miette;
 use std::path::PathBuf;
 use tracing::trace;
 
@@ -13,13 +12,14 @@ use tracing::trace;
 #[command(author, version, about, long_about = None)]
 pub struct SwipeLauncherArguments {
     /// Configuration file for shared background services.
-    /// Loaded once and shared across all launcher instances.
-    #[arg(short = 's', long, default_value = Some("services.toml"))]
+    /// If omitted, discovered from working directory or ~/.config/smearor/services/services.toml.
+    #[arg(short = 's', long)]
     pub(crate) services_config: Option<PathBuf>,
 
     /// Configuration files for each launcher instance window.
     /// Specify multiple times for multiple windows.
-    #[arg(short, long, default_value = Some("config.toml"))]
+    /// If omitted, discovered from working directory or ~/.config/smearor/launcher/*.toml.
+    #[arg(short, long)]
     pub(crate) config: Vec<PathBuf>,
 
     /// Optional instance IDs corresponding to each --config.
@@ -56,14 +56,19 @@ impl SwipeLauncherArguments {
     }
 
     pub fn load_services_config(&self) -> Result<ServicesConfig> {
-        match &self.services_config {
+        let discovery_service = crate::config::discovery::ConfigDiscoveryService::new();
+        let discovered = discovery_service.discover_services_config(self.services_config.as_ref())?;
+        match discovered {
             Some(config_path) => {
-                let config_content = std::fs::read_to_string(config_path).into_diagnostic()?;
+                let config_content = std::fs::read_to_string(&config_path).into_diagnostic()?;
                 let config: ServicesConfig = toml::from_str(&config_content).into_diagnostic()?;
                 trace!("Loaded services configuration with {} services", config.services.len());
                 Ok(config)
             }
-            None => Err(miette!("No services config file specified")),
+            None => {
+                trace!("No services config found, starting with default config");
+                Ok(ServicesConfig::default())
+            }
         }
     }
 }

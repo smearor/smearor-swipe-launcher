@@ -47,8 +47,8 @@ instant_context:
   key_files:
     - Cargo.toml
     - README.md
-    - config.toml
-    - services.toml
+    - configs/launcher/config.toml
+    - configs/services/services.toml
   commands:
     test: "cargo test --workspace"
     build: "cargo build --release"

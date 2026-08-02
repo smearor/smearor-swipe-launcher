@@ -1,8 +1,8 @@
 use smearor_power_model::InhibitorInfo;
 use smearor_power_model::PowerAction;
 use smearor_power_model::PowerCapabilities;
-use tracing::debug;
 use tracing::error;
+use tracing::trace;
 use zbus::Connection;
 
 /// D-Bus proxy for `org.freedesktop.login1.Manager`.
@@ -111,7 +111,7 @@ pub async fn execute_power_action(connection: &Connection, action: &PowerAction,
                     error!("Power Service: failed to lock session: {e}");
                 }
             } else {
-                debug!("Power Service: executing custom lock command: {lock_command}");
+                trace!("Power Service: executing custom lock command: {lock_command}");
                 spawn_custom_command(lock_command);
             }
         }
@@ -121,7 +121,7 @@ pub async fn execute_power_action(connection: &Connection, action: &PowerAction,
                     error!("Power Service: failed to terminate session: {e}");
                 }
             } else {
-                debug!("Power Service: executing custom logout command: {logout_command}");
+                trace!("Power Service: executing custom logout command: {logout_command}");
                 spawn_custom_command(logout_command);
             }
         }
@@ -131,7 +131,7 @@ pub async fn execute_power_action(connection: &Connection, action: &PowerAction,
             }
         }
         PowerAction::Cancel => {
-            debug!("Power Service: cancel action requested, no D-Bus call needed");
+            trace!("Power Service: cancel action requested, no D-Bus call needed");
         }
     }
 }

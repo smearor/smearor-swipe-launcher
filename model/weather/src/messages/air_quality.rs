@@ -1,6 +1,9 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 /// Air quality measurements.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AirQualityData {
     /// European Air Quality Index (0 - 100).
     pub european_aqi: stabby::option::Option<f32>,

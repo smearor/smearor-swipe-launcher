@@ -19,7 +19,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -218,7 +218,7 @@ impl AsRef<Option<FfiCoreContext>> for WaylandWorkspaceService {
     }
 }
 
-impl Service for WaylandWorkspaceService {
+impl ServicePlugin for WaylandWorkspaceService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if message.is_null() {
             return;
@@ -228,15 +228,12 @@ impl Service for WaylandWorkspaceService {
             debug!("Wayland service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
             match envelope.type_id {
                 id if id == FfiEnvelopePayload::<SwitchWorkspaceMessage>::TYPE_ID => {
-                    debug!("SwitchWorkspaceMessage");
                     MessageHandler::<FfiEnvelopePayload<SwitchWorkspaceMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<CreateWorkspaceMessage>::TYPE_ID => {
-                    debug!("CreateWorkspaceMessage");
                     MessageHandler::<FfiEnvelopePayload<CreateWorkspaceMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<WorkspaceSnapshotRequestMessage>::TYPE_ID => {
-                    debug!("WorkspaceSnapshotRequestMessage");
                     MessageHandler::<FfiEnvelopePayload<WorkspaceSnapshotRequestMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {

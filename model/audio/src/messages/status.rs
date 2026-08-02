@@ -1,3 +1,6 @@
+use crate::AudioDevice;
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -5,21 +8,9 @@ use smearor_swipe_launcher_plugin_api::generate_type_id;
 
 pub const TOPIC_STATUS: &str = "service.audio.status";
 
-/// Information about an audio device.
-#[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, PartialEq)]
-pub struct AudioDevice {
-    /// Unique device identifier
-    pub id: u32,
-    /// Human-readable device name
-    pub name: stabby::string::String,
-    /// Whether this is the default/active device
-    pub is_default: bool,
-}
-
 /// Status message broadcast by the audio service to all widgets.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct AudioStatusMessage {
     /// Current master volume (0.0 to 1.0, may exceed 1.0 if overdrive is enabled)
     pub volume: f32,

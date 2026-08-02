@@ -1,14 +1,13 @@
 use crate::config::WorkspaceSwitcherConfig;
+use crate::personalization::PersonalizationOverride;
 use gtk4::Align;
 use gtk4::Box as GtkBox;
-use gtk4::EventSequenceState;
-use gtk4::GestureClick;
-use gtk4::GestureDrag;
-use gtk4::GestureLongPress;
+use gtk4::Button;
+use gtk4::CssProvider;
 use gtk4::Image;
 use gtk4::Label;
+use gtk4::LevelBar;
 use gtk4::Orientation;
-use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
@@ -26,12 +25,23 @@ use smearor_model_compositor::WorkspaceLifecycleEvent;
 use smearor_model_compositor::WorkspaceLifecycleType;
 use smearor_model_compositor::WorkspaceSnapshotMessage;
 use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
+use smearor_personalization_model::PersonalizationCommandMessage;
+use smearor_personalization_model::PersonalizationStatusMessage;
+use smearor_personalization_model::TOPIC_STATUS as TOPIC_PERSONALIZATION_STATUS;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DefaultFallback;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::GestureHandler;
+use smearor_swipe_launcher_plugin_api::GestureHandlersConfiguration;
+use smearor_swipe_launcher_plugin_api::Locale;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
+use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
-use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -39,10 +49,16 @@ use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
+use smearor_swipe_launcher_plugin_api::WidgetMode;
+use smearor_swipe_launcher_plugin_api::WidgetPlugin;
+use smearor_swipe_launcher_plugin_api::apply_icon_color;
+use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::str::FromStr;
 use tracing::debug;
+use tracing::trace;
 
 /// Workspace Switcher Widget.
 ///
@@ -59,10 +75,14 @@ pub struct WorkspaceSwitcherWidget {
     pub current_view: Rc<RefCell<usize>>,
     /// The icon image widget.
     pub icon_image: Rc<RefCell<Option<Image>>>,
-    /// The label widget showing the workspace name.
-    pub label_widget: Rc<RefCell<Option<Label>>>,
-    /// The dot indicator container.
-    pub dot_container: Rc<RefCell<Option<GtkBox>>>,
+    /// The main label widget showing the workspace name.
+    pub main_label: Rc<RefCell<Option<Label>>>,
+    /// The info label widget showing the workspace index.
+    pub info_label: Rc<RefCell<Option<Label>>>,
+    /// The scrollbar indicator showing position in the workspace list.
+    pub scrollbar: Rc<RefCell<Option<LevelBar>>>,
+    /// Personalization override data (locale for sorting).
+    pub personalization: Rc<RefCell<PersonalizationOverride>>,
 }
 
 impl WorkspaceSwitcherWidget {
@@ -77,13 +97,18 @@ impl WorkspaceSwitcherWidget {
             workspaces: Rc::new(RefCell::new(Vec::new())),
             current_view: Rc::new(RefCell::new(0)),
             icon_image: Rc::new(RefCell::new(None)),
-            label_widget: Rc::new(RefCell::new(None)),
-            dot_container: Rc::new(RefCell::new(None)),
+            main_label: Rc::new(RefCell::new(None)),
+            info_label: Rc::new(RefCell::new(None)),
+            scrollbar: Rc::new(RefCell::new(None)),
+            personalization: Rc::new(RefCell::new(PersonalizationOverride::default())),
         };
 
         // Request initial workspace snapshot
         let broadcaster = widget.get_broadcaster();
         broadcaster.broadcast_message_to_topic(WorkspaceSnapshotRequestMessage { monitor_index: 0 });
+
+        // Request personalization status for locale-aware sorting
+        widget.request_personalization_status();
 
         Ok(widget)
     }
@@ -94,8 +119,9 @@ impl WorkspaceSwitcherWidget {
         let broadcaster = self.get_broadcaster();
 
         let icon_image = self.icon_image.clone();
-        let label_widget = self.label_widget.clone();
-        let dot_container = self.dot_container.clone();
+        let main_label = self.main_label.clone();
+        let info_label = self.info_label.clone();
+        let scrollbar = self.scrollbar.clone();
         let config = self.config.clone();
 
         MainContext::default().spawn_local(async move {
@@ -115,7 +141,7 @@ impl WorkspaceSwitcherWidget {
                 let msg = SwitchWorkspaceMessage { workspace_id: next_id };
                 broadcaster.broadcast_message_to_topic(msg);
                 *current_view.borrow_mut() = idx + 1;
-                update_ui_internal(&workspaces, &current_view, &icon_image, &label_widget, &dot_container, &config);
+                update_ui_internal(&workspaces, &current_view, &icon_image, &main_label, &info_label, &scrollbar, &config);
             } else {
                 let msg = CreateWorkspaceMessage {
                     relative_to: last_id,
@@ -132,8 +158,9 @@ impl WorkspaceSwitcherWidget {
         let broadcaster = self.get_broadcaster();
 
         let icon_image = self.icon_image.clone();
-        let label_widget = self.label_widget.clone();
-        let dot_container = self.dot_container.clone();
+        let main_label = self.main_label.clone();
+        let info_label = self.info_label.clone();
+        let scrollbar = self.scrollbar.clone();
         let config = self.config.clone();
 
         MainContext::default().spawn_local(async move {
@@ -153,7 +180,7 @@ impl WorkspaceSwitcherWidget {
                 let msg = SwitchWorkspaceMessage { workspace_id: prev_id };
                 broadcaster.broadcast_message_to_topic(msg);
                 *current_view.borrow_mut() = idx - 1;
-                update_ui_internal(&workspaces, &current_view, &icon_image, &label_widget, &dot_container, &config);
+                update_ui_internal(&workspaces, &current_view, &icon_image, &main_label, &info_label, &scrollbar, &config);
             } else {
                 let msg = CreateWorkspaceMessage {
                     relative_to: first_id,
@@ -168,13 +195,39 @@ impl WorkspaceSwitcherWidget {
         let workspaces = self.workspaces.clone();
         let current_view = self.current_view.clone();
         let icon_image = self.icon_image.clone();
-        let label_widget = self.label_widget.clone();
-        let dot_container = self.dot_container.clone();
+        let main_label = self.main_label.clone();
+        let info_label = self.info_label.clone();
+        let scrollbar = self.scrollbar.clone();
         let config = self.config.clone();
 
         MainContext::default().spawn_local(async move {
-            update_ui_internal(&workspaces, &current_view, &icon_image, &label_widget, &dot_container, &config);
+            update_ui_internal(&workspaces, &current_view, &icon_image, &main_label, &info_label, &scrollbar, &config);
         });
+    }
+
+    fn request_personalization_status(&self) {
+        self.get_broadcaster()
+            .broadcast_message_to_topic(PersonalizationCommandMessage::request_status());
+    }
+}
+
+impl DefaultFallback for WorkspaceSwitcherWidget {
+    fn default_fallback(&self, kind: &ActionKind, _broadcaster: &MessageBroadcasterInner) {
+        match kind {
+            ActionKind::SwipeUp | ActionKind::ScrollUp | ActionKind::MiddleClick => {
+                self.next_view();
+            }
+            ActionKind::SwipeDown | ActionKind::ScrollDown => {
+                self.prev_view();
+            }
+            ActionKind::Click
+            | ActionKind::DoublePress
+            | ActionKind::Longpress
+            | ActionKind::RightClick
+            | ActionKind::Hold
+            | ActionKind::CompoundLongpress
+            | ActionKind::Init => {}
+        }
     }
 }
 
@@ -182,21 +235,27 @@ fn update_ui_internal(
     workspaces: &Rc<RefCell<Vec<WorkspaceInfo>>>,
     current_view: &Rc<RefCell<usize>>,
     icon_image: &Rc<RefCell<Option<Image>>>,
-    label_widget: &Rc<RefCell<Option<Label>>>,
-    dot_container: &Rc<RefCell<Option<GtkBox>>>,
+    main_label: &Rc<RefCell<Option<Label>>>,
+    info_label: &Rc<RefCell<Option<Label>>>,
+    scrollbar: &Rc<RefCell<Option<LevelBar>>>,
     config: &WorkspaceSwitcherConfig,
 ) {
     let ws_list = workspaces.borrow();
+    let icon_size = config.icon_config.icon_size();
+    let show_labels = !config.icon_config.icon_only();
 
     if ws_list.is_empty() {
         if let Some(ref image) = *icon_image.borrow() {
-            set_workspace_icon(image, "nf-md-loading", config.icon_size);
+            set_workspace_icon(image, "nf-md-loading", icon_size);
         }
-        if let Some(ref label) = *label_widget.borrow() {
-            label.set_text("...");
+        if let Some(ref label) = *main_label.borrow() {
+            label.set_text(if show_labels { "..." } else { "" });
         }
-        if let Some(ref container) = *dot_container.borrow() {
-            update_dot_indicator(container, 0, 0);
+        if let Some(ref label) = *info_label.borrow() {
+            label.set_text("");
+        }
+        if let Some(ref bar) = *scrollbar.borrow() {
+            bar.set_value(0.0);
         }
         return;
     }
@@ -207,24 +266,41 @@ fn update_ui_internal(
 
     if let Some(ref image) = *icon_image.borrow() {
         let icon_class = resolve_workspace_icon(config, ws.workspace_id);
-        set_workspace_icon(image, &icon_class, config.icon_size);
+        set_workspace_icon(image, &icon_class, icon_size);
     }
-    if let Some(ref label) = *label_widget.borrow() {
-        if config.show_label {
+    if let Some(ref label) = *main_label.borrow() {
+        if show_labels && config.show_label {
             label.set_text(&ws.workspace_name.to_string());
             label.set_visible(true);
         } else {
             label.set_visible(false);
         }
     }
-    if let Some(ref container) = *dot_container.borrow() {
-        if config.show_dot_indicator {
-            update_dot_indicator(container, ws_list.len(), idx);
-            container.set_visible(true);
+    if let Some(ref label) = *info_label.borrow() {
+        if show_labels {
+            let info = format!("{}/{}", idx + 1, ws_list.len());
+            label.set_text(&info);
+            label.set_visible(true);
         } else {
-            container.set_visible(false);
+            label.set_visible(false);
         }
     }
+    if let Some(ref bar) = *scrollbar.borrow() {
+        if config.show_scrollbar && ws_list.len() > 1 {
+            let fraction = if ws_list.len() > 1 { idx as f64 / (ws_list.len() - 1) as f64 } else { 0.0 };
+            bar.set_value(fraction);
+            bar.set_visible(true);
+        } else {
+            bar.set_visible(false);
+        }
+    }
+}
+
+/// Sort workspaces by workspace_id, preserving a stable order.
+/// Locale-aware collation could be applied here in the future for
+/// sorting by workspace_name instead of by id.
+fn sort_workspaces(ws_list: &mut Vec<WorkspaceInfo>, _personalization: &PersonalizationOverride) {
+    ws_list.sort_by_key(|w| w.workspace_id);
 }
 
 fn resolve_workspace_icon(config: &WorkspaceSwitcherConfig, workspace_id: i32) -> String {
@@ -233,27 +309,16 @@ fn resolve_workspace_icon(config: &WorkspaceSwitcherConfig, workspace_id: i32) -
 }
 
 fn set_workspace_icon(image: &Image, icon_class: &str, icon_size: i32) {
-    if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(icon_class) {
-        image.set_icon_name(Some(&gtk_icon_name));
+    if icon_class.starts_with("nf-") {
+        if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(icon_class) {
+            image.set_icon_name(Some(&gtk_icon_name));
+        } else {
+            image.set_icon_name(Some(icon_class));
+        }
+    } else {
+        image.set_icon_name(Some(icon_class));
     }
     image.set_pixel_size(icon_size);
-}
-
-fn update_dot_indicator(container: &GtkBox, total: usize, current: usize) {
-    while let Some(child) = container.first_child() {
-        container.remove(&child);
-    }
-    for i in 0..total {
-        let dot = Label::builder()
-            .css_classes(if i == current {
-                vec!["workspace-dot-active".to_string()]
-            } else {
-                vec!["workspace-dot-inactive".to_string()]
-            })
-            .build();
-        dot.set_text("\u{2022}");
-        container.append(&dot);
-    }
 }
 
 impl MessageHandler<WorkspaceSnapshotMessage> for WorkspaceSwitcherWidget {
@@ -268,7 +333,7 @@ impl MessageHandler<WorkspaceSnapshotMessage> for WorkspaceSwitcherWidget {
         for ws in message.workspaces.iter() {
             ws_list.push(ws.clone());
         }
-        ws_list.sort_by_key(|w| w.workspace_id);
+        sort_workspaces(&mut ws_list, &self.personalization.borrow());
 
         let active_idx = ws_list.iter().position(|w| w.workspace_id == message.active_workspace_id);
         drop(ws_list);
@@ -315,7 +380,7 @@ impl MessageHandler<WorkspaceLifecycleEvent> for WorkspaceSwitcherWidget {
                             monitor_index: message.monitor_index,
                             is_active: false,
                         });
-                        ws_list.sort_by_key(|w| w.workspace_id);
+                        sort_workspaces(&mut ws_list, &self.personalization.borrow());
                     }
                 }
                 WorkspaceLifecycleType::Destroyed => {
@@ -330,7 +395,11 @@ impl MessageHandler<WorkspaceLifecycleEvent> for WorkspaceSwitcherWidget {
 
 impl AcceptTopic<FfiEnvelope> for WorkspaceSwitcherWidget {
     fn accept_topic(&self, topic: &str) -> bool {
-        topic == TOPIC_WORKSPACE_SNAPSHOT || topic == TOPIC_WORKSPACE_CHANGED || topic == TOPIC_WORKSPACE_LIFECYCLE
+        topic == TOPIC_WORKSPACE_SNAPSHOT
+            || topic == TOPIC_WORKSPACE_CHANGED
+            || topic == TOPIC_WORKSPACE_LIFECYCLE
+            || topic == TOPIC_MCP_INVOKE_TOOL
+            || topic == TOPIC_PERSONALIZATION_STATUS
     }
 }
 
@@ -348,7 +417,45 @@ impl AsRef<Option<FfiCoreContext>> for WorkspaceSwitcherWidget {
     }
 }
 
-impl Plugin for WorkspaceSwitcherWidget {
+impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for WorkspaceSwitcherWidget {
+    fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, _sender_id: &str) {
+        let tool_name = message.0.name.to_string();
+        let arguments = message.0.arguments.to_string();
+        debug!("Workspace switcher: InvokeToolMessage name={} args={}", tool_name, arguments);
+
+        let own_button_name = format!("button_{}", self.meta.id);
+        if tool_name == own_button_name {
+            let action_str = serde_json::from_str::<serde_json::Value>(&arguments)
+                .ok()
+                .and_then(|v| v.get("action").and_then(|a| a.as_str()).map(|s| s.to_string()))
+                .unwrap_or_else(|| "click".to_string());
+
+            match action_str.as_str() {
+                "click" => self.next_view(),
+                "longpress" => self.prev_view(),
+                _ => debug!("Workspace switcher: unhandled action '{}'", action_str),
+            }
+        }
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>> for WorkspaceSwitcherWidget {
+    fn handle_message(&self, message: FfiEnvelopePayload<PersonalizationStatusMessage>, _sender_id: &str) {
+        trace!("workspace switcher: received personalization status");
+        let status = message.0;
+        let locale = status.locale.as_ref().map(|l| Locale::from_str(l).unwrap_or_default()).unwrap_or_default();
+        let override_data = PersonalizationOverride { locale };
+        *self.personalization.borrow_mut() = override_data;
+        // Re-sort workspaces with locale awareness and refresh UI
+        {
+            let mut ws_list = self.workspaces.borrow_mut();
+            sort_workspaces(&mut ws_list, &self.personalization.borrow());
+        }
+        self.update_ui();
+    }
+}
+
+impl WidgetPlugin for WorkspaceSwitcherWidget {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if message.is_null() {
             return;
@@ -356,8 +463,8 @@ impl Plugin for WorkspaceSwitcherWidget {
         unsafe {
             let envelope = &*(message as *mut FfiEnvelope);
             let topic = envelope.topic.to_string();
-            if topic.starts_with("compositor.") {
-                debug!("Workspace switcher: on_message topic={} type_id={}", topic, envelope.type_id);
+            if topic.starts_with("compositor::") {
+                trace!("Workspace switcher: on_message topic={} type_id={}", topic, envelope.type_id);
             }
             if envelope.type_id == WorkspaceSnapshotMessage::TYPE_ID {
                 MessageHandler::<WorkspaceSnapshotMessage>::handle_envelope_message(self, envelope);
@@ -365,6 +472,10 @@ impl Plugin for WorkspaceSwitcherWidget {
                 MessageHandler::<WorkspaceChangedEvent>::handle_envelope_message(self, envelope);
             } else if envelope.type_id == WorkspaceLifecycleEvent::TYPE_ID {
                 MessageHandler::<WorkspaceLifecycleEvent>::handle_envelope_message(self, envelope);
+            } else if envelope.type_id == <FfiEnvelopePayload<InvokeToolMessage> as TypedMessage>::TYPE_ID {
+                MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+            } else if envelope.type_id == <FfiEnvelopePayload<PersonalizationStatusMessage> as TypedMessage>::TYPE_ID {
+                MessageHandler::<FfiEnvelopePayload<PersonalizationStatusMessage>>::handle_envelope_message(self, envelope);
             }
         }
     }
@@ -372,46 +483,125 @@ impl Plugin for WorkspaceSwitcherWidget {
 
 impl WidgetBuilder for WorkspaceSwitcherWidget {
     fn build_widget(&mut self) -> Widget {
-        let outer_box = GtkBox::builder()
+        let content_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
-            .spacing(2)
-            .css_classes(["workspace-switcher-widget".to_string()])
-            .halign(Align::Center)
+            .spacing(self.config.layout.spacing_or_default())
             .valign(Align::Center)
-            .build();
-
-        if let Some(width) = self.config.width {
-            outer_box.set_width_request(width);
-        }
-        if let Some(height) = self.config.height {
-            outer_box.set_height_request(height);
-        }
-
-        let icon_image = Image::builder().css_classes(["workspace-switcher-icon".to_string()]).build();
-        let label_widget = Label::builder().css_classes(["workspace-switcher-label".to_string()]).build();
-        let dot_container = GtkBox::builder()
-            .orientation(Orientation::Horizontal)
-            .spacing(2)
-            .css_classes(["workspace-switcher-dots".to_string()])
             .halign(Align::Center)
+            .vexpand(true)
+            .css_classes(["workspace-switcher-widget", "menu_button_inner"])
             .build();
 
-        set_workspace_icon(&icon_image, "nf-md-loading", self.config.icon_size);
-        label_widget.set_text("...");
-        update_dot_indicator(&dot_container, 0, 0);
+        let icon_size = self.config.icon_config.icon_size();
+        let show_labels = !self.config.icon_config.icon_only();
 
-        outer_box.append(&icon_image);
-        outer_box.append(&label_widget);
-        outer_box.append(&dot_container);
-
+        let icon_image = Image::builder().css_classes(["workspace-switcher-icon", "nerd-icon"]).build();
+        set_workspace_icon(&icon_image, &self.config.default_icon, icon_size);
+        if let Some(color) = self.config.icon_config.icon_color() {
+            apply_icon_color(&icon_image, color);
+        }
+        content_box.append(&icon_image);
         *self.icon_image.borrow_mut() = Some(icon_image.clone());
-        *self.label_widget.borrow_mut() = Some(label_widget.clone());
-        *self.dot_container.borrow_mut() = Some(dot_container.clone());
 
-        let click_topic = self.config.click_topic.clone();
-        let click_payload = self.config.click_payload.clone();
-        let longpress_topic = self.config.longpress_topic.clone();
-        let longpress_payload = self.config.longpress_payload.clone();
+        match self.config.mode {
+            WidgetMode::Compact => {
+                let main_label = Label::builder()
+                    .label(if show_labels { "..." } else { "" })
+                    .css_classes(["widget-main-text"])
+                    .build();
+                main_label.set_height_request(20);
+                apply_text_color(&main_label, self.config.text_colors.main_text_color());
+                content_box.append(&main_label);
+                *self.main_label.borrow_mut() = Some(main_label.clone());
+
+                let info_label = Label::builder()
+                    .label(if show_labels { "0/0" } else { "" })
+                    .css_classes(["widget-info-text"])
+                    .build();
+                info_label.set_height_request(16);
+                apply_text_color(&info_label, self.config.text_colors.info_text_color());
+                content_box.append(&info_label);
+                *self.info_label.borrow_mut() = Some(info_label.clone());
+
+                let scrollbar = LevelBar::builder()
+                    .min_value(0.0)
+                    .max_value(1.0)
+                    .value(0.0)
+                    .width_request(self.config.dimensions.width_or_default() - 20)
+                    .height_request(16)
+                    .css_classes(["workspace-switcher-scrollbar"])
+                    .build();
+                content_box.append(&scrollbar);
+                *self.scrollbar.borrow_mut() = Some(scrollbar.clone());
+            }
+            WidgetMode::Wide => {
+                let info_box = GtkBox::builder()
+                    .orientation(Orientation::Vertical)
+                    .spacing(self.config.layout.spacing_or_default())
+                    .valign(Align::Center)
+                    .halign(Align::Start)
+                    .build();
+
+                let main_label = Label::builder()
+                    .label(if show_labels { "..." } else { "" })
+                    .ellipsize(gtk4::gdk::pango::EllipsizeMode::End)
+                    .max_width_chars(24)
+                    .css_classes(["widget-main-text"])
+                    .build();
+                main_label.set_height_request(20);
+                apply_text_color(&main_label, self.config.text_colors.main_text_color());
+                info_box.append(&main_label);
+                *self.main_label.borrow_mut() = Some(main_label.clone());
+
+                let info_label = Label::builder()
+                    .label(if show_labels { "0/0" } else { "" })
+                    .ellipsize(gtk4::gdk::pango::EllipsizeMode::End)
+                    .max_width_chars(24)
+                    .css_classes(["widget-info-text"])
+                    .build();
+                info_label.set_height_request(16);
+                apply_text_color(&info_label, self.config.text_colors.info_text_color());
+                info_box.append(&info_label);
+                *self.info_label.borrow_mut() = Some(info_label.clone());
+
+                let scrollbar = LevelBar::builder()
+                    .min_value(0.0)
+                    .max_value(1.0)
+                    .value(0.0)
+                    .width_request(self.config.dimensions.max_width_or_default(self.config.mode) - 20)
+                    .height_request(16)
+                    .css_classes(["workspace-switcher-scrollbar"])
+                    .build();
+                info_box.append(&scrollbar);
+                *self.scrollbar.borrow_mut() = Some(scrollbar.clone());
+
+                content_box.append(&info_box);
+            }
+        }
+
+        let effective_width = self
+            .config
+            .dimensions
+            .width_or_default()
+            .min(self.config.dimensions.max_width_or_default(self.config.mode));
+        let mut button_builder = Button::builder()
+            .css_classes(["scroll-item", "menu-button"])
+            .width_request(effective_width)
+            .height_request(self.config.dimensions.height_or_default())
+            .child(&content_box);
+        if let Some(max_w) = self.config.dimensions.max_width {
+            button_builder = button_builder.hexpand(false).halign(Align::Start);
+            let css_class = format!("max-width-{}", max_w);
+            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
+            let css = format!(".max-width-{} {{ max-width: {}px; }}", max_w, max_w);
+            if let Some(display) = gtk4::gdk::Display::default() {
+                let provider = CssProvider::new();
+                provider.load_from_string(&css);
+                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
+            }
+        }
+        let button = button_builder.build();
+
         let message_broadcaster = self.get_broadcaster();
 
         let widget_self = Rc::new(Self {
@@ -421,54 +611,15 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
             workspaces: self.workspaces.clone(),
             current_view: self.current_view.clone(),
             icon_image: self.icon_image.clone(),
-            label_widget: self.label_widget.clone(),
-            dot_container: self.dot_container.clone(),
+            main_label: self.main_label.clone(),
+            info_label: self.info_label.clone(),
+            scrollbar: self.scrollbar.clone(),
+            personalization: self.personalization.clone(),
         });
 
-        let click_gesture = GestureClick::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
-        let broadcaster_for_click = message_broadcaster.clone();
-        click_gesture.connect_released(move |gesture, _n_press, _x, _y| {
-            if let Some(seq) = gesture.current_sequence() {
-                let state = gesture.sequence_state(&seq);
-                if state == EventSequenceState::Claimed || state == EventSequenceState::Denied {
-                    return;
-                }
-            }
-            if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
-                let payload_str = payload.to_string();
-                broadcaster_for_click.broadcast_string(&topic, &payload_str);
-            }
-            gesture.set_state(EventSequenceState::Claimed);
-        });
-        outer_box.add_controller(click_gesture);
+        let button_widget = button.upcast::<Widget>();
+        widget_self.attach_gesture_handlers(&button_widget, &self.config.actions, &message_broadcaster, &GestureHandlersConfiguration::default());
 
-        let drag_gesture = GestureDrag::new();
-        drag_gesture.set_propagation_phase(PropagationPhase::Capture);
-        let widget_for_drag = widget_self.clone();
-        drag_gesture.connect_drag_end(move |gesture, offset_x, offset_y| {
-            const SWIPE_THRESHOLD: f64 = 50.0;
-            if offset_y.abs() > offset_x.abs() && offset_y.abs() > SWIPE_THRESHOLD {
-                gesture.set_state(EventSequenceState::Claimed);
-                if offset_y < 0.0 {
-                    widget_for_drag.next_view();
-                } else {
-                    widget_for_drag.prev_view();
-                }
-            }
-        });
-        outer_box.add_controller(drag_gesture);
-
-        let longpress_gesture = GestureLongPress::builder().button(0).propagation_phase(PropagationPhase::Capture).build();
-        let broadcaster_for_longpress = message_broadcaster.clone();
-        longpress_gesture.connect_pressed(move |gesture, _x, _y| {
-            if let (Some(topic), Some(payload)) = (longpress_topic.clone(), longpress_payload.clone()) {
-                let payload_str = payload.to_string();
-                broadcaster_for_longpress.broadcast_string(&topic, &payload_str);
-            }
-            gesture.set_state(EventSequenceState::Claimed);
-        });
-        outer_box.add_controller(longpress_gesture);
-
-        outer_box.upcast::<Widget>()
+        button_widget
     }
 }

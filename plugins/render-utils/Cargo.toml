@@ -1,0 +1,17 @@
+[package]
+name = "smearor-render-utils"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+ab_glyph = { workspace = true }
+image = { workspace = true }
+imageproc = { workspace = true }
+nerd_gtk_icons = { workspace = true }
+resvg = { workspace = true }
+tracing = { workspace = true }
+usvg = { workspace = true }
+woff2-patched = "0.4.0"

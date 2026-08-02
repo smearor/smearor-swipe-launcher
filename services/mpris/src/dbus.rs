@@ -175,6 +175,7 @@ pub(crate) async fn run_mpris_async(
     };
     let mut state = MprisState::default();
     let mut last_broadcast: Option<MprisStatusMessage> = None;
+    let mut last_refresh_time = Instant::now() - Duration::from_secs(1);
     let mut blocked_players: HashMap<String, Instant> = HashMap::new();
     const BLOCK_DURATION: Duration = Duration::from_secs(60);
     let _ = status_sender.send(MprisStatusMessage::new(
@@ -207,6 +208,14 @@ pub(crate) async fn run_mpris_async(
                         .unwrap_or(0);
                     state.active_player_index = Some(new_idx);
                     trace!("MPRIS Service: switched to player {}", state.players[new_idx].1);
+                }
+            }
+            Ok(Some(MprisCommand::RefreshStatus)) => {
+                let now = Instant::now();
+                if now.duration_since(last_refresh_time) > Duration::from_millis(50) {
+                    last_refresh_time = now;
+                    last_broadcast = None;
+                    trace!("MPRIS Service: forcing status refresh");
                 }
             }
             Ok(Some(command)) => {
@@ -327,22 +336,4 @@ pub(crate) async fn run_mpris_async(
         }
     }
     debug!("MPRIS Service: MPRIS async task exiting");
-}
-
-/// FFI clone function for `MprisStatusMessage`.
-pub(crate) extern "C" fn clone_mpris_status(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    let status = unsafe { &*(ptr as *const MprisStatusMessage) };
-    Box::into_raw(Box::new(status.clone())) as *mut core::ffi::c_void
-}
-
-/// FFI destroy function for `MprisStatusMessage`.
-pub(crate) extern "C" fn destroy_mpris_status(ptr: *mut core::ffi::c_void) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = Box::from_raw(ptr as *mut MprisStatusMessage);
-        }
-    }
 }

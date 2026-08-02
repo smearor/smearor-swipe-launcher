@@ -11,7 +11,6 @@ use gtk4::LevelBar;
 use gtk4::Orientation;
 use gtk4::Overlay;
 use gtk4::Widget;
-use gtk4::gio;
 use gtk4::prelude::BoxExt;
 use gtk4::prelude::WidgetExt;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
@@ -60,7 +59,10 @@ pub fn build_percentage_widget(config: &PercentageWidgetConfig) -> PercentageWid
         DisplayMode::Bar => Orientation::Horizontal,
         DisplayMode::Gauge => Orientation::Vertical,
     };
-    let container = GtkBox::builder().orientation(container_orientation).spacing(4).build();
+    let container = GtkBox::builder()
+        .orientation(container_orientation)
+        .spacing(config.layout.spacing_or_default())
+        .build();
 
     let mut icon_image = None;
     if config.show_icon {
@@ -90,8 +92,8 @@ pub fn build_percentage_widget(config: &PercentageWidgetConfig) -> PercentageWid
                 .orientation(orientation)
                 .min_value(0.0)
                 .max_value(100.0)
-                .width_request(config.width)
-                .height_request(config.height)
+                .width_request(config.dimensions.width_or_default())
+                .height_request(config.dimensions.height_or_default())
                 .css_classes(["sysinfo-bar".to_string(), "sysinfo-normal".to_string()])
                 .build();
             container.append(&level_bar);
@@ -99,7 +101,7 @@ pub fn build_percentage_widget(config: &PercentageWidgetConfig) -> PercentageWid
             outer_widget = container.clone().upcast::<Widget>();
         }
         DisplayMode::Gauge => {
-            let size = config.width.max(config.height);
+            let size = config.dimensions.width_or_default().max(config.dimensions.height_or_default());
             let drawing_area = DrawingArea::builder()
                 .content_width(size)
                 .content_height(size)
@@ -133,12 +135,7 @@ pub fn build_percentage_widget(config: &PercentageWidgetConfig) -> PercentageWid
 pub fn build_icon_image(icon_name: &str, size: i32) -> Image {
     let image = if icon_name.starts_with("nf-") {
         if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(icon_name) {
-            let resource_path = format!("/com/nerd/icons/{}.svg", gtk_icon_name);
-            if gio::resources_lookup_data(&resource_path, gio::ResourceLookupFlags::NONE).is_ok() {
-                Image::from_resource(&resource_path)
-            } else {
-                Image::from_icon_name(&gtk_icon_name)
-            }
+            Image::from_icon_name(&gtk_icon_name)
         } else {
             Image::from_icon_name(icon_name)
         }
@@ -206,7 +203,7 @@ pub struct GaugeContainer {
 ///
 /// This is used by widgets that need a custom gauge drawing (e.g. network) and
 /// cannot reuse the single-value `build_percentage_widget` helper.
-pub fn build_gauge_container(size: i32, css_class: &str) -> GaugeContainer {
+pub fn build_gauge_container(size: i32, css_class: &str, spacing: i32) -> GaugeContainer {
     let drawing_area = DrawingArea::builder()
         .content_width(size)
         .content_height(size)
@@ -215,7 +212,7 @@ pub fn build_gauge_container(size: i32, css_class: &str) -> GaugeContainer {
 
     let content_box = GtkBox::builder()
         .orientation(Orientation::Vertical)
-        .spacing(4)
+        .spacing(spacing)
         .halign(Align::Center)
         .valign(Align::Center)
         .build();
@@ -389,4 +386,16 @@ pub fn format_duration_with_format(seconds: u64, format: &str) -> String {
     text = text.replace("{seconds}", &format!("{:02}", secs));
     text = text.replace("{value}", &format_duration(seconds));
     text
+}
+
+/// No-op fallback for sysinfo widgets (display-only, no default actions).
+pub struct NoOpFallback;
+
+impl smearor_swipe_launcher_plugin_api::DefaultFallback for NoOpFallback {
+    fn default_fallback(
+        &self,
+        _kind: &smearor_swipe_launcher_plugin_api::ActionKind,
+        _broadcaster: &smearor_swipe_launcher_plugin_api::MessageBroadcasterInner,
+    ) {
+    }
 }

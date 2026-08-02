@@ -7,11 +7,18 @@ members = [
     "model/audio",
     "model/clock",
     "model/hyprland",
+    "model/hyprland-shared",
+    "model/hyprland-dispatch",
+    "model/hyprland-status",
+    "model/hyprland-command",
     "model/http",
+    "model/instance-control",
+    "model/macropad",
     "model/mcp",
     "model/message",
     "model/mpris",
     "model/notifications",
+    "model/personalization",
     "model/plugin",
     "model/network",
     "model/power",
@@ -20,6 +27,7 @@ members = [
     "model/wallpaper",
     "model/voice_assistant",
     "model/weather",
+    "model/widget",
     "model/workspace",
     "mcp-server",
     "plugin-api",
@@ -31,6 +39,7 @@ members = [
     "plugins/notifications",
     "plugins/network",
     "plugins/power",
+    "plugins/render-utils",
     "plugins/sysinfo",
     "plugins/wallpaper",
     "plugins/weather",
@@ -44,7 +53,10 @@ members = [
     "services/mpris",
     "services/notifications",
     "services/network",
+    "services/personalization",
     "services/power",
+    "services/streamdeck",
+    "services/loupedeck",
     "services/sysinfo",
     "services/terminal_command",
     "services/voice_assistant",
@@ -60,11 +72,18 @@ default-members = [
     "model/audio",
     "model/clock",
     "model/hyprland",
+    "model/hyprland-shared",
+    "model/hyprland-dispatch",
+    "model/hyprland-status",
+    "model/hyprland-command",
     "model/http",
+    "model/instance-control",
+    "model/macropad",
     "model/mcp",
     "model/message",
     "model/mpris",
     "model/notifications",
+    "model/personalization",
     "model/plugin",
     "model/network",
     "model/power",
@@ -73,6 +92,7 @@ default-members = [
     "model/wallpaper",
     "model/voice_assistant",
     "model/weather",
+    "model/widget",
     "model/workspace",
     "mcp-server",
     "plugin-api",
@@ -84,6 +104,7 @@ default-members = [
     "plugins/notifications",
     "plugins/network",
     "plugins/power",
+    "plugins/render-utils",
     "plugins/sysinfo",
     "plugins/wallpaper",
     "plugins/weather",
@@ -97,7 +118,10 @@ default-members = [
     "services/mpris",
     "services/notifications",
     "services/network",
+    "services/personalization",
     "services/power",
+    "services/streamdeck",
+    "services/loupedeck",
     "services/sysinfo",
     "services/terminal_command",
     "services/voice_assistant",
@@ -116,7 +140,7 @@ authors = ["Andreas Schaeffer"]
 
 [workspace.dependencies]
 stabby = { version = "72.1", features = ["libloading"] }
-axum = { version = "0.8", features = ["tokio"] }
+axum = { version = "0.8", features = ["tokio", "ws"] }
 tower = { version = "0.5", default-features = false }
 tower-http = { version = "0.6", default-features = false, features = ["cors"] }
 async-stream = "0.3"
@@ -132,10 +156,12 @@ dirs = "6.0"
 freedesktop_entry_parser = "2.0"
 futures-util = "0.3"
 gtk4 = "0.11"
+shellexpand = "3.1"
 glib = "0.22"
 glib-build-tools = "0.22"
 gio = "0.22"
 gtk4-layer-shell = "0.8"
+hf-hub = "0.3"
 #hyprland = "0.3.13"
 hyprland = { git = "https://github.com/hyprland-community/hyprland-rs", branch = "master" }
 libpulse-binding = "2.30"
@@ -145,8 +171,10 @@ nerd_gtk_icons = "0.1.1"
 paste = "1.0"
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
+gguf = "0.1"
 serde_json = "1.0"
 sysinfo = { version = "0.39", default-features = false, features = ["component"] }
+text-processing-rs = { git = "https://github.com/FluidInference/text-processing-rs.git" }
 smearor-wrot-rotation = { version = "0.1", git = "https://github.com/smearor/smearor-wrot-rotation.git" }
 #smearor-wrot-rotation = { version = "0.1", path = "../smearor-wrot-rotation" }
 thiserror = "2.0"
@@ -158,7 +186,9 @@ uuid = { version = "1.23", features = ["v4"] }
 typed-builder = "0.23.2"
 nucleo-matcher = "0.3"
 moka = { version = "0.12", features = ["sync", "future"] }
+notify = "8"
 fastembed = "5.17"
+ndarray = "0.17"
 ort = { version = "=2.0.0-rc.12", default-features = true }
 rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = "0.4"
@@ -166,3 +196,19 @@ which = "8.0"
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
 zbus = "5"
+espeak-ng = { version = "0.1", features = ["bundled-data-de", "bundled-data-en"] }
+unicode-normalization = "0.1"
+oww-rs = "0.3"
+ringbuf = "0.4"
+ab_glyph = "0.2"
+imageproc = "0.25"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+resvg = "0.44"
+usvg = "0.44"
+strum = "0.28"
+strum_macros = "0.28"
+loupedeck-driver = { git = "https://github.com/aschaeffer/loupedeck-rs.git" }
+reqwest = { version = "0.13", features = ["json"] }
+ashpd = { version = "0.13", default-features = false, features = ["location", "settings", "tokio"] }
+iana-time-zone = "0.1"
+sys-locale = "0.3"

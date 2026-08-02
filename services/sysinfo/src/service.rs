@@ -1,14 +1,13 @@
 use crate::collector::CollectorState;
 use crate::config::SysinfoServiceConfig;
+use smearor_model_mcp::InvokePromptMessage;
 use smearor_model_mcp::InvokeResourceMessage;
-use smearor_model_mcp::InvokeResourceResponse;
 use smearor_model_mcp::InvokeToolMessage;
-use smearor_model_mcp::InvokeToolResponse;
-use smearor_model_mcp::RegisterResourceMessage;
-use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_PROMPT;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
@@ -18,9 +17,11 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::default_clone_payload;
+use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
 use smearor_sysinfo_model::BatteryStatusMessage;
 use smearor_sysinfo_model::CpuStatusMessage;
@@ -111,37 +112,7 @@ impl SysinfoService {
         Ok(service)
     }
 
-    fn register_mcp_capabilities(&self) {
-        let broadcaster = self.get_broadcaster();
-
-        let resources = [
-            ("sysinfo://cpu", "CPU Status", "Current CPU usage and temperature.", "application/json"),
-            (
-                "sysinfo://temperature-components",
-                "Temperature Components",
-                "Lists all available temperature components with label, id, current temperature, max and critical thresholds. Use this to find the correct component name for config filters.",
-                "application/json",
-            ),
-            ("sysinfo://memory", "Memory Status", "Current memory usage and available memory.", "application/json"),
-            ("sysinfo://battery", "Battery Status", "Current battery level and charging state.", "application/json"),
-            ("sysinfo://disks", "Disk Status", "Per-mount usage and disk throughput.", "application/json"),
-            ("sysinfo://network", "Network Status", "Inbound and outbound network throughput.", "application/json"),
-            ("sysinfo://uptime", "Uptime Status", "System uptime and load averages.", "application/json"),
-        ];
-        for (uri, name, description, mime_type) in resources {
-            let resource = RegisterResourceMessage::new(uri, name, description, mime_type);
-            broadcaster.broadcast_message_to_topic(resource);
-        }
-
-        let tool = RegisterToolMessage::new(
-            "sysinfo_refresh",
-            "Force an immediate refresh of all sysinfo metrics.",
-            r#"{ "type": "object", "properties": {} }"#,
-        );
-        broadcaster.broadcast_message_to_topic(tool);
-    }
-
-    fn send_response<T: TypedMessage + SharedMessage + Clone>(&self, message: T, sender_id: &str) {
+    pub(crate) fn send_response<T: TypedMessage + SharedMessage + Clone>(&self, message: T, sender_id: &str) {
         let payload_ptr = Box::into_raw(Box::new(message.clone())) as *mut core::ffi::c_void;
         let sender_id_string = sender_id.to_string();
         let topic = message.topic();
@@ -152,8 +123,8 @@ impl SysinfoService {
             topic: stabby::string::String::from(topic),
             type_id: T::TYPE_ID,
             payload: payload_ptr,
-            destroy_payload: Some(destroy_payload::<T>),
-            clone_payload: Some(clone_payload::<T>),
+            destroy_payload: Some(default_destroy_payload),
+            clone_payload: Some(default_clone_payload::<T>),
         };
         if let Some(context) = &self.core_context {
             debug!("sysinfo: calling context.send_message");
@@ -172,44 +143,6 @@ impl MessageHandler<FfiEnvelopePayload<SysinfoCommandMessage>> for SysinfoServic
                 let _ = self.command_sender.send(SysinfoCommandAction::Refresh);
             }
         }
-    }
-}
-
-impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for SysinfoService {
-    fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, sender_id: &str) {
-        debug!("sysinfo: InvokeToolMessage handler name={} sender_id={}", message.0.name, sender_id);
-        if message.0.name.to_string() != "sysinfo_refresh" {
-            debug!("sysinfo: InvokeToolMessage not sysinfo_refresh, ignoring");
-            return;
-        }
-        let _ = self.command_sender.send(SysinfoCommandAction::Refresh);
-        let correlation_id = message.0.correlation_id.to_string();
-        let response = InvokeToolResponse::success(&correlation_id, "Refresh triggered");
-        debug!("sysinfo: sending InvokeToolResponse correlation_id={}", correlation_id);
-        self.send_response(response, sender_id);
-    }
-}
-
-impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for SysinfoService {
-    fn handle_message(&self, message: FfiEnvelopePayload<InvokeResourceMessage>, sender_id: &str) {
-        debug!("sysinfo: InvokeResourceMessage handler uri={} sender_id={}", message.0.uri, sender_id);
-        let uri = message.0.uri.to_string();
-        let correlation_id = message.0.correlation_id.to_string();
-        let state = match self.latest_state.read() {
-            Ok(state) => state.clone(),
-            Err(_) => {
-                let response = InvokeResourceResponse::error(&correlation_id, "Failed to read sysinfo state");
-                self.send_response(response, sender_id);
-                return;
-            }
-        };
-        let result = serialize_resource_state(&uri, &state);
-        let response = match result {
-            Ok(contents) => InvokeResourceResponse::success(&correlation_id, &contents),
-            Err(error) => InvokeResourceResponse::error(&correlation_id, &error),
-        };
-        debug!("sysinfo: sending InvokeResourceResponse correlation_id={} uri={}", correlation_id, uri);
-        self.send_response(response, sender_id);
     }
 }
 
@@ -234,25 +167,26 @@ impl AsRef<Option<FfiCoreContext>> for SysinfoService {
     }
 }
 
-impl Service for SysinfoService {
+impl ServicePlugin for SysinfoService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
-                debug!("sysinfo: on_message topic={} type_id={}", envelope.topic, envelope.type_id);
-                debug!("sysinfo: expecting tool type_id={}", FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID);
-                debug!("sysinfo: expecting resource type_id={}", FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID);
+                trace!("sysinfo: on_message topic={} type_id={}", envelope.topic, envelope.type_id);
                 if envelope.type_id == FfiEnvelopePayload::<SysinfoCommandMessage>::TYPE_ID {
-                    debug!("sysinfo: handling command message");
+                    trace!("sysinfo: handling command message");
                     MessageHandler::<FfiEnvelopePayload<SysinfoCommandMessage>>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
-                    debug!("sysinfo: handling invoke tool message");
+                    trace!("sysinfo: handling invoke tool message");
                     MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
-                    debug!("sysinfo: handling invoke resource message");
+                    trace!("sysinfo: handling invoke resource message");
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.topic.to_string() == TOPIC_MCP_INVOKE_PROMPT && envelope.type_id == FfiEnvelopePayload::<InvokePromptMessage>::TYPE_ID {
+                    trace!("sysinfo: handling invoke prompt message");
+                    MessageHandler::<FfiEnvelopePayload<InvokePromptMessage>>::handle_envelope_message(self, envelope);
                 } else {
-                    debug!("sysinfo: unknown type_id");
+                    trace!("sysinfo: unknown type_id");
                 }
             }
         }
@@ -334,121 +268,12 @@ fn broadcast<T: Clone + MessageTopic + TypedMessage>(meta: &PluginMeta, core_con
         topic: stabby::string::String::from(T::topic()),
         type_id: T::TYPE_ID,
         payload: payload_ptr,
-        destroy_payload: Some(destroy_payload::<T>),
-        clone_payload: Some(clone_payload::<T>),
+        destroy_payload: Some(default_destroy_payload),
+        clone_payload: Some(default_clone_payload::<T>),
     };
 
     if let Some(context) = core_context {
         context.send_message(envelope);
-    }
-}
-
-extern "C" fn clone_payload<T: Clone>(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    let value = unsafe { &*(ptr as *const T) };
-    Box::into_raw(Box::new(value.clone())) as *mut core::ffi::c_void
-}
-
-extern "C" fn destroy_payload<T>(ptr: *mut core::ffi::c_void) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = Box::from_raw(ptr as *mut T);
-        }
-    }
-}
-
-fn serialize_resource_state(uri: &str, state: &LatestState) -> Result<String, String> {
-    match uri {
-        "sysinfo://cpu" => Ok(serde_json::json!({
-            "cpu_usage": state.cpu.cpu_usage,
-            "cpu_temperature": state.cpu.cpu_temperature.as_ref().copied(),
-            "temperature_components": state.cpu.temperature_components.iter().map(|c| serde_json::json!({
-                "label": c.label.to_string(),
-                "id": c.id.to_string(),
-                "temperature": c.temperature.as_ref().copied(),
-                "max_temperature": c.max_temperature.as_ref().copied(),
-                "critical_temperature": c.critical_temperature.as_ref().copied(),
-            })).collect::<Vec<_>>(),
-        })
-        .to_string()),
-        "sysinfo://temperature-components" => Ok(serde_json::json!({
-            "components": state.cpu.temperature_components.iter().map(|c| serde_json::json!({
-                "label": c.label.to_string(),
-                "id": c.id.to_string(),
-                "temperature": c.temperature.as_ref().copied(),
-                "max_temperature": c.max_temperature.as_ref().copied(),
-                "critical_temperature": c.critical_temperature.as_ref().copied(),
-            })).collect::<Vec<_>>(),
-        })
-        .to_string()),
-        "sysinfo://memory" => Ok(serde_json::json!({
-            "memory_usage": state.memory.memory_usage,
-            "memory_total": state.memory.memory_total,
-            "memory_used": state.memory.memory_used,
-            "memory_available": state.memory.memory_available,
-        })
-        .to_string()),
-        "sysinfo://battery" => Ok(serde_json::json!({
-            "level": state.battery.level,
-            "status": format!("{:?}", state.battery.status),
-        })
-        .to_string()),
-        "sysinfo://disks" => Ok(serde_json::json!({
-            "mounts": state.disks.mounts.iter().map(|disk| serde_json::json!({
-                "mount_point": disk.mount_point.to_string(),
-                "usage": disk.usage,
-                "total": disk.total,
-                "used": disk.used,
-                "available": disk.available,
-            })).collect::<Vec<_>>(),
-            "read_bytes_per_second": state.disks.read_bytes_per_second,
-            "write_bytes_per_second": state.disks.write_bytes_per_second,
-        })
-        .to_string()),
-        "sysinfo://network" => Ok(serde_json::json!({
-            "received_bytes_per_second": state.network.received_bytes_per_second,
-            "transmitted_bytes_per_second": state.network.transmitted_bytes_per_second,
-        })
-        .to_string()),
-        "sysinfo://uptime" => Ok(serde_json::json!({
-            "uptime_seconds": state.uptime.uptime_seconds,
-            "load_average_1_minute": state.uptime.load_average_1_minute,
-            "load_average_5_minute": state.uptime.load_average_5_minute,
-            "load_average_15_minute": state.uptime.load_average_15_minute,
-        })
-        .to_string()),
-        _ => Err(format!("Unknown resource uri: {}", uri)),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::LatestState;
-    use super::serialize_resource_state;
-
-    #[test]
-    fn serialize_cpu_resource_includes_usage() {
-        let mut state = LatestState::default();
-        state.cpu.cpu_usage = 42.5;
-        let json = serialize_resource_state("sysinfo://cpu", &state).expect("valid cpu resource");
-        assert!(json.contains("\"cpu_usage\":42.5"), "cpu_usage should be serialized: {}", json);
-    }
-
-    #[test]
-    fn serialize_memory_resource_includes_total() {
-        let mut state = LatestState::default();
-        state.memory.memory_total = 16_000_000_000;
-        let json = serialize_resource_state("sysinfo://memory", &state).expect("valid memory resource");
-        assert!(json.contains("\"memory_total\":16000000000"), "memory_total should be serialized: {}", json);
-    }
-
-    #[test]
-    fn serialize_resource_unknown_uri_returns_error() {
-        let state = LatestState::default();
-        let result = serialize_resource_state("sysinfo://unknown", &state);
-        assert!(result.is_err());
     }
 }
 

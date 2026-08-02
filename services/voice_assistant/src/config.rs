@@ -1,28 +1,103 @@
 use crate::gpu_detection::get_available_vram;
 use crate::gpu_detection::get_system_memory;
 use crate::gpu_detection::has_discrete_gpu;
-use crate::gpu_detection::hipblas_libraries_available;
-use crate::gpu_detection::is_amd_discrete_gpu;
 use crate::gpu_detection::vulkan_available;
 use serde::Deserialize;
+use smearor_voice_assistant_model::TtsConfig;
+use smearor_voice_assistant_model::xdg_models_dir;
+use std::str::FromStr;
 use tracing::debug;
 
-/// LLM backend selection for GPU acceleration.
-#[derive(Debug, Clone, PartialEq)]
-pub enum LlmBackend {
-    /// Automatic detection (Vulkan > HIPBLAS > CPU)
-    Auto,
-    /// Vulkan compute backend (universal GPU support)
-    Vulkan,
-    /// AMD ROCm/HIPBLAS backend (maximum performance for AMD GPUs)
-    Hipblas,
-    /// CPU-only backend (fallback)
-    Cpu,
+/// Default wake word detection threshold.
+pub const DEFAULT_WAKE_WORD_THRESHOLD: f32 = 0.1;
+
+/// Wake word model type for configuration.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+pub enum WakeWordModelType {
+    /// Built-in Alexa model.
+    #[default]
+    Alexa,
+    /// Built-in Hey Mycroft model.
+    HeyMycroft,
+    /// Custom ONNX model loaded from file.
+    Custom,
 }
 
-impl Default for LlmBackend {
+impl FromStr for WakeWordModelType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "alexa" => Ok(WakeWordModelType::Alexa),
+            "hey_mycroft" | "heymycroft" | "mycroft" => Ok(WakeWordModelType::HeyMycroft),
+            "custom" => Ok(WakeWordModelType::Custom),
+            _ => Err(format!("unknown wake word model '{s}', expected: Alexa, HeyMycroft, Custom")),
+        }
+    }
+}
+
+/// Configuration for wake word detection.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct WakeWordServiceConfig {
+    /// Whether wake word mode is enabled on startup.
+    pub auto_enable: bool,
+    /// Which wake word model to use.
+    pub model: WakeWordModelType,
+    /// Path to custom ONNX model file (only used when model is Custom).
+    pub model_path: String,
+    /// Detection threshold (0.0–1.0). Lower values are more sensitive.
+    pub threshold: f32,
+}
+
+impl Default for WakeWordServiceConfig {
     fn default() -> Self {
-        LlmBackend::Auto
+        Self {
+            auto_enable: false,
+            model: WakeWordModelType::default(),
+            model_path: String::new(),
+            threshold: DEFAULT_WAKE_WORD_THRESHOLD,
+        }
+    }
+}
+
+/// Default speech probability threshold for VAD trimming.
+pub const DEFAULT_VAD_THRESHOLD: f32 = 0.5;
+
+pub const DEFAULT_THREADS: i32 = 4;
+
+pub const DEFAULT_CONTEXT_SIZE: u32 = 4096;
+
+pub const DEFAULT_BATCH_SIZE: u32 = 512;
+
+/// Default max tokens for LLM generation. 512 is needed for tool-chaining with
+/// larger models (e.g. Gemma 4 E4B) that produce longer JSON responses during
+/// ReAct iterations.
+pub const DEFAULT_MAX_TOKENS: usize = 512;
+
+/// Default maximum tokens before context shifting is triggered.
+pub const DEFAULT_MAX_CONTEXT_TOKENS: usize = 4096;
+
+/// Default ratio of tokens to keep when shifting context (0.0–1.0).
+pub const DEFAULT_CONTEXT_KEEP_RATIO: f64 = 0.8;
+
+/// Default minimum tokens to preserve during context shifting.
+pub const DEFAULT_MIN_PRESERVE_TOKENS: usize = 512;
+
+/// Default number of trailing conversation messages to keep during rolling
+/// window trimming. Each tool call/response pair is 2 messages, so 6 keeps
+/// up to 3 tool-call/response pairs.
+pub const DEFAULT_ROLLING_WINDOW_KEEP_LAST: usize = 6;
+
+/// Estimate the model size in MB from the GGUF file on disk.
+/// Falls back to a conservative default if the file cannot be read.
+fn estimate_model_size_mb(model_path: &str) -> usize {
+    match std::fs::metadata(model_path) {
+        Ok(metadata) => (metadata.len() / (1024 * 1024)) as usize,
+        Err(e) => {
+            debug!("GPU auto-detection: cannot read model file '{}': {}, using default 2048 MB", model_path, e);
+            2048
+        }
     }
 }
 
@@ -40,26 +115,20 @@ pub enum DeviceType {
 /// GPU configuration for dynamic layer offloading.
 #[derive(Debug, Clone)]
 pub struct GpuConfig {
-    /// Selected backend for inference
-    pub backend: LlmBackend,
     /// GPU device type
     pub device_type: DeviceType,
     /// Available VRAM budget in MB
     pub vram_budget_mb: usize,
     /// Number of layers to offload to GPU (-1 = all layers)
     pub n_gpu_layers: i32,
-    /// Enable ROCm/HIPBLAS for AMD GPUs
-    pub enable_hipblas: bool,
 }
 
 impl Default for GpuConfig {
     fn default() -> Self {
         Self {
-            backend: LlmBackend::Auto,
             device_type: DeviceType::Cpu,
             vram_budget_mb: 0,
             n_gpu_layers: 0,
-            enable_hipblas: true,
         }
     }
 }
@@ -81,60 +150,41 @@ impl GpuConfig {
     }
 
     /// Detect optimal GPU configuration automatically.
-    pub fn detect_optimal_config() -> Self {
-        Self::detect_optimal_config_with_hipblas(true)
-    }
+    /// `model_path` is used to estimate the GGUF file size for accurate
+    /// GPU layer offloading calculation instead of assuming a fixed size.
+    ///
+    /// The actual GPU backend (Vulkan, HIPBLAS, CPU) is selected at compile
+    /// time via Cargo features. This function only detects device type and
+    /// calculates VRAM budget and layer offloading count.
+    pub fn detect_optimal_config(model_path: &str) -> Self {
+        let model_size_mb = estimate_model_size_mb(model_path);
+        debug!("GPU auto-detection: model size estimated at {} MB", model_size_mb);
 
-    /// Detect optimal GPU configuration with HIPBLAS control.
-    pub fn detect_optimal_config_with_hipblas(enable_hipblas: bool) -> Self {
-        // GPU-Erkennung mit AMD-spezifischer Optimierung
         if vulkan_available() {
-            // GPU-Typ erkennen und VRAM budgetieren
             if has_discrete_gpu() {
-                let vram_mb = get_available_vram().saturating_sub(512); // 512MB Reserve
-
-                // AMD dGPU: Prüfe ROCm/HIPBLAS Verfügbarkeit für maximale Performance
-                if is_amd_discrete_gpu() && enable_hipblas && hipblas_libraries_available() {
-                    debug!("AMD dGPU detected with ROCm/HIPBLAS support - using HIPBLAS backend");
-                    GpuConfig {
-                        backend: LlmBackend::Hipblas,
-                        device_type: DeviceType::DiscreteGpu,
-                        vram_budget_mb: vram_mb,
-                        n_gpu_layers: Self::calculate_optimal_layers(2048, vram_mb) as i32,
-                        enable_hipblas: true,
-                    }
-                } else {
-                    debug!("dGPU detected but no ROCm/HIPBLAS or disabled - falling back to Vulkan");
-                    GpuConfig {
-                        backend: LlmBackend::Vulkan,
-                        device_type: DeviceType::DiscreteGpu,
-                        vram_budget_mb: vram_mb,
-                        n_gpu_layers: Self::calculate_optimal_layers(2048, vram_mb) as i32,
-                        enable_hipblas: false,
-                    }
+                let vram_mb = get_available_vram().saturating_sub(512);
+                debug!("dGPU detected - {} MB VRAM available", vram_mb);
+                GpuConfig {
+                    device_type: DeviceType::DiscreteGpu,
+                    vram_budget_mb: vram_mb,
+                    n_gpu_layers: Self::calculate_optimal_layers(model_size_mb, vram_mb) as i32,
                 }
             } else {
-                // iGPU: Immer Vulkan (perfekte Universallösung)
                 let system_ram_mb = get_system_memory();
                 let vram_mb = system_ram_mb / 4;
-                debug!("iGPU detected - using Vulkan backend");
+                debug!("iGPU detected - using shared system memory");
                 GpuConfig {
-                    backend: LlmBackend::Vulkan,
                     device_type: DeviceType::IntegratedGpu,
                     vram_budget_mb: vram_mb,
-                    n_gpu_layers: Self::calculate_optimal_layers(2048, vram_mb) as i32,
-                    enable_hipblas: false,
+                    n_gpu_layers: Self::calculate_optimal_layers(model_size_mb, vram_mb) as i32,
                 }
             }
         } else {
-            // CPU Fallback
             debug!("No GPU acceleration available - using CPU backend");
             GpuConfig {
-                backend: LlmBackend::Cpu,
                 device_type: DeviceType::Cpu,
                 vram_budget_mb: 0,
                 n_gpu_layers: 0,
-                enable_hipblas: false,
             }
         }
     }
@@ -152,14 +202,20 @@ pub struct ContextConfig {
     pub context_keep_ratio: f64,
     /// Minimum tokens to preserve (e.g. system prompt) during shifting.
     pub min_preserve_tokens: usize,
+    /// Number of trailing conversation messages to always keep during rolling
+    /// window trimming. Each tool call/response pair is 2 messages, so 6 keeps
+    /// up to 3 tool-call/response pairs. The context message (index 0) is
+    /// always preserved in addition to this count.
+    pub rolling_window_keep_last: usize,
 }
 
 impl Default for ContextConfig {
     fn default() -> Self {
         Self {
-            max_context_tokens: 4096,
-            context_keep_ratio: 0.8,
-            min_preserve_tokens: 512,
+            max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
+            context_keep_ratio: DEFAULT_CONTEXT_KEEP_RATIO,
+            min_preserve_tokens: DEFAULT_MIN_PRESERVE_TOKENS,
+            rolling_window_keep_last: DEFAULT_ROLLING_WINDOW_KEEP_LAST,
         }
     }
 }
@@ -167,7 +223,7 @@ impl Default for ContextConfig {
 /// Configuration for the LLM inference engine.
 #[derive(Debug, Clone)]
 pub struct LlmConfig {
-    /// Path to the GGUF model file (e.g., "models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf").
+    /// Path to the GGUF model file (e.g., "$XDG_DATA_HOME/smearor/models/qwen2.5-1.5b-instruct-q4_k_m.gguf").
     pub model_path: String,
     /// Number of CPU threads for inference.
     pub n_threads: i32,
@@ -194,11 +250,11 @@ pub struct LlmConfig {
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            model_path: "models/qwen2.5-1.5b-instruct-q4_k_m.gguf".to_string(),
-            n_threads: 4,
-            n_ctx: 4096,
-            n_batch: 2048,
-            max_tokens: 256,
+            model_path: format!("{}/qwen2.5-1.5b-instruct-q4_k_m.gguf", xdg_models_dir()),
+            n_threads: DEFAULT_THREADS,
+            n_ctx: DEFAULT_CONTEXT_SIZE,
+            n_batch: DEFAULT_BATCH_SIZE,
+            max_tokens: DEFAULT_MAX_TOKENS,
             temperature: 0.7,
             top_k: 40,
             top_p: 0.95,
@@ -213,14 +269,26 @@ impl Default for LlmConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct VoiceAssistantServiceConfig {
-    /// Path to the Whisper GGML model file (e.g., "models/ggml-tiny.bin").
+    /// Path to the Whisper GGML model file (e.g., "$XDG_DATA_HOME/smearor/models/ggml-tiny.bin").
     pub whisper_model_path: String,
-    /// Path to the LLM GGUF model file (e.g., "models/qwen2.5-1.5b-instruct-q4_k_m.gguf").
+    /// HuggingFace repo ID for auto-download of the Whisper model (optional).
+    /// If empty, a hardcoded fallback mapping is used.
+    #[serde(default)]
+    pub whisper_model_repo: String,
+    /// Path to the LLM GGUF model file (e.g., "$XDG_DATA_HOME/smearor/models/qwen2.5-1.5b-instruct-q4_k_m.gguf").
     pub llm_model_path: String,
+    /// HuggingFace repo ID for auto-download of the LLM model (optional).
+    /// If empty, a hardcoded fallback mapping is used.
+    #[serde(default)]
+    pub llm_model_repo: String,
     /// Number of CPU threads for LLM inference.
     pub llm_threads: u32,
     /// Maximum context window size in tokens for the LLM.
     pub llm_context_size: u32,
+    ///
+    pub llm_batch_size: u32,
+    /// Maximum number of tokens to generate per LLM response.
+    pub llm_max_tokens: usize,
     /// Maximum number of ReAct loop iterations before giving up.
     pub max_react_iterations: u32,
     /// Sampling temperature for the LLM (0.0 = deterministic, 1.0 = creative).
@@ -239,31 +307,31 @@ pub struct VoiceAssistantServiceConfig {
     pub auto_enable: bool,
     /// Maximum character budget for the tool catalog in the system prompt.
     pub max_catalog_chars: usize,
-    /// System prompt template (stable, no dynamic content).
-    /// If not set, a default prompt is used.
-    pub system_prompt: Option<String>,
     /// Maximum number of conversation messages to retain in short-term memory.
     pub max_history_messages: usize,
     /// Whether to inject entity states into the context message.
     pub inject_entity_states: bool,
     /// Path to the SQLite database file for long-term memory.
     pub memory_db_path: String,
-    /// Maximum number of tools to inject into the context message after nucleo filtering.
+    /// Maximum number of tools to inject into the context message after semantic selection.
     pub max_tools_in_prompt: usize,
+    /// Maximum number of resources to inject into the context message after semantic selection.
+    pub max_resources_in_prompt: usize,
+    /// Maximum number of prompts to inject into the context message after semantic selection.
+    pub max_prompts_in_prompt: usize,
     /// Whether to inject semantically recalled facts into the context message.
     pub inject_long_term_facts: bool,
     /// Number of facts to recall via fastembed for context message injection.
     pub max_recalled_facts: usize,
     /// Embedding model to use for semantic memory.
     pub embedding_model: String,
+    /// Minimum cosine similarity for a tool to be included in the prompt.
+    /// Tools below this threshold are excluded even if in top-N.
+    pub tool_selection_threshold: f32,
     /// Fraction of n_ctx at which the session auto-resets.
     pub context_overflow_threshold: f32,
     /// Whether to enable MCP tool registration for this service.
     pub mcp_enabled: bool,
-    /// LLM backend selection (auto, vulkan, hipblas, cpu)
-    pub llm_backend: String,
-    /// Enable ROCm/HIPBLAS for AMD GPUs
-    pub enable_hipblas: bool,
     /// GPU layer offloading (-1 = all layers, 0 = CPU only)
     pub n_gpu_layers: i32,
     /// Maximum tokens before context shifting is triggered.
@@ -275,40 +343,77 @@ pub struct VoiceAssistantServiceConfig {
     /// Minimum tokens to preserve during context shifting (e.g. system prompt).
     /// The shifter will never remove tokens below this threshold.
     pub min_preserve_tokens: usize,
+    /// Number of trailing conversation messages to always keep during rolling
+    /// window trimming. Each tool call/response pair is 2 messages, so 6 keeps
+    /// up to 3 tool-call/response pairs. The context message (index 0) is
+    /// always preserved in addition to this count.
+    pub rolling_window_keep_last: usize,
+    /// Whether to use GBNF grammar enforcement to constrain LLM output to valid
+    /// ReAct JSON format (`{"tool": ...}` or `{"final_answer": ...}`).
+    /// Disable if the GPU backend crashes with grammar samplers.
+    pub use_grammar: bool,
+    /// Whether to enable Silero VAD post-processing to trim non-speech
+    /// segments from captured audio before Whisper transcription.
+    pub vad_enabled: bool,
+    /// Path to the Silero VAD ONNX model file (e.g., "$XDG_DATA_HOME/smearor/models/silero_vad.onnx").
+    pub vad_model_path: String,
+    /// HuggingFace repo ID for auto-download of the VAD model (optional).
+    /// If empty, a hardcoded fallback mapping is used.
+    #[serde(default)]
+    pub vad_model_repo: String,
+    /// Speech probability threshold (0.0–1.0) for VAD trimming.
+    /// Frames with probability below this value are considered non-speech.
+    pub vad_threshold: f32,
+    /// TTS (Text-to-Speech) configuration.
+    pub tts: TtsConfig,
+    /// Wake word detection configuration.
+    pub wake_word: WakeWordServiceConfig,
 }
 
 impl Default for VoiceAssistantServiceConfig {
     fn default() -> Self {
         Self {
-            whisper_model_path: "models/ggml-tiny.bin".to_string(),
-            llm_model_path: "models/qwen2.5-1.5b-instruct-q4_k_m.gguf".to_string(),
-            llm_threads: 4,
-            llm_context_size: 4096,
+            whisper_model_path: format!("{}/ggml-tiny.bin", xdg_models_dir()),
+            whisper_model_repo: String::new(),
+            llm_model_path: format!("{}/qwen2.5-1.5b-instruct-q4_k_m.gguf", xdg_models_dir()),
+            llm_model_repo: String::new(),
+            llm_threads: DEFAULT_THREADS as u32,
+            llm_context_size: DEFAULT_CONTEXT_SIZE,
+            llm_batch_size: DEFAULT_BATCH_SIZE,
+            llm_max_tokens: DEFAULT_MAX_TOKENS,
             max_react_iterations: 8,
             llm_temperature: 0.1,
             audio_sample_rate: 16000,
             audio_channels: 1,
-            max_recording_seconds: 30,
+            max_recording_seconds: 10,
             silence_threshold_seconds: 1.5,
             language: "en".to_string(),
             auto_enable: false,
             max_catalog_chars: 4000,
-            system_prompt: None,
             max_history_messages: 10,
             inject_entity_states: true,
             memory_db_path: "~/.local/share/smearor/memory.db".to_string(),
             max_tools_in_prompt: 20,
+            max_resources_in_prompt: 10,
+            max_prompts_in_prompt: 5,
             inject_long_term_facts: true,
             max_recalled_facts: 3,
             embedding_model: "bge-small-en-v1.5-q".to_string(),
+            tool_selection_threshold: 0.3,
             context_overflow_threshold: 0.8,
             mcp_enabled: true,
-            llm_backend: "auto".to_string(),
-            enable_hipblas: true,
             n_gpu_layers: -1,
-            max_context_tokens: 4096,
-            context_keep_ratio: 0.8,
-            min_preserve_tokens: 512,
+            max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
+            context_keep_ratio: DEFAULT_CONTEXT_KEEP_RATIO,
+            min_preserve_tokens: DEFAULT_MIN_PRESERVE_TOKENS,
+            rolling_window_keep_last: DEFAULT_ROLLING_WINDOW_KEEP_LAST,
+            use_grammar: true,
+            vad_enabled: true,
+            vad_model_path: format!("{}/silero_vad.onnx", xdg_models_dir()),
+            vad_model_repo: String::new(),
+            vad_threshold: DEFAULT_VAD_THRESHOLD,
+            tts: TtsConfig::default(),
+            wake_word: WakeWordServiceConfig::default(),
         }
     }
 }
@@ -316,42 +421,20 @@ impl Default for VoiceAssistantServiceConfig {
 impl VoiceAssistantServiceConfig {
     /// Builds an `LlmConfig` from the service configuration.
     pub fn to_llm_config(&self) -> LlmConfig {
-        // Parse backend string
-        let backend = match self.llm_backend.as_str() {
-            "auto" => LlmBackend::Auto,
-            "vulkan" => LlmBackend::Vulkan,
-            "hipblas" => LlmBackend::Hipblas,
-            "cpu" => LlmBackend::Cpu,
-            _ => {
-                debug!("Unknown backend '{}', falling back to auto", self.llm_backend);
-                LlmBackend::Auto
-            }
-        };
+        // GPU backend is selected at compile time via Cargo features.
+        // Auto-detect device type and VRAM budget for layer offloading.
+        let mut gpu_config = GpuConfig::detect_optimal_config(&self.llm_model_path);
 
-        // Create GPU configuration
-        let mut gpu_config = if backend == LlmBackend::Auto {
-            GpuConfig::detect_optimal_config_with_hipblas(self.enable_hipblas)
-        } else {
-            GpuConfig {
-                backend: backend.clone(),
-                device_type: DeviceType::Cpu, // Will be detected
-                vram_budget_mb: 0,
-                n_gpu_layers: self.n_gpu_layers,
-                enable_hipblas: self.enable_hipblas,
-            }
-        };
-
-        // Override n_gpu_layers if explicitly set
-        if self.n_gpu_layers != -1 {
-            gpu_config.n_gpu_layers = self.n_gpu_layers;
-        }
+        // Always apply explicit n_gpu_layers override from config.
+        // -1 means "all layers on GPU" and must be respected, not skipped.
+        gpu_config.n_gpu_layers = self.n_gpu_layers;
 
         LlmConfig {
             model_path: self.llm_model_path.clone(),
             n_threads: self.llm_threads as i32,
             n_ctx: self.llm_context_size,
-            n_batch: 2048,
-            max_tokens: 256,
+            n_batch: self.llm_batch_size,
+            max_tokens: self.llm_max_tokens,
             temperature: self.llm_temperature,
             top_k: 40,
             top_p: 0.95,
@@ -361,6 +444,36 @@ impl VoiceAssistantServiceConfig {
                 max_context_tokens: self.max_context_tokens,
                 context_keep_ratio: self.context_keep_ratio,
                 min_preserve_tokens: self.min_preserve_tokens,
+                rolling_window_keep_last: self.rolling_window_keep_last,
+            },
+        }
+    }
+
+    /// Builds an `LlmConfig` from the service configuration with a different model path.
+    /// Used for runtime model switching via MCP tool.
+    /// When `n_ctx_override` or `max_tokens_override` are provided, they replace the
+    /// config defaults — useful when a larger model needs a smaller context window
+    /// to fit the KV cache in VRAM.
+    pub fn to_llm_config_with_model(&self, model_path: &str, n_ctx_override: Option<u32>, max_tokens_override: Option<usize>) -> LlmConfig {
+        let mut gpu_config = GpuConfig::detect_optimal_config(model_path);
+        gpu_config.n_gpu_layers = self.n_gpu_layers;
+
+        LlmConfig {
+            model_path: model_path.to_string(),
+            n_threads: self.llm_threads as i32,
+            n_ctx: n_ctx_override.unwrap_or(self.llm_context_size),
+            n_batch: self.llm_batch_size,
+            max_tokens: max_tokens_override.unwrap_or(self.llm_max_tokens),
+            temperature: self.llm_temperature,
+            top_k: 40,
+            top_p: 0.95,
+            context_overflow_threshold: self.context_overflow_threshold,
+            gpu_config,
+            context_config: ContextConfig {
+                max_context_tokens: self.max_context_tokens,
+                context_keep_ratio: self.context_keep_ratio,
+                min_preserve_tokens: self.min_preserve_tokens,
+                rolling_window_keep_last: self.rolling_window_keep_last,
             },
         }
     }

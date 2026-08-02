@@ -1,4 +1,5 @@
 use crate::area::area_manager::AreaManager;
+use crate::area::backend::AreaBackend;
 use smearor_model_area::AddAreaMessage;
 use smearor_model_area::CloseAreaMessage;
 use smearor_model_area::OpenAreaMessage;
@@ -10,7 +11,7 @@ use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageRouter;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 
-impl MessageRouter for AreaManager {
+impl<B: AreaBackend> MessageRouter for AreaManager<B> {
     fn route(&self, envelope: &FfiEnvelope) {
         if envelope.type_id == FfiEnvelopePayload::<AddAreaMessage>::TYPE_ID
             && AcceptTopic::<FfiEnvelopePayload<AddAreaMessage>>::accept_topic(self, envelope.topic.as_str())
@@ -39,7 +40,7 @@ impl MessageRouter for AreaManager {
     }
 }
 
-impl<T> AcceptTopic<T> for AreaManager {
+impl<T, B: AreaBackend> AcceptTopic<T> for AreaManager<B> {
     fn accept_topic(&self, topic: &str) -> bool {
         topic.starts_with("area.")
     }

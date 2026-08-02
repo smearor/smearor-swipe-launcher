@@ -1,8 +1,11 @@
-mod json_converters;
+mod mcp;
 mod messages;
 mod topics;
 
-pub use json_converters::register_json_converters;
+use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+
+pub use mcp::resources::WallpaperMcpResources;
+pub use mcp::tools::WallpaperMcpTools;
 pub use messages::app_config::AppConfig;
 pub use messages::command::WallpaperCommandAction;
 pub use messages::command::WallpaperCommandMessage;
@@ -17,3 +20,19 @@ pub use messages::wallpaper_type::WallpaperType;
 pub use messages::wallpaper_type::wallpaper_type_icon;
 pub use topics::TOPIC_COMMAND;
 pub use topics::TOPIC_STATUS;
+
+smearor_swipe_launcher_plugin_api::impl_json_convertible!(WallpaperCommandMessageConverter, WallpaperCommandMessage, |json: serde_json::Value| {
+    serde_json::from_value(json).unwrap_or_default()
+});
+
+smearor_swipe_launcher_plugin_api::impl_json_convertible!(WallpaperStatusMessageConverter, WallpaperStatusMessage, |json: serde_json::Value| {
+    serde_json::from_value(json).unwrap_or_default()
+});
+
+/// Register all JSON converter implementations for wallpaper messages.
+///
+/// Call this once during plugin initialisation.
+pub fn register_json_converters(context: Option<FfiCoreContext>) {
+    WallpaperCommandMessageConverter::register_in_host(context);
+    WallpaperStatusMessageConverter::register_in_host(context);
+}

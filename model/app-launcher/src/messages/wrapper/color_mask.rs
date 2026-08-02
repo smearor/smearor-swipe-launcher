@@ -30,7 +30,7 @@ pub struct ColorMaskConfigFile {
 
 /// ABI-stable version of `ColorMaskConfigFile` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ColorMaskConfigFileStabby {
     pub background_color: stabby::option::Option<stabby::string::String>,
     pub color_mask: stabby::option::Option<stabby::string::String>,

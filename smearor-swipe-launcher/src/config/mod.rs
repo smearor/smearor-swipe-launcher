@@ -1,4 +1,5 @@
 pub mod area;
+pub mod discovery;
 pub mod error;
 pub mod launcher;
 pub mod layer;
@@ -6,3 +7,4 @@ pub mod layout;
 pub mod merge;
 pub mod rotation;
 pub mod services;
+pub mod watcher;

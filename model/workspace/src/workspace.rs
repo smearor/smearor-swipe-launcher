@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -11,7 +13,7 @@ pub const TOPIC_WORKSPACE_CHANGED: &str = "compositor::workspace_changed";
 /// Launcher instances use this to re-evaluate layout profiles with
 /// `LayoutTrigger::Workspace` or `MonitorIndexWorkspace`.
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorkspaceChangedEvent {
     /// The workspace name or number that became active.
     pub workspace_name: stabby::string::String,
@@ -45,7 +47,7 @@ pub const TOPIC_WORKSPACE_LIFECYCLE: &str = "compositor::workspace_lifecycle";
 /// Type of workspace lifecycle event.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WorkspaceLifecycleType {
     /// Workspace was created.
     #[default]
@@ -59,7 +61,7 @@ pub enum WorkspaceLifecycleType {
 /// Useful for widgets that display workspace lists or for the launcher to track
 /// available workspaces.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorkspaceLifecycleEvent {
     /// The workspace name or number.
     pub workspace_name: stabby::string::String,

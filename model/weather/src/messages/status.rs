@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -10,12 +12,14 @@ use crate::TOPIC_STATUS;
 
 /// Complete weather status message broadcast by the service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WeatherStatusMessage {
     /// Latitude of the configured location.
     pub latitude: f64,
     /// Longitude of the configured location.
     pub longitude: f64,
+    /// Elevation above sea level in metres.
+    pub elevation: stabby::option::Option<f32>,
     /// Current weather conditions.
     pub current: CurrentWeather,
     /// Daily forecast for today and tomorrow.

@@ -1,6 +1,9 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 /// Current weather conditions snapshot.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CurrentWeather {
     /// Air temperature at 2 m above ground in degrees Celsius.
     pub temperature: stabby::option::Option<f32>,
@@ -20,6 +23,14 @@ pub struct CurrentWeather {
     pub weather_code: stabby::option::Option<u16>,
     /// Whether it is currently day or night.
     pub is_day: stabby::option::Option<bool>,
+    /// Showers amount in mm.
+    pub showers: stabby::option::Option<f32>,
+    /// Snowfall amount in cm.
+    pub snowfall: stabby::option::Option<f32>,
+    /// Rain amount in mm.
+    pub rain: stabby::option::Option<f32>,
+    /// Total precipitation amount in mm.
+    pub precipitation: stabby::option::Option<f32>,
 }
 
 impl CurrentWeather {

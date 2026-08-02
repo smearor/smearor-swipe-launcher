@@ -1,70 +1,73 @@
 use serde::Deserialize;
-use serde_json::Value;
+use smearor_swipe_launcher_plugin_api::ActionBindings;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DispatchableBinding;
+use smearor_swipe_launcher_plugin_api::WidgetDimensions;
+use smearor_swipe_launcher_plugin_api::WidgetIcon;
+use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMode;
+use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use typed_builder::TypedBuilder;
 
-pub const DEFAULT_FORMAT: &str = "[hour]:[minute]:[second]";
-
-pub const DEFAULT_FORMAT_2: &str = "[day].[month].[year]";
-
-pub const DEFAULT_WIDTH: i32 = 100;
-
+/// Configuration for the clock widget.
 #[derive(Debug, Clone, Deserialize, TypedBuilder)]
 #[serde(default)]
 pub struct ClockConfig {
-    /// The date time format.
-    #[builder(default = DEFAULT_FORMAT.to_string())]
-    pub(crate) format: String,
-
-    /// The date time format.
-    #[builder(default)]
-    pub(crate) format_2: Option<String>,
-
-    /// The timezone..
+    /// The timezone (e.g. "local", "utc"). Defaults to local time.
     #[builder(default, setter(into))]
     pub(crate) timezone: Option<String>,
-
-    /// The width of the widget.
-    #[builder(default, setter(into))]
-    pub(crate) width: Option<i32>,
-
+    /// Widget dimensions (width, height) for GTK layout.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) dimensions: WidgetDimensions,
+    /// Widget icon configuration (icon_size, icon_only).
+    /// For the clock widget, `icon_size` controls the font size of the time display.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) icon_config: WidgetIcon,
+    /// Text color configuration (main_text_color, info_text_color).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) text_colors: WidgetTextColors,
+    /// Widget layout mode (compact or wide).
+    /// Compact: shows HH:MM. Wide: shows HH:MM:SS.
+    #[serde(default)]
+    pub(crate) mode: WidgetMode,
     /// The background color of the widget.
     #[builder(default, setter(into))]
     pub(crate) background_color: Option<String>,
-
-    /// Message topic for single-click
+    /// Action bindings for all input triggers.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub actions: ActionBindings,
+    /// Widget layout (spacing) for GTK container.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) layout: WidgetLayout,
+    /// Human-readable description of what the clock widget does.
     #[serde(default)]
-    pub click_topic: Option<String>,
+    pub description: Option<String>,
+}
 
-    /// Message payload for single-click (JSON/TOML)
-    #[serde(default)]
-    pub click_payload: Option<Value>,
-
-    /// Message topic for long-press
-    #[serde(default)]
-    pub longpress_topic: Option<String>,
-
-    /// Message payload for long-press (JSON/TOML)
-    #[serde(default)]
-    pub longpress_payload: Option<Value>,
-
-    /// Spacing between child widgets inside the clock widget.
-    #[serde(default)]
-    pub spacing: i32,
+impl ClockConfig {
+    /// Returns the binding for the given action kind as a `&dyn DispatchableBinding`.
+    pub fn binding_for_kind(&self, kind: ActionKind) -> &dyn DispatchableBinding {
+        self.actions.binding_for_kind(kind)
+    }
 }
 
 impl Default for ClockConfig {
     fn default() -> Self {
         Self {
-            format: DEFAULT_FORMAT.to_string(),
-            format_2: None,
             timezone: None,
-            width: None,
+            dimensions: WidgetDimensions::default(),
+            icon_config: WidgetIcon::default(),
+            text_colors: WidgetTextColors::default(),
+            mode: WidgetMode::default(),
             background_color: None,
-            click_topic: None,
-            click_payload: None,
-            longpress_topic: None,
-            longpress_payload: None,
-            spacing: 0,
+            actions: ActionBindings::default(),
+            layout: WidgetLayout::default(),
+            description: None,
         }
     }
 }

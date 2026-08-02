@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -9,7 +11,7 @@ pub const TOPIC_STATUS: &str = "service.terminal_command.status";
 /// Status of a tracked terminal command.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum TerminalCommandStatus {
     /// The command has been spawned and is still active.
     #[default]
@@ -21,7 +23,7 @@ pub enum TerminalCommandStatus {
 }
 
 /// Status broadcast message published by the terminal command service.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TerminalCommandStatusMessage {
     /// The configured command identifier.
     pub command_id: String,
@@ -33,7 +35,7 @@ pub struct TerminalCommandStatusMessage {
 
 /// ABI-stable version of `TerminalCommandStatusMessage` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TerminalCommandStatusMessageStabby {
     pub command_id: stabby::string::String,
     pub status: TerminalCommandStatus,

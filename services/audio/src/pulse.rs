@@ -18,7 +18,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
-use tracing::debug;
 use tracing::error;
 use tracing::trace;
 
@@ -113,7 +112,7 @@ pub async fn run_pulse_async(
             };
             if now.duration_since(*last) > Duration::from_millis(100) {
                 *last = now;
-                debug!("PulseAudio sink event detected, triggering status refresh");
+                trace!("PulseAudio sink event detected, triggering status refresh");
                 let _ = command_sender_clone.send(PulseCommand::RefreshStatus);
             }
         }
@@ -130,13 +129,13 @@ pub async fn run_pulse_async(
         let command = tokio::time::timeout(Duration::from_millis(50), command_receiver.recv()).await;
         match command {
             Ok(Some(PulseCommand::VolumeUp)) => {
-                debug!("Command Receiver: Volume up command received");
+                trace!("Command Receiver: Volume up command received");
                 if let Ok(s) = pulse_state.lock() {
                     if let Some(ref name) = s.default_sink_name {
                         let new_vol = (s.volume + 0.05).min(1.0);
                         let mut cv = ChannelVolumes::default();
                         cv.set(s.channels, Volume((Volume::NORMAL.0 as f32 * new_vol) as u32));
-                        debug!("Command Receiver: set_sink_volume_by_name {name} to {new_vol}");
+                        trace!("Command Receiver: set_sink_volume_by_name {name} to {new_vol}");
                         introspect.set_sink_volume_by_name(name, &cv, Some(Box::new(|_| {})));
                     }
                 }
@@ -145,13 +144,13 @@ pub async fn run_pulse_async(
                 }
             }
             Ok(Some(PulseCommand::VolumeDown)) => {
-                debug!("Command Receiver: Volume down command received");
+                trace!("Command Receiver: Volume down command received");
                 if let Ok(s) = pulse_state.lock() {
                     if let Some(ref name) = s.default_sink_name {
                         let new_vol = (s.volume - 0.05).max(0.0);
                         let mut cv = ChannelVolumes::default();
                         cv.set(s.channels, Volume((Volume::NORMAL.0 as f32 * new_vol) as u32));
-                        debug!("Command Receiver: set_sink_volume_by_name {name} to {new_vol}");
+                        trace!("Command Receiver: set_sink_volume_by_name {name} to {new_vol}");
                         introspect.set_sink_volume_by_name(name, &cv, Some(Box::new(|_| {})));
                     }
                 }
@@ -160,13 +159,13 @@ pub async fn run_pulse_async(
                 }
             }
             Ok(Some(PulseCommand::SetVolume(volume))) => {
-                debug!("Command Receiver: Set volume command received");
+                trace!("Command Receiver: Set volume command received");
                 if let Ok(s) = pulse_state.lock() {
                     if let Some(ref name) = s.default_sink_name {
                         let new_vol = volume.clamp(0.0, 1.0);
                         let mut cv = ChannelVolumes::default();
                         cv.set(s.channels, Volume((Volume::NORMAL.0 as f32 * new_vol) as u32));
-                        debug!("Command Receiver: set_sink_volume_by_name {name} to {new_vol}");
+                        trace!("Command Receiver: set_sink_volume_by_name {name} to {new_vol}");
                         introspect.set_sink_volume_by_name(name, &cv, Some(Box::new(|_| {})));
                     }
                 }
@@ -175,10 +174,10 @@ pub async fn run_pulse_async(
                 }
             }
             Ok(Some(PulseCommand::ToggleMute)) => {
-                debug!("Command Receiver: toggle mute command received");
+                trace!("Command Receiver: toggle mute command received");
                 if let Ok(s) = pulse_state.lock() {
                     if let Some(ref name) = s.default_sink_name {
-                        debug!("Command Receiver: set_sink_mute_by_name {name} to {}", !s.mute);
+                        trace!("Command Receiver: set_sink_mute_by_name {name} to {}", !s.mute);
                         introspect.set_sink_mute_by_name(name, !s.mute, Some(Box::new(|_| {})));
                     }
                 }
@@ -187,10 +186,10 @@ pub async fn run_pulse_async(
                 }
             }
             Ok(Some(PulseCommand::Mute)) => {
-                debug!("Command Receiver: mute command received");
+                trace!("Command Receiver: mute command received");
                 if let Ok(s) = pulse_state.lock() {
                     if let Some(ref name) = s.default_sink_name {
-                        debug!("Command Receiver: set_sink_mute_by_name {name} to {}", true);
+                        trace!("Command Receiver: set_sink_mute_by_name {name} to {}", true);
                         introspect.set_sink_mute_by_name(name, true, Some(Box::new(|_| {})));
                     }
                 }
@@ -199,10 +198,10 @@ pub async fn run_pulse_async(
                 }
             }
             Ok(Some(PulseCommand::Unmute)) => {
-                debug!("Command Receiver: unmute command received");
+                trace!("Command Receiver: unmute command received");
                 if let Ok(s) = pulse_state.lock() {
                     if let Some(ref name) = s.default_sink_name {
-                        debug!("Command Receiver: set_sink_mute_by_name {name} to {}", false);
+                        trace!("Command Receiver: set_sink_mute_by_name {name} to {}", false);
                         introspect.set_sink_mute_by_name(name, false, Some(Box::new(|_| {})));
                     }
                 }
@@ -225,7 +224,7 @@ pub async fn run_pulse_async(
                     }
                 };
                 if let Some((next_idx, next_name)) = next_device {
-                    debug!("Command Receiver: set_default_sink to {next_name}");
+                    trace!("Command Receiver: set_default_sink to {next_name}");
                     context.set_default_sink(&next_name, |_| {});
                     if let Ok(mut s) = pulse_state.lock() {
                         s.default_sink_index = Some(next_idx);
@@ -257,7 +256,7 @@ pub async fn run_pulse_async(
                     }
                 };
                 if let Some((prev_idx, prev_name)) = prev_device {
-                    debug!("Command Receiver: set_default_sink to {prev_name}");
+                    trace!("Command Receiver: set_default_sink to {prev_name}");
                     context.set_default_sink(&prev_name, |_| {});
                     if let Ok(mut s) = pulse_state.lock() {
                         s.default_sink_index = Some(prev_idx);
@@ -270,14 +269,18 @@ pub async fn run_pulse_async(
                 }
             }
             Ok(Some(PulseCommand::RefreshStatus)) => {
-                if !maybe_refresh(&mut last_refresh_time, &mut mainloop, &mut introspect, &pulse_state, &last_status, &status_sender) {
+                let now = Instant::now();
+                if now.duration_since(last_refresh_time) > Duration::from_millis(50) {
+                    last_refresh_time = now;
+                    force_refresh_and_broadcast(&mut mainloop, &mut introspect, &pulse_state, &last_status, &status_sender);
+                } else {
                     pending_refresh = true;
                 }
             }
             Err(_) => {
                 if pending_refresh && Instant::now().duration_since(last_refresh_time) > Duration::from_millis(50) {
                     pending_refresh = false;
-                    refresh_and_broadcast(&mut mainloop, &mut introspect, &pulse_state, &last_status, &status_sender);
+                    force_refresh_and_broadcast(&mut mainloop, &mut introspect, &pulse_state, &last_status, &status_sender);
                 }
             }
             Ok(None) => break,
@@ -325,6 +328,23 @@ fn refresh_and_broadcast(
         *last = Some(status.clone());
         let _ = status_sender.send(status);
     }
+}
+
+fn force_refresh_and_broadcast(
+    mainloop: &mut Mainloop,
+    introspect: &mut Introspector,
+    pulse_state: &Arc<Mutex<PulseState>>,
+    last_status: &Arc<Mutex<Option<AudioStatusMessage>>>,
+    status_sender: &tokio::sync::mpsc::UnboundedSender<AudioStatusMessage>,
+) {
+    trace!("Audio Service: force_refresh_and_broadcast");
+    let Some(status) = query_status(mainloop, introspect, pulse_state) else {
+        return;
+    };
+    if let Ok(mut last) = last_status.lock() {
+        *last = Some(status.clone());
+    }
+    let _ = status_sender.send(status);
 }
 
 fn query_status(mainloop: &mut Mainloop, introspect: &mut Introspector, state: &Arc<Mutex<PulseState>>) -> Option<AudioStatusMessage> {
@@ -421,22 +441,4 @@ fn query_status(mainloop: &mut Mainloop, introspect: &mut Introspector, state: &
     }
 
     Some(AudioStatusMessage::new(volume, is_muted, output_devices, stabby::vec::Vec::new(), active_device))
-}
-
-/// FFI clone function for `AudioStatusMessage` payload.
-pub extern "C" fn clone_audio_status(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    let status = unsafe { &*(ptr as *const AudioStatusMessage) };
-    Box::into_raw(Box::new(status.clone())) as *mut core::ffi::c_void
-}
-
-/// FFI destroy function for `AudioStatusMessage` payload.
-pub extern "C" fn destroy_audio_status(ptr: *mut core::ffi::c_void) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = Box::from_raw(ptr as *mut AudioStatusMessage);
-        }
-    }
 }

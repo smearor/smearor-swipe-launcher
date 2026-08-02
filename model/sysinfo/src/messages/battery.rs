@@ -8,7 +8,7 @@ use crate::TOPIC_BATTERY;
 /// Charging state of the battery.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum BatteryStatus {
     /// State is unknown.
     #[default]

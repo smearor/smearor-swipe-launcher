@@ -5,7 +5,7 @@ use smearor_wrot_rotation::layer::SmearorLayer;
 /// ABI-stable layer enum for cross-plugin messaging.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum StabbyLayer {
     Background,
     Bottom,
@@ -49,7 +49,7 @@ pub struct LayerConfigFile {
 
 /// ABI-stable version of `LayerConfigFile` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct LayerConfigFileStabby {
     pub layer: stabby::option::Option<StabbyLayer>,
     pub namespace: stabby::option::Option<stabby::string::String>,

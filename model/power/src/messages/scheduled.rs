@@ -1,8 +1,11 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::PowerAction;
 
 /// Information about a currently scheduled power action.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledActionInfo {
     /// The power action that is scheduled.
     pub action: PowerAction,

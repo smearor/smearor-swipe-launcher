@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -10,7 +12,7 @@ pub const TOPIC_COMMAND: &str = "service.power.command";
 /// Actions the power service can perform on request.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PowerCommandAction {
     /// Execute a power action immediately (with countdown if configured).
     #[default]
@@ -25,7 +27,7 @@ pub enum PowerCommandAction {
 
 /// Command message sent by widgets or MCP clients to the power service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PowerCommandMessage {
     /// The action to execute.
     pub action: PowerCommandAction,

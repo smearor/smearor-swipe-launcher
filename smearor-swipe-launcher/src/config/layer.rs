@@ -23,6 +23,12 @@ pub struct LayerConfigFile {
     /// When None, the primary monitor (index 0) is used.
     #[serde(default)]
     pub(crate) monitor: Option<u32>,
+
+    /// Maximum window width in pixels.
+    /// When set, the launcher window is capped to this width instead of
+    /// spanning the full monitor width. The window is centered horizontally.
+    #[serde(default)]
+    pub(crate) max_width: Option<i32>,
 }
 
 impl LayerConfigFile {

@@ -29,7 +29,7 @@ pub fn core_resources() -> Vec<ResourceDefinition> {
         ResourceDefinition {
             uri: "area://list".to_string(),
             name: "area_list".to_string(),
-            description: "List of all configured areas with status and position.".to_string(),
+            description: "Current list of all configured Smearor launcher areas (Bereiche) with their area_id, visibility status, and position. Use this resource when the user asks for areas, 'Bereiche', or 'Areas' in the launcher.".to_string(),
             mime_type: "application/json".to_string(),
             handler: Box::new(|sender, _uri| Box::pin(async move { read_resource(sender, "area://list".to_string()).await })),
         },

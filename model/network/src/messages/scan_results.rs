@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -9,7 +11,7 @@ pub const TOPIC_SCAN_RESULTS: &str = "service.network.scan_results";
 
 /// WLAN scan results message broadcast by the service after a scan request.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScanResultsMessage {
     /// List of access points found, sorted by signal strength (strongest first).
     pub access_points: stabby::vec::Vec<AccessPointInfo>,

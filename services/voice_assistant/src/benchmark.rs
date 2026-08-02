@@ -5,7 +5,7 @@ use smearor_voice_assistant_model::ToolCatalogEntry;
 use std::time::Instant;
 use tracing::debug;
 
-/// Runs a micro-benchmark for tool selection (nucleo matching).
+/// Runs a micro-benchmark for tool selection (semantic embedding).
 /// Measures the time to select tools for a set of sample queries.
 pub fn benchmark_tool_selection(num_iterations: usize) {
     let mut router = ToolRouter::new();
@@ -22,7 +22,7 @@ pub fn benchmark_tool_selection(num_iterations: usize) {
         sample_tool("sysinfo_get_memory_usage", "Get current memory usage"),
         sample_tool("sysinfo_get_temperature", "Get CPU temperature"),
     ];
-    router.rebuild(&catalog);
+    router.rebuild(&catalog, None);
 
     let queries = vec![
         "turn on the fan",
@@ -37,7 +37,7 @@ pub fn benchmark_tool_selection(num_iterations: usize) {
     let start = Instant::now();
     for _ in 0..num_iterations {
         for query in &queries {
-            let _ = router.select_tools(query, 5);
+            let _ = router.select_tools(query, 5, 0.3);
         }
     }
     let elapsed = start.elapsed();

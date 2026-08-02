@@ -2,8 +2,10 @@ use crate::config::MprisServiceConfig;
 use crate::dbus::run_mpris_async;
 use crate::mpris_command::MprisCommand;
 use glib::MainContext;
+use smearor_model_mcp::InvokePromptMessage;
 use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_PROMPT;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_mpris_model::MprisCommandAction;
@@ -12,6 +14,7 @@ use smearor_mpris_model::MprisStatusMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
@@ -21,8 +24,10 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::default_clone_payload;
+use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tracing::error;
@@ -76,8 +81,8 @@ impl MprisService {
                     topic: stabby::string::String::from(MprisStatusMessage::topic()),
                     type_id: MprisStatusMessage::TYPE_ID,
                     payload: payload_ptr,
-                    destroy_payload: Some(crate::dbus::destroy_mpris_status),
-                    clone_payload: Some(crate::dbus::clone_mpris_status),
+                    destroy_payload: Some(default_destroy_payload),
+                    clone_payload: Some(default_clone_payload::<MprisStatusMessage>),
                 };
                 if let Some(ctx) = &core_context_clone {
                     ctx.send_message(envelope);
@@ -138,6 +143,9 @@ impl MprisService {
     pub(crate) fn handle_quit(&self) {
         let _ = self.command_sender.send(MprisCommand::Quit);
     }
+    pub(crate) fn handle_refresh_status(&self) {
+        let _ = self.command_sender.send(MprisCommand::RefreshStatus);
+    }
 
     pub(crate) fn status_snapshot(&self) -> Option<MprisStatusMessage> {
         self.last_status.lock().ok().and_then(|s| s.clone())
@@ -170,6 +178,7 @@ impl MessageHandler<FfiEnvelopePayload<MprisCommandMessage>> for MprisService {
             MprisCommandAction::PreviousPlayer => self.handle_previous_player(),
             MprisCommandAction::Raise => self.handle_raise(),
             MprisCommandAction::Quit => self.handle_quit(),
+            MprisCommandAction::Refresh => self.handle_refresh_status(),
         }
     }
 }
@@ -187,7 +196,7 @@ impl AsRef<Option<FfiCoreContext>> for MprisService {
     }
 }
 
-impl Service for MprisService {
+impl ServicePlugin for MprisService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
@@ -199,6 +208,8 @@ impl Service for MprisService {
                     MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_MCP_INVOKE_RESOURCE && envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_PROMPT && envelope.type_id == FfiEnvelopePayload::<InvokePromptMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokePromptMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }

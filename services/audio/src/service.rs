@@ -1,6 +1,4 @@
 use crate::config::AudioServiceConfig;
-use crate::pulse::clone_audio_status;
-use crate::pulse::destroy_audio_status;
 use crate::pulse::run_pulse_async;
 use crate::pulse_command::PulseCommand;
 use glib::MainContext;
@@ -14,6 +12,7 @@ use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
@@ -23,8 +22,10 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::default_clone_payload;
+use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tracing::error;
@@ -79,8 +80,8 @@ impl AudioService {
                     topic: stabby::string::String::from(AudioStatusMessage::topic()),
                     type_id: AudioStatusMessage::TYPE_ID,
                     payload: payload_ptr,
-                    destroy_payload: Some(destroy_audio_status),
-                    clone_payload: Some(clone_audio_status),
+                    destroy_payload: Some(default_destroy_payload),
+                    clone_payload: Some(default_clone_payload::<AudioStatusMessage>),
                 };
                 if let Some(ctx) = &core_context_clone {
                     ctx.send_message(envelope);
@@ -157,6 +158,7 @@ impl MessageHandler<FfiEnvelopePayload<AudioCommandMessage>> for AudioService {
             AudioCommandAction::Unmute => self.handle_unmute(),
             AudioCommandAction::NextDevice => self.handle_next_device(),
             AudioCommandAction::PreviousDevice => self.handle_previous_device(),
+            AudioCommandAction::Refresh => self.handle_refresh_status(),
         }
     }
 }
@@ -177,7 +179,7 @@ impl AsRef<Option<FfiCoreContext>> for AudioService {
     }
 }
 
-impl Service for AudioService {
+impl ServicePlugin for AudioService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {

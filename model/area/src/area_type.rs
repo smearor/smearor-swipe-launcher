@@ -17,7 +17,7 @@ pub enum AreaType {
 /// ABI-stable version of `AreaType` for cross-plugin messaging.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub enum AreaTypeStabby {
     #[default]
     Fixed,

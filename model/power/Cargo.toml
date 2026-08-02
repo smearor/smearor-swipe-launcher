@@ -9,5 +9,8 @@ authors.workspace = true
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+smearor-model-mcp = { path = "../mcp" }
+smearor-personalization-model = { path = "../personalization" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
-stabby = { workspace = true }
+stabby = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }

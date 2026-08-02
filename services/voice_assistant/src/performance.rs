@@ -52,7 +52,7 @@ pub struct PerformanceReport {
     pub embedding_generation: OperationMetrics,
     /// Speech recognition (Whisper) timings.
     pub speech_recognition: OperationMetrics,
-    /// Tool selection (nucleo matching) timings.
+    /// Tool selection (semantic embedding) timings.
     pub tool_selection: OperationMetrics,
     /// Total ReAct loop durations.
     pub react_loop: OperationMetrics,

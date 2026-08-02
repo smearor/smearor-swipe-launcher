@@ -26,7 +26,7 @@ pub struct RotationConfigFile {
 
 /// ABI-stable version of `RotationConfigFile` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct RotationConfigFileStabby {
     pub disable_rotation: stabby::option::Option<bool>,
     pub rotation: stabby::option::Option<f32>,

@@ -12,10 +12,13 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
+use smearor_swipe_launcher_plugin_api::default_clone_payload;
+use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 
 use crate::config::HttpServiceConfig;
 use crate::whitelist::is_url_allowed;
@@ -89,7 +92,7 @@ impl AsRef<Option<FfiCoreContext>> for HttpService {
     }
 }
 
-impl Service for HttpService {
+impl ServicePlugin for HttpService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if message.is_null() {
             return;
@@ -110,7 +113,7 @@ async fn run_request_handler(
     core_context: Option<FfiCoreContext>,
 ) {
     while let Some(request) = request_receiver.recv().await {
-        debug!("HTTP service: received request for URL {}", request.url);
+        trace!("HTTP service: received request for URL {}", request.url);
         if !is_url_allowed(&request.url, &config.allowed_urls) {
             let response = HttpResponseMessage {
                 status: HttpResponseStatus::Forbidden,
@@ -128,7 +131,7 @@ async fn run_request_handler(
         let response = execute_http_request(&request, timeout, config.max_response_bytes).await;
 
         match &response.status {
-            HttpResponseStatus::Success => debug!("HTTP service: request succeeded with status code {:?}", response.status_code),
+            HttpResponseStatus::Success => trace!("HTTP service: request succeeded with status code {:?}", response.status_code),
             HttpResponseStatus::Forbidden => debug!("HTTP service: request forbidden: {:?}", response.error_message),
             HttpResponseStatus::Error => error!("HTTP service: request failed: {:?}", response.error_message),
         }
@@ -221,28 +224,12 @@ fn broadcast_response_string(meta: &PluginMeta, core_context: &Option<FfiCoreCon
         topic: stabby::string::String::from(response_topic),
         type_id: generate_type_id("std::string::String"),
         payload: payload_ptr,
-        destroy_payload: Some(destroy_payload_string),
-        clone_payload: Some(clone_payload_string),
+        destroy_payload: Some(default_destroy_payload),
+        clone_payload: Some(default_clone_payload::<String>),
     };
 
     if let Some(context) = core_context {
         context.send_message(envelope);
-        debug!("HTTP service: broadcasted response on topic {}", response_topic);
-    }
-}
-
-extern "C" fn clone_payload_string(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    let value = unsafe { &*(ptr as *const String) };
-    Box::into_raw(Box::new(value.clone())) as *mut core::ffi::c_void
-}
-
-extern "C" fn destroy_payload_string(ptr: *mut core::ffi::c_void) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = Box::from_raw(ptr as *mut String);
-        }
+        trace!("HTTP service: broadcasted response on topic {}", response_topic);
     }
 }

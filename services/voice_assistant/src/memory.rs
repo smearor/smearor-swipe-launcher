@@ -1,8 +1,6 @@
-use fastembed::EmbeddingModel;
-use fastembed::TextEmbedding;
-use fastembed::TextInitOptions;
-use moka::sync::Cache;
-use ort::execution_providers::ExecutionProviderDispatch;
+use crate::embedding_engine::EmbeddingEngine;
+use crate::embedding_engine::SharedEmbeddingEngine;
+use crate::embedding_engine::cosine_similarity;
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde::Serialize;
@@ -11,28 +9,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use tracing::debug;
-
-/// Default batch size for embedding generation.
-const DEFAULT_EMBED_BATCH_SIZE: usize = 32;
-
-/// Builds execution providers for the embedding model based on GPU availability.
-/// On Linux with CUDA/ROCm, uses GPU acceleration when available.
-/// Falls back to CPU otherwise.
-fn build_execution_providers() -> Vec<ExecutionProviderDispatch> {
-    #[cfg(all(feature = "ort-cuda", target_os = "linux"))]
-    {
-        use ort::execution_providers::CUDA;
-        debug!("Semantic memory: using CUDA execution provider for embeddings");
-        return vec![CUDA::default().build().into()];
-    }
-    #[cfg(all(feature = "ort-rocm", target_os = "linux"))]
-    {
-        use ort::execution_providers::ROCm;
-        debug!("Semantic memory: using ROCm execution provider for embeddings");
-        return vec![ROCm::default().build().into()];
-    }
-    Vec::new()
-}
 
 /// Errors that can occur during memory operations.
 #[derive(Debug, thiserror::Error)]
@@ -134,12 +110,9 @@ pub struct StoredFact {
 /// Supports GPU acceleration via ONNX Runtime execution providers and
 /// caches embeddings with moka to avoid redundant computation.
 pub struct SemanticMemory {
-    model: TextEmbedding,
+    embedding_engine: Option<SharedEmbeddingEngine>,
     vectors: Vec<(Vec<f32>, String)>,
     db: Arc<Mutex<Connection>>,
-    /// Cache: text string -> embedding vector.
-    /// Avoids re-embedding identical text across store/recall calls.
-    embedding_cache: Cache<String, Vec<f32>>,
 }
 
 impl SemanticMemory {
@@ -151,40 +124,26 @@ impl SemanticMemory {
             .map_err(|e| MemoryError::Database(e.to_string()))
             .expect("in-memory SQLite should always succeed");
         init_schema(&db).expect("schema init should succeed");
-        let embedding_cache = Cache::builder().max_capacity(256).time_to_live(std::time::Duration::from_secs(3600)).build();
         Self {
-            model: TextEmbedding::try_new(TextInitOptions::new(EmbeddingModel::BGESmallENV15Q).with_execution_providers(build_execution_providers()))
-                .expect("default embedding model should load"),
+            embedding_engine: None,
             vectors: Vec::new(),
             db: Arc::new(Mutex::new(db)),
-            embedding_cache,
         }
     }
 
     /// Initializes the semantic memory: loads the embedding model, opens SQLite,
     /// creates schema, and loads existing vectors from the database.
     pub fn new(db_path: &str, embedding_model: &str) -> Result<Self, MemoryError> {
-        let model_name = match embedding_model {
-            "bge-small-en-v1.5-q" => EmbeddingModel::BGESmallENV15Q,
-            "bge-small-en-v1.5" => EmbeddingModel::BGESmallENV15,
-            "all-MiniLM-L6-v2" => EmbeddingModel::AllMiniLML6V2,
-            "paraphrase-multilingual-MiniLM-L12-v2" => EmbeddingModel::ParaphraseMLMiniLML12V2,
-            other => {
-                debug!("Semantic memory: unknown embedding model '{other}', falling back to BGESmallENV15Q");
-                EmbeddingModel::BGESmallENV15Q
-            }
-        };
-
-        let execution_providers = build_execution_providers();
-        let intra_threads = std::thread::available_parallelism().map(|n| n.get()).ok();
-        let mut init_options = TextInitOptions::new(model_name).with_execution_providers(execution_providers);
-        if let Some(threads) = intra_threads {
-            init_options = init_options.with_intra_threads(threads);
-        }
-        let model = TextEmbedding::try_new(init_options).map_err(|e| MemoryError::ModelLoad(e.to_string()))?;
+        let embedding_engine = EmbeddingEngine::load(embedding_model)
+            .or_else(|e| {
+                debug!("Semantic memory: failed to load embedding model: {e}, trying fallback");
+                EmbeddingEngine::fallback()
+            })
+            .map_err(|e| MemoryError::ModelLoad(e.to_string()))?;
+        let embedding_engine = Arc::new(embedding_engine);
         debug!("Semantic memory: embedding model loaded");
 
-        let expanded_path = expand_tilde(db_path);
+        let expanded_path = shellexpand::tilde(db_path).into_owned();
         if let Some(parent) = std::path::Path::new(&expanded_path).parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -192,17 +151,22 @@ impl SemanticMemory {
         let db = Connection::open(&expanded_path).map_err(|e| MemoryError::Database(e.to_string()))?;
         init_schema(&db)?;
 
-        let embedding_cache = Cache::builder().max_capacity(256).time_to_live(std::time::Duration::from_secs(3600)).build();
         let db = Arc::new(Mutex::new(db));
         let mut memory = Self {
-            model,
+            embedding_engine: Some(embedding_engine),
             vectors: Vec::new(),
             db,
-            embedding_cache,
         };
         memory.load_vectors_from_db()?;
         debug!("Semantic memory: initialized with {} vectors", memory.vectors.len());
         Ok(memory)
+    }
+
+    /// Returns a reference to the shared embedding engine.
+    /// Allows other components (ToolRouter, CatalogRouter) to reuse the same model.
+    /// Returns None when SemanticMemory is in its uninit placeholder state.
+    pub fn embedding_engine(&self) -> Option<&SharedEmbeddingEngine> {
+        self.embedding_engine.as_ref()
     }
 
     /// Stores a fact with its semantic embedding.
@@ -283,36 +247,22 @@ impl SemanticMemory {
         Ok(facts)
     }
 
-    /// Embeds a single text string, using the cache when possible.
-    fn embed_single(&mut self, text: &str) -> Result<Vec<f32>, MemoryError> {
-        if let Some(cached) = self.embedding_cache.get(text) {
-            return Ok(cached);
-        }
-        let embedding = self
-            .model
-            .embed(vec![text.to_string()], None)
-            .map_err(|e| MemoryError::EmbeddingFailed(e.to_string()))?
-            .into_iter()
-            .next()
-            .ok_or(MemoryError::EmbeddingFailed("No embedding returned".to_string()))?;
-        self.embedding_cache.insert(text.to_string(), embedding.clone());
-        Ok(embedding)
+    /// Embeds a single text string, using the embedding engine cache.
+    fn embed_single(&self, text: &str) -> Result<Vec<f32>, MemoryError> {
+        self.embedding_engine
+            .as_ref()
+            .ok_or(MemoryError::ModelLoad("embedding engine not initialized".to_string()))?
+            .embed_single(text)
+            .map_err(|e| MemoryError::EmbeddingFailed(e.to_string()))
     }
 
     /// Embeds multiple texts in a single batch call for efficiency.
-    /// Uses the default batch size for optimal throughput.
-    fn embed_batch(&mut self, texts: &[String]) -> Result<Vec<Vec<f32>>, MemoryError> {
-        if texts.is_empty() {
-            return Ok(Vec::new());
-        }
-        let embeddings = self
-            .model
-            .embed(texts.to_vec(), Some(DEFAULT_EMBED_BATCH_SIZE))
-            .map_err(|e| MemoryError::EmbeddingFailed(e.to_string()))?;
-        for (text, embedding) in texts.iter().zip(embeddings.iter()) {
-            self.embedding_cache.insert(text.clone(), embedding.clone());
-        }
-        Ok(embeddings)
+    fn embed_batch(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, MemoryError> {
+        self.embedding_engine
+            .as_ref()
+            .ok_or(MemoryError::ModelLoad("embedding engine not initialized".to_string()))?
+            .embed_batch(texts)
+            .map_err(|e| MemoryError::EmbeddingFailed(e.to_string()))
     }
 
     /// Lists all stored fact keys, optionally filtered by category.
@@ -568,16 +518,7 @@ pub fn extract_entity_state(tool_name: &str, arguments: &serde_json::Value) -> O
     None
 }
 
-/// Computes cosine similarity between two vectors.
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    let dot = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum::<f32>();
-    let norm_a = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm_a == 0.0 || norm_b == 0.0 {
-        return 0.0;
-    }
-    dot / (norm_a * norm_b)
-}
+// cosine_similarity is now in crate::embedding_engine
 
 /// Serializes an embedding to little-endian f32 bytes for SQLite BLOB storage.
 fn serialize_embedding(emb: &[f32]) -> Vec<u8> {
@@ -625,19 +566,4 @@ fn init_schema(db: &Connection) -> Result<(), MemoryError> {
     )
     .map_err(|e| MemoryError::Database(e.to_string()))?;
     Ok(())
-}
-
-/// Expands ~ in a path to the user's home directory.
-fn expand_tilde(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Some(home) = dirs_home() {
-            return format!("{home}/{rest}");
-        }
-    }
-    path.to_string()
-}
-
-/// Gets the user's home directory.
-fn dirs_home() -> Option<String> {
-    std::env::var("HOME").ok()
 }

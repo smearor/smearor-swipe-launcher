@@ -8,4 +8,4 @@ authors.workspace = true
 
 [dependencies]
 serde = { workspace = true }
-stabby = { workspace = true }
+stabby = { workspace = true, features = ["serde"] }

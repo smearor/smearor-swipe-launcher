@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 chrono = "0.4"
 openmeteo-rs = "1"
+reqwest = { workspace = true, features = ["json", "query"] }
 stabby = { workspace = true }
 glib = { workspace = true }
 miette = { workspace = true }
@@ -19,6 +20,7 @@ paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }
+smearor-personalization-model = { path = "../../model/personalization" }
 smearor-weather-model = { path = "../../model/weather" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 thiserror = { workspace = true }

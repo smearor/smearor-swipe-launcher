@@ -1,26 +1,33 @@
 use serde::Deserialize;
 use serde_json::Value;
+use smearor_swipe_launcher_plugin_api::ActionBindings;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DEFAULT_ICON_SIZE;
+use smearor_swipe_launcher_plugin_api::DispatchableBinding;
+use smearor_swipe_launcher_plugin_api::WidgetDimensions;
+use smearor_swipe_launcher_plugin_api::WidgetLayout;
 
-pub const DEFAULT_WIDTH: i32 = 100;
-
-pub const DEFAULT_HEIGHT: i32 = 100;
-
-/// Configuration for the notifications widget.
+/// Configuration for the notification widget.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct NotificationWidgetConfig {
-    /// Widget width in pixels.
-    pub width: i32,
-    /// Widget height in pixels.
-    pub height: i32,
+    /// Widget dimensions (width, height) for GTK layout.
+    #[serde(flatten)]
+    pub dimensions: WidgetDimensions,
     /// Maximum number of notifications to display.
     pub max_visible: usize,
     /// Whether to show the Do Not Disturb toggle.
     pub show_dnd_toggle: bool,
     /// Whether to show notification icons.
     pub show_icons: bool,
-    /// Spacing between child widgets inside the notifications widget.
-    pub spacing: i32,
+    /// Size of notification icons in pixels.
+    pub icon_size: i32,
+    /// Widget layout (spacing) for GTK container.
+    #[serde(flatten)]
+    pub layout: WidgetLayout,
+    /// Action bindings for all input triggers.
+    #[serde(flatten)]
+    pub actions: ActionBindings,
 }
 
 impl NotificationWidgetConfig {
@@ -32,12 +39,20 @@ impl NotificationWidgetConfig {
 impl Default for NotificationWidgetConfig {
     fn default() -> Self {
         Self {
-            width: DEFAULT_WIDTH,
-            height: DEFAULT_HEIGHT,
+            dimensions: WidgetDimensions::default(),
             max_visible: 3,
             show_dnd_toggle: true,
             show_icons: true,
-            spacing: 0,
+            icon_size: DEFAULT_ICON_SIZE,
+            layout: WidgetLayout::default(),
+            actions: ActionBindings::default(),
         }
+    }
+}
+
+impl NotificationWidgetConfig {
+    /// Returns the binding for the given action kind as a `&dyn DispatchableBinding`.
+    pub fn binding_for_kind(&self, kind: ActionKind) -> &dyn DispatchableBinding {
+        self.actions.binding_for_kind(kind)
     }
 }

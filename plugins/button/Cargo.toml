@@ -11,15 +11,21 @@ crate-type = ["cdylib"]
 
 [dependencies]
 stabby = { workspace = true }
+ab_glyph = { workspace = true }
 adw = { workspace = true }
 glib = { workspace = true }
 gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
+image = { workspace = true }
+imageproc = { workspace = true }
 miette = { workspace = true }
 paste = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }
+smearor-model-widget = { path = "../../model/widget" }
+smearor-personalization-model = { path = "../../model/personalization" }
+smearor-render-utils = { path = "../render-utils" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 thiserror = { workspace = true }
 tokio = { workspace = true }

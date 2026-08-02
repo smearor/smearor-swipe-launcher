@@ -1,17 +1,14 @@
 use serde::Deserialize;
-use serde_json::Value;
 use smearor_network_model::NetworkView;
+use smearor_swipe_launcher_plugin_api::ActionBindings;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DispatchableBinding;
+use smearor_swipe_launcher_plugin_api::WidgetDimensions;
+use smearor_swipe_launcher_plugin_api::WidgetIcon;
+use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMode;
+use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use typed_builder::TypedBuilder;
-
-pub const DEFAULT_WIDTH: i32 = 100;
-
-pub const DEFAULT_HEIGHT: i32 = 100;
-
-pub const DEFAULT_SPACING: i32 = 0;
-
-pub const DEFAULT_BUTTON_SIZE: i32 = 48;
-
-pub const DEFAULT_ICON_SIZE: i32 = 36;
 
 pub const DEFAULT_ICON_WIFI_STRENGTH_4: &str = "nf-md-wifi_strength_4";
 
@@ -45,25 +42,30 @@ pub const DEFAULT_ICON_QR_CODE: &str = "nf-md-qrcode";
 #[derive(Debug, Clone, Deserialize, TypedBuilder)]
 #[serde(default)]
 pub struct NetworkWidgetConfig {
-    /// Width of the widget in pixels.
-    #[builder(default = DEFAULT_WIDTH)]
-    pub(crate) width: i32,
+    /// Widget dimensions (width, height) for GTK layout.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) dimensions: WidgetDimensions,
 
-    /// Height of the widget in pixels.
-    #[builder(default = DEFAULT_HEIGHT)]
-    pub(crate) height: i32,
+    /// Widget layout (spacing) for GTK container.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) layout: WidgetLayout,
 
-    /// Spacing between elements (icon, value, info labels) in pixels.
-    #[builder(default = DEFAULT_SPACING)]
-    pub(crate) spacing: i32,
+    /// Widget icon configuration (icon_size, icon_only).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) icon_config: WidgetIcon,
 
-    /// Button size in pixels (used for touch target sizing).
-    #[builder(default = DEFAULT_BUTTON_SIZE)]
-    pub(crate) button_size: i32,
+    /// Text color configuration (main_text_color, info_text_color).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub(crate) text_colors: WidgetTextColors,
 
-    /// Icon size in pixels (pixel size for Nerd Font icon images).
-    #[builder(default = DEFAULT_ICON_SIZE)]
-    pub(crate) icon_size: i32,
+    /// Widget layout mode (compact or wide).
+    #[builder(default)]
+    #[serde(default)]
+    pub(crate) mode: WidgetMode,
 
     /// WiFi icon: signal strength 4 (>75%).
     #[builder(default = DEFAULT_ICON_WIFI_STRENGTH_4.to_string())]
@@ -143,39 +145,27 @@ pub struct NetworkWidgetConfig {
     #[builder(default = 10)]
     pub(crate) max_access_points: usize,
 
-    /// Message topic for single-click (opens the network menu area).
-    #[serde(default)]
-    pub click_topic: Option<String>,
+    /// Action bindings for all input triggers.
+    #[serde(flatten)]
+    #[builder(default)]
+    pub actions: ActionBindings,
+}
 
-    /// Message payload for single-click.
-    #[serde(default)]
-    pub click_payload: Option<Value>,
-
-    /// Target instance for single-click message.
-    #[serde(default)]
-    pub click_instance: Option<String>,
-
-    /// Message topic for long-press.
-    #[serde(default)]
-    pub longpress_topic: Option<String>,
-
-    /// Message payload for long-press (JSON/TOML).
-    #[serde(default)]
-    pub longpress_payload: Option<Value>,
-
-    /// Target instance for long-press message.
-    #[serde(default)]
-    pub longpress_instance: Option<String>,
+impl NetworkWidgetConfig {
+    /// Returns the binding for the given action kind as a `&dyn DispatchableBinding`.
+    pub fn binding_for_kind(&self, kind: ActionKind) -> &dyn DispatchableBinding {
+        self.actions.binding_for_kind(kind)
+    }
 }
 
 impl Default for NetworkWidgetConfig {
     fn default() -> Self {
         Self {
-            width: DEFAULT_WIDTH,
-            height: DEFAULT_HEIGHT,
-            spacing: DEFAULT_SPACING,
-            button_size: DEFAULT_BUTTON_SIZE,
-            icon_size: DEFAULT_ICON_SIZE,
+            dimensions: WidgetDimensions::default(),
+            layout: WidgetLayout::default(),
+            icon_config: WidgetIcon::default(),
+            text_colors: WidgetTextColors::default(),
+            mode: WidgetMode::default(),
             icon_wifi_strength_4: DEFAULT_ICON_WIFI_STRENGTH_4.to_string(),
             icon_wifi_strength_3: DEFAULT_ICON_WIFI_STRENGTH_3.to_string(),
             icon_wifi_strength_2: DEFAULT_ICON_WIFI_STRENGTH_2.to_string(),
@@ -200,12 +190,7 @@ impl Default for NetworkWidgetConfig {
                 NetworkView::QrCode,
             ],
             max_access_points: 10,
-            click_topic: None,
-            click_payload: None,
-            click_instance: None,
-            longpress_topic: None,
-            longpress_payload: None,
-            longpress_instance: None,
+            actions: ActionBindings::default(),
         }
     }
 }

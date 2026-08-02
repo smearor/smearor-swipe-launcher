@@ -1,8 +1,11 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::WifiSecurity;
 
 /// Information about a single WLAN access point found during a scan.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccessPointInfo {
     /// SSID (network name) of the access point.
     pub ssid: stabby::string::String,

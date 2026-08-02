@@ -1,16 +1,22 @@
 use serde::Deserialize;
 use serde_json::Value;
+use smearor_swipe_launcher_plugin_api::ActionBindings;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DEFAULT_ICON_SIZE;
+use smearor_swipe_launcher_plugin_api::DispatchableBinding;
+use smearor_swipe_launcher_plugin_api::WidgetDimensions;
+use smearor_swipe_launcher_plugin_api::WidgetLayout;
 
 /// Configuration for the voice assistant widget.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct VoiceAssistantWidgetConfig {
-    /// Width of the widget in pixels.
-    pub width: i32,
-    /// Height of the widget in pixels.
-    pub height: i32,
-    /// Spacing between child widgets inside the voice assistant widget.
-    pub spacing: i32,
+    /// Widget dimensions (width, height) for GTK layout.
+    #[serde(flatten)]
+    pub dimensions: WidgetDimensions,
+    /// Widget layout (spacing) for GTK container.
+    #[serde(flatten)]
+    pub layout: WidgetLayout,
     /// Size of the icon in pixels.
     pub icon_size: i32,
     /// Whether to show the assistant icon.
@@ -29,8 +35,13 @@ pub struct VoiceAssistantWidgetConfig {
     pub icon_thinking: String,
     /// Icon for the executing state.
     pub icon_executing: String,
+    /// Icon for the speaking state.
+    pub icon_speaking: String,
     /// Icon for the error state.
     pub icon_error: String,
+    /// Action bindings for all input triggers.
+    #[serde(flatten)]
+    pub actions: ActionBindings,
 }
 
 impl VoiceAssistantWidgetConfig {
@@ -43,10 +54,9 @@ impl VoiceAssistantWidgetConfig {
 impl Default for VoiceAssistantWidgetConfig {
     fn default() -> Self {
         Self {
-            width: 120,
-            height: 80,
-            spacing: 4,
-            icon_size: 32,
+            dimensions: WidgetDimensions::default(),
+            layout: WidgetLayout::default(),
+            icon_size: DEFAULT_ICON_SIZE,
             show_icon: true,
             show_transcript: true,
             show_final_answer: true,
@@ -55,7 +65,16 @@ impl Default for VoiceAssistantWidgetConfig {
             icon_processing: "nf-md-waveform".to_string(),
             icon_thinking: "nf-md-brain".to_string(),
             icon_executing: "nf-md-cog_play".to_string(),
+            icon_speaking: "nf-md-volume_high".to_string(),
             icon_error: "nf-md-alert_circle".to_string(),
+            actions: ActionBindings::default(),
         }
+    }
+}
+
+impl VoiceAssistantWidgetConfig {
+    /// Returns the binding for the given action kind as a `&dyn DispatchableBinding`.
+    pub fn binding_for_kind(&self, kind: ActionKind) -> &dyn DispatchableBinding {
+        self.actions.binding_for_kind(kind)
     }
 }

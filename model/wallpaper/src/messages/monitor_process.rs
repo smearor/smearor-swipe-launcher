@@ -1,5 +1,8 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 /// Tracks the PID of a wallpaper process running on a specific monitor.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[stabby::stabby]
 pub struct MonitorProcess {
     /// The monitor name (e.g., "DP-1", "HDMI-A-1").

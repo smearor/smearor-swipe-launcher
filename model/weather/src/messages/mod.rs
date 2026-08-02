@@ -4,4 +4,5 @@ pub(crate) mod current;
 pub(crate) mod daily;
 pub(crate) mod status;
 pub(crate) mod view;
+pub(crate) mod voice;
 pub(crate) mod wmo;

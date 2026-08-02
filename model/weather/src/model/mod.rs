@@ -1,0 +1,13 @@
+pub(crate) mod air_quality_level;
+pub(crate) mod cloud_cover_level;
+pub(crate) mod humidity_level;
+pub(crate) mod particulate_matter_level;
+pub(crate) mod precipitation_amount_level;
+pub(crate) mod precipitation_intensity;
+pub(crate) mod precipitation_probability_level;
+pub(crate) mod pressure_level;
+pub(crate) mod sunshine_level;
+pub(crate) mod temperature_level;
+pub(crate) mod uv_index_level;
+pub(crate) mod wind_direction;
+pub(crate) mod wind_speed_level;

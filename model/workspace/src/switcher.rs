@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -20,7 +22,7 @@ pub const TOPIC_CREATE_WORKSPACE: &str = "compositor::create_workspace";
 /// Used in snapshots and internal widget state to represent one workspace
 /// in the compositor's workspace list.
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorkspaceInfo {
     /// The workspace ID (numeric, as reported by the compositor).
     /// Set to `-1` for special workspaces.
@@ -39,7 +41,7 @@ pub struct WorkspaceInfo {
 /// Broadcast by the service in response to a snapshot request,
 /// or automatically on startup.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorkspaceSnapshotMessage {
     /// All known workspaces, ordered by workspace ID.
     pub workspaces: stabby::vec::Vec<WorkspaceInfo>,
@@ -69,7 +71,7 @@ impl SharedMessage for WorkspaceSnapshotMessage {
 ///
 /// Sent by the widget on startup to request the current workspace list.
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorkspaceSnapshotRequestMessage {
     /// The monitor index the widget is interested in.
     /// Set to `0` if the widget does not filter by monitor.
@@ -98,7 +100,7 @@ impl SharedMessage for WorkspaceSnapshotRequestMessage {
 /// The active compositor service translates this to the compositor-specific
 /// dispatch mechanism.
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SwitchWorkspaceMessage {
     /// The workspace ID to switch to.
     pub workspace_id: i32,
@@ -123,7 +125,7 @@ impl SharedMessage for SwitchWorkspaceMessage {
 /// Position for creating a new workspace relative to a reference workspace.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WorkspaceCreatePosition {
     /// Create the new workspace before the reference workspace.
     #[default]
@@ -138,7 +140,7 @@ pub enum WorkspaceCreatePosition {
 /// the first or last workspace. The service creates a new workspace relative
 /// to the reference workspace.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CreateWorkspaceMessage {
     /// The workspace ID of the reference workspace.
     pub relative_to: i32,

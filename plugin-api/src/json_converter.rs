@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use crate::FfiEnvelope;
 
 /// Function pointer type for deserializing a JSON string into a typed message pointer.
-pub type JsonDeserializerFn = fn(*const u8, usize) -> *mut core::ffi::c_void;
+pub type JsonDeserializerFn = extern "C" fn(*const u8, usize) -> *mut core::ffi::c_void;
 
 /// Function pointer type for destroying a typed message pointer.
 pub type DestroyPayloadFn = extern "C" fn(*mut core::ffi::c_void);
@@ -144,7 +144,7 @@ macro_rules! impl_json_convertible {
             pub fn register_in_host(context: Option<$crate::FfiCoreContext>) {
                 struct __JsonConverter;
                 impl __JsonConverter {
-                    fn deserialize(ptr: *const u8, len: usize) -> *mut core::ffi::c_void {
+                    extern "C" fn deserialize(ptr: *const u8, len: usize) -> *mut core::ffi::c_void {
                         if ptr.is_null() {
                             return core::ptr::null_mut();
                         }
@@ -181,7 +181,7 @@ macro_rules! impl_json_convertible {
             fn register_json_converter(registry: &$crate::JsonConverterRegistry) {
                 struct __JsonConverter;
                 impl __JsonConverter {
-                    fn deserialize(ptr: *const u8, len: usize) -> *mut core::ffi::c_void {
+                    extern "C" fn deserialize(ptr: *const u8, len: usize) -> *mut core::ffi::c_void {
                         if ptr.is_null() {
                             return core::ptr::null_mut();
                         }

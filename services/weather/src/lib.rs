@@ -1,5 +1,8 @@
 pub(crate) mod config;
 pub(crate) mod fetcher;
+pub(crate) mod latest_state;
+pub(crate) mod mcp;
+pub(crate) mod personalization_coordinates;
 pub(crate) mod service;
 
 use crate::service::WeatherService;

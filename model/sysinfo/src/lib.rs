@@ -1,6 +1,11 @@
+mod mcp;
 mod messages;
+mod model;
 mod topics;
 
+pub use mcp::prompts::SysinfoMcpPrompts;
+pub use mcp::resources::SysinfoMcpResources;
+pub use mcp::tools::SysinfoMcpTools;
 pub use messages::battery::BatteryStatus;
 pub use messages::battery::BatteryStatusMessage;
 pub use messages::cpu::CpuStatusMessage;
@@ -10,6 +15,10 @@ pub use messages::memory::MemoryStatusMessage;
 pub use messages::network::NetworkStatusMessage;
 pub use messages::temperature::TemperatureComponent;
 pub use messages::uptime::UptimeStatusMessage;
+pub use messages::view::SysinfoView;
+pub use model::BatteryLevel;
+pub use model::SysinfoTemperatureLevel;
+pub use model::UsageLevel;
 pub use topics::TOPIC_BATTERY;
 pub use topics::TOPIC_CPU;
 pub use topics::TOPIC_DISKS;

@@ -1,11 +1,12 @@
 use crate::area::area_manager::AreaManager;
+use crate::area::backend::AreaBackend;
 use smearor_model_area::AddAreaMessage;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use tracing::error;
 use tracing::trace;
 
-impl MessageHandler<FfiEnvelopePayload<AddAreaMessage>> for AreaManager {
+impl<B: AreaBackend> MessageHandler<FfiEnvelopePayload<AddAreaMessage>> for AreaManager<B> {
     fn handle_message(&self, message: FfiEnvelopePayload<AddAreaMessage>, _sender_id: &str) {
         let area_id = &message.area_id;
         let area_config = message.area_config.clone();

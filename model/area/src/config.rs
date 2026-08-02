@@ -83,7 +83,7 @@ pub struct AreaConfig {
 
 /// ABI-stable version of `AreaConfig` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AreaConfigStabby {
     pub area_type: AreaTypeStabby,
     pub width: stabby::option::Option<i32>,

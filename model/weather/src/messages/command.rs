@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -8,7 +10,7 @@ use crate::TOPIC_COMMAND;
 /// Actions that can be sent from the widget to the weather service.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum WeatherCommandAction {
     /// Force an immediate refresh of weather data.
     #[default]
@@ -17,7 +19,7 @@ pub enum WeatherCommandAction {
 
 /// Command message sent from the weather widget to the weather service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WeatherCommandMessage {
     /// The action to execute.
     pub action: WeatherCommandAction,

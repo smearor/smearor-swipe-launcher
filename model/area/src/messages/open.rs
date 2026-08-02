@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -6,7 +8,7 @@ use smearor_swipe_launcher_plugin_api::generate_type_id;
 pub const TOPIC_OPEN_AREA: &str = "area.open";
 
 #[stabby::stabby(no_opt)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OpenAreaMessage {
     pub area_id: stabby::string::String,
 }

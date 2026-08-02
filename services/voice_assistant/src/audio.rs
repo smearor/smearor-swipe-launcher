@@ -246,6 +246,17 @@ pub async fn capture_audio(config: &VoiceAssistantServiceConfig, stop_rx: onesho
     result
 }
 
+/// Computes the root-mean-square (RMS) amplitude of a PCM sample buffer.
+/// Returns 0.0 for empty buffers. Useful for detecting whether captured
+/// audio contains meaningful speech or is merely background noise/silence.
+pub fn compute_rms(samples: &[f32]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let sum_squares: f64 = samples.iter().map(|s| (*s as f64) * (*s as f64)).sum();
+    (sum_squares / samples.len() as f64).sqrt() as f32
+}
+
 /// Resamples a PCM buffer from one sample rate to another using linear interpolation.
 /// This is a simple, dependency-free resampler suitable for speech audio.
 fn resample_linear(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {

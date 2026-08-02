@@ -5,21 +5,22 @@ use serde_json::Value;
 use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiGraphic;
 use smearor_swipe_launcher_plugin_api::FfiWidget;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
-use smearor_swipe_launcher_plugin_api::PluginConstructor;
-use smearor_swipe_launcher_plugin_api::PluginVTable;
+use smearor_swipe_launcher_plugin_api::WidgetPluginConstructor;
+use smearor_swipe_launcher_plugin_api::WidgetPluginVTable;
 use stabby::libloading::StabbyLibrary;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::debug;
+use tracing::trace;
 
 /// Represents a loaded plugin with its library handle.
 pub struct LoadedPlugin {
     _library: Arc<Library>,
     pub instance: *mut core::ffi::c_void,
-    pub vtable: *const PluginVTable,
+    pub vtable: *const WidgetPluginVTable,
     core_context: *mut core::ffi::c_void,
 }
 
@@ -34,15 +35,27 @@ impl LoadedPlugin {
             let path = PathBuf::from(&plugin_entry.path);
             let library = Arc::new(Library::new(&path)?);
 
-            debug!("load plugin: {:?}", config);
+            trace!("load plugin: {:?}", config);
             let constructor = library
-                .get_stabbied::<PluginConstructor>(b"smearor_plugin_create")
+                .get_stabbied::<WidgetPluginConstructor>(b"smearor_plugin_create")
                 .map_err(|e| LauncherError::PluginStabbiedLoadError(e.to_string()))?;
 
             let mut config_ext = config.config.clone();
             config_ext["id"] = Value::String(plugin_entry.id.clone());
             if let Some(widget) = &plugin_entry.widget {
                 config_ext["widget"] = Value::String(widget.clone());
+            }
+            if let Some(ref span_group) = plugin_entry.span_group {
+                config_ext["span_group"] = Value::String(span_group.clone());
+            }
+            if let Some(span_index) = plugin_entry.span_index {
+                config_ext["span_index"] = Value::from(span_index);
+            }
+            if let Some(span_rows) = plugin_entry.span_rows {
+                config_ext["span_rows"] = Value::from(span_rows);
+            }
+            if let Some(span_cols) = plugin_entry.span_cols {
+                config_ext["span_cols"] = Value::from(span_cols);
             }
             let config_json = serde_json::to_string(&config_ext)?;
             let config_bytes = config_json.as_bytes();
@@ -70,7 +83,7 @@ impl LoadedPlugin {
                 ));
             }
 
-            let api_loaded_plugin = &*(container_ptr as *mut smearor_swipe_launcher_plugin_api::PluginContainer);
+            let api_loaded_plugin = &*(container_ptr as *mut smearor_swipe_launcher_plugin_api::WidgetPluginContainer);
 
             let plugin = LoadedPlugin {
                 _library: library,
@@ -107,6 +120,21 @@ impl LoadedPlugin {
             if !self.vtable.is_null() && !self.instance.is_null() {
                 ((*self.vtable).destroy)(self.instance);
             }
+        }
+    }
+
+    /// Render the plugin's graphic at the given dimensions.
+    ///
+    /// Returns `None` if the plugin does not implement `GraphicRenderer`
+    /// (i.e. `render_graphic` is `None` in the VTable).
+    pub unsafe fn render_graphic(&self, width: u32, height: u32) -> Option<FfiGraphic> {
+        unsafe {
+            if self.vtable.is_null() || self.instance.is_null() {
+                return None;
+            }
+            let render_fn = (*self.vtable).render_graphic?;
+            let graphic = render_fn(self.instance, width, height);
+            if graphic.pixels.is_null() { None } else { Some(graphic) }
         }
     }
 }

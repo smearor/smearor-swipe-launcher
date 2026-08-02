@@ -1,7 +1,10 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 /// Encryption type of a WLAN access point.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WifiSecurity {
     /// Open network, no encryption.
     #[default]

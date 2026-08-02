@@ -1,6 +1,7 @@
 pub mod dbus;
 pub mod gsettings;
 pub mod tracker;
+pub mod wmctrl;
 
 pub use tracker::WorkspaceEvent;
 pub use tracker::run_workspace_polling;

@@ -32,7 +32,7 @@ impl ServiceManager {
         let (actual_service_id, service) = LoadedService::load(service_entry, &config, self.message_sender.clone())?;
 
         self.services.insert(actual_service_id.clone(), service);
-        debug!("Successfully loaded service: {}", actual_service_id);
+        trace!("Successfully loaded service: {}", actual_service_id);
 
         if let Some(service) = self.services.get(&actual_service_id) {
             unsafe {

@@ -10,7 +10,6 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-stabby = { workspace = true }
 adw = { workspace = true }
 glib = { workspace = true }
 gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
@@ -18,9 +17,13 @@ miette = { workspace = true }
 paste = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+smearor-model-mcp = { path = "../../model/mcp" }
+smearor-model-widget = { path = "../../model/widget" }
 smearor-notifications-model = { path = "../../model/notifications" }
+smearor-personalization-model = { path = "../../model/personalization" }
+smearor-render-utils = { path = "../render-utils" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
-thiserror = { workspace = true }
+stabby = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

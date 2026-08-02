@@ -21,11 +21,42 @@ pub struct PluginEntry {
     /// plugin library nor add it to any area.
     #[serde(default)]
     pub disabled: bool,
+
+    /// Span group identifier for Multi-Span Widgets.
+    ///
+    /// Plugins with the same `span_group` form a single logical widget that
+    /// spans multiple buttons. The host renders the group at combined dimensions
+    /// and splits the result across the buttons.
+    #[serde(default)]
+    pub span_group: Option<String>,
+
+    /// Index within the span group (0-based).
+    ///
+    /// Determines the order of buttons within a span group. The host sorts
+    /// plugins by `span_index` before rendering.
+    #[serde(default)]
+    pub span_index: Option<u32>,
+
+    /// Number of rows this span group occupies in the button grid.
+    ///
+    /// Defaults to `1` (horizontal span). Used together with `span_cols`
+    /// to determine the combined render dimensions and physical button
+    /// mapping for 2D span groups.
+    #[serde(default)]
+    pub span_rows: Option<u32>,
+
+    /// Number of columns this span group occupies in the button grid.
+    ///
+    /// Defaults to `1` (vertical span or single button). Used together
+    /// with `span_rows` to determine the combined render dimensions and
+    /// physical button mapping for 2D span groups.
+    #[serde(default)]
+    pub span_cols: Option<u32>,
 }
 
 /// ABI-stable version of `PluginEntry` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PluginEntryStabby {
     pub id: stabby::string::String,
     pub path: stabby::string::String,
@@ -52,6 +83,10 @@ impl From<PluginEntryStabby> for PluginEntry {
                 widget.map(|widget| widget.to_string())
             },
             disabled: false,
+            span_group: None,
+            span_index: None,
+            span_rows: None,
+            span_cols: None,
         }
     }
 }

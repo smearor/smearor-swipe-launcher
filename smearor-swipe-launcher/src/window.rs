@@ -16,12 +16,21 @@ pub fn create_window(app: &gtk4::Application, config: &SwipeLauncherSettings, co
     let monitor_index = config.layer.monitor;
     let monitor = resolve_monitor(monitor_index);
     let height = config.layer.exclusive_zone().unwrap_or(DEFAULT_HEIGHT);
-    let area_size = coordinated_size.unwrap_or_else(|| calculate_area_size_for_monitor(rotation, height, &monitor));
+    let mut area_size = coordinated_size.unwrap_or_else(|| calculate_area_size_for_monitor(rotation, height, &monitor));
+
+    let max_width = config.layer.max_width;
+    let width_capped = max_width.is_some();
+    if let Some(max_w) = max_width {
+        area_size.width = area_size.width.min(max_w);
+    }
+
+    let decorated = config.show_decorations.unwrap_or(true);
 
     let window = ApplicationWindow::builder()
         .application(app)
         .default_width(area_size.width)
         .default_height(area_size.height)
+        .decorated(decorated)
         .build();
 
     window.init_layer_shell();
@@ -46,7 +55,11 @@ pub fn create_window(app: &gtk4::Application, config: &SwipeLauncherSettings, co
             }
         }
 
-        set_anchors_for_rotation(&window, rotation);
+        if width_capped {
+            set_anchors_for_rotation_capped(&window, rotation);
+        } else {
+            set_anchors_for_rotation(&window, rotation);
+        }
     }
 
     window.add_css_class("transparent-background");
@@ -71,4 +84,26 @@ pub fn set_anchors_for_rotation(window: &ApplicationWindow, rotation: SmearorRot
     window.set_anchor(Edge::Left, (degrees - 90.0).abs() < 0.1);
     window.set_anchor(Edge::Top, (degrees - 180.0).abs() < 0.1);
     window.set_anchor(Edge::Right, (degrees - 270.0).abs() < 0.1);
+}
+
+/// Updates layer-shell anchors for a width-capped window.
+/// Only the edge corresponding to the rotation is anchored (bottom for 0°,
+/// left for 90°, top for 180°, right for 270°). The perpendicular edges are
+/// not anchored, allowing the compositor to center the window.
+pub fn set_anchors_for_rotation_capped(window: &ApplicationWindow, rotation: SmearorRotation) {
+    let degrees = rotation.to_degrees();
+    window.set_anchor(Edge::Bottom, (degrees - 0.0).abs() < 0.1);
+    window.set_anchor(Edge::Left, (degrees - 90.0).abs() < 0.1);
+    window.set_anchor(Edge::Top, (degrees - 180.0).abs() < 0.1);
+    window.set_anchor(Edge::Right, (degrees - 270.0).abs() < 0.1);
+    // Do not anchor the perpendicular edges — compositor centers the window.
+    if (degrees - 0.0).abs() < 0.1 || (degrees - 180.0).abs() < 0.1 {
+        // Horizontal rotation: don't anchor left/right
+        window.set_anchor(Edge::Left, false);
+        window.set_anchor(Edge::Right, false);
+    } else {
+        // Vertical rotation: don't anchor top/bottom
+        window.set_anchor(Edge::Top, false);
+        window.set_anchor(Edge::Bottom, false);
+    }
 }

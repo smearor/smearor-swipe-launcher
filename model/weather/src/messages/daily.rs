@@ -1,6 +1,9 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 /// Forecast data for a single day.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DailyForecast {
     /// Maximum air temperature at 2 m in degrees Celsius.
     pub temperature_max: stabby::option::Option<f32>,
@@ -20,6 +23,14 @@ pub struct DailyForecast {
     pub precipitation_sum: stabby::option::Option<f32>,
     /// Weather interpretation code (WMO code).
     pub weather_code: stabby::option::Option<u16>,
+    /// Daylight duration in seconds.
+    pub daylight_duration: stabby::option::Option<f32>,
+    /// Sunshine duration in seconds.
+    pub sunshine_duration: stabby::option::Option<f32>,
+    /// Number of hours with precipitation.
+    pub precipitation_hours: stabby::option::Option<f32>,
+    /// Maximum precipitation probability in percent.
+    pub precipitation_probability_max: stabby::option::Option<f32>,
 }
 
 impl DailyForecast {
@@ -31,7 +42,7 @@ impl DailyForecast {
 
 /// Container for today's and tomorrow's daily forecast.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DailyForecastData {
     /// Forecast for the current day.
     pub today: DailyForecast,

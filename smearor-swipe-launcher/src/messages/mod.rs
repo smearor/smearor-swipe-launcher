@@ -3,6 +3,8 @@ use gtk4::prelude::*;
 use smearor_model_compositor::MonitorChangedEvent;
 use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_model_compositor::WorkspaceLifecycleEvent;
+use smearor_model_macropad::TOPIC_MACROPAD_CONNECTION;
+use smearor_model_macropad::TOPIC_MACROPAD_INPUT;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageRouter;
@@ -110,7 +112,12 @@ impl LauncherInstance {
 
         // Broadcast service outbound updates to all plugins.
         // These are topics that services broadcast to widgets.
-        if topic.ends_with(".status") || topic.ends_with(".scan_results") || topic.ends_with(".vpn_profiles") {
+        if topic.ends_with(".status")
+            || topic.ends_with(".scan_results")
+            || topic.ends_with(".vpn_profiles")
+            || topic == TOPIC_MACROPAD_INPUT
+            || topic == TOPIC_MACROPAD_CONNECTION
+        {
             if topic.starts_with("service.") {
                 for r in self.plugin_manager.plugins.iter() {
                     let plugin = r.value();
@@ -149,20 +156,20 @@ impl LauncherInstance {
             let target = envelope.target_instance_id.to_string();
             if target != "*" && !target.is_empty() {
                 if let Some(plugin) = self.plugin_manager.plugins.get(&target) {
-                    debug!("instance.handle_message: routing {} to plugin {}", topic, target);
+                    trace!("instance.handle_message: routing {} to plugin {}", topic, target);
                     unsafe {
                         plugin.on_message(envelope.clone());
                     }
                 } else {
-                    debug!("instance.handle_message: target plugin {} not found for {}", target, topic);
+                    trace!("instance.handle_message: target plugin {} not found for {}", target, topic);
                 }
             } else {
                 let plugin_count = self.plugin_manager.plugins.len();
-                debug!("instance.handle_message: topic={} plugin_count={}", topic, plugin_count);
+                trace!("instance.handle_message: topic={} plugin_count={}", topic, plugin_count);
                 for r in self.plugin_manager.plugins.iter() {
                     let plugin_id = r.key().to_string();
                     let plugin = r.value();
-                    debug!("instance.handle_message: sending mcp.invoke to plugin {}", plugin_id);
+                    trace!("instance.handle_message: sending mcp.invoke to plugin {}", plugin_id);
                     unsafe {
                         plugin.on_message(envelope.clone());
                     }
@@ -173,7 +180,7 @@ impl LauncherInstance {
         // Broadcast compositor events to all plugins so widgets like the
         // workspace switcher can receive workspace snapshots, changes, and
         // lifecycle events from compositor services.
-        if topic.starts_with("compositor.") {
+        if topic.starts_with("compositor::") {
             for r in self.plugin_manager.plugins.iter() {
                 let plugin = r.value();
                 unsafe {

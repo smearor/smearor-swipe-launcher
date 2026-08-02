@@ -1,10 +1,6 @@
 use crate::config::HyprlandServiceConfig;
-use crate::monitor::MonitorEvent;
-use crate::monitor::spawn_monitor_listener;
-use crate::monitor::spawn_monitor_worker;
-use crate::workspace::WorkspaceEvent;
-use crate::workspace::spawn_workspace_listener;
-use crate::workspace::spawn_workspace_worker;
+use crate::event_listener::spawn_event_listener;
+use crate::event_listener::spawn_event_worker;
 use hyprland::dispatch::Dispatch;
 use hyprland::dispatch::DispatchType;
 use hyprland::dispatch::FirstEmpty;
@@ -24,8 +20,6 @@ use smearor_hyprland_model::HyprlandColor;
 use smearor_hyprland_model::HyprlandCorner;
 use smearor_hyprland_model::HyprlandCycleDirection;
 use smearor_hyprland_model::HyprlandDirection;
-use smearor_hyprland_model::HyprlandDispatchActionKind;
-use smearor_hyprland_model::HyprlandDispatchMessage;
 use smearor_hyprland_model::HyprlandFocusMasterParam;
 use smearor_hyprland_model::HyprlandFullscreenType;
 use smearor_hyprland_model::HyprlandLockType;
@@ -37,13 +31,20 @@ use smearor_hyprland_model::HyprlandPosition;
 use smearor_hyprland_model::HyprlandPositionKind;
 use smearor_hyprland_model::HyprlandPropType;
 use smearor_hyprland_model::HyprlandPropTypeKind;
+use smearor_hyprland_model::HyprlandStateMessage;
+use smearor_hyprland_model::HyprlandStateRequestMessage;
 use smearor_hyprland_model::HyprlandSwapWithMasterParam;
 use smearor_hyprland_model::HyprlandSwitchXkbLayoutCmd;
 use smearor_hyprland_model::HyprlandSwitchXkbLayoutCmdKind;
+use smearor_hyprland_model::HyprlandSystemDispatchMessage;
+use smearor_hyprland_model::HyprlandToggleDispatchMessage;
+use smearor_hyprland_model::HyprlandWindowDispatchMessage;
+use smearor_hyprland_model::HyprlandWindowEventData;
 use smearor_hyprland_model::HyprlandWindowIdentifier;
 use smearor_hyprland_model::HyprlandWindowMove;
 use smearor_hyprland_model::HyprlandWindowMoveKind;
 use smearor_hyprland_model::HyprlandWindowSwitchDirection;
+use smearor_hyprland_model::HyprlandWorkspaceDispatchMessage;
 use smearor_hyprland_model::HyprlandWorkspaceIdentifier;
 use smearor_hyprland_model::HyprlandWorkspaceIdentifierKind;
 use smearor_hyprland_model::HyprlandWorkspaceIdentifierWithSpecial;
@@ -81,11 +82,19 @@ use smearor_hyprland_model::SwapActiveWorkspacesDispatchMessage;
 use smearor_hyprland_model::SwapWindowDispatchMessage;
 use smearor_hyprland_model::SwapWithMasterDispatchMessage;
 use smearor_hyprland_model::SwitchXkbLayoutCommandMessage;
+use smearor_hyprland_model::SystemDispatchKind;
+use smearor_hyprland_model::SystemDispatchOps;
+use smearor_hyprland_model::ToggleDispatchKind;
+use smearor_hyprland_model::ToggleDispatchOps;
 use smearor_hyprland_model::ToggleDpmsDispatchMessage;
 use smearor_hyprland_model::ToggleFloatingDispatchMessage;
 use smearor_hyprland_model::ToggleFullscreenDispatchMessage;
 use smearor_hyprland_model::ToggleSpecialWorkspaceDispatchMessage;
+use smearor_hyprland_model::WindowDispatchKind;
+use smearor_hyprland_model::WindowDispatchOps;
+use smearor_hyprland_model::WorkspaceDispatchKind;
 use smearor_hyprland_model::WorkspaceDispatchMessage;
+use smearor_hyprland_model::WorkspaceDispatchOps;
 use smearor_hyprland_model::WorkspaceOptionDispatchMessage;
 use smearor_model_compositor::CreateWorkspaceMessage;
 use smearor_model_compositor::SwitchWorkspaceMessage;
@@ -104,7 +113,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use stabby::option::Option as StabbyOption;
 use std::env;
@@ -118,10 +127,14 @@ use tracing::warn;
 
 /// Internal union of all command types the service handles.
 pub enum HyprlandCommand {
-    Dispatch(HyprlandDispatchMessage),
+    WindowDispatch(HyprlandWindowDispatchMessage),
+    WorkspaceDispatch(HyprlandWorkspaceDispatchMessage),
+    ToggleDispatch(HyprlandToggleDispatchMessage),
+    SystemDispatch(HyprlandSystemDispatchMessage),
     SwitchWorkspace(SwitchWorkspaceMessage),
     CreateWorkspace(CreateWorkspaceMessage),
     SnapshotRequest(WorkspaceSnapshotRequestMessage),
+    StateRequest,
     CtlKill(KillCommandMessage),
     CtlNotify(NotifyCommandMessage),
     CtlOutputCreate(OutputCreateCommandMessage),
@@ -170,6 +183,7 @@ impl HyprlandService {
             config: service_config,
         };
 
+        let service_meta = service.meta.clone();
         std::thread::spawn(move || {
             let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                 Ok(rt) => rt,
@@ -182,8 +196,17 @@ impl HyprlandService {
             rt.block_on(async move {
                 while let Some(command) = command_receiver.recv().await {
                     match command {
-                        HyprlandCommand::Dispatch(message) => {
-                            handle_dispatch(message).await;
+                        HyprlandCommand::WindowDispatch(message) => {
+                            handle_dispatch_window(message).await;
+                        }
+                        HyprlandCommand::WorkspaceDispatch(message) => {
+                            handle_dispatch_workspace(message).await;
+                        }
+                        HyprlandCommand::ToggleDispatch(message) => {
+                            handle_dispatch_toggle(message).await;
+                        }
+                        HyprlandCommand::SystemDispatch(message) => {
+                            handle_dispatch_system(message).await;
                         }
                         HyprlandCommand::SwitchWorkspace(message) => {
                             handle_switch_workspace(message).await;
@@ -227,30 +250,26 @@ impl HyprlandService {
                         HyprlandCommand::CtlSwitchXkbLayout(message) => {
                             handle_ctl_switch_xkb_layout(message).await;
                         }
+                        HyprlandCommand::StateRequest => {
+                            handle_state_request(core_context.clone(), &service_meta).await;
+                        }
                     }
                 }
             });
         });
 
-        // Spawn workspace event listener and worker if workspace tracking is enabled
-        if service.config.enable_workspace_tracking {
-            let ws_core_context = service.core_context.clone();
-            let ws_meta = service.meta.clone();
+        // Spawn consolidated event listener and worker if any event tracking is enabled
+        if service.config.enable_workspace_tracking || service.config.enable_monitor_events || service.config.enable_status_events {
+            let ev_core_context = service.core_context.clone();
+            let ev_meta = service.meta.clone();
+            let enable_workspace_tracking = service.config.enable_workspace_tracking;
+            let enable_monitor_events = service.config.enable_monitor_events;
+            let enable_status_events = service.config.enable_status_events;
             let enable_workspace_lifecycle = service.config.enable_workspace_lifecycle;
 
-            let (ws_sender, ws_receiver) = mpsc::unbounded_channel::<WorkspaceEvent>();
-            spawn_workspace_listener(ws_sender);
-            spawn_workspace_worker(ws_receiver, ws_core_context, ws_meta, enable_workspace_lifecycle);
-        }
-
-        // Spawn monitor event listener and worker if monitor events are enabled
-        if service.config.enable_monitor_events {
-            let mon_core_context = service.core_context.clone();
-            let mon_meta = service.meta.clone();
-
-            let (mon_sender, mon_receiver) = mpsc::unbounded_channel::<MonitorEvent>();
-            spawn_monitor_listener(mon_sender);
-            spawn_monitor_worker(mon_receiver, mon_core_context, mon_meta);
+            let (event_sender, event_receiver) = mpsc::unbounded_channel();
+            spawn_event_listener(event_sender, enable_workspace_tracking, enable_monitor_events, enable_status_events);
+            spawn_event_worker(event_receiver, ev_core_context, ev_meta, enable_workspace_lifecycle);
         }
 
         Ok(service)
@@ -311,295 +330,337 @@ pub fn ensure_hyprland_instance_signature() {
     }
 }
 
-async fn handle_dispatch(message: HyprlandDispatchMessage) {
+async fn handle_dispatch_window(message: HyprlandWindowDispatchMessage) {
     ensure_hyprland_instance_signature();
-    let result = match message.kind {
-        HyprlandDispatchActionKind::Exec => {
-            let opt = message.exec.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_exec(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::KillActiveWindow => Dispatch::call_async(DispatchType::KillActiveWindow).await,
-        HyprlandDispatchActionKind::MoveFocus => {
-            let opt = message.move_focus.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_move_focus(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::MoveToWorkspace => {
-            let opt = message.move_to_workspace.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_move_to_workspace(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::ToggleFloating => {
-            let opt: Option<ToggleFloatingDispatchMessage> = message.toggle_floating.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(_payload) => handle_toggle_floating().await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::ToggleFullscreen => {
-            let opt = message.toggle_fullscreen.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_toggle_fullscreen(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::Workspace => {
-            let opt = message.workspace.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_workspace(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::AddMaster => Dispatch::call_async(DispatchType::AddMaster).await,
-        HyprlandDispatchActionKind::BringActiveToTop => Dispatch::call_async(DispatchType::BringActiveToTop).await,
-        HyprlandDispatchActionKind::CenterWindow => Dispatch::call_async(DispatchType::CenterWindow).await,
-        HyprlandDispatchActionKind::ChangeGroupActive => {
-            let opt = message.change_group_active.match_owned(|value| Some(value.into()), || None);
+    let result = handle_window_dispatch(message.kind, message.ops).await;
+    if let Err(error) = result {
+        error!("Hyprland window dispatch failed: {error}");
+    }
+}
+
+async fn handle_dispatch_workspace(message: HyprlandWorkspaceDispatchMessage) {
+    ensure_hyprland_instance_signature();
+    let result = handle_workspace_dispatch(message.kind, message.ops).await;
+    if let Err(error) = result {
+        error!("Hyprland workspace dispatch failed: {error}");
+    }
+}
+
+async fn handle_dispatch_toggle(message: HyprlandToggleDispatchMessage) {
+    ensure_hyprland_instance_signature();
+    let result = handle_toggle_dispatch(message.kind, message.ops).await;
+    if let Err(error) = result {
+        error!("Hyprland toggle dispatch failed: {error}");
+    }
+}
+
+async fn handle_dispatch_system(message: HyprlandSystemDispatchMessage) {
+    ensure_hyprland_instance_signature();
+    let result = handle_system_dispatch(message.kind, message.ops).await;
+    if let Err(error) = result {
+        error!("Hyprland system dispatch failed: {error}");
+    }
+}
+
+async fn handle_window_dispatch(kind: WindowDispatchKind, ops: WindowDispatchOps) -> hyprland::Result<()> {
+    match kind {
+        WindowDispatchKind::CenterWindow => Dispatch::call_async(DispatchType::CenterWindow).await,
+        WindowDispatchKind::ChangeGroupActive => {
+            let opt = ops.change_group_active.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_change_group_active(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::ChangeSplitRatio => {
-            let opt = message.change_split_ratio.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::ChangeSplitRatio => {
+            let opt = ops.change_split_ratio.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_change_split_ratio(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::CloseWindow => {
-            let opt = message.close_window.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::CloseWindow => {
+            let opt = ops.close_window.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_close_window(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::Custom => {
-            let opt = message.custom.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_custom(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::CycleWindow => {
-            let opt = message.cycle_window.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::CycleWindow => {
+            let opt = ops.cycle_window.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_cycle_window(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::Exit => Dispatch::call_async(DispatchType::Exit).await,
-        HyprlandDispatchActionKind::FocusCurrentOrLast => Dispatch::call_async(DispatchType::FocusCurrentOrLast).await,
-        HyprlandDispatchActionKind::FocusMaster => {
-            let opt = message.focus_master.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::Exec => {
+            let opt = ops.exec.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_exec(payload).await,
+                None => Ok(()),
+            }
+        }
+        WindowDispatchKind::FocusCurrentOrLast => Dispatch::call_async(DispatchType::FocusCurrentOrLast).await,
+        WindowDispatchKind::FocusMaster => {
+            let opt = ops.focus_master.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_focus_master(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::FocusMonitor => {
-            let opt = message.focus_monitor.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::FocusMonitor => {
+            let opt = ops.focus_monitor.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_focus_monitor(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::FocusUrgentOrLast => Dispatch::call_async(DispatchType::FocusUrgentOrLast).await,
-        HyprlandDispatchActionKind::FocusWindow => {
-            let opt = message.focus_window.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::FocusUrgentOrLast => Dispatch::call_async(DispatchType::FocusUrgentOrLast).await,
+        WindowDispatchKind::FocusWindow => {
+            let opt = ops.focus_window.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_focus_window(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::ForceRendererReload => Dispatch::call_async(DispatchType::ForceRendererReload).await,
-        HyprlandDispatchActionKind::Global => {
-            let opt = message.global.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_global(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::LockGroups => {
-            let opt = message.lock_groups.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_lock_groups(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::MoveActive => {
-            let opt = message.move_active.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::KillActiveWindow => Dispatch::call_async(DispatchType::KillActiveWindow).await,
+        WindowDispatchKind::MoveActive => {
+            let opt = ops.move_active.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_move_active(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::MoveCursor => {
-            let opt = message.move_cursor.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::MoveCursor => {
+            let opt = ops.move_cursor.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_move_cursor(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::MoveCursorToCorner => {
-            let opt = message.move_cursor_to_corner.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::MoveCursorToCorner => {
+            let opt = ops.move_cursor_to_corner.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_move_cursor_to_corner(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::MoveCurrentWorkspaceToMonitor => {
-            let opt = message.move_current_workspace_to_monitor.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::MoveFocus => {
+            let opt = ops.move_focus.match_owned(|value| Some(value.into()), || None);
             match opt {
-                Some(payload) => handle_move_current_workspace_to_monitor(payload).await,
+                Some(payload) => handle_move_focus(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::MoveFocusedWindowToWorkspace => {
-            let opt = message.move_focused_window_to_workspace.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_move_focused_window_to_workspace(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::MoveFocusedWindowToWorkspaceSilent => {
-            let opt = message.move_focused_window_to_workspace_silent.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_move_focused_window_to_workspace_silent(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::MoveIntoGroup => {
-            let opt = message.move_into_group.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::MoveIntoGroup => {
+            let opt = ops.move_into_group.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_move_into_group(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::MoveOutOfGroup => Dispatch::call_async(DispatchType::MoveOutOfGroup).await,
-        HyprlandDispatchActionKind::MoveToWorkspaceSilent => {
-            let opt = message.move_to_workspace_silent.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_move_to_workspace_silent(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::MoveWindow => {
-            let opt = message.move_window.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::MoveWindow => {
+            let opt = ops.move_window.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_move_window(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::MoveWindowPixel => {
-            let opt = message.move_window_pixel.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::MoveWindowPixel => {
+            let opt = ops.move_window_pixel.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_move_window_pixel(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::OrientationBottom => Dispatch::call_async(DispatchType::OrientationBottom).await,
-        HyprlandDispatchActionKind::OrientationCenter => Dispatch::call_async(DispatchType::OrientationCenter).await,
-        HyprlandDispatchActionKind::OrientationLeft => Dispatch::call_async(DispatchType::OrientationLeft).await,
-        HyprlandDispatchActionKind::OrientationNext => Dispatch::call_async(DispatchType::OrientationNext).await,
-        HyprlandDispatchActionKind::OrientationPrev => Dispatch::call_async(DispatchType::OrientationPrev).await,
-        HyprlandDispatchActionKind::OrientationRight => Dispatch::call_async(DispatchType::OrientationRight).await,
-        HyprlandDispatchActionKind::OrientationTop => Dispatch::call_async(DispatchType::OrientationTop).await,
-        HyprlandDispatchActionKind::Pass => {
-            let opt = message.pass.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_pass(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::RemoveMaster => Dispatch::call_async(DispatchType::RemoveMaster).await,
-        HyprlandDispatchActionKind::RenameWorkspace => {
-            let opt = message.rename_workspace.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_rename_workspace(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::ResizeActive => {
-            let opt = message.resize_active.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::ResizeActive => {
+            let opt = ops.resize_active.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_resize_active(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::ResizeWindowPixel => {
-            let opt = message.resize_window_pixel.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::ResizeWindowPixel => {
+            let opt = ops.resize_window_pixel.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_resize_window_pixel(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::SetCursor => {
-            let opt = message.set_cursor.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_set_cursor(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::SwapActiveWorkspaces => {
-            let opt = message.swap_active_workspaces.match_owned(|value| Some(value.into()), || None);
-            match opt {
-                Some(payload) => handle_swap_active_workspaces(payload).await,
-                None => Ok(()),
-            }
-        }
-        HyprlandDispatchActionKind::SwapWindow => {
-            let opt = message.swap_window.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::SwapWindow => {
+            let opt = ops.swap_window.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_swap_window(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::SwapWithMaster => {
-            let opt = message.swap_with_master.match_owned(|value| Some(value.into()), || None);
+        WindowDispatchKind::SwapWithMaster => {
+            let opt = ops.swap_with_master.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_swap_with_master(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::ToggleDpms => {
-            let opt = message.toggle_dpms.match_owned(|value| Some(value.into()), || None);
+    }
+}
+
+async fn handle_workspace_dispatch(kind: WorkspaceDispatchKind, ops: WorkspaceDispatchOps) -> hyprland::Result<()> {
+    match kind {
+        WorkspaceDispatchKind::MoveCurrentWorkspaceToMonitor => {
+            let opt = ops.move_current_workspace_to_monitor.match_owned(|value| Some(value.into()), || None);
             match opt {
-                Some(payload) => handle_toggle_dpms(payload).await,
+                Some(payload) => handle_move_current_workspace_to_monitor(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::ToggleFakeFullscreen => Dispatch::call_async(DispatchType::ToggleFakeFullscreen).await,
-        HyprlandDispatchActionKind::ToggleGroup => Dispatch::call_async(DispatchType::ToggleGroup).await,
-        HyprlandDispatchActionKind::ToggleOpaque => Dispatch::call_async(DispatchType::ToggleOpaque).await,
-        HyprlandDispatchActionKind::TogglePin => Dispatch::call_async(DispatchType::TogglePin).await,
-        HyprlandDispatchActionKind::TogglePseudo => Dispatch::call_async(DispatchType::TogglePseudo).await,
-        HyprlandDispatchActionKind::ToggleSpecialWorkspace => {
-            let opt = message.toggle_special_workspace.match_owned(|value| Some(value.into()), || None);
+        WorkspaceDispatchKind::MoveFocusedWindowToWorkspace => {
+            let opt = ops.move_focused_window_to_workspace.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_move_focused_window_to_workspace(payload).await,
+                None => Ok(()),
+            }
+        }
+        WorkspaceDispatchKind::MoveFocusedWindowToWorkspaceSilent => {
+            let opt = ops.move_focused_window_to_workspace_silent.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_move_focused_window_to_workspace_silent(payload).await,
+                None => Ok(()),
+            }
+        }
+        WorkspaceDispatchKind::MoveToWorkspace => {
+            let opt = ops.move_to_workspace.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_move_to_workspace(payload).await,
+                None => Ok(()),
+            }
+        }
+        WorkspaceDispatchKind::MoveToWorkspaceSilent => {
+            let opt = ops.move_to_workspace_silent.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_move_to_workspace_silent(payload).await,
+                None => Ok(()),
+            }
+        }
+        WorkspaceDispatchKind::RenameWorkspace => {
+            let opt = ops.rename_workspace.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_rename_workspace(payload).await,
+                None => Ok(()),
+            }
+        }
+        WorkspaceDispatchKind::SwapActiveWorkspaces => {
+            let opt = ops.swap_active_workspaces.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_swap_active_workspaces(payload).await,
+                None => Ok(()),
+            }
+        }
+        WorkspaceDispatchKind::ToggleSpecialWorkspace => {
+            let opt = ops.toggle_special_workspace.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_toggle_special_workspace(payload).await,
                 None => Ok(()),
             }
         }
-        HyprlandDispatchActionKind::ToggleSplit => Dispatch::call_async(DispatchType::ToggleSplit).await,
-        HyprlandDispatchActionKind::WorkspaceOption => {
-            let opt = message.workspace_option.match_owned(|value| Some(value.into()), || None);
+        WorkspaceDispatchKind::Workspace => {
+            let opt = ops.workspace.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_workspace(payload).await,
+                None => Ok(()),
+            }
+        }
+        WorkspaceDispatchKind::WorkspaceOption => {
+            let opt = ops.workspace_option.match_owned(|value| Some(value.into()), || None);
             match opt {
                 Some(payload) => handle_workspace_option(payload).await,
                 None => Ok(()),
             }
         }
-    };
+    }
+}
 
-    if let Err(error) = result {
-        error!("Hyprland dispatch failed: {error}");
+async fn handle_toggle_dispatch(kind: ToggleDispatchKind, ops: ToggleDispatchOps) -> hyprland::Result<()> {
+    match kind {
+        ToggleDispatchKind::ToggleDpms => {
+            let opt = ops.toggle_dpms.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_toggle_dpms(payload).await,
+                None => Ok(()),
+            }
+        }
+        ToggleDispatchKind::ToggleFakeFullscreen => Dispatch::call_async(DispatchType::ToggleFakeFullscreen).await,
+        ToggleDispatchKind::ToggleFloating => {
+            let opt: Option<ToggleFloatingDispatchMessage> = ops.toggle_floating.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(_payload) => handle_toggle_floating().await,
+                None => Ok(()),
+            }
+        }
+        ToggleDispatchKind::ToggleFullscreen => {
+            let opt = ops.toggle_fullscreen.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_toggle_fullscreen(payload).await,
+                None => Ok(()),
+            }
+        }
+        ToggleDispatchKind::ToggleGroup => Dispatch::call_async(DispatchType::ToggleGroup).await,
+        ToggleDispatchKind::ToggleOpaque => Dispatch::call_async(DispatchType::ToggleOpaque).await,
+        ToggleDispatchKind::TogglePin => Dispatch::call_async(DispatchType::TogglePin).await,
+        ToggleDispatchKind::TogglePseudo => Dispatch::call_async(DispatchType::TogglePseudo).await,
+        ToggleDispatchKind::ToggleSplit => Dispatch::call_async(DispatchType::ToggleSplit).await,
+    }
+}
+
+async fn handle_system_dispatch(kind: SystemDispatchKind, ops: SystemDispatchOps) -> hyprland::Result<()> {
+    match kind {
+        SystemDispatchKind::AddMaster => Dispatch::call_async(DispatchType::AddMaster).await,
+        SystemDispatchKind::BringActiveToTop => Dispatch::call_async(DispatchType::BringActiveToTop).await,
+        SystemDispatchKind::Custom => {
+            let opt = ops.custom.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_custom(payload).await,
+                None => Ok(()),
+            }
+        }
+        SystemDispatchKind::Exit => Dispatch::call_async(DispatchType::Exit).await,
+        SystemDispatchKind::ForceRendererReload => Dispatch::call_async(DispatchType::ForceRendererReload).await,
+        SystemDispatchKind::Global => {
+            let opt = ops.global.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_global(payload).await,
+                None => Ok(()),
+            }
+        }
+        SystemDispatchKind::LockGroups => {
+            let opt = ops.lock_groups.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_lock_groups(payload).await,
+                None => Ok(()),
+            }
+        }
+        SystemDispatchKind::MoveOutOfGroup => Dispatch::call_async(DispatchType::MoveOutOfGroup).await,
+        SystemDispatchKind::OrientationBottom => Dispatch::call_async(DispatchType::OrientationBottom).await,
+        SystemDispatchKind::OrientationCenter => Dispatch::call_async(DispatchType::OrientationCenter).await,
+        SystemDispatchKind::OrientationLeft => Dispatch::call_async(DispatchType::OrientationLeft).await,
+        SystemDispatchKind::OrientationNext => Dispatch::call_async(DispatchType::OrientationNext).await,
+        SystemDispatchKind::OrientationPrev => Dispatch::call_async(DispatchType::OrientationPrev).await,
+        SystemDispatchKind::OrientationRight => Dispatch::call_async(DispatchType::OrientationRight).await,
+        SystemDispatchKind::OrientationTop => Dispatch::call_async(DispatchType::OrientationTop).await,
+        SystemDispatchKind::Pass => {
+            let opt = ops.pass.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_pass(payload).await,
+                None => Ok(()),
+            }
+        }
+        SystemDispatchKind::RemoveMaster => Dispatch::call_async(DispatchType::RemoveMaster).await,
+        SystemDispatchKind::SetCursor => {
+            let opt = ops.set_cursor.match_owned(|value| Some(value.into()), || None);
+            match opt {
+                Some(payload) => handle_set_cursor(payload).await,
+                None => Ok(()),
+            }
+        }
     }
 }
 
@@ -1004,6 +1065,66 @@ async fn handle_snapshot_request(_message: WorkspaceSnapshotRequestMessage, core
         core_context: Some(ctx),
     };
     broadcaster.broadcast_message_to_topic(snapshot);
+}
+
+/// Handle a `HyprlandStateRequestMessage` by querying the current Hyprland state
+/// and broadcasting a `HyprlandStateMessage`.
+///
+/// Synchronous IPC calls are wrapped in `tokio::task::spawn_blocking` to prevent
+/// blocking the async event worker when the compositor is under load.
+async fn handle_state_request(core_context: Option<FfiCoreContext>, meta: &PluginMeta) {
+    ensure_hyprland_instance_signature();
+
+    let state = tokio::task::spawn_blocking(|| {
+        let active_window = hyprland::data::Clients::get()
+            .ok()
+            .and_then(|clients| clients.into_iter().find(|c| c.focus_history_id == 0))
+            .map(|c| HyprlandWindowEventData {
+                window_class: c.class.clone().into(),
+                window_title: c.title.clone().into(),
+                window_address: c.address.to_string().into(),
+                workspace_id: c.workspace.id,
+            });
+
+        let is_fullscreen = active_window
+            .as_ref()
+            .is_some_and(|_w| hyprland::data::Workspace::get_active().ok().map(|ws| ws.fullscreen).unwrap_or(false));
+
+        let keyboard_layout = hyprland::data::Devices::get()
+            .ok()
+            .and_then(|devices| devices.keyboards.first().map(|k| k.active_keymap.clone().into()));
+
+        let sub_map = String::new().into();
+
+        let ignore_group_lock = false;
+        let groups_locked = false;
+
+        HyprlandStateMessage {
+            active_window: active_window.into(),
+            is_fullscreen,
+            keyboard_layout: keyboard_layout.into(),
+            sub_map,
+            ignore_group_lock,
+            groups_locked,
+        }
+    })
+    .await
+    .unwrap_or_default();
+
+    let Some(ctx) = core_context else {
+        return;
+    };
+    let broadcaster = MessageBroadcasterInner {
+        meta: meta.clone(),
+        core_context: Some(ctx),
+    };
+    broadcaster.broadcast_message_to_topic(state);
+}
+
+impl MessageHandler<FfiEnvelopePayload<HyprlandStateRequestMessage>> for HyprlandService {
+    fn handle_message(&self, _message: FfiEnvelopePayload<HyprlandStateRequestMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::StateRequest);
+    }
 }
 
 fn convert_direction(direction: HyprlandDirection) -> hyprland::dispatch::Direction {
@@ -1426,355 +1547,93 @@ async fn handle_ctl_switch_xkb_layout(message: SwitchXkbLayoutCommandMessage) {
     }
 }
 
-impl MessageHandler<FfiEnvelopePayload<HyprlandDispatchMessage>> for HyprlandService {
-    fn handle_message(&self, message: FfiEnvelopePayload<HyprlandDispatchMessage>, _sender_id: &str) {
-        let _ = self.command_sender.send(HyprlandCommand::Dispatch(message.0));
+impl MessageHandler<FfiEnvelopePayload<HyprlandWindowDispatchMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<HyprlandWindowDispatchMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::WindowDispatch(message.0));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<HyprlandWorkspaceDispatchMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<HyprlandWorkspaceDispatchMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::WorkspaceDispatch(message.0));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<HyprlandToggleDispatchMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<HyprlandToggleDispatchMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::ToggleDispatch(message.0));
+    }
+}
+
+impl MessageHandler<FfiEnvelopePayload<HyprlandSystemDispatchMessage>> for HyprlandService {
+    fn handle_message(&self, message: FfiEnvelopePayload<HyprlandSystemDispatchMessage>, _sender_id: &str) {
+        let _ = self.command_sender.send(HyprlandCommand::SystemDispatch(message.0));
     }
 }
 
 impl MessageHandler<FfiEnvelopePayload<WorkspaceDispatchMessage>> for HyprlandService {
     fn handle_message(&self, message: FfiEnvelopePayload<WorkspaceDispatchMessage>, _sender_id: &str) {
         debug!("Hyprland service: queueing workspace dispatch for {:?}", message.0.identifier);
-        let dispatch_message = HyprlandDispatchMessage {
-            kind: HyprlandDispatchActionKind::Workspace,
-            add_master: StabbyOption::None(),
-            bring_active_to_top: StabbyOption::None(),
-            center_window: StabbyOption::None(),
-            change_group_active: StabbyOption::None(),
-            change_split_ratio: StabbyOption::None(),
-            close_window: StabbyOption::None(),
-            custom: StabbyOption::None(),
-            cycle_window: StabbyOption::None(),
-            exec: StabbyOption::None(),
-            exit: StabbyOption::None(),
-            focus_current_or_last: StabbyOption::None(),
-            focus_master: StabbyOption::None(),
-            focus_monitor: StabbyOption::None(),
-            focus_urgent_or_last: StabbyOption::None(),
-            focus_window: StabbyOption::None(),
-            force_renderer_reload: StabbyOption::None(),
-            global: StabbyOption::None(),
-            kill_active_window: StabbyOption::None(),
-            lock_groups: StabbyOption::None(),
-            move_active: StabbyOption::None(),
-            move_cursor: StabbyOption::None(),
-            move_cursor_to_corner: StabbyOption::None(),
-            move_current_workspace_to_monitor: StabbyOption::None(),
-            move_focused_window_to_workspace: StabbyOption::None(),
-            move_focused_window_to_workspace_silent: StabbyOption::None(),
-            move_focus: StabbyOption::None(),
-            move_into_group: StabbyOption::None(),
-            move_out_of_group: StabbyOption::None(),
-            move_to_workspace: StabbyOption::None(),
-            move_to_workspace_silent: StabbyOption::None(),
-            move_window: StabbyOption::None(),
-            move_window_pixel: StabbyOption::None(),
-            orientation_bottom: StabbyOption::None(),
-            orientation_center: StabbyOption::None(),
-            orientation_left: StabbyOption::None(),
-            orientation_next: StabbyOption::None(),
-            orientation_prev: StabbyOption::None(),
-            orientation_right: StabbyOption::None(),
-            orientation_top: StabbyOption::None(),
-            pass: StabbyOption::None(),
-            remove_master: StabbyOption::None(),
-            rename_workspace: StabbyOption::None(),
-            resize_active: StabbyOption::None(),
-            resize_window_pixel: StabbyOption::None(),
-            set_cursor: StabbyOption::None(),
-            swap_active_workspaces: StabbyOption::None(),
-            swap_window: StabbyOption::None(),
-            swap_with_master: StabbyOption::None(),
-            toggle_dpms: StabbyOption::None(),
-            toggle_fake_fullscreen: StabbyOption::None(),
-            toggle_floating: StabbyOption::None(),
-            toggle_fullscreen: StabbyOption::None(),
-            toggle_group: StabbyOption::None(),
-            toggle_opaque: StabbyOption::None(),
-            toggle_pin: StabbyOption::None(),
-            toggle_pseudo: StabbyOption::None(),
-            toggle_special_workspace: StabbyOption::None(),
-            toggle_split: StabbyOption::None(),
-            workspace: StabbyOption::Some(message.0.into()),
-            workspace_option: StabbyOption::None(),
+        let dispatch_message = HyprlandWorkspaceDispatchMessage {
+            kind: WorkspaceDispatchKind::Workspace,
+            ops: WorkspaceDispatchOps {
+                workspace: StabbyOption::Some(message.0.into()),
+                ..WorkspaceDispatchOps::default()
+            },
         };
-        let _ = self.command_sender.send(HyprlandCommand::Dispatch(dispatch_message));
+        let _ = self.command_sender.send(HyprlandCommand::WorkspaceDispatch(dispatch_message));
     }
 }
 
 impl MessageHandler<FfiEnvelopePayload<ExecDispatchMessage>> for HyprlandService {
     fn handle_message(&self, message: FfiEnvelopePayload<ExecDispatchMessage>, _sender_id: &str) {
-        let dispatch_message = HyprlandDispatchMessage {
-            kind: HyprlandDispatchActionKind::Exec,
-            add_master: StabbyOption::None(),
-            bring_active_to_top: StabbyOption::None(),
-            center_window: StabbyOption::None(),
-            change_group_active: StabbyOption::None(),
-            change_split_ratio: StabbyOption::None(),
-            close_window: StabbyOption::None(),
-            custom: StabbyOption::None(),
-            cycle_window: StabbyOption::None(),
-            exec: StabbyOption::Some(message.0.into()),
-            exit: StabbyOption::None(),
-            focus_current_or_last: StabbyOption::None(),
-            focus_master: StabbyOption::None(),
-            focus_monitor: StabbyOption::None(),
-            focus_urgent_or_last: StabbyOption::None(),
-            focus_window: StabbyOption::None(),
-            force_renderer_reload: StabbyOption::None(),
-            global: StabbyOption::None(),
-            kill_active_window: StabbyOption::None(),
-            lock_groups: StabbyOption::None(),
-            move_active: StabbyOption::None(),
-            move_cursor: StabbyOption::None(),
-            move_cursor_to_corner: StabbyOption::None(),
-            move_current_workspace_to_monitor: StabbyOption::None(),
-            move_focused_window_to_workspace: StabbyOption::None(),
-            move_focused_window_to_workspace_silent: StabbyOption::None(),
-            move_focus: StabbyOption::None(),
-            move_into_group: StabbyOption::None(),
-            move_out_of_group: StabbyOption::None(),
-            move_to_workspace: StabbyOption::None(),
-            move_to_workspace_silent: StabbyOption::None(),
-            move_window: StabbyOption::None(),
-            move_window_pixel: StabbyOption::None(),
-            orientation_bottom: StabbyOption::None(),
-            orientation_center: StabbyOption::None(),
-            orientation_left: StabbyOption::None(),
-            orientation_next: StabbyOption::None(),
-            orientation_prev: StabbyOption::None(),
-            orientation_right: StabbyOption::None(),
-            orientation_top: StabbyOption::None(),
-            pass: StabbyOption::None(),
-            remove_master: StabbyOption::None(),
-            rename_workspace: StabbyOption::None(),
-            resize_active: StabbyOption::None(),
-            resize_window_pixel: StabbyOption::None(),
-            set_cursor: StabbyOption::None(),
-            swap_active_workspaces: StabbyOption::None(),
-            swap_window: StabbyOption::None(),
-            swap_with_master: StabbyOption::None(),
-            toggle_dpms: StabbyOption::None(),
-            toggle_fake_fullscreen: StabbyOption::None(),
-            toggle_floating: StabbyOption::None(),
-            toggle_fullscreen: StabbyOption::None(),
-            toggle_group: StabbyOption::None(),
-            toggle_opaque: StabbyOption::None(),
-            toggle_pin: StabbyOption::None(),
-            toggle_pseudo: StabbyOption::None(),
-            toggle_special_workspace: StabbyOption::None(),
-            toggle_split: StabbyOption::None(),
-            workspace: StabbyOption::None(),
-            workspace_option: StabbyOption::None(),
+        let dispatch_message = HyprlandWindowDispatchMessage {
+            kind: WindowDispatchKind::Exec,
+            ops: WindowDispatchOps {
+                exec: StabbyOption::Some(message.0.into()),
+                ..WindowDispatchOps::default()
+            },
         };
-        let _ = self.command_sender.send(HyprlandCommand::Dispatch(dispatch_message));
+        let _ = self.command_sender.send(HyprlandCommand::WindowDispatch(dispatch_message));
     }
 }
 
 impl MessageHandler<FfiEnvelopePayload<KillActiveWindowDispatchMessage>> for HyprlandService {
     fn handle_message(&self, message: FfiEnvelopePayload<KillActiveWindowDispatchMessage>, _sender_id: &str) {
-        let dispatch_message = HyprlandDispatchMessage {
-            kind: HyprlandDispatchActionKind::KillActiveWindow,
-            add_master: StabbyOption::None(),
-            bring_active_to_top: StabbyOption::None(),
-            center_window: StabbyOption::None(),
-            change_group_active: StabbyOption::None(),
-            change_split_ratio: StabbyOption::None(),
-            close_window: StabbyOption::None(),
-            custom: StabbyOption::None(),
-            cycle_window: StabbyOption::None(),
-            exec: StabbyOption::None(),
-            exit: StabbyOption::None(),
-            focus_current_or_last: StabbyOption::None(),
-            focus_master: StabbyOption::None(),
-            focus_monitor: StabbyOption::None(),
-            focus_urgent_or_last: StabbyOption::None(),
-            focus_window: StabbyOption::None(),
-            force_renderer_reload: StabbyOption::None(),
-            global: StabbyOption::None(),
-            kill_active_window: StabbyOption::Some(message.0.into()),
-            lock_groups: StabbyOption::None(),
-            move_active: StabbyOption::None(),
-            move_cursor: StabbyOption::None(),
-            move_cursor_to_corner: StabbyOption::None(),
-            move_current_workspace_to_monitor: StabbyOption::None(),
-            move_focused_window_to_workspace: StabbyOption::None(),
-            move_focused_window_to_workspace_silent: StabbyOption::None(),
-            move_focus: StabbyOption::None(),
-            move_into_group: StabbyOption::None(),
-            move_out_of_group: StabbyOption::None(),
-            move_to_workspace: StabbyOption::None(),
-            move_to_workspace_silent: StabbyOption::None(),
-            move_window: StabbyOption::None(),
-            move_window_pixel: StabbyOption::None(),
-            orientation_bottom: StabbyOption::None(),
-            orientation_center: StabbyOption::None(),
-            orientation_left: StabbyOption::None(),
-            orientation_next: StabbyOption::None(),
-            orientation_prev: StabbyOption::None(),
-            orientation_right: StabbyOption::None(),
-            orientation_top: StabbyOption::None(),
-            pass: StabbyOption::None(),
-            remove_master: StabbyOption::None(),
-            rename_workspace: StabbyOption::None(),
-            resize_active: StabbyOption::None(),
-            resize_window_pixel: StabbyOption::None(),
-            set_cursor: StabbyOption::None(),
-            swap_active_workspaces: StabbyOption::None(),
-            swap_window: StabbyOption::None(),
-            swap_with_master: StabbyOption::None(),
-            toggle_dpms: StabbyOption::None(),
-            toggle_fake_fullscreen: StabbyOption::None(),
-            toggle_floating: StabbyOption::None(),
-            toggle_fullscreen: StabbyOption::None(),
-            toggle_group: StabbyOption::None(),
-            toggle_opaque: StabbyOption::None(),
-            toggle_pin: StabbyOption::None(),
-            toggle_pseudo: StabbyOption::None(),
-            toggle_special_workspace: StabbyOption::None(),
-            toggle_split: StabbyOption::None(),
-            workspace: StabbyOption::None(),
-            workspace_option: StabbyOption::None(),
+        let dispatch_message = HyprlandWindowDispatchMessage {
+            kind: WindowDispatchKind::KillActiveWindow,
+            ops: WindowDispatchOps {
+                kill_active_window: StabbyOption::Some(message.0.into()),
+                ..WindowDispatchOps::default()
+            },
         };
-        let _ = self.command_sender.send(HyprlandCommand::Dispatch(dispatch_message));
+        let _ = self.command_sender.send(HyprlandCommand::WindowDispatch(dispatch_message));
     }
 }
 
 impl MessageHandler<FfiEnvelopePayload<MoveFocusDispatchMessage>> for HyprlandService {
     fn handle_message(&self, message: FfiEnvelopePayload<MoveFocusDispatchMessage>, _sender_id: &str) {
-        let dispatch_message = HyprlandDispatchMessage {
-            kind: HyprlandDispatchActionKind::MoveFocus,
-            add_master: StabbyOption::None(),
-            bring_active_to_top: StabbyOption::None(),
-            center_window: StabbyOption::None(),
-            change_group_active: StabbyOption::None(),
-            change_split_ratio: StabbyOption::None(),
-            close_window: StabbyOption::None(),
-            custom: StabbyOption::None(),
-            cycle_window: StabbyOption::None(),
-            exec: StabbyOption::None(),
-            exit: StabbyOption::None(),
-            focus_current_or_last: StabbyOption::None(),
-            focus_master: StabbyOption::None(),
-            focus_monitor: StabbyOption::None(),
-            focus_urgent_or_last: StabbyOption::None(),
-            focus_window: StabbyOption::None(),
-            force_renderer_reload: StabbyOption::None(),
-            global: StabbyOption::None(),
-            kill_active_window: StabbyOption::None(),
-            lock_groups: StabbyOption::None(),
-            move_active: StabbyOption::None(),
-            move_cursor: StabbyOption::None(),
-            move_cursor_to_corner: StabbyOption::None(),
-            move_current_workspace_to_monitor: StabbyOption::None(),
-            move_focused_window_to_workspace: StabbyOption::None(),
-            move_focused_window_to_workspace_silent: StabbyOption::None(),
-            move_focus: StabbyOption::Some(message.0.into()),
-            move_into_group: StabbyOption::None(),
-            move_out_of_group: StabbyOption::None(),
-            move_to_workspace: StabbyOption::None(),
-            move_to_workspace_silent: StabbyOption::None(),
-            move_window: StabbyOption::None(),
-            move_window_pixel: StabbyOption::None(),
-            orientation_bottom: StabbyOption::None(),
-            orientation_center: StabbyOption::None(),
-            orientation_left: StabbyOption::None(),
-            orientation_next: StabbyOption::None(),
-            orientation_prev: StabbyOption::None(),
-            orientation_right: StabbyOption::None(),
-            orientation_top: StabbyOption::None(),
-            pass: StabbyOption::None(),
-            remove_master: StabbyOption::None(),
-            rename_workspace: StabbyOption::None(),
-            resize_active: StabbyOption::None(),
-            resize_window_pixel: StabbyOption::None(),
-            set_cursor: StabbyOption::None(),
-            swap_active_workspaces: StabbyOption::None(),
-            swap_window: StabbyOption::None(),
-            swap_with_master: StabbyOption::None(),
-            toggle_dpms: StabbyOption::None(),
-            toggle_fake_fullscreen: StabbyOption::None(),
-            toggle_floating: StabbyOption::None(),
-            toggle_fullscreen: StabbyOption::None(),
-            toggle_group: StabbyOption::None(),
-            toggle_opaque: StabbyOption::None(),
-            toggle_pin: StabbyOption::None(),
-            toggle_pseudo: StabbyOption::None(),
-            toggle_special_workspace: StabbyOption::None(),
-            toggle_split: StabbyOption::None(),
-            workspace: StabbyOption::None(),
-            workspace_option: StabbyOption::None(),
+        let dispatch_message = HyprlandWindowDispatchMessage {
+            kind: WindowDispatchKind::MoveFocus,
+            ops: WindowDispatchOps {
+                move_focus: StabbyOption::Some(message.0.into()),
+                ..WindowDispatchOps::default()
+            },
         };
-        let _ = self.command_sender.send(HyprlandCommand::Dispatch(dispatch_message));
+        let _ = self.command_sender.send(HyprlandCommand::WindowDispatch(dispatch_message));
     }
 }
 
 impl MessageHandler<FfiEnvelopePayload<ToggleFullscreenDispatchMessage>> for HyprlandService {
     fn handle_message(&self, message: FfiEnvelopePayload<ToggleFullscreenDispatchMessage>, _sender_id: &str) {
-        let dispatch_message = HyprlandDispatchMessage {
-            kind: HyprlandDispatchActionKind::ToggleFullscreen,
-            add_master: StabbyOption::None(),
-            bring_active_to_top: StabbyOption::None(),
-            center_window: StabbyOption::None(),
-            change_group_active: StabbyOption::None(),
-            change_split_ratio: StabbyOption::None(),
-            close_window: StabbyOption::None(),
-            custom: StabbyOption::None(),
-            cycle_window: StabbyOption::None(),
-            exec: StabbyOption::None(),
-            exit: StabbyOption::None(),
-            focus_current_or_last: StabbyOption::None(),
-            focus_master: StabbyOption::None(),
-            focus_monitor: StabbyOption::None(),
-            focus_urgent_or_last: StabbyOption::None(),
-            focus_window: StabbyOption::None(),
-            force_renderer_reload: StabbyOption::None(),
-            global: StabbyOption::None(),
-            kill_active_window: StabbyOption::None(),
-            lock_groups: StabbyOption::None(),
-            move_active: StabbyOption::None(),
-            move_cursor: StabbyOption::None(),
-            move_cursor_to_corner: StabbyOption::None(),
-            move_current_workspace_to_monitor: StabbyOption::None(),
-            move_focused_window_to_workspace: StabbyOption::None(),
-            move_focused_window_to_workspace_silent: StabbyOption::None(),
-            move_focus: StabbyOption::None(),
-            move_into_group: StabbyOption::None(),
-            move_out_of_group: StabbyOption::None(),
-            move_to_workspace: StabbyOption::None(),
-            move_to_workspace_silent: StabbyOption::None(),
-            move_window: StabbyOption::None(),
-            move_window_pixel: StabbyOption::None(),
-            orientation_bottom: StabbyOption::None(),
-            orientation_center: StabbyOption::None(),
-            orientation_left: StabbyOption::None(),
-            orientation_next: StabbyOption::None(),
-            orientation_prev: StabbyOption::None(),
-            orientation_right: StabbyOption::None(),
-            orientation_top: StabbyOption::None(),
-            pass: StabbyOption::None(),
-            remove_master: StabbyOption::None(),
-            rename_workspace: StabbyOption::None(),
-            resize_active: StabbyOption::None(),
-            resize_window_pixel: StabbyOption::None(),
-            set_cursor: StabbyOption::None(),
-            swap_active_workspaces: StabbyOption::None(),
-            swap_window: StabbyOption::None(),
-            swap_with_master: StabbyOption::None(),
-            toggle_dpms: StabbyOption::None(),
-            toggle_fake_fullscreen: StabbyOption::None(),
-            toggle_floating: StabbyOption::None(),
-            toggle_fullscreen: StabbyOption::Some(message.0.into()),
-            toggle_group: StabbyOption::None(),
-            toggle_opaque: StabbyOption::None(),
-            toggle_pin: StabbyOption::None(),
-            toggle_pseudo: StabbyOption::None(),
-            toggle_special_workspace: StabbyOption::None(),
-            toggle_split: StabbyOption::None(),
-            workspace: StabbyOption::None(),
-            workspace_option: StabbyOption::None(),
+        let dispatch_message = HyprlandToggleDispatchMessage {
+            kind: ToggleDispatchKind::ToggleFullscreen,
+            ops: ToggleDispatchOps {
+                toggle_fullscreen: StabbyOption::Some(message.0.into()),
+                ..ToggleDispatchOps::default()
+            },
         };
-        let _ = self.command_sender.send(HyprlandCommand::Dispatch(dispatch_message));
+        let _ = self.command_sender.send(HyprlandCommand::ToggleDispatch(dispatch_message));
     }
 }
 
@@ -1882,7 +1741,7 @@ impl AsRef<Option<FfiCoreContext>> for HyprlandService {
     }
 }
 
-impl Service for HyprlandService {
+impl ServicePlugin for HyprlandService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if message.is_null() {
             return;
@@ -1891,9 +1750,21 @@ impl Service for HyprlandService {
             let envelope = &*(message as *mut FfiEnvelope);
             debug!("Hyprland service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
             match envelope.type_id {
-                id if id == FfiEnvelopePayload::<HyprlandDispatchMessage>::TYPE_ID => {
-                    debug!("HyprlandDispatchMessage");
-                    MessageHandler::<FfiEnvelopePayload<HyprlandDispatchMessage>>::handle_envelope_message(self, envelope);
+                id if id == FfiEnvelopePayload::<HyprlandWindowDispatchMessage>::TYPE_ID => {
+                    debug!("HyprlandWindowDispatchMessage");
+                    MessageHandler::<FfiEnvelopePayload<HyprlandWindowDispatchMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<HyprlandWorkspaceDispatchMessage>::TYPE_ID => {
+                    debug!("HyprlandWorkspaceDispatchMessage");
+                    MessageHandler::<FfiEnvelopePayload<HyprlandWorkspaceDispatchMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<HyprlandToggleDispatchMessage>::TYPE_ID => {
+                    debug!("HyprlandToggleDispatchMessage");
+                    MessageHandler::<FfiEnvelopePayload<HyprlandToggleDispatchMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<HyprlandSystemDispatchMessage>::TYPE_ID => {
+                    debug!("HyprlandSystemDispatchMessage");
+                    MessageHandler::<FfiEnvelopePayload<HyprlandSystemDispatchMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<WorkspaceDispatchMessage>::TYPE_ID => {
                     debug!("WorkspaceDispatchMessage");
@@ -1970,6 +1841,10 @@ impl Service for HyprlandService {
                 id if id == FfiEnvelopePayload::<SwitchXkbLayoutCommandMessage>::TYPE_ID => {
                     debug!("SwitchXkbLayoutCommandMessage");
                     MessageHandler::<FfiEnvelopePayload<SwitchXkbLayoutCommandMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<HyprlandStateRequestMessage>::TYPE_ID => {
+                    debug!("HyprlandStateRequestMessage");
+                    MessageHandler::<FfiEnvelopePayload<HyprlandStateRequestMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {
                     warn!("Unknown message type");

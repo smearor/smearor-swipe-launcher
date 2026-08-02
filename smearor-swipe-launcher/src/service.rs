@@ -6,19 +6,20 @@ use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
-use smearor_swipe_launcher_plugin_api::ServiceConstructor;
-use smearor_swipe_launcher_plugin_api::ServiceVTable;
+use smearor_swipe_launcher_plugin_api::ServicePluginConstructor;
+use smearor_swipe_launcher_plugin_api::ServicePluginVTable;
 use stabby::libloading::StabbyLibrary;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
+use tracing::trace;
 
 /// Represents a loaded background service with its library handle.
 pub struct LoadedService {
     _library: Arc<Library>,
     pub instance: *mut core::ffi::c_void,
-    pub vtable: *const ServiceVTable,
+    pub vtable: *const ServicePluginVTable,
     core_context: *mut core::ffi::c_void,
 }
 
@@ -28,9 +29,9 @@ impl LoadedService {
             let path = PathBuf::from(&service_entry.path);
             let library = Arc::new(Library::new(&path)?);
 
-            debug!("Loading service: {:?}", config);
+            trace!("Loading service: {:?}", config);
             let constructor = library
-                .get_stabbied::<ServiceConstructor>(b"smearor_service_create")
+                .get_stabbied::<ServicePluginConstructor>(b"smearor_service_create")
                 .map_err(|e| LauncherError::PluginStabbiedLoadError(e.to_string()))?;
 
             let mut config_ext = config.config.clone();
@@ -62,7 +63,7 @@ impl LoadedService {
                 ));
             }
 
-            let api_loaded_service = &*(container_ptr as *mut smearor_swipe_launcher_plugin_api::ServiceContainer);
+            let api_loaded_service = &*(container_ptr as *mut smearor_swipe_launcher_plugin_api::ServicePluginContainer);
             let service_id = service_entry.id.clone();
 
             let service = LoadedService {

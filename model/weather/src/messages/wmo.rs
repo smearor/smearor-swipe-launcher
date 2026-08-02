@@ -1,117 +1,220 @@
-/// Returns a human-readable description for a WMO weather interpretation code.
-pub fn weather_code_description(code: u16) -> &'static str {
-    match code {
-        0 => "Clear sky",
-        1 => "Mainly clear",
-        2 => "Partly cloudy",
-        3 => "Overcast",
-        45 => "Fog",
-        48 => "Depositing rime fog",
-        51 => "Light drizzle",
-        53 => "Moderate drizzle",
-        55 => "Dense drizzle",
-        56 => "Light freezing drizzle",
-        57 => "Dense freezing drizzle",
-        61 => "Slight rain",
-        63 => "Moderate rain",
-        65 => "Heavy rain",
-        66 => "Light freezing rain",
-        67 => "Heavy freezing rain",
-        71 => "Slight snow fall",
-        73 => "Moderate snow fall",
-        75 => "Heavy snow fall",
-        77 => "Snow grains",
-        80 => "Slight rain showers",
-        81 => "Moderate rain showers",
-        82 => "Violent rain showers",
-        85 => "Slight snow showers",
-        86 => "Heavy snow showers",
-        95 => "Thunderstorm",
-        96 => "Thunderstorm with slight hail",
-        99 => "Thunderstorm with heavy hail",
-        _ => "Unknown",
-    }
+/// WMO weather interpretation code.
+///
+/// Represents the weather condition codes defined by the World Meteorological
+/// Organization, as returned by the Open-Meteo API.
+///
+/// See <https://open-meteo.com/en/docs> for the full code reference.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum WeatherCode {
+    /// Clear sky (WMO code 0).
+    ClearSky,
+    /// Mainly clear (WMO code 1).
+    MainlyClear,
+    /// Partly cloudy (WMO code 2).
+    PartlyCloudy,
+    /// Overcast (WMO code 3).
+    Overcast,
+    /// Fog (WMO code 45).
+    Fog,
+    /// Depositing rime fog (WMO code 48).
+    DepositingRimeFog,
+    /// Light drizzle (WMO code 51).
+    LightDrizzle,
+    /// Moderate drizzle (WMO code 53).
+    ModerateDrizzle,
+    /// Dense drizzle (WMO code 55).
+    DenseDrizzle,
+    /// Light freezing drizzle (WMO code 56).
+    LightFreezingDrizzle,
+    /// Dense freezing drizzle (WMO code 57).
+    DenseFreezingDrizzle,
+    /// Slight rain (WMO code 61).
+    SlightRain,
+    /// Moderate rain (WMO code 63).
+    ModerateRain,
+    /// Heavy rain (WMO code 65).
+    HeavyRain,
+    /// Light freezing rain (WMO code 66).
+    LightFreezingRain,
+    /// Heavy freezing rain (WMO code 67).
+    HeavyFreezingRain,
+    /// Slight snow fall (WMO code 71).
+    SlightSnowFall,
+    /// Moderate snow fall (WMO code 73).
+    ModerateSnowFall,
+    /// Heavy snow fall (WMO code 75).
+    HeavySnowFall,
+    /// Snow grains (WMO code 77).
+    SnowGrains,
+    /// Slight rain showers (WMO code 80).
+    SlightRainShowers,
+    /// Moderate rain showers (WMO code 81).
+    ModerateRainShowers,
+    /// Violent rain showers (WMO code 82).
+    ViolentRainShowers,
+    /// Slight snow showers (WMO code 85).
+    SlightSnowShowers,
+    /// Heavy snow showers (WMO code 86).
+    HeavySnowShowers,
+    /// Thunderstorm (WMO code 95).
+    Thunderstorm,
+    /// Thunderstorm with slight hail (WMO code 96).
+    ThunderstormWithSlightHail,
+    /// Thunderstorm with heavy hail (WMO code 99).
+    ThunderstormWithHeavyHail,
+    /// Unknown or unsupported weather code.
+    Unknown,
 }
 
-/// Returns the Nerd Font icon name for a WMO weather interpretation code.
-pub fn weather_code_icon(code: u16) -> &'static str {
-    match code {
-        0 => "\u{e30d}",            // nf-weather-day_sunny
-        1 => "\u{e30c}",            // nf-weather-day_sunny_overcast
-        2 => "\u{e302}",            // nf-weather-day_cloudy
-        3 => "\u{e312}",            // nf-weather-cloudy
-        45 | 48 => "\u{e313}",      // nf-weather_fog
-        51 | 56 => "\u{e316}",      // nf-weather_rain_mix
-        53 => "\u{e318}",           // nf-weather_rain
-        55 | 57 => "\u{e317}",      // nf-weather_rain_wind
-        61 | 66 => "\u{e318}",      // nf-weather_rain
-        63 => "\u{e318}",           // nf-weather_rain
-        65 | 67 => "\u{ef1d}",      // nf-weather_rain_wind
-        71 | 77 | 85 => "\u{e31a}", // nf-weather_snow
-        73 => "\u{e31a}",           // nf-weather_snow
-        75 | 86 => "\u{e35e}",      // nf-weather_snow_wind
-        80 | 81 => "\u{e319}",      // nf-weather_showers
-        82 => "\u{f01a}",           // nf-weather_showers_wind
-        95 | 96 | 99 => "\u{e337}", // nf-weather_storm_showers
-        _ => "\u{e36e}",            // nf-weather-alien
+impl WeatherCode {
+    /// Converts a raw WMO weather code (`u16`) into a `WeatherCode` variant.
+    pub fn from_code(code: u16) -> Self {
+        match code {
+            0 => Self::ClearSky,
+            1 => Self::MainlyClear,
+            2 => Self::PartlyCloudy,
+            3 => Self::Overcast,
+            45 => Self::Fog,
+            48 => Self::DepositingRimeFog,
+            51 => Self::LightDrizzle,
+            53 => Self::ModerateDrizzle,
+            55 => Self::DenseDrizzle,
+            56 => Self::LightFreezingDrizzle,
+            57 => Self::DenseFreezingDrizzle,
+            61 => Self::SlightRain,
+            63 => Self::ModerateRain,
+            65 => Self::HeavyRain,
+            66 => Self::LightFreezingRain,
+            67 => Self::HeavyFreezingRain,
+            71 => Self::SlightSnowFall,
+            73 => Self::ModerateSnowFall,
+            75 => Self::HeavySnowFall,
+            77 => Self::SnowGrains,
+            80 => Self::SlightRainShowers,
+            81 => Self::ModerateRainShowers,
+            82 => Self::ViolentRainShowers,
+            85 => Self::SlightSnowShowers,
+            86 => Self::HeavySnowShowers,
+            95 => Self::Thunderstorm,
+            96 => Self::ThunderstormWithSlightHail,
+            99 => Self::ThunderstormWithHeavyHail,
+            _ => Self::Unknown,
+        }
     }
-}
 
-/// Returns the Nerd Font icon name for a WMO weather interpretation code,
-/// considering whether it is day or night.
-pub fn weather_code_icon_day_night(code: u16, is_day: bool) -> &'static str {
-    if !is_day {
-        return match code {
-            0 => "\u{f0594}",           // nf-weather-night_clear
-            1 => "\u{f0f31}",           // nf-weather-night_alt_clouds
-            2 => "\u{f0f31}",           // nf-weather-night_alt_cloudy
-            3 => "\u{f0590}",           // nf-weather-cloudy
-            45 | 48 => "\u{f0591}",     // nf-weather_fog
-            51 | 56 => "\u{e323}",      // nf-weather-night_alt_rain_mix
-            53 => "\u{e325}",           // nf-weather-night_alt_rain
-            55 | 57 => "\u{e323}",      // nf-weather-night_alt_rain_mix
-            61 | 66 => "\u{e325}",      // nf-weather-night_alt_rain
-            63 => "\u{e325}",           // nf-weather-night_alt_rain
-            65 | 67 => "\u{e325}",      // nf-weather-night_alt_rain
-            71 | 77 | 85 => "\u{e327}", // nf-weather-night_alt_snow
-            73 => "\u{e327}",           // nf-weather-night_alt_snow
-            75 | 86 => "\u{e327}",      // nf-weather-night_alt_snow
-            80 | 81 => "\u{e326}",      // nf-weather-night_alt_showers
-            82 => "\u{e326}",           // nf-weather-night_alt_showers
-            95 | 96 | 99 => "\u{e329}", // nf-weather-night_alt_storm_showers
-            _ => "\u{e36e}",            // nf-weather-alien
-        };
+    /// Returns a human-readable description of the weather condition.
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::ClearSky => "Clear sky",
+            Self::MainlyClear => "Mainly clear",
+            Self::PartlyCloudy => "Partly cloudy",
+            Self::Overcast => "Overcast",
+            Self::Fog => "Fog",
+            Self::DepositingRimeFog => "Depositing rime fog",
+            Self::LightDrizzle => "Light drizzle",
+            Self::ModerateDrizzle => "Moderate drizzle",
+            Self::DenseDrizzle => "Dense drizzle",
+            Self::LightFreezingDrizzle => "Light freezing drizzle",
+            Self::DenseFreezingDrizzle => "Dense freezing drizzle",
+            Self::SlightRain => "Slight rain",
+            Self::ModerateRain => "Moderate rain",
+            Self::HeavyRain => "Heavy rain",
+            Self::LightFreezingRain => "Light freezing rain",
+            Self::HeavyFreezingRain => "Heavy freezing rain",
+            Self::SlightSnowFall => "Slight snow fall",
+            Self::ModerateSnowFall => "Moderate snow fall",
+            Self::HeavySnowFall => "Heavy snow fall",
+            Self::SnowGrains => "Snow grains",
+            Self::SlightRainShowers => "Slight rain showers",
+            Self::ModerateRainShowers => "Moderate rain showers",
+            Self::ViolentRainShowers => "Violent rain showers",
+            Self::SlightSnowShowers => "Slight snow showers",
+            Self::HeavySnowShowers => "Heavy snow showers",
+            Self::Thunderstorm => "Thunderstorm",
+            Self::ThunderstormWithSlightHail => "Thunderstorm with slight hail",
+            Self::ThunderstormWithHeavyHail => "Thunderstorm with heavy hail",
+            Self::Unknown => "Unknown",
+        }
     }
-    weather_code_icon(code)
+
+    /// Returns the Nerd Font icon name for daytime conditions.
+    pub fn icon(&self) -> &'static str {
+        match self {
+            Self::ClearSky => "nf-weather-day_sunny",
+            Self::MainlyClear => "nf-weather-day_sunny_overcast",
+            Self::PartlyCloudy => "nf-weather-day_cloudy",
+            Self::Overcast => "nf-weather-cloudy",
+            Self::Fog | Self::DepositingRimeFog => "nf-weather-fog",
+            Self::LightDrizzle | Self::LightFreezingDrizzle => "nf-weather-rain_mix",
+            Self::ModerateDrizzle => "nf-weather-rain",
+            Self::DenseDrizzle | Self::DenseFreezingDrizzle => "nf-weather-rain_wind",
+            Self::SlightRain | Self::LightFreezingRain => "nf-weather-rain",
+            Self::ModerateRain => "nf-weather-rain",
+            Self::HeavyRain | Self::HeavyFreezingRain => "nf-weather-rain_wind",
+            Self::SlightSnowFall | Self::SnowGrains | Self::SlightSnowShowers => "nf-weather-snow",
+            Self::ModerateSnowFall => "nf-weather-snow",
+            Self::HeavySnowFall | Self::HeavySnowShowers => "nf-weather-snow_wind",
+            Self::SlightRainShowers | Self::ModerateRainShowers => "nf-weather-showers",
+            Self::ViolentRainShowers => "nf-weather-showers_wind",
+            Self::Thunderstorm | Self::ThunderstormWithSlightHail | Self::ThunderstormWithHeavyHail => "nf-weather-storm_showers",
+            Self::Unknown => "nf-weather-alien",
+        }
+    }
+
+    /// Returns the Nerd Font icon name, considering whether it is day or night.
+    pub fn icon_day_night(&self, is_day: bool) -> &'static str {
+        if is_day {
+            return self.icon();
+        }
+        match self {
+            Self::ClearSky => "nf-weather-night_clear",
+            Self::MainlyClear => "nf-weather-night_clear",
+            Self::PartlyCloudy => "nf-weather-night_partly_cloudy",
+            Self::Overcast => "nf-weather-night_cloudy",
+            Self::Fog | Self::DepositingRimeFog => "nf-weather-night_fog",
+            Self::LightDrizzle | Self::LightFreezingDrizzle => "nf-weather-night_alt_rain_mix",
+            Self::ModerateDrizzle => "nf-weather-night_alt_rain",
+            Self::DenseDrizzle | Self::DenseFreezingDrizzle => "nf-weather-night_alt_rain_mix",
+            Self::SlightRain | Self::LightFreezingRain => "nf-weather-night_alt_rain",
+            Self::ModerateRain => "nf-weather-night_alt_rain",
+            Self::HeavyRain | Self::HeavyFreezingRain => "nf-weather-night_alt_rain",
+            Self::SlightSnowFall | Self::SnowGrains | Self::SlightSnowShowers => "nf-weather-night_alt_snow",
+            Self::ModerateSnowFall => "nf-weather-night_alt_snow",
+            Self::HeavySnowFall | Self::HeavySnowShowers => "nf-weather-night_alt_snow",
+            Self::SlightRainShowers | Self::ModerateRainShowers => "nf-weather-night_alt_showers",
+            Self::ViolentRainShowers => "nf-weather-night_alt_showers",
+            Self::Thunderstorm | Self::ThunderstormWithSlightHail | Self::ThunderstormWithHeavyHail => "nf-weather-night_alt_storm_showers",
+            Self::Unknown => "nf-weather-alien",
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::weather_code_description;
-    use super::weather_code_icon;
+    use super::WeatherCode;
 
     #[test]
     fn description_for_clear_sky() {
-        assert_eq!(weather_code_description(0), "Clear sky");
+        assert_eq!(WeatherCode::from_code(0).description(), "Clear sky");
     }
 
     #[test]
     fn description_for_thunderstorm() {
-        assert_eq!(weather_code_description(95), "Thunderstorm");
+        assert_eq!(WeatherCode::from_code(95).description(), "Thunderstorm");
     }
 
     #[test]
     fn description_for_unknown_code() {
-        assert_eq!(weather_code_description(999), "Unknown");
+        assert_eq!(WeatherCode::from_code(999).description(), "Unknown");
     }
 
     #[test]
     fn icon_for_clear_sky() {
-        assert_eq!(weather_code_icon(0), "\u{e30d}");
+        assert_eq!(WeatherCode::from_code(0).icon(), "nf-weather-day_sunny");
     }
 
     #[test]
     fn icon_for_overcast() {
-        assert_eq!(weather_code_icon(3), "\u{e312}");
+        assert_eq!(WeatherCode::from_code(3).icon(), "nf-weather-cloudy");
     }
 }

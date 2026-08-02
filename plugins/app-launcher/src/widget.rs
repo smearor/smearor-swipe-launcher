@@ -1,32 +1,38 @@
 use crate::config::AppLauncherConfig;
+use crate::personalization::PersonalizationOverride;
 use adw::gdk::pango::EllipsizeMode;
-use adw::prelude::ObjectExt;
 use freedesktop_entry_parser::Entry;
 use gtk4::Align;
 use gtk4::Button;
-use gtk4::EventSequenceState;
-use gtk4::GestureClick;
-use gtk4::GestureLongPress;
+use gtk4::CssProvider;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
-use gtk4::PropagationPhase;
 use gtk4::Widget;
-use gtk4::gio;
 use gtk4::prelude::BoxExt;
 use gtk4::prelude::Cast;
-use gtk4::prelude::GestureExt;
-use gtk4::prelude::GestureSingleExt;
 use gtk4::prelude::WidgetExt;
 use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatus;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
+use smearor_app_launcher_model::TOPIC_STATUS as TOPIC_APP_LAUNCHER_STATUS;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
+use smearor_personalization_model::PersonalizationCommandMessage;
+use smearor_personalization_model::PersonalizationStatusMessage;
+use smearor_personalization_model::TOPIC_STATUS as TOPIC_PERSONALIZATION_STATUS;
+use smearor_swipe_launcher_plugin_api::AcceptTopic;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::DefaultFallback;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::GestureHandler;
+use smearor_swipe_launcher_plugin_api::GestureHandlersConfiguration;
+use smearor_swipe_launcher_plugin_api::Locale;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
+use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
-use smearor_swipe_launcher_plugin_api::Plugin;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
@@ -35,7 +41,14 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::PluginMetaRaw;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
+use smearor_swipe_launcher_plugin_api::WidgetMode;
+use smearor_swipe_launcher_plugin_api::WidgetPlugin;
+use smearor_swipe_launcher_plugin_api::apply_icon_color;
+use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tracing::debug;
@@ -49,6 +62,7 @@ pub struct AppLauncherWidget {
     pub app_name: String,
     pub icon_name: String,
     pub led_indicator: Arc<RwLock<Option<gtk4::Box>>>,
+    pub personalization: Rc<RefCell<PersonalizationOverride>>,
 }
 
 impl AppLauncherWidget {
@@ -86,7 +100,7 @@ impl AppLauncherWidget {
             }
         }
 
-        Ok(AppLauncherWidget {
+        let widget = AppLauncherWidget {
             meta: PluginMeta::new(meta_raw.id, app_name.clone(), Some(icon_name.clone())),
             config,
             desktop_entry,
@@ -94,7 +108,42 @@ impl AppLauncherWidget {
             icon_name,
             core_context,
             led_indicator: Arc::new(RwLock::new(None)),
-        })
+            personalization: Rc::new(RefCell::new(PersonalizationOverride::default())),
+        };
+        widget.request_personalization_status();
+        Ok(widget)
+    }
+
+    /// Request personalization status from the personalization service.
+    /// This is needed because the widget may be created after the initial broadcast.
+    fn request_personalization_status(&self) {
+        MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(PersonalizationCommandMessage::request_status());
+    }
+}
+
+impl DefaultFallback for AppLauncherWidget {
+    fn default_fallback(&self, kind: &ActionKind, broadcaster: &MessageBroadcasterInner) {
+        match kind {
+            ActionKind::Click | ActionKind::DoublePress => {
+                broadcaster.broadcast_message_to_topic(DesktopFileCommandMessage::exec(
+                    &self.config.desktop_file_path,
+                    self.config.wrapper.clone(),
+                    self.config.forked,
+                    self.config.terminate_on_exit,
+                ));
+            }
+            ActionKind::Longpress | ActionKind::RightClick => {
+                broadcaster.broadcast_message_to_topic(DesktopFileCommandMessage::terminate(&self.config.desktop_file_path, self.config.wrapper.clone()));
+            }
+            ActionKind::SwipeUp
+            | ActionKind::ScrollUp
+            | ActionKind::SwipeDown
+            | ActionKind::ScrollDown
+            | ActionKind::MiddleClick
+            | ActionKind::Hold
+            | ActionKind::CompoundLongpress
+            | ActionKind::Init => {}
+        }
     }
 }
 
@@ -121,6 +170,16 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileStatusMessage>> for AppLaunche
     }
 }
 
+impl MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>> for AppLauncherWidget {
+    fn handle_message(&self, message: FfiEnvelopePayload<PersonalizationStatusMessage>, _sender_id: &str) {
+        trace!("app-launcher widget: received personalization status");
+        let status = message.0;
+        let locale = status.locale.as_ref().map(|l| Locale::from_str(l).unwrap_or_default()).unwrap_or_default();
+        let override_data = PersonalizationOverride { locale };
+        *self.personalization.borrow_mut() = override_data;
+    }
+}
+
 impl MessageBroadcaster for AppLauncherWidget {}
 
 impl PluginMetaGetter for AppLauncherWidget {
@@ -135,13 +194,23 @@ impl AsRef<Option<FfiCoreContext>> for AppLauncherWidget {
     }
 }
 
-impl Plugin for AppLauncherWidget {
+impl AcceptTopic<FfiEnvelope> for AppLauncherWidget {
+    fn accept_topic(&self, topic: &str) -> bool {
+        topic == TOPIC_APP_LAUNCHER_STATUS || topic == TOPIC_PERSONALIZATION_STATUS || topic == TOPIC_MCP_INVOKE_TOOL
+    }
+}
+
+impl WidgetPlugin for AppLauncherWidget {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
                 if envelope.type_id == FfiEnvelopePayload::<DesktopFileStatusMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<DesktopFileStatusMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == FfiEnvelopePayload::<PersonalizationStatusMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<PersonalizationStatusMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }
@@ -152,42 +221,94 @@ impl WidgetBuilder for AppLauncherWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
 
-        let main_box = gtk4::Box::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(self.config.spacing)
-            .valign(Align::Center)
-            .halign(Align::Center)
-            .vexpand(true)
-            .css_classes(["app-launcher-tile"])
-            .build();
+        let config = self.config.clone();
+        let show_labels = !config.icon_config.icon_only();
 
-        // Render Icon
+        // Build content box based on widget mode
+        let content_box = match config.mode {
+            WidgetMode::Compact => {
+                // Compact: vertical layout (icon on top, name below)
+                let box_ = gtk4::Box::builder()
+                    .orientation(Orientation::Vertical)
+                    .spacing(config.layout.spacing_or_default())
+                    .css_classes(["app-launcher-tile", "menu_button_inner"])
+                    .halign(Align::Center)
+                    .valign(Align::Center)
+                    .vexpand(true)
+                    .build();
+                box_
+            }
+            WidgetMode::Wide => {
+                // Wide: horizontal layout (icon on left, name on right)
+                let box_ = gtk4::Box::builder()
+                    .orientation(Orientation::Horizontal)
+                    .spacing(config.layout.spacing_or_default())
+                    .css_classes(["app-launcher-tile", "menu_button_inner", "app-launcher-wide"])
+                    .halign(Align::Center)
+                    .valign(Align::Center)
+                    .vexpand(true)
+                    .build();
+                box_
+            }
+        };
+
+        // Line 0: Icon
         let image = if self.icon_name.starts_with("nf-") {
             if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(&self.icon_name) {
-                let resource_path = format!("/com/nerd/icons/{}.svg", gtk_icon_name);
-                if gio::resources_lookup_data(&resource_path, gio::ResourceLookupFlags::NONE).is_ok() {
-                    Image::from_resource(&resource_path)
-                } else {
-                    Image::from_icon_name(&self.icon_name)
-                }
+                Image::from_icon_name(&gtk_icon_name)
             } else {
                 Image::from_icon_name(&self.icon_name)
             }
         } else {
             Image::from_icon_name(&self.icon_name)
         };
-        image.set_pixel_size(self.config.icon_size);
-        main_box.append(&image);
+        image.set_pixel_size(config.icon_config.icon_size());
+        image.set_height_request(config.icon_config.icon_size());
+        if let Some(color) = config.icon_config.icon_color() {
+            apply_icon_color(&image, color);
+        }
+        content_box.append(&image);
 
-        if !self.config.icon_only {
-            // Render Name
-            let label = Label::builder()
-                .label(&self.app_name)
-                .ellipsize(EllipsizeMode::End)
-                .max_width_chars(12)
-                .css_classes(["app-launcher-label"])
-                .build();
-            main_box.append(&label);
+        // For wide mode, wrap text lines in a vertical sub-box
+        let text_box = gtk4::Box::builder().orientation(Orientation::Vertical).spacing(0).valign(Align::Center).build();
+
+        // Line 1: App name (main text)
+        let name_label = Label::builder()
+            .label(&self.app_name)
+            .ellipsize(EllipsizeMode::End)
+            .max_width_chars(12)
+            .css_classes(["app-launcher-label", "widget-main-text"])
+            .halign(if config.mode == WidgetMode::Wide { Align::Start } else { Align::Center })
+            .build();
+        name_label.set_height_request(20);
+        apply_text_color(&name_label, config.text_colors.main_text_color());
+        if show_labels {
+            text_box.append(&name_label);
+        }
+
+        // Line 2: Info text (empty for app-launcher, reserved for future use)
+        let info_label = Label::builder()
+            .label("")
+            .css_classes(["widget-info-text"])
+            .halign(if config.mode == WidgetMode::Wide { Align::Start } else { Align::Center })
+            .build();
+        info_label.set_height_request(16);
+        apply_text_color(&info_label, config.text_colors.info_text_color());
+        if show_labels {
+            text_box.append(&info_label);
+        }
+
+        // Line 3: Spacer
+        let spacer = Label::new(Some(""));
+        spacer.set_height_request(16);
+        text_box.append(&spacer);
+
+        if config.mode == WidgetMode::Wide {
+            content_box.append(&text_box);
+        } else {
+            // In compact mode, append text_box children directly to content_box
+            // to maintain the flat 4-line structure
+            content_box.append(&text_box);
         }
 
         // LED Indicator Box to show if application is running
@@ -197,104 +318,54 @@ impl WidgetBuilder for AppLauncherWidget {
             .halign(Align::Center)
             .css_classes(["app-launcher-led", "led-unlit"])
             .build();
-        // main_box.append(&led_box);
 
         *self.led_indicator.write().unwrap() = Some(led_box);
 
-        let button = Button::builder()
+        // Calculate effective width with max_width enforcement
+        let effective_width = config.dimensions.width_or_default().min(config.dimensions.max_width_or_default(config.mode));
+        let mut button_builder = Button::builder()
             .css_classes(["scroll-item", "menu-button"])
-            .width_request(self.config.width)
-            .child(&main_box)
-            .build();
+            .width_request(effective_width)
+            .height_request(config.dimensions.height_or_default())
+            .child(&content_box);
 
-        // Gestures - Click to Launch
-        let longpress_gesture = GestureLongPress::builder()
-            .propagation_phase(PropagationPhase::Capture)
-            // Extra long because of the parent scroll window widget has a drag gesture
-            .delay_factor(2.0)
-            .build();
-
-        let click_gesture = GestureClick::builder().propagation_phase(PropagationPhase::Capture).build();
-        longpress_gesture.group_with(&click_gesture);
-
-        click_gesture.connect_pressed(move |_, _, _, _| {});
-
-        let desktop_file_inner = self.config.desktop_file_path.clone();
-        let wrapper_config_inner = self.config.wrapper.clone();
-        let forked_inner = self.config.forked;
-        let terminate_on_exit_inner = self.config.terminate_on_exit;
-        let message_broadcaster_desktop_file_command = self.get_broadcaster();
-        let click_topic = self.config.click_topic.clone();
-        let click_payload = self.config.click_payload.clone();
-        let click_instance = self.config.click_instance.clone();
-        let message_broadcaster_generic = self.get_broadcaster();
-        click_gesture.connect_released(move |gesture, _n_clicks, _, _| {
-            if let Some(seq) = gesture.current_sequence() {
-                let state = gesture.sequence_state(&seq);
-                if state == EventSequenceState::Claimed || state == EventSequenceState::Denied {
-                    return;
-                }
+        // Enforce max_width via CSS when explicitly set
+        if let Some(max_w) = config.dimensions.max_width {
+            button_builder = button_builder.hexpand(false).halign(Align::Start);
+            let css_class = format!("app-launcher-max-width-{}", max_w);
+            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
+            let css = format!(".app-launcher-max-width-{} {{ max-width: {}px; }}", max_w, max_w);
+            if let Some(display) = gtk4::gdk::Display::default() {
+                let provider = CssProvider::new();
+                provider.load_from_string(&css);
+                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
             }
-            message_broadcaster_desktop_file_command.broadcast_message_to_topic(DesktopFileCommandMessage::exec(
-                &desktop_file_inner,
-                wrapper_config_inner.clone(),
-                forked_inner,
-                terminate_on_exit_inner,
-            ));
-            if let (Some(topic), Some(payload)) = (click_topic.clone(), click_payload.clone()) {
-                let payload_str = payload.to_string();
-                if let Some(instance) = click_instance.clone() {
-                    message_broadcaster_generic.broadcast_string_to_instance(&instance, &topic, &payload_str);
-                } else {
-                    message_broadcaster_generic.broadcast_string(&topic, &payload_str);
-                }
-            }
-            gesture.set_state(EventSequenceState::Claimed);
-        });
+        }
+        let button = button_builder.build();
 
-        let button_inner = button.downgrade();
-        longpress_gesture.connect_begin(move |_, _| {
-            if let Some(button) = button_inner.upgrade() {
-                button.add_css_class("menu-button-longpress");
-            }
+        let widget_self = Rc::new(Self {
+            meta: self.meta.clone(),
+            core_context: self.core_context,
+            config: self.config.clone(),
+            desktop_entry: self.desktop_entry.clone(),
+            app_name: self.app_name.clone(),
+            icon_name: self.icon_name.clone(),
+            led_indicator: Arc::clone(&self.led_indicator),
+            personalization: self.personalization.clone(),
         });
-        let desktop_file_inner = self.config.desktop_file_path.clone();
-        let wrapper_config_inner = self.config.wrapper.clone();
-        let message_broadcaster_desktop_file_command = self.get_broadcaster();
-        let long_press_topic = self.config.longpress_topic.clone();
-        let long_press_payload = self.config.longpress_payload.clone();
-        let long_press_instance = self.config.longpress_instance.clone();
-        let message_broadcaster_generic = self.get_broadcaster();
-        longpress_gesture.connect_pressed(move |gesture, _n_clicks, _| {
-            message_broadcaster_desktop_file_command
-                .broadcast_message_to_topic(DesktopFileCommandMessage::terminate(&desktop_file_inner, wrapper_config_inner.clone()));
-            if let (Some(topic), Some(payload)) = (long_press_topic.clone(), long_press_payload.clone()) {
-                let payload_str = payload.to_string();
-                if let Some(instance) = long_press_instance.clone() {
-                    message_broadcaster_generic.broadcast_string_to_instance(&instance, &topic, &payload_str);
-                } else {
-                    message_broadcaster_generic.broadcast_string(&topic, &payload_str);
-                }
-                gesture.set_state(EventSequenceState::Claimed);
-            }
-            gesture.set_state(EventSequenceState::Claimed);
-        });
+        let button_widget = button.upcast::<Widget>();
+        let message_broadcaster = self.get_broadcaster();
+        widget_self.attach_gesture_handlers(
+            &button_widget,
+            &self.config.actions,
+            &message_broadcaster,
+            &GestureHandlersConfiguration {
+                delay_factor: Some(2.0),
+                longpress_css_class: Some("menu-button-longpress".to_string()),
+                ..Default::default()
+            },
+        );
 
-        let button_inner = button.downgrade();
-        longpress_gesture.connect_end(move |_, _| {
-            if let Some(button) = button_inner.upgrade() {
-                button.remove_css_class("menu-button-longpress");
-            }
-        });
-        longpress_gesture.connect_cancelled(move |gesture| {
-            gesture.set_state(EventSequenceState::None);
-        });
-
-        button.add_controller(click_gesture);
-        button.add_controller(longpress_gesture);
-
-        button.clone().upcast::<Widget>()
-
-        // main_box.upcast::<Widget>()
+        button_widget
     }
 }

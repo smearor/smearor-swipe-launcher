@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -9,7 +11,7 @@ pub const TOPIC_VPN_PROFILES: &str = "service.network.vpn_profiles";
 
 /// VPN profiles message broadcast by the service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VpnProfilesMessage {
     /// List of all VPN connection profiles registered in NetworkManager.
     pub profiles: stabby::vec::Vec<VpnProfileInfo>,

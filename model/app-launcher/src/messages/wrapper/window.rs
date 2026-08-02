@@ -67,7 +67,7 @@ pub struct WindowConfigFile {
 
 /// ABI-stable version of `WindowConfigFile` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WindowConfigFileStabby {
     pub aspect_ratio: stabby::option::Option<f32>,
     pub fullscreen: stabby::option::Option<bool>,

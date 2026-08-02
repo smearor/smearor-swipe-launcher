@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -7,14 +9,14 @@ pub const TOPIC_STATUS: &str = "service.app_launcher.status";
 
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum DesktopFileStatus {
     #[default]
     Running,
     Stopped,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DesktopFileStatusMessage {
     /// The canonical path of the desktop file
     pub desktop_file: String,
@@ -25,7 +27,7 @@ pub struct DesktopFileStatusMessage {
 
 /// ABI-stable version of `DesktopFileStatusMessage` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DesktopFileStatusMessageStabby {
     pub desktop_file: stabby::string::String,
     pub status: DesktopFileStatus,

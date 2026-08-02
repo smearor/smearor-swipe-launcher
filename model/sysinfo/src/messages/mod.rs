@@ -5,3 +5,4 @@ pub mod memory;
 pub mod network;
 pub mod temperature;
 pub mod uptime;
+pub mod view;

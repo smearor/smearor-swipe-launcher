@@ -2,7 +2,7 @@ use moka::sync::Cache;
 use smearor_voice_assistant_model::ToolResult;
 use std::collections::BTreeMap;
 use std::time::Duration;
-use tracing::debug;
+use tracing::trace;
 
 /// Cache key combining tool name and deterministic parameter serialization.
 fn cache_key(tool: &str, args: &serde_json::Value) -> String {
@@ -76,7 +76,7 @@ impl ToolCache {
         for key in keys_to_remove {
             self.cache.invalidate(&key);
         }
-        debug!("Tool cache: invalidated entries for tool '{}'", tool_name);
+        trace!("Tool cache: invalidated entries for tool '{}'", tool_name);
     }
 
     /// Invalidates a specific cache entry.
@@ -89,7 +89,7 @@ impl ToolCache {
     /// Removes all entries from the cache.
     pub fn invalidate_all(&self) {
         self.cache.invalidate_all();
-        debug!("Tool cache: invalidated all entries");
+        trace!("Tool cache: invalidated all entries");
     }
 }
 

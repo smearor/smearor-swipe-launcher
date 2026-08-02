@@ -1,12 +1,18 @@
 #![recursion_limit = "512"]
+#![allow(long_running_const_eval)]
 
-pub mod json_converters;
-pub mod messages;
+use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
-pub use json_converters::register_json_converters;
-pub use json_converters::register_json_converters_in_registry;
-pub use messages::command::*;
-pub use messages::dispatch::*;
-pub use messages::dispatch_message::HyprlandDispatchActionKind;
-pub use messages::dispatch_message::HyprlandDispatchMessage;
-pub use messages::shared::*;
+pub use smearor_hyprland_command::*;
+pub use smearor_hyprland_dispatch::*;
+pub use smearor_hyprland_shared::*;
+pub use smearor_hyprland_status::*;
+
+/// Register all JSON converter implementations for Hyprland messages.
+///
+/// Call this once during plugin initialisation.
+pub fn register_json_converters(context: Option<FfiCoreContext>) {
+    smearor_hyprland_command::register_json_converters(context);
+    smearor_hyprland_dispatch::register_json_converters(context);
+    smearor_hyprland_status::register_json_converters(context);
+}

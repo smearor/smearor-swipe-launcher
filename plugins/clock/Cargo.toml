@@ -19,6 +19,9 @@ paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }
+smearor-model-widget = { path = "../../model/widget" }
+smearor-personalization-model = { path = "../../model/personalization" }
+smearor-render-utils = { path = "../render-utils" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 smearor-clock-model = { path = "../../model/clock" }
 thiserror = { workspace = true }

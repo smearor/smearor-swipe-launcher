@@ -18,8 +18,10 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::default_clone_payload;
+use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -42,6 +44,7 @@ pub enum NotificationCommand {
     DismissLast,
     InvokeAction(u32, String),
     ToggleDoNotDisturb,
+    Refresh,
 }
 
 #[zbus::proxy(
@@ -245,6 +248,10 @@ impl NotificationService {
     fn handle_toggle_do_not_disturb(&self) {
         let _ = self.command_sender.send(NotificationCommand::ToggleDoNotDisturb);
     }
+
+    fn handle_refresh(&self) {
+        let _ = self.command_sender.send(NotificationCommand::Refresh);
+    }
 }
 
 impl MessageHandler<FfiEnvelopePayload<NotificationCommandMessage>> for NotificationService {
@@ -266,6 +273,7 @@ impl MessageHandler<FfiEnvelopePayload<NotificationCommandMessage>> for Notifica
                 }
             }
             NotificationCommandAction::ToggleDoNotDisturb => self.handle_toggle_do_not_disturb(),
+            NotificationCommandAction::Refresh => self.handle_refresh(),
         }
     }
 }
@@ -283,7 +291,7 @@ impl AsRef<Option<FfiCoreContext>> for NotificationService {
     }
 }
 
-impl Service for NotificationService {
+impl ServicePlugin for NotificationService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
@@ -328,8 +336,8 @@ fn send_status(meta: &PluginMeta, core_context: &FfiCoreContext, status: Notific
         topic: stabby::string::String::from(NotificationStatusMessage::topic()),
         type_id: NotificationStatusMessage::TYPE_ID,
         payload: payload_ptr,
-        destroy_payload: Some(destroy_notification_status),
-        clone_payload: Some(clone_notification_status),
+        destroy_payload: Some(default_destroy_payload),
+        clone_payload: Some(default_clone_payload::<NotificationStatusMessage>),
     };
     core_context.send_message(envelope);
 }
@@ -669,6 +677,12 @@ async fn run_notification_async(
                 s.do_not_disturb = !s.do_not_disturb;
                 debug!("Notification Service: Do Not Disturb = {}", s.do_not_disturb);
             }
+            Ok(Some(NotificationCommand::Refresh)) => {
+                debug!("Notification Service: refreshing status");
+                let status = state.lock().unwrap().to_status_message();
+                send_status(&meta, &core_context, status.clone());
+                last_broadcast = Some(status);
+            }
             Ok(Some(NotificationCommand::InvokeAction(id, key))) => {
                 debug!("Notification Service: invoking action {key} on notification {id}");
                 if let Err(e) = signal_sender.send(SignalCommand::ActionInvoked(id, key)).await {
@@ -691,20 +705,4 @@ async fn run_notification_async(
 
     let _ = conn;
     debug!("Notification Service: notification async task exiting");
-}
-
-extern "C" fn clone_notification_status(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    let status = unsafe { &*(ptr as *const NotificationStatusMessage) };
-    Box::into_raw(Box::new(status.clone())) as *mut core::ffi::c_void
-}
-
-extern "C" fn destroy_notification_status(ptr: *mut core::ffi::c_void) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = Box::from_raw(ptr as *mut NotificationStatusMessage);
-        }
-    }
 }

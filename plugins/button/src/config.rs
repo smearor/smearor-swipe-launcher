@@ -1,66 +1,36 @@
 use serde::Deserialize;
-use serde_json::Value;
-
-pub const DEFAULT_WIDTH: i32 = 100;
-
-pub const DEFAULT_ICON_SIZE: i32 = 36;
+use smearor_swipe_launcher_plugin_api::ActionBindings;
+use smearor_swipe_launcher_plugin_api::ActionKind;
+use smearor_swipe_launcher_plugin_api::WidgetDimensions;
+use smearor_swipe_launcher_plugin_api::WidgetIcon;
+use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 
 /// Configuration for a button widget
 #[derive(Debug, Clone, Deserialize)]
 pub struct ButtonConfig {
-    /// Button label text (hidden if icon_only is true)
-    pub text: String,
-    /// Button width
-    #[serde(default = "default_width")]
-    pub width: i32,
+    /// Primary label text (hidden if icon_only is true)
+    #[serde(default)]
+    pub main_text: String,
+    /// Secondary info text displayed below the main label.
+    /// Shown in a smaller font. Empty string hides it.
+    #[serde(default)]
+    pub info_text: String,
+    /// Widget dimensions (width, height) for GTK layout.
+    #[serde(flatten)]
+    pub dimensions: WidgetDimensions,
     /// Icon name from icon theme
     #[serde(default)]
     pub icon: Option<String>,
-    /// Icon size
-    #[serde(default = "default_icon_size")]
-    pub icon_size: i32,
+    /// Widget icon configuration (icon_size, icon_only).
+    #[serde(flatten)]
+    pub icon_config: WidgetIcon,
     /// Tooltip text on hover
     #[serde(default)]
     pub tooltip: Option<String>,
-    /// Show only icon without text
-    #[serde(default)]
-    pub icon_only: bool,
-    /// Message topic for single-click
-    #[serde(default)]
-    pub click_topic: Option<String>,
-    /// Message payload for single-click (JSON/TOML)
-    #[serde(default)]
-    pub click_payload: Option<Value>,
-    /// Target instance for single-click message
-    #[serde(default)]
-    pub click_instance: Option<String>,
-    /// Message topic for long-press
-    #[serde(default)]
-    pub longpress_topic: Option<String>,
-    /// Message payload for long-press (JSON/TOML)
-    #[serde(default)]
-    pub longpress_payload: Option<Value>,
-    /// Target instance for long-press message
-    #[serde(default)]
-    pub longpress_instance: Option<String>,
-    /// Message topic for swipe-up gesture
-    #[serde(default)]
-    pub swipe_up_topic: Option<String>,
-    /// Message payload for swipe-up gesture (JSON/TOML)
-    #[serde(default)]
-    pub swipe_up_payload: Option<Value>,
-    /// Target instance for swipe-up message
-    #[serde(default)]
-    pub swipe_up_instance: Option<String>,
-    /// Message topic for swipe-down gesture
-    #[serde(default)]
-    pub swipe_down_topic: Option<String>,
-    /// Message payload for swipe-down gesture (JSON/TOML)
-    #[serde(default)]
-    pub swipe_down_payload: Option<Value>,
-    /// Target instance for swipe-down message
-    #[serde(default)]
-    pub swipe_down_instance: Option<String>,
+    /// Action bindings for all input triggers.
+    #[serde(flatten)]
+    pub actions: ActionBindings,
     /// Keyboard shortcut (e.g., "Ctrl+G", "Alt+F1")
     #[serde(default)]
     pub shortcut: Option<String>,
@@ -73,9 +43,12 @@ pub struct ButtonConfig {
     /// Animation type on button press (scale, fade, ripple)
     #[serde(default)]
     pub press_animation: Option<String>,
-    /// Spacing between child widgets inside the button
-    #[serde(default)]
-    pub spacing: i32,
+    /// Widget layout (spacing) for GTK container.
+    #[serde(flatten)]
+    pub layout: WidgetLayout,
+    /// Text color configuration (main_text_color, info_text_color).
+    #[serde(flatten)]
+    pub text_colors: WidgetTextColors,
     /// Additional CSS classes for styling
     #[serde(default)]
     pub css_classes: Vec<String>,
@@ -91,15 +64,6 @@ pub struct ButtonConfig {
     /// Topic whose messages update the internal state (JSON)
     #[serde(default)]
     pub state_topic: Option<String>,
-    /// Initial one-shot request topic (sent on widget construction)
-    #[serde(default)]
-    pub init_topic: Option<String>,
-    /// Initial one-shot request payload (JSON/TOML)
-    #[serde(default)]
-    pub init_payload: Option<Value>,
-    /// Target instance for the initial one-shot request
-    #[serde(default)]
-    pub init_instance: Option<String>,
     /// Icon expression evaluated against the internal state.
     /// Supports static icon names and conditional expressions like "{ison?nf-md-fan:nf-md-fan-off}".
     #[serde(default)]
@@ -112,25 +76,24 @@ pub struct ButtonConfig {
     pub state_label: Option<String>,
     /// Optional description for MCP tool registration. When set, the button
     /// registers an MCP tool that allows the voice assistant to trigger actions.
-    /// The tool supports an "action" parameter: "click", "longpress", "swipe_up", "swipe_down".
+    /// The tool supports an "action" parameter: "click", "longpress", "hold_start", "hold_stop", "double_press", "swipe_up", "swipe_down", "right_click", "middle_click", "scroll_up", "scroll_down", "compound_longpress".
     #[serde(default)]
     pub description: Option<String>,
 }
 
 impl ButtonConfig {
-    pub fn parse(config: &Value) -> Result<Self, serde_json::Error> {
+    pub fn parse(config: &serde_json::Value) -> Result<Self, serde_json::Error> {
         serde_json::from_value(config.clone())
+    }
+
+    /// Dispatches an action kind via the broadcaster, respecting `instance`.
+    ///
+    /// Returns `true` if the action was configured and dispatched, `false` otherwise.
+    pub fn dispatch_by_kind(&self, kind: ActionKind, broadcaster: &smearor_swipe_launcher_plugin_api::MessageBroadcasterInner) -> bool {
+        self.actions.dispatch_by_kind(kind, broadcaster)
     }
 }
 
 fn default_enabled() -> bool {
     true
-}
-
-fn default_width() -> i32 {
-    DEFAULT_WIDTH
-}
-
-fn default_icon_size() -> i32 {
-    DEFAULT_ICON_SIZE
 }

@@ -1,0 +1,28 @@
+[package]
+name = "smearor-personalization-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+stabby = { workspace = true }
+ashpd = { workspace = true, default-features = false, features = ["location", "settings", "tokio"] }
+futures-util = { workspace = true }
+iana-time-zone = { workspace = true }
+paste = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+smearor-model-mcp = { path = "../../model/mcp" }
+smearor-personalization-model = { path = "../../model/personalization" }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+sys-locale = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

@@ -1,4 +1,4 @@
-use crate::service::ensure_hyprland_instance_signature;
+use crate::event_listener::listener::HyprlandEvent;
 use hyprland::shared::HyprData;
 use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_model_compositor::WorkspaceLifecycleEvent;
@@ -13,125 +13,80 @@ use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::warn;
 
-/// Maximum number of consecutive reconnect attempts before giving up.
-const MAX_RECONNECT_ATTEMPTS: u32 = 10;
-
 /// Internal workspace event sent from the Hyprland event listener to the worker.
 pub enum WorkspaceEvent {
     /// Active workspace changed on a monitor.
     Changed(WorkspaceChangedEvent),
 }
 
-/// Spawn the Hyprland workspace event listener thread.
-///
-/// Connects to Hyprland's event socket and listens for workspace change events.
-/// Sends `WorkspaceEvent`s to the provided channel.
-pub fn spawn_workspace_listener(event_sender: mpsc::UnboundedSender<WorkspaceEvent>) {
-    std::thread::spawn(move || {
-        let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-            Ok(rt) => rt,
-            Err(error) => {
-                tracing::error!("Hyprland workspace listener: failed to create runtime: {error}");
-                return;
-            }
+/// Workspace-specific state for the worker loop.
+pub struct WorkspaceState {
+    known_workspaces: HashSet<i32>,
+}
+
+impl WorkspaceState {
+    pub fn new() -> Self {
+        Self {
+            known_workspaces: HashSet::new(),
+        }
+    }
+}
+
+/// Register workspace handlers on the shared listener.
+pub fn register_handlers(listener: &mut hyprland::event_listener::EventListener, sender: mpsc::UnboundedSender<HyprlandEvent>) {
+    let ws_sender = sender.clone();
+    listener.add_workspace_changed_handler(move |workspace_data| {
+        let workspace_name = match &workspace_data.name {
+            hyprland::shared::WorkspaceType::Regular(name) => name.clone(),
+            hyprland::shared::WorkspaceType::Special(name) => name.clone().unwrap_or_default(),
         };
-
-        rt.block_on(async move {
-            ensure_hyprland_instance_signature();
-            let mut reconnect_attempts: u32 = 0;
-            loop {
-                let mut listener = hyprland::event_listener::EventListener::new();
-
-                let ws_sender = event_sender.clone();
-                listener.add_workspace_changed_handler(move |workspace_data| {
-                    let workspace_name = match &workspace_data.name {
-                        hyprland::shared::WorkspaceType::Regular(name) => name.clone(),
-                        hyprland::shared::WorkspaceType::Special(name) => name.clone().unwrap_or_default(),
-                    };
-                    let event = WorkspaceChangedEvent {
-                        workspace_name: workspace_name.into(),
-                        workspace_id: workspace_data.id,
-                        monitor_index: 0,
-                    };
-                    let _ = ws_sender.send(WorkspaceEvent::Changed(event));
-                });
-
-                match listener.start_listener_async().await {
-                    Ok(()) => {
-                        reconnect_attempts = 0;
-                        debug!("Hyprland workspace listener exited cleanly, reconnecting in 5s");
-                    }
-                    Err(error) => {
-                        reconnect_attempts += 1;
-                        if reconnect_attempts >= MAX_RECONNECT_ATTEMPTS {
-                            tracing::error!("Hyprland workspace listener stopped after {reconnect_attempts} consecutive failed attempts: {error}");
-                            break;
-                        }
-                        tracing::error!(
-                            "Hyprland workspace listener stopped: {error}, reconnecting in 5s (attempt {reconnect_attempts}/{MAX_RECONNECT_ATTEMPTS})"
-                        );
-                    }
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            }
-        });
+        let event = WorkspaceChangedEvent {
+            workspace_name: workspace_name.into(),
+            workspace_id: workspace_data.id,
+            monitor_index: 0,
+        };
+        let _ = ws_sender.send(HyprlandEvent::Workspace(WorkspaceEvent::Changed(event)));
     });
 }
 
-/// Spawn the workspace event worker thread that processes events and broadcasts
-/// to the launcher core.
-pub fn spawn_workspace_worker(
-    mut event_receiver: mpsc::UnboundedReceiver<WorkspaceEvent>,
-    core_context: Option<FfiCoreContext>,
-    meta: PluginMeta,
+/// Process a single workspace event. Atomic, focused, no status logic mixed in.
+pub async fn process_event(
+    state: &mut WorkspaceState,
+    event: WorkspaceEvent,
+    core_context: &Option<FfiCoreContext>,
+    meta: &PluginMeta,
     enable_workspace_lifecycle: bool,
 ) {
-    std::thread::spawn(move || {
-        let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-            Ok(rt) => rt,
-            Err(error) => {
-                tracing::error!("Hyprland workspace worker: failed to create runtime: {error}");
-                return;
+    match event {
+        WorkspaceEvent::Changed(mut event) => {
+            if let Some(monitor_index) = resolve_monitor_for_workspace(event.workspace_id).await {
+                event.monitor_index = monitor_index;
             }
-        };
 
-        rt.block_on(async move {
-            let mut known_workspaces: HashSet<i32> = HashSet::new();
+            if enable_workspace_lifecycle && !state.known_workspaces.contains(&event.workspace_id) {
+                let lifecycle_event = WorkspaceLifecycleEvent {
+                    workspace_name: event.workspace_name.clone(),
+                    workspace_id: event.workspace_id,
+                    monitor_index: event.monitor_index,
+                    lifecycle_type: WorkspaceLifecycleType::Created,
+                };
+                debug!("Workspace created: {:?}", lifecycle_event);
+                broadcast_event(core_context, meta, lifecycle_event);
+                state.known_workspaces.insert(event.workspace_id);
+            }
 
-            while let Some(event) = event_receiver.recv().await {
-                match event {
-                    WorkspaceEvent::Changed(mut event) => {
-                        if let Some(monitor_index) = resolve_monitor_for_workspace(event.workspace_id).await {
-                            event.monitor_index = monitor_index;
-                        }
+            debug!("Workspace changed: {:?}", event);
+            broadcast_event(core_context, meta, event);
 
-                        if enable_workspace_lifecycle && !known_workspaces.contains(&event.workspace_id) {
-                            let lifecycle_event = WorkspaceLifecycleEvent {
-                                workspace_name: event.workspace_name.clone(),
-                                workspace_id: event.workspace_id,
-                                monitor_index: event.monitor_index,
-                                lifecycle_type: WorkspaceLifecycleType::Created,
-                            };
-                            debug!("Workspace created: {:?}", lifecycle_event);
-                            broadcast_event(&core_context, &meta, lifecycle_event);
-                            known_workspaces.insert(event.workspace_id);
-                        }
-
-                        debug!("Workspace changed: {:?}", event);
-                        broadcast_event(&core_context, &meta, event);
-
-                        if enable_workspace_lifecycle {
-                            let removed = detect_removed_workspaces(&mut known_workspaces).await;
-                            for lifecycle_event in removed {
-                                debug!("Workspace destroyed: {:?}", lifecycle_event);
-                                broadcast_event(&core_context, &meta, lifecycle_event);
-                            }
-                        }
-                    }
+            if enable_workspace_lifecycle {
+                let removed = detect_removed_workspaces(&mut state.known_workspaces).await;
+                for lifecycle_event in removed {
+                    debug!("Workspace destroyed: {:?}", lifecycle_event);
+                    broadcast_event(core_context, meta, lifecycle_event);
                 }
             }
-        });
-    });
+        }
+    }
 }
 
 /// Query `hyprctl monitors` to find which monitor index has the given workspace active.

@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -9,7 +11,7 @@ pub const TOPIC_COMMAND: &str = "service.audio.command";
 /// Actions that can be sent to the audio service.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum AudioCommandAction {
     #[default]
     /// Increase the volume by a relative amount
@@ -28,11 +30,13 @@ pub enum AudioCommandAction {
     NextDevice,
     /// Switch to the previous output device
     PreviousDevice,
+    /// Request a status refresh from the audio service
+    Refresh,
 }
 
 /// Command message sent from the audio widget to the audio service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AudioCommandMessage {
     /// The action to execute
     pub action: AudioCommandAction,
@@ -77,6 +81,10 @@ impl AudioCommandMessage {
 
     pub fn previous_device() -> Self {
         Self::new(AudioCommandAction::PreviousDevice, Option::None(), Option::None())
+    }
+
+    pub fn refresh() -> Self {
+        Self::new(AudioCommandAction::Refresh, Option::None(), Option::None())
     }
 }
 

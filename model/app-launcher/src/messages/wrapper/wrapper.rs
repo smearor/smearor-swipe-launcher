@@ -30,7 +30,7 @@ pub struct SmearorWindowRotationWrapper {
 
 /// ABI-stable version of `SmearorWindowRotationWrapper` for cross-plugin messaging.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SmearorWindowRotationWrapperStabby {
     pub follows_rotation: bool,
     pub color_mask: ColorMaskConfigFileStabby,

@@ -47,21 +47,21 @@ impl Default for CollectorState {
 }
 
 /// Raw disk counters for a single device.
-pub(self) struct DiskSample {
+pub struct DiskSample {
     timestamp: Instant,
     read_sectors: u64,
     write_sectors: u64,
 }
 
 /// Raw network counters for all interfaces.
-pub(self) struct NetworkSample {
+pub struct NetworkSample {
     timestamp: Instant,
     received_bytes: u64,
     transmitted_bytes: u64,
 }
 
 /// Raw CPU tick counters.
-pub(self) struct CpuSample {
+pub struct CpuSample {
     idle: u64,
     total: u64,
 }

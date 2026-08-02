@@ -86,7 +86,7 @@ pub fn core_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "list_areas".to_string(),
-            description: "Lists all configured Smearor areas with their current visibility and position.".to_string(),
+            description: "Lists all currently visible/open Smearor launcher areas (Bereiche) with their area_id, visibility state, and position. Use when the user asks for visible areas, 'Bereiche', or 'Areas' in the launcher.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {}
@@ -160,12 +160,12 @@ pub fn core_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "send_message".to_string(),
-            description: "Publishes a message to a topic on the central message broker.".to_string(),
+            description: "Publishes a message to a topic on the central message broker. Use this to trigger button actions: after reading an area config, use the button's click_topic as the topic and click_payload as the payload to activate devices like lights.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "topic": { "type": "string", "description": "Broker topic name" },
-                    "payload": { "type": "object", "description": "JSON payload to publish" },
+                    "topic": { "type": "string", "description": "Broker topic name (e.g. the click_topic from a button config)" },
+                    "payload": { "type": "object", "description": "JSON payload to publish (e.g. the click_payload from a button config)" },
                     "target_instance_id": { "type": "string", "description": "Optional target widget/service instance ID" }
                 },
                 "required": ["topic", "payload"]
@@ -189,6 +189,70 @@ pub fn core_tools() -> Vec<ToolDefinition> {
                         },
                     )
                     .await
+                })
+            }),
+        },
+        ToolDefinition {
+            name: "send_multiple_messages".to_string(),
+            description: "Publishes multiple messages to the central message broker in a single call. Automatically filters out duplicate messages (same topic + payload). Use this when you need to trigger multiple button actions at once, e.g. turning off all lights in a room.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "messages": {
+                        "type": "array",
+                        "description": "Array of messages to send. Each message has a topic, payload, and optional target_instance_id.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "topic": { "type": "string", "description": "Broker topic name" },
+                                "payload": { "type": "object", "description": "JSON payload to publish" },
+                                "target_instance_id": { "type": "string", "description": "Optional target widget/service instance ID" }
+                            },
+                            "required": ["topic", "payload"]
+                        }
+                    }
+                },
+                "required": ["messages"]
+            }),
+            handler: Box::new(|sender, params| {
+                let Some(messages_array) = params.and_then(|p| p.get("messages")).and_then(|v| v.as_array()) else {
+                    return Box::pin(async move { Err("Missing 'messages' array. Each message must be an object with 'topic' (string) and 'payload' (object). Example: {\"messages\": [{\"topic\": \"service.http.request\", \"payload\": {\"method\": \"Get\", \"url\": \"...\", \"response_topic\": \"...\"}}]}".to_string()) }) as ToolFuture;
+                };
+                let mut messages = Vec::new();
+                let mut errors: Vec<String> = Vec::new();
+                for (index, item) in messages_array.iter().enumerate() {
+                    if !item.is_object() {
+                        errors.push(format!("Message {}: not a JSON object (got {}). Each message must be an object with 'topic' and 'payload' fields.", index, item));
+                        continue;
+                    }
+                    let Some(topic) = item.get("topic").and_then(|v| v.as_str()).map(|s| s.to_string()) else {
+                        errors.push(format!("Message {}: missing or non-string 'topic' field. The 'topic' must be a string, e.g. \"service.http.request\".", index));
+                        continue;
+                    };
+                    let Some(payload) = item.get("payload").cloned() else {
+                        errors.push(format!("Message {}: missing 'payload' field. The 'payload' must be a JSON object, e.g. {{\"method\": \"Get\", \"url\": \"...\", \"response_topic\": \"...\"}}.", index));
+                        continue;
+                    };
+                    if !payload.is_object() {
+                        errors.push(format!("Message {}: 'payload' is not a JSON object (got {}). It must be an object.", index, payload));
+                        continue;
+                    }
+                    let target_instance_id = item.get("target_instance_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+                    messages.push((topic, payload, target_instance_id));
+                }
+                if !errors.is_empty() {
+                    let error_detail = errors.join("; ");
+                    return Box::pin(async move { Err(format!("Invalid messages format: {error_detail}. Fix the format and retry. Each message must be: {{\"topic\": \"<string>\", \"payload\": {{<object>}}, \"target_instance_id\": \"<optional string>\"}}")) }) as ToolFuture;
+                }
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::SendMultipleMessages {
+                            messages,
+                            response: oneshot::channel().0,
+                        },
+                    )
+                        .await
                 })
             }),
         },
@@ -220,7 +284,7 @@ pub fn core_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "list_all_areas".to_string(),
-            description: "Lists all configured Smearor areas (including not-yet-opened ones) with their area IDs.".to_string(),
+            description: "Lists every configured Smearor launcher area (Bereiche), including areas that are not currently opened/visible, with their area_id and configuration state. Use when the user asks for a list of all areas, 'alle Bereiche', or 'alle Areas' in the launcher.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {}
@@ -239,7 +303,7 @@ pub fn core_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "get_area_config".to_string(),
-            description: "Returns the configuration of a Smearor area as JSON.".to_string(),
+            description: "Returns the full configuration of a Smearor area (Bereich) as JSON, including its buttons and their associated actions. Use this after listing areas to inspect the devices or controls available inside a specific area.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -260,6 +324,118 @@ pub fn core_tools() -> Vec<ToolDefinition> {
                         },
                     )
                     .await
+                })
+            }),
+        },
+        ToolDefinition {
+            name: "launcher_load_instance".to_string(),
+            description: "Dynamically loads a new launcher instance from a TOML config file path. The instance gets its own window, plugins, and areas. Use this to add a new launcher window at runtime.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "instance_id": {
+                        "type": "string",
+                        "description": "Unique identifier for the new instance (e.g. 'side3', 'macropad_5')"
+                    },
+                    "config_path": {
+                        "type": "string",
+                        "description": "File system path to the TOML config file (e.g. 'config-side3.toml')"
+                    },
+                    "instance_type": {
+                        "type": "string",
+                        "enum": ["gtk", "headless", "web"],
+                        "default": "gtk",
+                        "description": "Instance type: 'gtk' creates a visible window, 'headless' runs without a window (for hardware devices), 'web' serves the instance via HTTP"
+                    }
+                },
+                "required": ["instance_id", "config_path"]
+            }),
+            handler: Box::new(|sender, params| {
+                let Some(instance_id) = get_string_param(params, "instance_id") else {
+                    return Box::pin(async move { Err("Missing instance_id".to_string()) }) as ToolFuture;
+                };
+                let Some(config_path) = get_string_param(params, "config_path") else {
+                    return Box::pin(async move { Err("Missing config_path".to_string()) }) as ToolFuture;
+                };
+                let instance_type = get_string_param(params, "instance_type").unwrap_or_else(|| "gtk".to_string());
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::LoadInstance {
+                            instance_id,
+                            config_path,
+                            instance_type,
+                            response: oneshot::channel().0,
+                        },
+                    )
+                        .await
+                })
+            }),
+        },
+        ToolDefinition {
+            name: "launcher_stop_instance".to_string(),
+            description: "Stops a running launcher instance by its instance_id. Closes the window, unloads plugins, and removes the instance from the message broker. Other instances are not affected.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "instance_id": {
+                        "type": "string",
+                        "description": "Unique identifier of the instance to stop"
+                    }
+                },
+                "required": ["instance_id"]
+            }),
+            handler: Box::new(|sender, params| {
+                let Some(instance_id) = get_string_param(params, "instance_id") else {
+                    return Box::pin(async move { Err("Missing instance_id".to_string()) }) as ToolFuture;
+                };
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::StopInstance {
+                            instance_id,
+                            response: oneshot::channel().0,
+                        },
+                    )
+                        .await
+                })
+            }),
+        },
+        ToolDefinition {
+            name: "launcher_list_instances".to_string(),
+            description: "Lists all currently running launcher instances with their IDs, types, and window states.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+            handler: Box::new(|sender, _params| {
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::ListInstances {
+                            response: oneshot::channel().0,
+                        },
+                    )
+                        .await
+                })
+            }),
+        },
+        ToolDefinition {
+            name: "web_server_status".to_string(),
+            description: "Returns the status of the embedded web server, including port, enabled state, and list of active web instances.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+            handler: Box::new(|sender, _params| {
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::WebServerStatus {
+                            response: oneshot::channel().0,
+                        },
+                    )
+                        .await
                 })
             }),
         },
@@ -304,6 +480,10 @@ async fn send_command_and_wait(sender: Sender<McpCommand>, command: McpCommand) 
             target_instance_id,
             response: response_tx,
         },
+        McpCommand::SendMultipleMessages { messages, response: _ } => McpCommand::SendMultipleMessages {
+            messages,
+            response: response_tx,
+        },
         McpCommand::ReadResource { uri, response: _ } => McpCommand::ReadResource { uri, response: response_tx },
         McpCommand::ToggleArea { area_id, response: _ } => McpCommand::ToggleArea {
             area_id,
@@ -313,9 +493,26 @@ async fn send_command_and_wait(sender: Sender<McpCommand>, command: McpCommand) 
             area_id,
             response: response_tx,
         },
-        McpCommand::InvokePluginTool { .. } | McpCommand::InvokePluginResource { .. } => {
+        McpCommand::InvokePluginTool { .. } | McpCommand::InvokePluginResource { .. } | McpCommand::InvokePluginPrompt { .. } => {
             return Err("Plugin invocation commands are handled by the message handler".to_string());
         }
+        McpCommand::LoadInstance {
+            instance_id,
+            config_path,
+            instance_type,
+            response: _,
+        } => McpCommand::LoadInstance {
+            instance_id,
+            config_path,
+            instance_type,
+            response: response_tx,
+        },
+        McpCommand::StopInstance { instance_id, response: _ } => McpCommand::StopInstance {
+            instance_id,
+            response: response_tx,
+        },
+        McpCommand::ListInstances { response: _ } => McpCommand::ListInstances { response: response_tx },
+        McpCommand::WebServerStatus { response: _ } => McpCommand::WebServerStatus { response: response_tx },
     };
 
     sender

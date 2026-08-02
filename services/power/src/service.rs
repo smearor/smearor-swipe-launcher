@@ -5,12 +5,10 @@ use crate::dbus::refresh_inhibitors;
 use crate::scheduler::PowerState;
 use crate::scheduler::run_countdown;
 use crate::scheduler::run_scheduled_action;
+use smearor_model_mcp::InvokePromptMessage;
 use smearor_model_mcp::InvokeResourceMessage;
-use smearor_model_mcp::InvokeResourceResponse;
 use smearor_model_mcp::InvokeToolMessage;
-use smearor_model_mcp::InvokeToolResponse;
-use smearor_model_mcp::RegisterResourceMessage;
-use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_PROMPT;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_power_model::PowerAction;
@@ -20,6 +18,7 @@ use smearor_power_model::PowerStatusMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
@@ -29,14 +28,17 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionError;
 use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
-use smearor_swipe_launcher_plugin_api::Service;
+use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::default_clone_payload;
+use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::sync::Notify;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 
 /// Internal command enum for the service event loop.
 pub enum PowerCommand {
@@ -98,9 +100,9 @@ impl PowerService {
             let config = self.config.clone();
             let shared_state = self.shared_state.clone();
             self.register_mcp_capabilities();
-            debug!("Power Service: spawning async runtime thread");
+            trace!("Power Service: spawning async runtime thread");
             std::thread::spawn(move || {
-                debug!("Power Service: async thread started, creating runtime");
+                trace!("Power Service: async thread started, creating runtime");
                 let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                     Ok(rt) => rt,
                     Err(e) => {
@@ -109,7 +111,7 @@ impl PowerService {
                     }
                 };
                 let local_set = tokio::task::LocalSet::new();
-                debug!("Power Service: runtime created, running async loop");
+                trace!("Power Service: runtime created, running async loop");
                 local_set.block_on(&rt, async move {
                     if let Some(receiver) = command_receiver {
                         run_power_async(meta, core_context, receiver, config, shared_state).await;
@@ -123,79 +125,18 @@ impl PowerService {
         }
     }
 
-    fn state_snapshot(&self) -> PowerStatusMessage {
+    pub(crate) fn state_snapshot(&self) -> PowerStatusMessage {
         self.shared_state.lock().map(|s| s.status.clone()).unwrap_or_default()
-    }
-
-    fn register_mcp_capabilities(&self) {
-        if !self.config.mcp_enabled {
-            debug!("Power Service: MCP tool registration disabled by config");
-            return;
-        }
-
-        let broadcaster = self.get_broadcaster();
-
-        let capabilities_resource = RegisterResourceMessage::new(
-            "power://capabilities",
-            "Power Capabilities",
-            "System power capabilities as reported by systemd-logind.",
-            "application/json",
-        );
-        broadcaster.broadcast_message_to_topic(capabilities_resource);
-
-        let inhibitors_resource = RegisterResourceMessage::new(
-            "power://inhibitors",
-            "Power Inhibitors",
-            "List of active inhibitor locks blocking power actions.",
-            "application/json",
-        );
-        broadcaster.broadcast_message_to_topic(inhibitors_resource);
-
-        let scheduled_resource = RegisterResourceMessage::new(
-            "power://scheduled_actions",
-            "Scheduled Power Actions",
-            "Currently scheduled power action, if any.",
-            "application/json",
-        );
-        broadcaster.broadcast_message_to_topic(scheduled_resource);
-
-        let power_action_tool = RegisterToolMessage::new(
-            "system_power_action",
-            "Executes the desired power action immediately.",
-            r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["shutdown", "reboot", "suspend", "hibernate", "lock", "logout"], "description": "The power action to execute" } }, "required": ["action"] }"#,
-        );
-        broadcaster.broadcast_message_to_topic(power_action_tool);
-
-        let schedule_tool = RegisterToolMessage::new(
-            "system_schedule_power_action",
-            "Schedules a shutdown or reboot in the future.",
-            r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["shutdown", "reboot"], "description": "The power action to schedule" }, "delay_minutes": { "type": "integer", "minimum": 1, "description": "Delay in minutes before the action executes" } }, "required": ["action", "delay_minutes"] }"#,
-        );
-        broadcaster.broadcast_message_to_topic(schedule_tool);
-
-        let cancel_tool = RegisterToolMessage::new(
-            "system_cancel_power_action",
-            "Cancels a running shutdown timer or scheduled action.",
-            r#"{ "type": "object", "properties": {} }"#,
-        );
-        broadcaster.broadcast_message_to_topic(cancel_tool);
-
-        let uefi_tool = RegisterToolMessage::new(
-            "system_reboot_to_uefi",
-            "Sets the firmware reboot flag and reboots directly into BIOS/UEFI.",
-            r#"{ "type": "object", "properties": {} }"#,
-        );
-        broadcaster.broadcast_message_to_topic(uefi_tool);
     }
 }
 
 impl MessageHandler<FfiEnvelopePayload<PowerCommandMessage>> for PowerService {
     fn handle_message(&self, message: FfiEnvelopePayload<PowerCommandMessage>, _sender_id: &str) {
-        debug!("Power Service: received command {:?} for action {:?}", message.action, message.power_action);
+        trace!("Power Service: received command {:?} for action {:?}", message.action, message.power_action);
         match message.action {
             PowerCommandAction::Execute => {
                 if let Err(e) = self.command_sender.send(PowerCommand::Execute(message.power_action.clone())) {
-                    debug!("Power Service: failed to send Execute command to async loop: {e}");
+                    trace!("Power Service: failed to send Execute command to async loop: {e}");
                 }
             }
             PowerCommandAction::Schedule => {
@@ -203,121 +144,20 @@ impl MessageHandler<FfiEnvelopePayload<PowerCommandMessage>> for PowerService {
                     .command_sender
                     .send(PowerCommand::Schedule(message.power_action.clone(), message.delay_minutes as u64))
                 {
-                    debug!("Power Service: failed to send Schedule command to async loop: {e}");
+                    trace!("Power Service: failed to send Schedule command to async loop: {e}");
                 }
             }
             PowerCommandAction::Cancel => {
                 if let Err(e) = self.command_sender.send(PowerCommand::Cancel) {
-                    debug!("Power Service: failed to send Cancel command to async loop: {e}");
+                    trace!("Power Service: failed to send Cancel command to async loop: {e}");
                 }
             }
             PowerCommandAction::Refresh => {
                 if let Err(e) = self.command_sender.send(PowerCommand::Refresh) {
-                    debug!("Power Service: failed to send Refresh command to async loop: {e}");
+                    trace!("Power Service: failed to send Refresh command to async loop: {e}");
                 }
             }
         }
-    }
-}
-
-impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for PowerService {
-    fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, _sender_id: &str) {
-        let tool_name = message.0.name.to_string();
-        debug!("Power Service: InvokeToolMessage name={}", tool_name);
-        let broadcaster = self.get_broadcaster();
-
-        match tool_name.as_str() {
-            "system_power_action" => {
-                let action_str = serde_json::from_str::<serde_json::Value>(&message.0.arguments.to_string())
-                    .ok()
-                    .and_then(|v| v.get("action").and_then(|a| a.as_str()).map(|s| s.to_string()))
-                    .unwrap_or_default();
-                let power_action = parse_action_from_string(&action_str);
-                let _ = self.command_sender.send(PowerCommand::Execute(power_action));
-                let response = InvokeToolResponse::success(&message.0.correlation_id, "Power action triggered");
-                broadcaster.broadcast_message_to_topic(response);
-            }
-            "system_schedule_power_action" => {
-                let parsed = serde_json::from_str::<serde_json::Value>(&message.0.arguments.to_string()).ok();
-                let action_str = parsed
-                    .as_ref()
-                    .and_then(|v| v.get("action").and_then(|a| a.as_str()).map(|s| s.to_string()))
-                    .unwrap_or_default();
-                let delay_minutes = parsed.as_ref().and_then(|v| v.get("delay_minutes").and_then(|a| a.as_u64())).unwrap_or(0);
-                let power_action = parse_action_from_string(&action_str);
-                let _ = self.command_sender.send(PowerCommand::Schedule(power_action, delay_minutes));
-                let response = InvokeToolResponse::success(&message.0.correlation_id, "Power action scheduled");
-                broadcaster.broadcast_message_to_topic(response);
-            }
-            "system_cancel_power_action" => {
-                let _ = self.command_sender.send(PowerCommand::Cancel);
-                let response = InvokeToolResponse::success(&message.0.correlation_id, "Power action cancelled");
-                broadcaster.broadcast_message_to_topic(response);
-            }
-            "system_reboot_to_uefi" => {
-                let _ = self.command_sender.send(PowerCommand::Execute(PowerAction::RebootToFirmware));
-                let response = InvokeToolResponse::success(&message.0.correlation_id, "Reboot to UEFI triggered");
-                broadcaster.broadcast_message_to_topic(response);
-            }
-            _ => {
-                let response = InvokeToolResponse::error(&message.0.correlation_id, &format!("Unknown tool: {tool_name}"));
-                broadcaster.broadcast_message_to_topic(response);
-            }
-        }
-    }
-}
-
-impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for PowerService {
-    fn handle_message(&self, message: FfiEnvelopePayload<InvokeResourceMessage>, _sender_id: &str) {
-        let uri = message.0.uri.to_string();
-        debug!("Power Service: InvokeResourceMessage uri={}", uri);
-        let broadcaster = self.get_broadcaster();
-
-        let state = self.state_snapshot();
-        let response = match uri.as_str() {
-            "power://capabilities" => {
-                let caps = &state.capabilities;
-                let json = serde_json::json!({
-                    "can_shutdown": caps.can_shutdown,
-                    "can_reboot": caps.can_reboot,
-                    "can_suspend": caps.can_suspend,
-                    "can_hibernate": caps.can_hibernate,
-                    "can_reboot_to_firmware": caps.can_reboot_to_firmware,
-                    "can_lock": caps.can_lock,
-                    "can_logout": caps.can_logout,
-                });
-                InvokeResourceResponse::success(&message.0.correlation_id, &json.to_string())
-            }
-            "power://inhibitors" => {
-                let inhibitors: Vec<serde_json::Value> = state
-                    .inhibitors
-                    .iter()
-                    .map(|inh| {
-                        serde_json::json!({
-                            "process_name": inh.process_name.to_string(),
-                            "reason": inh.reason.to_string(),
-                            "what": inh.what.to_string(),
-                            "who": inh.who.to_string(),
-                        })
-                    })
-                    .collect();
-                let json = serde_json::Value::Array(inhibitors);
-                InvokeResourceResponse::success(&message.0.correlation_id, &json.to_string())
-            }
-            "power://scheduled_actions" => {
-                let json = match state.scheduled_action.as_ref() {
-                    Some(sched) => serde_json::json!({
-                        "action": format!("{:?}", sched.action),
-                        "remaining_seconds": sched.remaining_seconds,
-                        "total_delay_seconds": sched.total_delay_seconds,
-                    }),
-                    None => serde_json::json!(null),
-                };
-                InvokeResourceResponse::success(&message.0.correlation_id, &json.to_string())
-            }
-            _ => InvokeResourceResponse::error(&message.0.correlation_id, &format!("Unknown resource: {uri}")),
-        };
-        broadcaster.broadcast_message_to_topic(response);
     }
 }
 
@@ -337,7 +177,7 @@ impl AsRef<Option<FfiCoreContext>> for PowerService {
     }
 }
 
-impl Service for PowerService {
+impl ServicePlugin for PowerService {
     fn on_message(&mut self, message: *mut core::ffi::c_void) {
         if !message.is_null() {
             unsafe {
@@ -349,13 +189,15 @@ impl Service for PowerService {
                     MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_MCP_INVOKE_RESOURCE && envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_PROMPT && envelope.type_id == FfiEnvelopePayload::<InvokePromptMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokePromptMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }
     }
 }
 
-fn parse_action_from_string(s: &str) -> PowerAction {
+pub(crate) fn parse_action_from_string(s: &str) -> PowerAction {
     match s {
         "shutdown" => PowerAction::Shutdown,
         "reboot" => PowerAction::Reboot,
@@ -381,8 +223,8 @@ fn send_status(meta: &PluginMeta, core_context: &FfiCoreContext, status: PowerSt
         topic: stabby::string::String::from(PowerStatusMessage::topic()),
         type_id: PowerStatusMessage::TYPE_ID,
         payload: payload_ptr,
-        destroy_payload: Some(destroy_power_status),
-        clone_payload: Some(clone_power_status),
+        destroy_payload: Some(default_destroy_payload),
+        clone_payload: Some(default_clone_payload::<PowerStatusMessage>),
     };
     core_context.send_message(envelope);
 }
@@ -487,6 +329,7 @@ async fn run_power_async(
                         if let Ok(mut current) = state.lock() {
                             current.status.countdown_active = false;
                             current.status.countdown_remaining_seconds = 0;
+                            current.status.countdown_total_seconds = 0;
                             current.status.scheduled_action = stabby::option::Option::None();
                             let status = current.status.clone();
                             drop(current);
@@ -529,21 +372,5 @@ async fn do_refresh(
         let status = current.status.clone();
         drop(current);
         let _ = status_sender.send(status);
-    }
-}
-
-extern "C" fn clone_power_status(ptr: *mut core::ffi::c_void) -> *mut core::ffi::c_void {
-    if ptr.is_null() {
-        return std::ptr::null_mut();
-    }
-    let status = unsafe { &*(ptr as *const PowerStatusMessage) };
-    Box::into_raw(Box::new(status.clone())) as *mut core::ffi::c_void
-}
-
-extern "C" fn destroy_power_status(ptr: *mut core::ffi::c_void) {
-    if !ptr.is_null() {
-        unsafe {
-            let _ = Box::from_raw(ptr as *mut PowerStatusMessage);
-        }
     }
 }

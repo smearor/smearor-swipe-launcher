@@ -1,9 +1,12 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::NetworkConnectionState;
 use crate::NetworkInterfaceType;
 
 /// Status of a single network interface.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InterfaceStatus {
     /// Interface type (Wifi, Ethernet, Bluetooth, Vpn, Other).
     pub interface_type: NetworkInterfaceType,

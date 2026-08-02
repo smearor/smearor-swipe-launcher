@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -9,7 +11,7 @@ pub const TOPIC_STATUS: &str = "service.network.status";
 
 /// Complete network status message broadcast by the service.
 #[stabby::stabby(no_opt)]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct NetworkStatusMessage {
     /// Primary active interface (the one with internet access, or the first connected).
     pub primary_interface: InterfaceStatus,

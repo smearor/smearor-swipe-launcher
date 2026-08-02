@@ -1,8 +1,11 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::WallpaperType;
 
 /// Lightweight theme info for the FFI status message.
 /// Contains only the fields needed by the widget for display.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[stabby::stabby]
 pub struct WallpaperThemeInfo {
     /// Human-readable name of the theme.
