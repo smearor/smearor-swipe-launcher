@@ -1,0 +1,141 @@
+/* Smearor Swipe Launcher — Web Instance Default Stylesheet */
+
+:root {
+    --bg-color: #1e1e2e;
+    --fg-color: #cdd6f4;
+    --accent-color: #89b4fa;
+    --border-color: #45475a;
+    --button-bg: #313244;
+    --button-hover: #45475a;
+    --button-active: #89b4fa;
+    --spacing: 8px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--fg-color);
+    font-family: sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.launcher-instance {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing);
+    padding: var(--spacing);
+}
+
+.launcher-areas {
+    display: flex;
+    gap: var(--spacing);
+}
+
+.launcher-areas.horizontal {
+    flex-direction: row;
+}
+
+.launcher-areas.vertical {
+    flex-direction: column;
+}
+
+.web-button {
+    background-color: var(--button-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: var(--fg-color);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.web-button:hover {
+    background-color: var(--button-hover);
+}
+
+.web-button:active,
+.web-button.active {
+    background-color: var(--button-active);
+    color: var(--bg-color);
+}
+
+.web-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.button-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.button-icon {
+    margin-bottom: 4px;
+}
+
+.widget-main-text {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.widget-info-text {
+    font-size: 10px;
+    font-weight: normal;
+    color: #88ccff;
+    opacity: 0.8;
+}
+
+.smearor-widget {
+    background-color: var(--button-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.smearor-weather-icon {
+    font-size: 36px;
+    margin-bottom: 4px;
+}
+
+.smearor-weather-temp {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.smearor-weather-info {
+    font-size: 10px;
+    color: #88ccff;
+    opacity: 0.8;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+.smearor-weather-info.marquee {
+    text-overflow: clip;
+    animation: marquee-scroll 8s ease-in-out infinite alternate;
+}
+
+@keyframes marquee-scroll {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(calc(-100% + 120px));
+    }
+}

@@ -337,6 +337,7 @@ scrolledwindow {
 
 .menu-button {
     background-color: transparent;
+    border-radius: 8px;
 }
 
 .menu-button:hover {
@@ -374,11 +375,27 @@ scrolledwindow {
 /*}*/
 
 .menu-button image {
-    -gtk-icon-size: 48px;
-    min-width: 48px;
-    min-height: 48px;
-    color: white;
+    -gtk-icon-size: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    /*background-color: transparent;*/
+    color: #000000;
     filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+}
+
+.widget-main-text {
+    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.widget-info-text {
+    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
+    font-size: 10px;
+    font-weight: normal;
+    color: #88ccff;
+    opacity: 0.8;
 }
 
 .audio-volume-bar trough {
@@ -396,95 +413,51 @@ scrolledwindow {
     background-color: transparent;
 }
 
-
-/* Hauptcontainer */
-.cyber-clock-main {
-    padding: 8px 12px;
+.mpris-progress-bar trough {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    min-height: 8px;
 }
 
-/* Trennpunkte */
-.cyber-clock-divider {
-    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
-    font-size: 28px;
-    font-weight: bold;
-    color: #44aaff;
-    text-shadow: 0 0 8px rgba(68, 170, 255, 0.8);
+.mpris-progress-bar block.filled {
+    background-color: #00a1e4;
+    border-radius: 4px;
 }
 
-/* Vorherige / nächste Zahlen (gedimmt) */
-.cyber-clock-hour-prev,
-.cyber-clock-hour-next,
-.cyber-clock-minute-prev,
-.cyber-clock-minute-next,
-.cyber-clock-second-prev,
-.cyber-clock-second-next {
-    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
-    font-size: 14px;
-    color: #55aaff;
-    opacity: 0.65;
-    transition: opacity 0.4s ease, text-shadow 0.4s ease;
+.mpris-progress-bar block.empty {
+    background-color: transparent;
 }
 
-/* Aktuelle Zahlen (hell leuchtend) */
-.cyber-clock-hour-curr,
-.cyber-clock-minute-curr,
-.cyber-clock-second-curr {
+.power-timeout-bar trough {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    min-height: 8px;
+}
+
+.power-timeout-bar block.filled {
+    background-color: #00a1e4;
+    border-radius: 4px;
+}
+
+.power-timeout-bar block.empty {
+    background-color: transparent;
+}
+
+
+/* Clock time display (replaces icon line in 4-line layout) */
+.clock-time {
     font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
     font-size: 32px;
     font-weight: 900;
-    color: #ffffff;
-    text-shadow: 0 0 4px #ffffff,
-    0 0 10px #00aaff,
-    0 0 20px #00aaff,
-    0 0 40px rgba(0, 170, 255, 0.4);
-    transition: text-shadow 0.3s ease;
-}
-
-/* Pulsierender Glow fuer die Sekunden */
-.cyber-clock-second-curr {
-    animation: cyber-pulse 2s ease-in-out infinite;
-}
-
-@keyframes cyber-pulse {
-    0%, 100% {
-        text-shadow: 0 0 4px #ffffff,
-        0 0 10px #00aaff,
-        0 0 20px #00aaff,
-        0 0 40px rgba(0, 170, 255, 0.4);
-    }
-    50% {
-        text-shadow: 0 0 4px #ffffff,
-        0 0 14px #00aaff,
-        0 0 30px #00aaff,
-        0 0 60px rgba(0, 170, 255, 0.7);
-    }
-}
-
-/* Hover-Effekt: aktuelle Zahlen flackern auf */
-.cyber-clock-main:hover .cyber-clock-hour-curr,
-.cyber-clock-main:hover .cyber-clock-minute-curr,
-.cyber-clock-main:hover .cyber-clock-second-curr {
-    text-shadow: 0 0 4px #ffffff,
-    0 0 16px #00aaff,
-    0 0 40px #00aaff,
-    0 0 80px rgba(0, 170, 255, 0.8);
-}
-
-/* Datum unter der Uhr */
-.cyber-clock-date {
-    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    color: #88ccff;
-    text-shadow: 0 0 4px rgba(136, 204, 255, 0.5);
-    opacity: 0.8;
-    transition: opacity 0.4s ease;
+    color: black;
+    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
 }
 
 /* Sysinfo widgets */
 .sysinfo-icon {
     font-family: 'NerdFontsSymbolsOnly';
     font-size: 1.5em;
+    color: #000000;
     filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
 }
 
@@ -517,50 +490,34 @@ scrolledwindow {
 }
 
 .sysinfo-bar trough {
-    background-color: #2a2a2a;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    min-height: 8px;
 }
 
-.sysinfo-bar trough > fill {
-    background-color: #04e762;
+.sysinfo-bar block.filled {
+    background-color: #00a1e4;
+    border-radius: 4px;
 }
 
-.sysinfo-bar.sysinfo-warning trough > fill {
-    background-color: #f5b700;
-}
-
-.sysinfo-bar.sysinfo-critical trough > fill {
-    background-color: #dc0073;
+.sysinfo-bar block.empty {
+    background-color: transparent;
 }
 
 /* Weather widget */
 .weather-widget {
-    padding: 4px 8px;
+    /*padding: 4px 8px;*/
 }
 
 .weather-icon {
     font-family: 'NerdFontsSymbolsOnly';
-    font-size: 1.8em;
     color: white;
     filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
 }
 
-.weather-temp {
-    font-family: "JetBrains Mono", "Fira Code", "Monospace", sans-serif;
-    font-size: 16px;
-    font-weight: bold;
-    color: #ffffff;
-    text-shadow: 0 0 4px rgba(0, 170, 255, 0.6);
-}
-
-.weather-info {
-    font-size: 0.8em;
-    color: #88ccff;
-    text-shadow: 0 0 4px rgba(136, 204, 255, 0.4);
-}
-
 .menu-button .nerd-icon {
     font-size: 1.8em;
-    color: white;
+    color: #000000;
     filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
 }
 
@@ -671,4 +628,53 @@ scrolledwindow {
 .workspace-dot-inactive {
     color: #555555;
     font-size: 1.2em;
+}
+
+/* Semantic icon color classes for WidgetIconRendering */
+.icon-color-green {
+    color: rgba(0, 200, 50, 0.9);
+}
+
+.icon-color-light-green {
+    color: rgba(128, 230, 77, 0.9);
+}
+
+.icon-color-yellow {
+    color: rgba(255, 217, 0, 0.9);
+}
+
+.icon-color-orange {
+    color: rgba(255, 128, 0, 0.9);
+}
+
+.icon-color-red {
+    color: rgba(230, 26, 26, 0.9);
+}
+
+.icon-color-dark-red {
+    color: rgba(153, 0, 0, 0.9);
+}
+
+.icon-color-dark-blue {
+    color: rgba(0, 0, 128, 0.9);
+}
+
+.icon-color-blue {
+    color: rgba(26, 77, 230, 0.9);
+}
+
+.icon-color-light-blue {
+    color: rgba(102, 179, 255, 0.9);
+}
+
+.icon-color-black {
+    color: rgba(0, 0, 0, 0.9);
+}
+
+.icon-color-white {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.icon-color-default {
+    color: rgba(240, 240, 240, 0.9);
 }
