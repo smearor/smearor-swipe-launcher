@@ -1,0 +1,15 @@
+[book]
+title = "Smearor Swipe Launcher"
+authors = ["Andreas Schaeffer"]
+language = "en"
+src = "src"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+default-theme = "dark"
+preferred-dark-theme = "ayu"
+git-repository-url = "https://github.com/smearor/smearor-swipe-launcher"
+edit-url-template = "https://github.com/smearor/smearor-swipe-launcher/edit/main/src/{path}"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
