@@ -1,5 +1,6 @@
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
+use crate::library_path::resolve_library_path;
 use libloading::Library;
 use serde_json::Value;
 use smearor_model_plugin::PluginEntry;
@@ -11,7 +12,6 @@ use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::WidgetPluginConstructor;
 use smearor_swipe_launcher_plugin_api::WidgetPluginVTable;
 use stabby::libloading::StabbyLibrary;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::trace;
@@ -32,7 +32,7 @@ impl LoadedPlugin {
         instance_id: &str,
     ) -> Result<(String, Self), LauncherError> {
         unsafe {
-            let path = PathBuf::from(&plugin_entry.path);
+            let path = resolve_library_path(&plugin_entry.path, &plugin_entry.name)?;
             let library = Arc::new(Library::new(&path)?);
 
             trace!("load plugin: {:?}", config);

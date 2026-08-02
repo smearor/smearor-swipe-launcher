@@ -10,9 +10,9 @@ const EXCLUDED_TOML_FILES: &[&str] = &["services.toml", "wallpaper.toml"];
 /// Service for discovering configuration files from CLI arguments, working directory, and XDG config directory.
 ///
 /// Implements the fallback loading order for launcher configs, services config, and wallpaper config:
-/// - Launcher configs: CLI `--config` > working dir `*.toml` (excluding `services.toml`/`wallpaper.toml`) > `~/.config/smearor/launcher/*.toml`
-/// - Services config: CLI `--services-config` > working dir `services.toml` > `~/.config/smearor/services/services.toml`
-/// - Wallpaper config: working dir `wallpaper.toml` > `~/.config/smearor/services/wallpaper.toml`
+/// - Launcher configs: CLI `--config` > working dir `*.toml` (excluding `services.toml`/`wallpaper.toml`) > `~/.config/smearor/launcher/*.toml` > `/usr/share/smearor/launcher/*.toml`
+/// - Services config: CLI `--services-config` > working dir `services.toml` > `~/.config/smearor/services/services.toml` > `/usr/share/smearor/services/services.toml`
+/// - Wallpaper config: working dir `wallpaper.toml` > `~/.config/smearor/services/wallpaper.toml` > `/usr/share/smearor/services/wallpaper.toml`
 pub struct ConfigDiscoveryService;
 
 impl ConfigDiscoveryService {
@@ -56,6 +56,15 @@ impl ConfigDiscoveryService {
 
         if !configs.is_empty() {
             debug!("Discovered {} launcher config(s) in XDG config directory", configs.len());
+            return Ok(configs);
+        }
+
+        // Priority 4: /usr/share/smearor/launcher/*.toml (system default)
+        let system_dir = Path::new("/usr/share/smearor/launcher");
+        configs.extend(Self::collect_toml_files(system_dir, &[]));
+
+        if !configs.is_empty() {
+            debug!("Discovered {} launcher config(s) in system directory", configs.len());
         }
 
         Ok(configs)
@@ -64,7 +73,8 @@ impl ConfigDiscoveryService {
     /// Discovers the services config file based on CLI arg and fallback locations.
     ///
     /// If `cli_services_config` is provided, returns only that path.
-    /// Otherwise, checks the working directory for `services.toml`, then `~/.config/smearor/services/services.toml`.
+    /// Otherwise, checks the working directory for `services.toml`, then `~/.config/smearor/services/services.toml`,
+    /// then `/usr/share/smearor/services/services.toml`.
     pub fn discover_services_config(&self, cli_services_config: Option<&PathBuf>) -> Result<Option<PathBuf>> {
         if let Some(path) = cli_services_config {
             return Ok(Some(path.clone()));
@@ -88,8 +98,50 @@ impl ConfigDiscoveryService {
             }
         }
 
+        // Priority 4: /usr/share/smearor/services/services.toml (system default)
+        let system_path = Path::new("/usr/share/smearor/services/services.toml");
+        if system_path.is_file() {
+            debug!("Discovered services config in system directory: {}", system_path.display());
+            return Ok(Some(system_path.to_path_buf()));
+        }
+
         debug!("No services config found, starting with default config");
         Ok(None)
+    }
+
+    /// Discovers the wallpaper config file (`wallpaper.toml`) using fallback locations.
+    ///
+    /// Checks the working directory first, then `~/.config/smearor/services/wallpaper.toml`,
+    /// then `/usr/share/smearor/services/wallpaper.toml` (system default).
+    /// Returns `None` if no file is found.
+    pub fn discover_wallpaper_config(&self) -> Option<PathBuf> {
+        // Priority 1: wallpaper.toml in working directory
+        if let Ok(cwd) = std::env::current_dir() {
+            let path = cwd.join("wallpaper.toml");
+            if path.is_file() {
+                debug!("Discovered wallpaper config in working directory: {}", path.display());
+                return Some(path);
+            }
+        }
+
+        // Priority 2: ~/.config/smearor/services/wallpaper.toml
+        if let Some(xdg_dir) = Self::xdg_config_dir() {
+            let path = xdg_dir.join("services").join("wallpaper.toml");
+            if path.is_file() {
+                debug!("Discovered wallpaper config in XDG config directory: {}", path.display());
+                return Some(path);
+            }
+        }
+
+        // Priority 3: /usr/share/smearor/services/wallpaper.toml (system default)
+        let system_path = Path::new("/usr/share/smearor/services/wallpaper.toml");
+        if system_path.is_file() {
+            debug!("Discovered wallpaper config in system directory: {}", system_path.display());
+            return Some(system_path.to_path_buf());
+        }
+
+        debug!("No wallpaper config found");
+        None
     }
 
     /// Validates that all paths in the given list exist and are readable files.

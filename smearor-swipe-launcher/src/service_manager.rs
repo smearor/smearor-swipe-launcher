@@ -27,7 +27,7 @@ impl ServiceManager {
     }
 
     pub fn load_service(&self, service_entry: &PluginEntry, config: PluginConfig) -> Result<(), LauncherError> {
-        trace!("Loading service {} from: {:?}", service_entry.id, service_entry.path);
+        trace!("Loading service {} from: {:?} (name: {:?})", service_entry.id, service_entry.path, service_entry.name);
 
         let (actual_service_id, service) = LoadedService::load(service_entry, &config, self.message_sender.clone())?;
 

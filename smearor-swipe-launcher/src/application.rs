@@ -217,9 +217,26 @@ impl LauncherHost {
     }
 
     pub fn load_services(&self, services_config: &ServicesConfig) {
+        let discovery_service = crate::config::discovery::ConfigDiscoveryService::new();
+        let wallpaper_config_path = discovery_service.discover_wallpaper_config();
+
         for service_entry in &services_config.services {
             trace!("Loading service {}", service_entry.id);
-            let service_config = services_config.plugin_config(&service_entry.id);
+            let mut service_config = services_config.plugin_config(&service_entry.id);
+
+            if service_entry.id == "wallpaper" {
+                if let Some(ref path) = wallpaper_config_path {
+                    let path_str = path.display().to_string();
+                    let needs_inject = service_config.config.get("config_path").and_then(|v| v.as_str()).is_none_or(|s| s.is_empty());
+                    if needs_inject {
+                        trace!("Injecting wallpaper config_path: {}", path_str);
+                        if let Some(obj) = service_config.config.as_object_mut() {
+                            obj.insert("config_path".to_string(), serde_json::Value::String(path_str));
+                        }
+                    }
+                }
+            }
+
             trace!("Service config: {service_config:?}");
             if let Err(e) = self.service_manager.load_service(&service_entry, service_config) {
                 error!("Failed to load service {}: {}", service_entry.id, e);

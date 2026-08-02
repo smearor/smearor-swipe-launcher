@@ -1,5 +1,6 @@
 use crate::context::SimpleCoreContext;
 use crate::error::LauncherError;
+use crate::library_path::resolve_library_path;
 use libloading::Library;
 use serde_json::Value;
 use smearor_model_plugin::PluginEntry;
@@ -9,7 +10,6 @@ use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::ServicePluginConstructor;
 use smearor_swipe_launcher_plugin_api::ServicePluginVTable;
 use stabby::libloading::StabbyLibrary;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
@@ -26,7 +26,7 @@ pub struct LoadedService {
 impl LoadedService {
     pub fn load(service_entry: &PluginEntry, config: &PluginConfig, sender: UnboundedSender<FfiEnvelope>) -> Result<(String, Self), LauncherError> {
         unsafe {
-            let path = PathBuf::from(&service_entry.path);
+            let path = resolve_library_path(&service_entry.path, &service_entry.name)?;
             let library = Arc::new(Library::new(&path)?);
 
             trace!("Loading service: {:?}", config);

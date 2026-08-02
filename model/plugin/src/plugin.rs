@@ -7,7 +7,24 @@ pub struct PluginEntry {
     pub id: String,
 
     /// The path to the shared library of the plugin (.so file)
-    pub path: String,
+    ///
+    /// Either `path` or `name` must be specified. When `path` is given, it is
+    /// used directly (relative to the working directory or absolute). When
+    /// `name` is given instead, the host resolves the library by searching
+    /// standard directories for `libsmearor_<name>.so`.
+    #[serde(default)]
+    pub path: Option<String>,
+
+    /// The short name of the plugin, used to resolve the shared library path.
+    ///
+    /// The host searches for `libsmearor_<name>.so` in the following
+    /// directories (first match wins):
+    /// - `~/.local/lib/smearor/` (user-local)
+    /// - `/usr/local/lib/smearor/` (system-wide)
+    ///
+    /// Either `path` or `name` must be specified.
+    #[serde(default)]
+    pub name: Option<String>,
 
     /// The widget type to instantiate from a plugin that provides multiple widgets.
     ///
@@ -67,7 +84,7 @@ impl From<PluginEntry> for PluginEntryStabby {
     fn from(value: PluginEntry) -> Self {
         Self {
             id: value.id.into(),
-            path: value.path.into(),
+            path: value.path.unwrap_or_default().into(),
             widget: value.widget.map(|widget| widget.into()).into(),
         }
     }
@@ -75,9 +92,11 @@ impl From<PluginEntry> for PluginEntryStabby {
 
 impl From<PluginEntryStabby> for PluginEntry {
     fn from(value: PluginEntryStabby) -> Self {
+        let path = value.path.to_string();
         Self {
             id: value.id.to_string(),
-            path: value.path.to_string(),
+            path: if path.is_empty() { None } else { Some(path) },
+            name: None,
             widget: {
                 let widget: Option<stabby::string::String> = value.widget.into();
                 widget.map(|widget| widget.to_string())

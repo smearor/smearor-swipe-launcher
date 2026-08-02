@@ -38,6 +38,9 @@ pub struct WallpaperServiceConfig {
     /// Name of the default theme that the service starts with.
     pub default_theme: String,
     /// Path to the configuration file where themes are persisted.
+    ///
+    /// If empty, the host resolves the path via `ConfigDiscoveryService`.
+    /// Falls back to discovery within the service if the host does not inject a path.
     pub config_path: String,
     /// Whether to automatically start the default theme on service initialization.
     pub auto_start: bool,
@@ -56,6 +59,12 @@ pub struct WallpaperServiceConfig {
 
 impl WallpaperServiceConfig {
     pub fn load_or_discover_themes(&self) -> Vec<WallpaperTheme> {
+        if self.config_path.is_empty() {
+            if let Some(discovered) = self.discover_wallpaper_config() {
+                return self.load_themes_with_config(&discovered);
+            }
+            return Vec::new();
+        }
         let path = Path::new(&self.config_path);
         if path.is_file() {
             self.load_themes_with_config(path)
@@ -102,7 +111,8 @@ impl WallpaperServiceConfig {
 
     /// Discovers the wallpaper config file (`wallpaper.toml`) using fallback locations.
     ///
-    /// Checks the working directory first, then `~/.config/smearor/services/wallpaper.toml`.
+    /// Checks the working directory first, then `~/.config/smearor/services/wallpaper.toml`,
+    /// then `/usr/share/smearor/services/wallpaper.toml` (system default).
     /// Returns `None` if no file is found.
     fn discover_wallpaper_config(&self) -> Option<PathBuf> {
         if let Ok(cwd) = std::env::current_dir() {
@@ -121,6 +131,12 @@ impl WallpaperServiceConfig {
             }
         }
 
+        let system_path = Path::new("/usr/share/smearor/services/wallpaper.toml");
+        if system_path.is_file() {
+            debug!("Discovered wallpaper config in system directory: {}", system_path.display());
+            return Some(system_path.to_path_buf());
+        }
+
         debug!("No wallpaper config found, starting with empty themes list");
         None
     }
@@ -131,7 +147,7 @@ impl Default for WallpaperServiceConfig {
         Self {
             themes: Vec::new(),
             default_theme: String::new(),
-            config_path: String::from("wallpaper.toml"),
+            config_path: String::new(),
             auto_start: false,
             kill_grace_period_ms: default_kill_grace_period_ms(),
             mpvpaper_path: None,

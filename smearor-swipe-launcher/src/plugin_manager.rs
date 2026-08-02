@@ -38,7 +38,7 @@ impl PluginManager {
     }
 
     pub fn load_plugin(&self, plugin_entry: &PluginEntry, config: PluginConfig) -> Result<(), LauncherError> {
-        trace!("Loading plugin {} from: {:?}", plugin_entry.id, plugin_entry.path);
+        trace!("Loading plugin {} from: {:?} (name: {:?})", plugin_entry.id, plugin_entry.path, plugin_entry.name);
 
         let (plugin_id, plugin) = LoadedPlugin::load(plugin_entry, &config, self.message_sender.clone(), &self.instance_id)?;
 

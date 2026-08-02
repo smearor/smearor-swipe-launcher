@@ -15,6 +15,9 @@ pub enum LauncherError {
     #[error("Failed to serialize plugin config: {0}")]
     ConfigSerializeError(#[from] serde_json::Error),
 
+    #[error("Failed to resolve plugin library path: {0}")]
+    LibraryPathError(#[from] crate::library_path::LibraryPathError),
+
     #[error("Failed to load plugin library: {0}")]
     PluginLoadError(#[from] libloading::Error),
 

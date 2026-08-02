@@ -8,6 +8,7 @@ mod display;
 mod error;
 mod instance;
 mod json_converter;
+mod library_path;
 mod mcp_registry;
 mod mcp_response_tracker;
 mod messages;
@@ -523,6 +524,7 @@ fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String>
                             serde_json::json!({
                                 "id": p.id,
                                 "path": p.path,
+                                "name": p.name,
                                 "widget": p.widget,
                             })
                         })
@@ -545,7 +547,7 @@ fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String>
                     config::area::config_entry::ConfigEntry::Plugin(_) => continue,
                 };
                 for plugin in &area_config.plugins {
-                    if plugin.path.contains("libsmearor_button_widget") && !plugin.disabled {
+                    if plugin.path.as_deref().unwrap_or("").contains("libsmearor_button_widget") && !plugin.disabled {
                         if let Some(button_config) = config.get_plugin_config(&plugin.id) {
                             buttons.push(serde_json::json!({
                                 "id": plugin.id,
@@ -574,6 +576,7 @@ fn read_plugin_list(host: &LauncherHost) -> Result<String, String> {
                 plugins.push(serde_json::json!({
                     "id": service.id,
                     "path": service.path,
+                    "name": service.name,
                     "type": "service",
                 }));
             }
@@ -592,6 +595,7 @@ fn read_plugin_list(host: &LauncherHost) -> Result<String, String> {
                     plugins.push(serde_json::json!({
                         "id": plugin.id,
                         "path": plugin.path,
+                        "name": plugin.name,
                         "type": "widget",
                     }));
                 }
