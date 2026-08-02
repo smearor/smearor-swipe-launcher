@@ -3,8 +3,8 @@
 ## Problem
 
 The `widget_plugin!` macro in `plugin-api/src/macro.rs` generates one FFI export function with the fixed symbol name `smearor_plugin_create` per invocation (
-`@/home/aschaeffer/git/smearor-swipe-launcher/plugin-api/src/macro.rs:176-177`). A dynamic library (`.so`) may export this symbol only once. When multiple
-widgets use the same macro in one crate, the compiler emits:
+`$HOME/git/smearor-swipe-launcher/plugin-api/src/macro.rs:176-177`). A dynamic library (`.so`) may export this symbol only once. When multiple widgets use the
+same macro in one crate, the compiler emits:
 
 ```
 error[E0428]: the name `smearor_plugin_create` is defined multiple times
