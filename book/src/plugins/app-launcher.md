@@ -19,15 +19,16 @@ info_text = "My App"
 follows_rotation = true
 ```
 
-| Field                      | Type             | Description                                    |
-|----------------------------|------------------|------------------------------------------------|
-| `desktop_file_path`        | `String`         | Path to the `.desktop` file                    |
-| `icon`                     | `Option<String>` | Override icon (defaults to desktop entry icon) |
-| `icon_size`                | `i32`            | Icon size in pixels                            |
-| `icon_only`                | `bool`           | Show only the icon                             |
-| `info_text`                | `Option<String>` | Override description text                      |
-| `mode`                     | `WidgetMode`     | `compact` or `wide`                            |
-| `wrapper.follows_rotation` | `bool`           | Pass rotation to `smearor-wrot`                |
+| Field                      | Type             | Description                                                           |
+|----------------------------|------------------|-----------------------------------------------------------------------|
+| `desktop_file_path`        | `String`         | Path to the `.desktop` file                                           |
+| `icon`                     | `Option<String>` | Override icon (defaults to desktop entry icon)                        |
+| `icon_size`                | `i32`            | Icon size in pixels                                                   |
+| `icon_only`                | `bool`           | Show only the icon                                                    |
+| `info_text`                | `Option<String>` | Override description text                                             |
+| `mode`                     | `WidgetMode`     | `compact` or `wide`                                                   |
+| `wrapper.follows_rotation` | `bool`           | Auto-inject launcher rotation into `smearor-wrot` args                |
+| `wrapper.rotation`         | `Option<f32>`    | Explicit rotation override (takes precedence over `follows_rotation`) |
 
 ## Action Bindings
 

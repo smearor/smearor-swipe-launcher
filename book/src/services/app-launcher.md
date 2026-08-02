@@ -31,10 +31,10 @@ smearor_wrot_path = "smearor-wrot"
 rotation = 0
 ```
 
-| Field               | Type     | Description                       |
-|---------------------|----------|-----------------------------------|
-| `smearor_wrot_path` | `String` | Path to the `smearor-wrot` binary |
-| `rotation`          | `i32`    | Default rotation in degrees       |
+| Field               | Type          | Description                                                                                              |
+|---------------------|---------------|----------------------------------------------------------------------------------------------------------|
+| `smearor_wrot_path` | `String`      | Path to the `smearor-wrot` binary                                                                        |
+| `rotation`          | `Option<f32>` | Fallback rotation in degrees (used only when `follows_rotation = true` and no `wrapper.rotation` is set) |
 
 ## Crate
 

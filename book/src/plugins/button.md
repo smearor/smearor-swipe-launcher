@@ -55,6 +55,30 @@ Buttons commonly inherit from `[defaults.menu_button]` or `[defaults.close_butto
 Supports all [action binding types](../features/action-bindings.md). Since the button has no default fallback, `supplement` mode effectively only dispatches the
 binding.
 
+## Examples
+
+### Hyprland Dispatch
+
+Buttons can trigger [Hyprland dispatch actions](../services/hyprland.md) via subtopics with `kind` + `ops` payloads:
+
+```toml
+[toggle_floating]
+defaults = "menu_button"
+main_text = "Toggle Floating"
+icon = "nf-md-window_restore"
+click_topic = "service.hyprland.dispatch.toggle"
+click_payload = { kind = "ToggleFloating" }
+
+[previous_workspace]
+defaults = "menu_button"
+main_text = "Previous"
+icon = "nf-md-skip_previous"
+click_topic = "service.hyprland.dispatch.workspace"
+click_payload = { kind = "Workspace", ops = { workspace = { identifier = { kind = "Relative", id = -1 } } } }
+longpress_topic = "service.hyprland.dispatch.workspace"
+longpress_payload = { kind = "MoveToWorkspace", ops = { move_to_workspace = { identifier = { kind = "RelativeOpen", id = -1 } } } }
+```
+
 ## Crate
 
 - **Path**: `plugins/button/`
