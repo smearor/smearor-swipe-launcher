@@ -30,7 +30,7 @@ impl LoadedService {
             let library = Arc::new(Library::new(&path)?);
 
             trace!("Loading service: {:?}", config);
-            let constructor = library
+            let constructor = (&*library)
                 .get_stabbied::<ServicePluginConstructor>(b"smearor_service_create")
                 .map_err(|e| LauncherError::PluginStabbiedLoadError(e.to_string()))?;
 
