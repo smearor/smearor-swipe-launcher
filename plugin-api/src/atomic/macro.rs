@@ -714,6 +714,7 @@ macro_rules! atomic_widget_impl {
 
                 self.update_ui();
 
+                smearor_swipe_launcher_plugin_api::apply_widget_css_classes(&widget, &self.meta.id, &[]);
                 widget
             }
         }
@@ -843,6 +844,7 @@ macro_rules! atomic_widget_impl {
                 }
                 self.request_initial_status();
 
+                smearor_swipe_launcher_plugin_api::apply_widget_css_classes(&widget, &self.meta.id, &[]);
                 widget
             }
         }
@@ -994,6 +996,7 @@ macro_rules! atomic_widget_impl {
 
                 self.update_ui();
 
+                smearor_swipe_launcher_plugin_api::apply_widget_css_classes(&widget, &self.meta.id, &[]);
                 widget
             }
         }

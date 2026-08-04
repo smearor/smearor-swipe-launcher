@@ -36,6 +36,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_sysinfo_model::CpuStatusMessage;
 use smearor_sysinfo_model::TOPIC_CPU;
 use smearor_sysinfo_model::TemperatureComponent;
@@ -334,6 +335,7 @@ impl WidgetBuilder for TemperatureWidget {
         *self.container.borrow_mut() = Some(container.clone());
 
         let outer_widget = container.upcast::<Widget>();
+        apply_widget_css_classes(&outer_widget, &self.meta.id, &self.config.layout.css_classes);
         let broadcaster = self.get_broadcaster();
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());

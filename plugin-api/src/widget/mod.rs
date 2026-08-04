@@ -41,3 +41,5 @@ pub use vtable::WidgetPluginVTable;
 pub use widget::FfiWidget;
 pub use widget::FfiWidgetBuilder;
 pub use widget::WidgetBuilder;
+pub use widget::apply_widget_css_class;
+pub use widget::apply_widget_css_classes;

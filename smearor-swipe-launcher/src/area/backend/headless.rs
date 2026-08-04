@@ -20,6 +20,7 @@ impl AreaBackend for HeadlessBackend {
     fn create_area_widget(
         _plugin_manager: &PluginManager,
         _config: &SwipeLauncherConfig,
+        _area_id: &str,
         _area_config: &AreaConfig,
     ) -> Result<HeadlessWidget, CreateAreaError> {
         Ok(HeadlessWidget)

@@ -152,6 +152,28 @@ click_topic = "area.open"
 click_payload = { area_id = "my_area" }
 ```
 
+### CSS Classes
+
+Each widget automatically receives a CSS class `.widget-{id}` based on its plugin instance ID. For example, `{ id = "my_widget", ... }` gets
+`.widget-my_widget`. This allows targeting specific widgets in CSS:
+
+```css
+.widget-my_widget {
+    border: 2px solid #dc0073;
+}
+```
+
+Widgets can also apply custom CSS classes via the `css_classes` config field (provided by `WidgetLayout`):
+
+```toml
+[[scroll_band.plugins]]
+id = "my_widget"
+path = "target/release/libsmearor_my_widget.so"
+css_classes = ["highlight", "large-text"]
+```
+
+See [Design and CSS](../configuration/design-css.md) for the full CSS layer system.
+
 ## 6. Build and Test
 
 ```bash

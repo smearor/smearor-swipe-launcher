@@ -44,6 +44,7 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_sysinfo_model::TOPIC_UPTIME;
 use smearor_sysinfo_model::UptimeStatusMessage;
 use std::cell::RefCell;
@@ -265,6 +266,7 @@ impl WidgetBuilder for UptimeWidget {
         *self.icon_image.borrow_mut() = icon_image;
 
         let outer_widget = container.upcast::<Widget>();
+        apply_widget_css_classes(&outer_widget, &self.meta.id, &self.config.layout.css_classes);
         let broadcaster = self.get_broadcaster();
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());
@@ -313,6 +315,7 @@ impl UptimeWidget {
         *self.icon_image.borrow_mut() = percentage_widget.icon_image;
 
         let outer_widget = percentage_widget.outer_widget;
+        apply_widget_css_classes(&outer_widget, &self.meta.id, &self.config.layout.css_classes);
         let broadcaster = self.get_broadcaster();
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());

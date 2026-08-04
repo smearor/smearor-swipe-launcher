@@ -45,6 +45,7 @@ use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -354,6 +355,7 @@ impl WidgetBuilder for AppLauncherWidget {
             personalization: self.personalization.clone(),
         });
         let button_widget = button.upcast::<Widget>();
+        apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
         let message_broadcaster = self.get_broadcaster();
         widget_self.attach_gesture_handlers(
             &button_widget,

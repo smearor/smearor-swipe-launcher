@@ -2,6 +2,9 @@ use gtk4::Widget;
 use gtk4::ffi::GtkWidget;
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::Cast;
+use gtk4::prelude::WidgetExt;
+
+use crate::sanitize_css_class_name;
 
 /// An FFI-safe wrapper around a GTK widget pointer.
 #[repr(C)]
@@ -19,6 +22,26 @@ impl FfiWidget {
         Self {
             raw_widget: std::ptr::null_mut(),
         }
+    }
+}
+
+/// Applies the automatic `widget-{plugin_id}` CSS class to a widget.
+///
+/// The `plugin_id` is sanitized to ensure it only contains valid CSS class
+/// name characters (`[a-zA-Z0-9_-]`).
+pub fn apply_widget_css_class(widget: &impl WidgetExt, plugin_id: &str) {
+    widget.add_css_class(&format!("widget-{}", sanitize_css_class_name(plugin_id)));
+}
+
+/// Applies the automatic `widget-{plugin_id}` CSS class and user-configured
+/// `css_classes` from `WidgetLayout` to a widget.
+///
+/// The `plugin_id` is sanitized. User-configured `css_classes` are applied
+/// verbatim — invalid CSS class names are silently ignored by GTK4.
+pub fn apply_widget_css_classes(widget: &impl WidgetExt, plugin_id: &str, user_css_classes: &[String]) {
+    apply_widget_css_class(widget, plugin_id);
+    for class in user_css_classes {
+        widget.add_css_class(class);
     }
 }
 

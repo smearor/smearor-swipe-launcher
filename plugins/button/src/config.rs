@@ -49,9 +49,6 @@ pub struct ButtonConfig {
     /// Text color configuration (main_text_color, info_text_color).
     #[serde(flatten)]
     pub text_colors: WidgetTextColors,
-    /// Additional CSS classes for styling
-    #[serde(default)]
-    pub css_classes: Vec<String>,
     /// Topic whose messages control the label text.
     #[serde(default)]
     pub label_topic: Option<String>,

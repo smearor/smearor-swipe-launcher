@@ -12,6 +12,7 @@ use smearor_model_area::AreaAlign;
 use smearor_model_area::AreaConfig;
 use smearor_model_area::AreaTransition;
 use smearor_model_area::AreaType;
+use smearor_swipe_launcher_plugin_api::sanitize_css_class_name;
 use tracing::error;
 use tracing::trace;
 
@@ -36,11 +37,18 @@ impl AreaBackend for GtkBackend {
     type Overlay = Overlay;
     type Container = GtkBox;
 
-    fn create_area_widget(plugin_manager: &PluginManager, config: &SwipeLauncherConfig, area_config: &AreaConfig) -> Result<Widget, CreateAreaError> {
+    fn create_area_widget(
+        plugin_manager: &PluginManager,
+        config: &SwipeLauncherConfig,
+        area_id: &str,
+        area_config: &AreaConfig,
+    ) -> Result<Widget, CreateAreaError> {
         use gtk4::Align;
         use gtk4::Orientation;
         use gtk4::PolicyType;
         use gtk4::ScrolledWindow;
+
+        let area_class = format!("area-{}", sanitize_css_class_name(area_id));
 
         match area_config.area_type {
             AreaType::Fixed => {
@@ -48,6 +56,7 @@ impl AreaBackend for GtkBackend {
                 let mut css_classes = vec!["static-area"];
                 css_classes.push(area_config.open_transition.css_class());
                 css_classes.extend(area_config.css_classes.iter().map(String::as_str));
+                css_classes.push(area_class.as_str());
 
                 let box_widget = GtkBox::builder()
                     .orientation(Orientation::Horizontal)
@@ -73,6 +82,7 @@ impl AreaBackend for GtkBackend {
                 let mut css_classes = vec!["scroll-area"];
                 css_classes.push(area_config.open_transition.css_class());
                 css_classes.extend(area_config.css_classes.iter().map(String::as_str));
+                css_classes.push(area_class.as_str());
 
                 let scrolled_window = ScrolledWindow::builder()
                     .hscrollbar_policy(PolicyType::External)

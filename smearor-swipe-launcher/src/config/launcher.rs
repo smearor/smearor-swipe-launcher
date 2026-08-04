@@ -424,6 +424,11 @@ pub struct SwipeLauncherSettings {
     /// Defaults to `gtk`.
     #[serde(default)]
     pub instance_type: InstanceTypeConfig,
+
+    /// User-configurable CSS classes applied to the instance window
+    /// in addition to the automatic `instance-{id}` class.
+    #[serde(default)]
+    pub css_classes: Vec<String>,
 }
 
 impl MergeWithArguments<SwipeLauncherArguments> for SwipeLauncherSettings {

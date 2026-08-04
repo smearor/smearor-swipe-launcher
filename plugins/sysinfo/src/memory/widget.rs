@@ -37,6 +37,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_sysinfo_model::MemoryStatusMessage;
 use smearor_sysinfo_model::TOPIC_MEMORY;
 use std::cell::RefCell;
@@ -229,6 +230,7 @@ impl WidgetBuilder for MemoryWidget {
         *self.details_label.borrow_mut() = details_label;
 
         let outer_widget = percentage_widget.outer_widget;
+        apply_widget_css_classes(&outer_widget, &self.meta.id, &self.config.percentage.layout.css_classes);
         let broadcaster = self.get_broadcaster();
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());

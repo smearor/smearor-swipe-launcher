@@ -90,11 +90,24 @@ plugins = [...]
 
 ## CSS Classes
 
-Areas can apply CSS classes for styling:
+### Automatic Area Class
+
+Each area automatically receives a CSS class `.area-{id}` based on its config section name. For example, `[scroll_band]` gets `.area-scroll_band`. This allows
+targeting specific areas in CSS without manual configuration:
+
+```css
+.area-scroll_band {
+    background-color: rgba(20, 20, 35, 0.9);
+}
+```
+
+### Custom CSS Classes
+
+Areas can also apply additional custom CSS classes for styling:
 
 ```toml
 [games_area]
 css_classes = ["games-area-bg"]
 ```
 
-See [Design and CSS](./design-css.md) for CSS styling details.
+See [Design and CSS](./design-css.md) for the full CSS layer system and available classes.

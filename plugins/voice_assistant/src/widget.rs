@@ -37,6 +37,7 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_voice_assistant_model::AssistantState;
 use smearor_voice_assistant_model::AssistantStatusMessage;
 use smearor_voice_assistant_model::TOPIC_STATUS;
@@ -334,6 +335,7 @@ impl WidgetBuilder for VoiceAssistantWidget {
 
         let broadcaster = self.get_broadcaster();
         let button_widget = button.upcast::<Widget>();
+        apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
 
         let widget_self = Rc::new(Self {
             meta: self.meta.clone(),

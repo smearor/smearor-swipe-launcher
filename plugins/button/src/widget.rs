@@ -39,6 +39,7 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -456,7 +457,7 @@ impl WidgetBuilder for ButtonWidget {
                     let icon = Image::from_icon_name(&gtk_icon_name);
                     icon.set_pixel_size(self.config.icon_config.icon_size());
                     icon.add_css_class("nerd-icon");
-                    for class in &self.config.css_classes {
+                    for class in &self.config.layout.css_classes {
                         icon.add_css_class(class);
                     }
                     if let Some(color) = self.config.icon_config.icon_color() {
@@ -526,7 +527,7 @@ impl WidgetBuilder for ButtonWidget {
         button_box.append(&spacer);
 
         let mut css_classes = vec!["scroll-item", "menu-button"];
-        css_classes.extend(self.config.css_classes.iter().map(String::as_str));
+        css_classes.extend(self.config.layout.css_classes.iter().map(String::as_str));
         let button = Button::builder()
             .css_classes(css_classes.as_slice())
             .width_request(self.config.dimensions.width_or_default())
@@ -554,6 +555,7 @@ impl WidgetBuilder for ButtonWidget {
             personalization: self.personalization.clone(),
         });
         let button_widget = button.upcast::<Widget>();
+        apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
         widget_self.attach_gesture_handlers(
             &button_widget,
             &widget_self.config.actions,
@@ -681,10 +683,10 @@ impl smearor_swipe_launcher_plugin_api::WebRenderer for ButtonWidget {
             String::new()
         };
 
-        let css_classes = if config.css_classes.is_empty() {
+        let css_classes = if config.layout.css_classes.is_empty() {
             String::new()
         } else {
-            format!(" {}", config.css_classes.join(" "))
+            format!(" {}", config.layout.css_classes.join(" "))
         };
 
         let disabled_attr = if config.enabled { String::new() } else { " disabled".to_string() };

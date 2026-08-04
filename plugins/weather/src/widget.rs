@@ -42,6 +42,7 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetIconRendering;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use smearor_weather_model::TOPIC_STATUS;
 use smearor_weather_model::WeatherCode;
@@ -689,6 +690,7 @@ impl WidgetBuilder for WeatherWidget {
         });
 
         let outer_widget = outer_box.upcast::<Widget>();
+        apply_widget_css_classes(&outer_widget, &self.meta.id, &self.config.layout.css_classes);
         let message_broadcaster = self.get_broadcaster();
         widget_self.attach_gesture_handlers(&outer_widget, &self.config.actions, &message_broadcaster, &GestureHandlersConfiguration::default());
 

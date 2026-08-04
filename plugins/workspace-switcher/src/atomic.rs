@@ -40,6 +40,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_swipe_launcher_plugin_api::build_atomic_widget;
 use smearor_swipe_launcher_plugin_api::render_atomic_graphic_default;
 use smearor_swipe_launcher_plugin_api::update_labels;
@@ -451,6 +452,7 @@ impl WidgetBuilder for WorkspaceAtomicWidget {
 
         self.update_ui();
 
+        apply_widget_css_classes(&widget, &self.meta.id, &[]);
         widget
     }
 }

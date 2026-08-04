@@ -39,6 +39,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_sysinfo_model::NetworkStatusMessage;
 use smearor_sysinfo_model::TOPIC_NETWORK;
 use std::cell::RefCell;
@@ -240,6 +241,7 @@ impl WidgetBuilder for NetworkWidget {
 
         let broadcaster = self.get_broadcaster();
         let outer_widget = container.upcast::<Widget>();
+        apply_widget_css_classes(&outer_widget, &self.meta.id, &self.config.layout.css_classes);
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());
 
@@ -309,6 +311,7 @@ impl NetworkWidget {
         *self.gauge.borrow_mut() = Some(drawing_area);
 
         let outer_widget = gauge_widget.outer_widget;
+        apply_widget_css_classes(&outer_widget, &self.meta.id, &self.config.layout.css_classes);
         let broadcaster = self.get_broadcaster();
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());

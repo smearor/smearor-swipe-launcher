@@ -20,6 +20,7 @@ use gtk4::prelude::*;
 use smearor_model_compositor::MonitorChangeType;
 use smearor_model_compositor::WorkspaceLifecycleType;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::sanitize_css_class_name;
 use smearor_wrot_rotation::RotationWidget;
 use smearor_wrot_rotation::SmearorRotation;
 use std::collections::HashMap;
@@ -148,6 +149,10 @@ impl LauncherInstance {
 
         let coordinated_size = self.coordinated_size.lock().ok().and_then(|g| *g);
         let window = create_window(app, &launcher_config, coordinated_size);
+        window.add_css_class(&format!("instance-{}", sanitize_css_class_name(&self.instance_id)));
+        for css_class in &launcher_config.css_classes {
+            window.add_css_class(css_class);
+        }
 
         let app_clone = app.clone();
         let handler_id = window.connect_close_request(move |_win| {

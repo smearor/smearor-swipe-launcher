@@ -3,7 +3,7 @@ mod area;
 mod args;
 mod config;
 mod context;
-mod css_provider;
+mod css;
 mod display;
 mod error;
 mod instance;
@@ -106,6 +106,8 @@ async fn main() -> Result<()> {
         let instance_type = config.launcher.instance_type.to_instance_type();
         host.create_instance(instance_id.clone(), config, instance_type);
 
+        host.css_watcher.watch_instance_css(config_path);
+
         // For web and headless instances, build areas (no GTK window).
         if instance_type == crate::instance::InstanceType::Web || instance_type == crate::instance::InstanceType::Headless {
             if let Ok(instances) = host.instances.lock() {
@@ -165,6 +167,10 @@ async fn main() -> Result<()> {
         host.start_web_server(web_config);
         debug!("Web server started on {}:{}", services_config.web.bind_address, services_config.web.port);
     }
+
+    // Start CSS file watcher (global + per-instance hot-reload)
+    host.css_watcher.watch_global_css();
+    host.css_watcher.start();
 
     host.build_ui()?;
 
@@ -248,6 +254,9 @@ async fn main() -> Result<()> {
     }
 
     host.service_manager.unload_services();
+
+    // Stop CSS file watchers and cancel debounce tasks.
+    host.css_watcher.shutdown();
 
     // Brief grace period to let pending GLib timeouts, async tasks, and
     // service Drop handlers fully drain before process exit.

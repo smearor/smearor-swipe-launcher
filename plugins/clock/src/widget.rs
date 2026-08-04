@@ -41,6 +41,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -265,6 +266,7 @@ impl WidgetBuilder for ClockWidget {
             time_receiver: self.time_receiver.take(),
         });
         let button_widget = button.upcast::<Widget>();
+        apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
         let message_broadcaster = self.get_broadcaster();
         widget_self.attach_gesture_handlers(&button_widget, &self.config.actions, &message_broadcaster, &GestureHandlersConfiguration::default());
 

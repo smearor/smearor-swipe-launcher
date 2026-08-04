@@ -2,7 +2,8 @@ use crate::config::launcher::SwipeLauncherConfig;
 use crate::config::services::ServicesConfig;
 use crate::context::GLOBAL_JSON_CONVERTER_REGISTRY;
 use crate::context::initialize_global_json_converter_registry;
-use crate::css_provider::create_css_provider;
+use crate::css::CssWatcher;
+use crate::css::create_css_provider;
 use crate::display::AreaSize;
 use crate::instance::LauncherInstance;
 use crate::instance::PersistedInstance;
@@ -144,6 +145,8 @@ pub struct LauncherHost {
     /// Tracks which span groups had a compound longpress actually dispatched.
     /// Key: (instance_id, span_group). Cleared on button release.
     pub(crate) macropad_compound_dispatched: Arc<Mutex<HashMap<(String, String), ()>>>,
+    /// CSS file watcher for global and per-instance CSS hot-reload.
+    pub(crate) css_watcher: Arc<CssWatcher>,
 }
 
 impl LauncherHost {
@@ -169,6 +172,7 @@ impl LauncherHost {
             macropad_pending_clicks: Arc::new(Mutex::new(HashMap::new())),
             macropad_compound_presses: Arc::new(Mutex::new(HashMap::new())),
             macropad_compound_dispatched: Arc::new(Mutex::new(HashMap::new())),
+            css_watcher: Arc::new(CssWatcher::new()),
         }
     }
 
@@ -1448,6 +1452,8 @@ impl LauncherHost {
         }
 
         self.create_instance(instance_id.clone(), config, instance_type);
+
+        self.css_watcher.watch_instance_css(std::path::Path::new(config_path));
 
         if instance_type == crate::instance::InstanceType::Gtk {
             let self_clone = self.clone();

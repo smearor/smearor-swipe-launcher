@@ -123,5 +123,12 @@ The launcher discovers config files in this fallback order:
 
 On first run, the launcher copies default configs from `/usr/share/smearor/` to `~/.config/smearor/` if they don't already exist.
 
+### Per-Instance CSS
+
+Each config file can have an accompanying CSS file. Given `my-launcher.toml`, the launcher looks for `my-launcher.css` in the same directory. If found, it is
+loaded with higher priority than the global user CSS, allowing per-instance style overrides.
+
+See [Design and CSS](./design-css.md) for the full CSS layer system and hot-reload details.
+
 See [Area Configuration](./area-config.md) for area-specific settings, and individual [plugin pages](../plugins/app-launcher.md) for plugin-specific config
 fields.

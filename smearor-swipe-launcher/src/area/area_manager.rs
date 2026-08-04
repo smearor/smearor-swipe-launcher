@@ -75,7 +75,7 @@ impl<B: AreaBackend> AreaManager<B> {
             return Err(AddAreaError::AreaAlreadyExists(area_id.to_string()));
         }
 
-        let widget = B::create_area_widget(&self.plugin_manager, &self.config, &area_config)?;
+        let widget = B::create_area_widget(&self.plugin_manager, &self.config, area_id, &area_config)?;
 
         let overlay = B::create_overlay(&widget);
 
@@ -276,7 +276,7 @@ impl<B: AreaBackend> AreaManager<B> {
             trace!("Made source area widget transparent for {}", area_id);
         }
 
-        let widget = B::create_area_widget(&self.plugin_manager, &self.config, &config)?;
+        let widget = B::create_area_widget(&self.plugin_manager, &self.config, area_id, &config)?;
 
         let overlay = B::create_overlay(&widget);
 

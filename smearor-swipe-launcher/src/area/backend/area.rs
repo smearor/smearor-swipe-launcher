@@ -24,7 +24,12 @@ pub trait AreaBackend: Clone + Send + Sync + 'static {
     type Container: AreaContainer<Overlay = Self::Overlay>;
 
     /// Create a widget for an area from its configuration.
-    fn create_area_widget(plugin_manager: &PluginManager, config: &SwipeLauncherConfig, area_config: &AreaConfig) -> Result<Self::Widget, CreateAreaError>;
+    fn create_area_widget(
+        plugin_manager: &PluginManager,
+        config: &SwipeLauncherConfig,
+        area_id: &str,
+        area_config: &AreaConfig,
+    ) -> Result<Self::Widget, CreateAreaError>;
 
     /// Create an overlay with the given child widget.
     fn create_overlay(child: &Self::Widget) -> Self::Overlay;
