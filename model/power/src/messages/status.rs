@@ -1,7 +1,6 @@
 use serde::Deserialize;
 use serde::Serialize;
 use smearor_personalization_model::TimeFormat;
-use smearor_swipe_launcher_plugin_api::Locale;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
@@ -60,30 +59,15 @@ impl PowerStatusMessage {
         }
     }
 
-    /// Builds the info text for display based on countdown or scheduled action status.
+    /// Returns a formatted countdown timer when an action is scheduled, or an empty string.
     ///
-    /// Returns a localized "Shutting down in {n}s" message when a countdown is active,
-    /// a formatted countdown timer when an action is scheduled, or an empty string.
-    pub fn info_text(&self, locale: Locale, time_format: TimeFormat) -> String {
-        if self.countdown_active {
-            let label = shutting_down_label(locale);
-            label.replace("{n}", &self.countdown_remaining_seconds.to_string())
-        } else if let Some(sched) = self.scheduled_action.as_ref() {
+    /// Countdown localization is handled by the plugin via `PowerLabel::countdown_label`.
+    pub fn scheduled_info_text(&self, time_format: TimeFormat) -> String {
+        if let Some(sched) = self.scheduled_action.as_ref() {
             format_countdown(sched.remaining_seconds, time_format)
         } else {
             String::new()
         }
-    }
-}
-
-/// Returns a localized "Shutting down in {n}s" label template.
-fn shutting_down_label(locale: Locale) -> String {
-    match locale {
-        Locale::DeDe => "Herunterfahren in {n}s".to_string(),
-        Locale::FrFr => "Arr\u{ea}t dans {n}s".to_string(),
-        Locale::ItIt => "Spegnimento in {n}s".to_string(),
-        Locale::EsEs => "Apagando en {n}s".to_string(),
-        _ => "Shutting down in {n}s".to_string(),
     }
 }
 

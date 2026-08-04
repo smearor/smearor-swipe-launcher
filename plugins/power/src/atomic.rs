@@ -100,8 +100,8 @@ impl AtomicView {
         let label = self.label().localized_label(override_data.locale);
         let main_text = label.clone();
         let info_text = if status.countdown_active && status.countdown_action == action {
-            let shutting_down_label = PowerLabel::ShuttingDown.localized_label(override_data.locale);
-            PowerLabel::format_with_seconds(&shutting_down_label, status.countdown_remaining_seconds)
+            let countdown_label = PowerLabel::countdown_label(status.countdown_action, override_data.locale);
+            PowerLabel::format_with_seconds(&countdown_label, status.countdown_remaining_seconds)
         } else if let Some(sched) = status.scheduled_action.as_ref() {
             if sched.action == action {
                 override_data.format_countdown(sched.remaining_seconds)

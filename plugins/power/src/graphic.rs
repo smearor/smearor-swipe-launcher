@@ -66,7 +66,12 @@ fn render_compact(pixels: &mut [u8], width: u32, height: u32, widget: &PowerWidg
 
     let status = widget.last_status.borrow();
     if let Some(ref status) = *status {
-        let info_text = status.info_text(override_data.locale, override_data.effective_time_format());
+        let info_text = if status.countdown_active {
+            let label = PowerLabel::countdown_label(status.countdown_action, override_data.locale);
+            PowerLabel::format_with_seconds(&label, status.countdown_remaining_seconds)
+        } else {
+            status.scheduled_info_text(override_data.effective_time_format())
+        };
         if !info_text.is_empty() {
             draw_text_centered(
                 pixels,

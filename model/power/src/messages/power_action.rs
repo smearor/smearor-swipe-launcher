@@ -5,7 +5,7 @@ use serde::Serialize;
 /// Each variant maps to a specific D-Bus call on `org.freedesktop.login1`.
 #[repr(u8)]
 #[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PowerAction {
     /// Shut the system down gracefully.
     Shutdown,

@@ -48,6 +48,7 @@ use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
+use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -482,6 +483,7 @@ impl WidgetBuilder for PowerWidget {
         self.start_status_listener();
 
         let button_widget = button.upcast::<Widget>();
+        apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
         widget_self.attach_gesture_handlers(
             &button_widget,
             &widget_self.config.actions,
@@ -547,7 +549,7 @@ fn update_info_and_timeout(
         let remaining = status.countdown_remaining_seconds as f64;
         let total = status.countdown_total_seconds as f64;
         let frac = if total > 0.0 { remaining / total } else { 0.0 };
-        let label = PowerLabel::ShuttingDown.localized_label(override_data.locale);
+        let label = PowerLabel::countdown_label(status.countdown_action, override_data.locale);
         (PowerLabel::format_with_seconds(&label, status.countdown_remaining_seconds), frac, true)
     } else if let Some(sched) = status.scheduled_action.as_ref() {
         let remaining = sched.remaining_seconds as f64;
