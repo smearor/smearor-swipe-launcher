@@ -13,10 +13,16 @@ const VENDOR_ID_SEEED: u16 = 0x2886;
 const VENDOR_ID_XMOS: u16 = 0x20b1;
 
 /// USB Control Transfer parameters for XVF3800.
+/// The XVF3800 uses a resource/command ID protocol:
+/// - wValue = 0x80 | cmdid (high bit set for reads)
+/// - wIndex = resid (resource ID)
+/// - Response: byte 0 = status, followed by payload data
 const REQUEST_TYPE_READ: u8 = 0xC0;
 const B_REQUEST_READ: u8 = 0x00;
-const PARAM_DOA_ANGLE: u16 = 0x0015;
-const PARAM_VAD: u16 = 0x0016;
+const CMDID_READ_FLAG: u8 = 0x80;
+const RESID_DOA: u16 = 20;
+const CMDID_DOA: u8 = 18;
+const DOA_RESPONSE_LEN: usize = 5;
 
 /// Result of a single DoA USB read, sent from the USB reader thread to the async loop.
 pub enum DoaReading {
@@ -58,9 +64,19 @@ pub fn open_respeaker(config: &DoaServiceConfig, old_handle: Option<DeviceHandle
                     continue;
                 }
             }
-            if let Ok(handle) = device.open() {
-                debug!("DoA service: connected to USB device VID={:#06x} PID={:#06x}", vid, device_desc.product_id());
-                return Some(handle);
+            match device.open() {
+                Ok(handle) => {
+                    debug!("DoA service: connected to USB device VID={:#06x} PID={:#06x}", vid, device_desc.product_id());
+                    return Some(handle);
+                }
+                Err(e) => {
+                    warn!(
+                        "DoA service: found USB device VID={:#06x} PID={:#06x} but failed to open: {:?}",
+                        vid,
+                        device_desc.product_id(),
+                        e
+                    );
+                }
             }
         }
     }
@@ -68,30 +84,19 @@ pub fn open_respeaker(config: &DoaServiceConfig, old_handle: Option<DeviceHandle
     None
 }
 
-/// Reads the DoA angle (0-359 degrees) via a USB Control Transfer.
+/// Reads the DoA angle (0-359 degrees) and VAD flag in a single USB Control Transfer.
+/// The XVF3800 returns both values in one response: status byte, angle (uint16 LE), VAD (uint16 LE).
 /// The timeout is derived from the current poll interval to ensure that
 /// a single stalled transfer cannot block the USB thread longer than
 /// one poll cycle. See `usb_transfer_timeout`.
-pub fn read_doa_angle(handle: &DeviceHandle<Context>, timeout: Duration) -> Result<u16, rusb::Error> {
-    let mut buffer = [0u8; 8];
-    let bytes_read = handle.read_control(REQUEST_TYPE_READ, B_REQUEST_READ, PARAM_DOA_ANGLE, 0x0000, &mut buffer, timeout)?;
-    if bytes_read >= 2 {
-        let raw_angle = u16::from_le_bytes([buffer[0], buffer[1]]);
-        Ok(raw_angle % 360)
-    } else {
-        Err(rusb::Error::InvalidParam)
-    }
-}
-
-/// Reads the Voice Activity Detection (VAD) flag via a USB Control Transfer.
-/// Returns `true` when the DSP detects active speech, `false` during silence.
-/// When `false`, the DoA angle register holds the last detected direction.
-/// The timeout is derived from the current poll interval (see `usb_transfer_timeout`).
-pub fn read_speech_detected(handle: &DeviceHandle<Context>, timeout: Duration) -> Result<bool, rusb::Error> {
-    let mut buffer = [0u8; 8];
-    let bytes_read = handle.read_control(REQUEST_TYPE_READ, B_REQUEST_READ, PARAM_VAD, 0x0000, &mut buffer, timeout)?;
-    if bytes_read >= 1 {
-        Ok(buffer[0] != 0)
+pub fn read_doa(handle: &DeviceHandle<Context>, timeout: Duration) -> Result<(u16, bool), rusb::Error> {
+    let mut buffer = [0u8; DOA_RESPONSE_LEN];
+    let w_value = u16::from(CMDID_READ_FLAG | CMDID_DOA);
+    let bytes_read = handle.read_control(REQUEST_TYPE_READ, B_REQUEST_READ, w_value, RESID_DOA, &mut buffer, timeout)?;
+    if bytes_read >= DOA_RESPONSE_LEN {
+        let angle = u16::from_le_bytes([buffer[1], buffer[2]]);
+        let vad = u16::from_le_bytes([buffer[3], buffer[4]]) != 0;
+        Ok((angle % 360, vad))
     } else {
         Err(rusb::Error::InvalidParam)
     }
@@ -195,46 +200,49 @@ pub fn usb_reader_loop(
     let _ = reading_sender.send(initial_reading(&handle));
 
     loop {
-        match control_receiver.blocking_recv() {
-            Some(UsbControl::Pause) => {
-                paused = true;
-                debug!("DoA USB thread: paused");
-            }
-            Some(UsbControl::Resume) => {
-                paused = false;
-                debug!("DoA USB thread: resumed");
-            }
-            Some(UsbControl::SetInterval(ms)) => {
-                poll_interval_ms = ms.max(50);
-                debug!("DoA USB thread: interval set to {}ms", poll_interval_ms);
-            }
-            Some(UsbControl::Reconnect) => {
-                debug!("DoA USB thread: reconnecting (manual)...");
-                let old_handle = handle.take();
-                handle = open_respeaker(&config, old_handle);
-                consecutive_failures = 0;
-                let _ = reading_sender.send(initial_reading(&handle));
-            }
-            None => {
-                debug!("DoA USB thread: control channel closed, exiting");
-                drop(handle.take());
-                return;
+        while let Ok(cmd) = control_receiver.try_recv() {
+            match cmd {
+                UsbControl::Pause => {
+                    paused = true;
+                    debug!("DoA USB thread: paused");
+                }
+                UsbControl::Resume => {
+                    paused = false;
+                    debug!("DoA USB thread: resumed");
+                }
+                UsbControl::SetInterval(ms) => {
+                    poll_interval_ms = ms.max(50);
+                    debug!("DoA USB thread: interval set to {}ms", poll_interval_ms);
+                }
+                UsbControl::Reconnect => {
+                    debug!("DoA USB thread: reconnecting (manual)...");
+                    let old_handle = handle.take();
+                    handle = open_respeaker(&config, old_handle);
+                    consecutive_failures = 0;
+                    let _ = reading_sender.send(initial_reading(&handle));
+                }
             }
         }
+        if control_receiver.is_closed() {
+            debug!("DoA USB thread: control channel closed, exiting");
+            drop(handle.take());
+            return;
+        }
+
+        let cycle_start = std::time::Instant::now();
 
         if paused {
+            let elapsed = cycle_start.elapsed();
+            let remaining = Duration::from_millis(poll_interval_ms).saturating_sub(elapsed);
+            std::thread::sleep(remaining);
             continue;
         }
 
         match &handle {
             Some(device_handle) => {
                 let transfer_timeout = usb_transfer_timeout(poll_interval_ms);
-                match read_doa_angle(device_handle, transfer_timeout) {
-                    Ok(angle) => {
-                        let speech_detected = read_speech_detected(device_handle, transfer_timeout).unwrap_or_else(|e| {
-                            debug!("DoA USB thread: VAD read failed ({:?}), falling back to false", e);
-                            false
-                        });
+                match read_doa(device_handle, transfer_timeout) {
+                    Ok((angle, speech_detected)) => {
                         let (vid, pid) = device_vid_pid(device_handle);
                         let _ = reading_sender.send(DoaReading::Reading {
                             angle,
@@ -250,13 +258,18 @@ pub fn usb_reader_loop(
                 }
             }
             None => {
-                std::thread::sleep(Duration::from_millis(config.reconnect_delay_ms));
                 handle = open_respeaker(&config, None);
                 if handle.is_some() {
                     consecutive_failures = 0;
+                    let _ = reading_sender.send(initial_reading(&handle));
+                } else {
+                    std::thread::sleep(Duration::from_millis(config.reconnect_delay_ms));
                 }
-                let _ = reading_sender.send(initial_reading(&handle));
             }
         }
+
+        let elapsed = cycle_start.elapsed();
+        let remaining = Duration::from_millis(poll_interval_ms).saturating_sub(elapsed);
+        std::thread::sleep(remaining);
     }
 }
