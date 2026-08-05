@@ -122,6 +122,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 use tracing::warn;
 
 /// Internal union of all command types the service handles.
@@ -1840,7 +1841,7 @@ impl ServicePlugin for HyprlandService {
                     MessageHandler::<FfiEnvelopePayload<HyprlandStateRequestMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {
-                    warn!("Unknown message type");
+                    trace!("Hyprland service: unhandled message type for topic {}", envelope.topic.to_string());
                 }
             }
         }

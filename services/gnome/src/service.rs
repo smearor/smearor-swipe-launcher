@@ -28,6 +28,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 use tracing::warn;
 
 /// Internal command types the GNOME service handles asynchronously.
@@ -401,7 +402,7 @@ impl ServicePlugin for GnomeWorkspaceService {
                     MessageHandler::<FfiEnvelopePayload<WorkspaceSnapshotRequestMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {
-                    warn!("GNOME service: unknown message type");
+                    trace!("GNOME service: unhandled message type for topic {}", envelope.topic.to_string());
                 }
             }
         }

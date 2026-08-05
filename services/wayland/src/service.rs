@@ -26,6 +26,7 @@ use std::sync::Mutex;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 use tracing::warn;
 
 /// Internal command types the Wayland service handles asynchronously.
@@ -237,7 +238,7 @@ impl ServicePlugin for WaylandWorkspaceService {
                     MessageHandler::<FfiEnvelopePayload<WorkspaceSnapshotRequestMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {
-                    warn!("Wayland service: unknown message type");
+                    trace!("Wayland service: unhandled message type for topic {}", envelope.topic.to_string());
                 }
             }
         }
