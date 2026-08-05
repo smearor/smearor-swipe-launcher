@@ -631,6 +631,7 @@ impl VoiceAssistantService {
         // 6. Run the ReAct loop via the worker.
         let mut last_tool_invoked: Option<(String, String)> = None;
         let mut last_resource_read: Option<String> = None;
+        let mut rejected_final_answer = false;
         for iteration in 0..max_iterations {
             let llm_start = std::time::Instant::now();
             let (llm_output, trimmed_payload) = worker
@@ -1038,6 +1039,41 @@ impl VoiceAssistantService {
                                 }
                             }
                         }
+                        // Premature final_answer guard: if the user requested an
+                        // action (start, open, launch, etc.) and no tool has been
+                        // called yet, reject the final_answer once and redirect
+                        // the LLM to use the appropriate tool.
+                        if last_tool_invoked.is_none() && !rejected_final_answer && self.is_premature_action_final_answer(user_text) {
+                            rejected_final_answer = true;
+                            debug!(
+                                "Voice Assistant: ReAct iteration {iteration}: \
+                                 rejected premature final_answer for action request, \
+                                 redirecting to tool execution"
+                            );
+                            if is_training {
+                                if let Ok(mut trace_guard) = self.active_trace.lock() {
+                                    if let Some(trace) = trace_guard.as_mut() {
+                                        trace.add_step(
+                                            iteration as usize,
+                                            &llm_output,
+                                            cot_text.as_deref(),
+                                            "rejected_final_answer",
+                                            "",
+                                            "Premature final_answer rejected; redirecting to tool execution",
+                                            None,
+                                        );
+                                    }
+                                }
+                            }
+                            active_payload.push(
+                                LlamaChatMessage::new(
+                                    "user".to_string(),
+                                    "[SYSTEM_ACTION]: CRITICAL: Your final_answer was rejected because the user requested an action (start, open, launch, etc.) but you have NOT called any tool yet. You MUST call the appropriate tool to perform the requested action. Do NOT return a final_answer without first executing the action via a tool call. Respond NOW with a tool call in the format {\"tool\": \"<name>\", \"parameters\": {...}}.".to_string(),
+                                )
+                                    .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
+                            );
+                            continue;
+                        }
                         // Automatically store any new insights in semantic memory.
                         if !new_insights.is_empty() {
                             if let Ok(mut memory) = self.semantic_memory.write() {
@@ -1251,6 +1287,49 @@ Respond NOW with only {{\"text_to_speech_answer\": \"<spoken text>\"}}."),
             return "\n\n[SYSTEM_ACTION]: CRITICAL: This tool returned intermediate data, NOT the final answer. The task is INCOMPLETE. You MUST use this data in a subsequent tool call to retrieve the actual answer. Do NOT return a final_answer yet.".to_string();
         }
         String::new()
+    }
+
+    /// Detects whether a `final_answer` is premature because the user requested
+    /// an action (start, open, launch, etc.) but no tool was called yet.
+    /// Returns true when the user text contains action verbs AND the tool
+    /// ranking includes exec tools with a score >= 0.4.
+    fn is_premature_action_final_answer(&self, user_text: &str) -> bool {
+        let user_lower = user_text.to_lowercase();
+        let is_action_request = user_lower.contains("start")
+            || user_lower.contains("öffn")
+            || user_lower.contains("open")
+            || user_lower.contains("launch")
+            || user_lower.contains("beend")
+            || user_lower.contains("schließen")
+            || user_lower.contains("einschalten")
+            || user_lower.contains("ausschalten")
+            || user_lower.contains("schalte")
+            || user_lower.contains("turn on")
+            || user_lower.contains("turn off")
+            || user_lower.contains("ausführen")
+            || user_lower.contains("execute")
+            || user_lower.contains("terminate")
+            || user_lower.contains("install")
+            || user_lower.contains("deinstall")
+            || user_lower.contains("uninstall");
+        if !is_action_request {
+            return false;
+        }
+        let ranking = self.last_tool_ranking.read().map(|r| r.clone()).unwrap_or_default();
+        ranking.iter().any(|(name, score)| {
+            *score >= 0.4
+                && (name.contains("exec")
+                    || name.contains("launch")
+                    || name.contains("start")
+                    || name.contains("open")
+                    || name.contains("terminate")
+                    || name.contains("set_")
+                    || name.contains("toggle")
+                    || name.contains("send")
+                    || name.contains("delete")
+                    || name.contains("create")
+                    || name.contains("update"))
+        })
     }
 
     /// Finds tools whose names contain the scheme of a hallucinated resource URI.
