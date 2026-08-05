@@ -93,7 +93,6 @@ async fn main() -> Result<()> {
     }
 
     // Create one instance per config file
-    let mut config_watcher = crate::config::watcher::ConfigWatcher::new();
     for (index, config_path) in config_paths.iter().enumerate() {
         let config = args.load_config_from_file(config_path)?;
         let instance_id = args
@@ -102,11 +101,13 @@ async fn main() -> Result<()> {
             .cloned()
             .unwrap_or_else(|| config_path.file_stem().unwrap_or_default().to_string_lossy().to_string());
         let include_paths = config.collect_include_paths(config_path);
-        config_watcher.add_config(config_path, &instance_id, &include_paths);
+        host.config_watcher.add_config(config_path, &instance_id, &include_paths);
         let instance_type = config.launcher.instance_type.to_instance_type();
         host.create_instance(instance_id.clone(), config, instance_type);
 
-        host.css_watcher.watch_instance_css(config_path);
+        if instance_type == crate::instance::InstanceType::Gtk {
+            host.css_watcher.watch_instance_css(config_path);
+        }
 
         // For web and headless instances, build areas (no GTK window).
         if instance_type == crate::instance::InstanceType::Web || instance_type == crate::instance::InstanceType::Headless {
@@ -137,7 +138,7 @@ async fn main() -> Result<()> {
         if !config_paths.iter().any(|p| *p == persisted_config_path) {
             if let Ok(config) = args.load_config_from_file(&persisted_config_path) {
                 let include_paths = config.collect_include_paths(&persisted_config_path);
-                config_watcher.add_config(&persisted_config_path, &entry.instance_id, &include_paths);
+                host.config_watcher.add_config(&persisted_config_path, &entry.instance_id, &include_paths);
             }
         }
     }
@@ -194,7 +195,7 @@ async fn main() -> Result<()> {
     });
 
     // Start config file watcher and handle reload requests on the main context
-    let reload_rx = config_watcher.start();
+    let reload_rx = host.config_watcher.start();
     let host_clone_for_reload = host.clone();
     main_context.spawn_local(async move {
         while let Ok(request) = reload_rx.recv().await {
@@ -257,6 +258,9 @@ async fn main() -> Result<()> {
 
     // Stop CSS file watchers and cancel debounce tasks.
     host.css_watcher.shutdown();
+
+    // Stop config file watcher and cancel debounce task.
+    host.config_watcher.shutdown();
 
     // Brief grace period to let pending GLib timeouts, async tasks, and
     // service Drop handlers fully drain before process exit.

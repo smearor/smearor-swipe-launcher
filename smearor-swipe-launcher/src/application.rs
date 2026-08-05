@@ -1,5 +1,6 @@
 use crate::config::launcher::SwipeLauncherConfig;
 use crate::config::services::ServicesConfig;
+use crate::config::watcher::ConfigWatcher;
 use crate::context::GLOBAL_JSON_CONVERTER_REGISTRY;
 use crate::context::initialize_global_json_converter_registry;
 use crate::css::CssWatcher;
@@ -147,6 +148,8 @@ pub struct LauncherHost {
     pub(crate) macropad_compound_dispatched: Arc<Mutex<HashMap<(String, String), ()>>>,
     /// CSS file watcher for global and per-instance CSS hot-reload.
     pub(crate) css_watcher: Arc<CssWatcher>,
+    /// Config file watcher for TOML hot-reload.
+    pub(crate) config_watcher: Arc<ConfigWatcher>,
 }
 
 impl LauncherHost {
@@ -173,6 +176,7 @@ impl LauncherHost {
             macropad_compound_presses: Arc::new(Mutex::new(HashMap::new())),
             macropad_compound_dispatched: Arc::new(Mutex::new(HashMap::new())),
             css_watcher: Arc::new(CssWatcher::new()),
+            config_watcher: Arc::new(ConfigWatcher::new()),
         }
     }
 
@@ -1453,7 +1457,9 @@ impl LauncherHost {
 
         self.create_instance(instance_id.clone(), config, instance_type);
 
-        self.css_watcher.watch_instance_css(std::path::Path::new(config_path));
+        if instance_type == crate::instance::InstanceType::Gtk {
+            self.css_watcher.watch_instance_css(std::path::Path::new(config_path));
+        }
 
         if instance_type == crate::instance::InstanceType::Gtk {
             let self_clone = self.clone();
@@ -2034,6 +2040,17 @@ impl LauncherHost {
         self.mcp_registry.remove_tools_by_instance(instance_id);
         self.mcp_registry.remove_resources_by_instance(instance_id);
         self.mcp_registry.remove_prompts_by_instance(instance_id);
+
+        // Remove CSS provider and file watch for this instance (GTK only).
+        if instance.instance_type == crate::instance::InstanceType::Gtk {
+            if let Some(config_path) = self.config_watcher.get_config_path(instance_id) {
+                self.css_watcher.remove_instance_css(&config_path);
+            }
+        }
+
+        // Remove config file watches for this instance.
+        self.config_watcher.remove_instance(instance_id);
+
         self.calculate_coordinated_sizes();
         self.unpersist_instance(instance_id);
         self.broadcast_instance_status(instance_id, InstanceLifecycleEvent::Stopped);

@@ -109,6 +109,38 @@ impl CssWatcher {
         self.watch_css_file(&css_path, INSTANCE_CSS_PRIORITY);
     }
 
+    /// Removes a per-instance CSS provider and stops watching its file.
+    ///
+    /// Called during `stop_instance()` to clean up CSS resources. The CSS
+    /// path is resolved from the TOML config path. If the CSS file was
+    /// watched directly, its provider is removed from the display. If it
+    /// was tracked via a directory watch (file didn't exist), the entry
+    /// is removed from the directory-watch map.
+    pub fn remove_instance_css(&self, config_path: &Path) {
+        let Some(css_path) = resolve_instance_css_path(config_path) else {
+            return;
+        };
+        let canonical = std::fs::canonicalize(&css_path).unwrap_or_else(|_| css_path.to_path_buf());
+
+        // Remove from direct watch map and remove provider from display.
+        if self.watched.contains_key(&canonical) {
+            self.remove_css_provider(&canonical);
+            debug!("CssWatcher: removed instance CSS for {}", canonical.display());
+        }
+
+        // Remove from directory-watch map (inotify fallback for non-existent files).
+        if let Some(parent) = canonical.parent() {
+            if let Some(mut entry) = self.directory_watches.get_mut(parent) {
+                entry.remove(&canonical);
+                if entry.is_empty() {
+                    drop(entry);
+                    self.directory_watches.remove(parent);
+                }
+                debug!("CssWatcher: removed instance CSS directory watch for {}", canonical.display());
+            }
+        }
+    }
+
     /// Registers a CSS file for watching and loads it if it exists.
     ///
     /// If the file does not exist, the parent directory is watched instead
