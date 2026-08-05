@@ -102,9 +102,10 @@ impl TtsEngine {
         // 0. Install bundled espeak-ng data so the phonemizer can find dictionaries.
         Self::ensure_espeak_data();
 
-        // 0b. Create a persistent espeak-ng engine instance.
-        let espeak_engine =
+        // 0b. Create a persistent espeak-ng engine instance with SSML markup enabled.
+        let mut espeak_engine =
             EspeakNg::new(&config.phonemizer_config.language).map_err(|e| TtsError::Phonemizer(format!("Failed to initialize espeak-ng engine: {e}")))?;
+        espeak_engine.set_markup(true);
 
         // 1. Load the phoneme ID map from the model config JSON.
         let config_json = std::fs::read_to_string(&config.config_path)
@@ -371,6 +372,10 @@ impl TtsEngine {
     /// to `tn_normalize_lang` with the appropriate language. Non-matching
     /// text is left untouched.
     ///
+    /// German compound words that espeak-ng mispronounces are wrapped in
+    /// SSML `<sub alias="...">` tags so the engine speaks the alias text
+    /// instead of trying to decompose the compound.
+    ///
     /// Times (`10:30`), hyphens between letters (`well-known`), and
     /// dotted version numbers (`1.2.3`) are handled natively by espeak-ng
     /// 0.1.3 and are intentionally not pre-normalized here.
@@ -412,22 +417,22 @@ impl TtsEngine {
         }
         result.push_str(&text[last_end..]);
 
-        // Split German compound words that espeak-ng mispronounces.
-        // espeak-ng can't decompose certain compounds and produces garbage
-        // phonemes (e.g. "Luftqualität" → "Luft Luft"). Inserting a space
-        // forces espeak-ng to treat the parts as separate words.
+        // Wrap German compound words in SSML <sub alias="..."> tags so
+        // espeak-ng speaks the decomposition instead of producing garbage
+        // phonemes (e.g. "Luftqualität" → "Luft Luft").
         if lang == "de" {
-            let compound_splits: &[(&str, &str)] = &[
+            let compound_subs: &[(&str, &str)] = &[
                 ("Luftqualität", "Luft Qualität"),
                 ("Luftfeuchtigkeit", "Luft Feuchtigkeit"),
                 ("Luftfeuchte", "Luft Feuchte"),
             ];
-            for &(original, replacement) in compound_splits {
-                result = result.replace(original, replacement);
+            for &(original, alias) in compound_subs {
+                let replacement = format!("<sub alias=\"{}\">{}</sub>", alias, original);
+                result = result.replace(original, &replacement);
             }
         }
 
-        result.split_whitespace().collect::<Vec<_>>().join(" ")
+        result
     }
 
     /// Converts text to phoneme token IDs using espeak-ng.
@@ -466,7 +471,14 @@ impl TtsEngine {
 
         let ipa = self
             .espeak_engine
-            .text_to_phonemes(&normalized_text)
+            .text_to_phonemes_with_options(
+                &normalized_text,
+                espeak_ng::TextToPhonemesOptions {
+                    preserve_punctuation: true,
+                    flatten_clauses: true,
+                    markup: true,
+                },
+            )
             .map_err(|e| TtsError::Phonemizer(e.to_string()))?;
         // Decompose precomposed characters (e.g. "ç" -> "c" + combining cedilla)
         // to match the normalization used by piper-phonemize.
@@ -807,5 +819,86 @@ mod tests {
         let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
         let ipa = engine.text_to_phonemes("Wallpaper-Themen").unwrap();
         assert!(!ipa.is_empty(), "IPA for 'Wallpaper-Themen' should not be empty");
+    }
+
+    /// Verifies that SSML `<sub alias="...">` replaces compound word pronunciation.
+    /// "Luftqualität" wrapped in `<sub alias="Luft Qualität">` should produce
+    /// IPA containing both "Luft" and "Qualität" as separate words.
+    #[test]
+    fn test_ssml_sub_alias_compound_word() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ssml = r#"<sub alias="Luft Qualität">Luftqualität</sub>"#;
+        let ipa = engine
+            .text_to_phonemes_with_options(
+                ssml,
+                espeak_ng::TextToPhonemesOptions {
+                    preserve_punctuation: true,
+                    flatten_clauses: true,
+                    markup: true,
+                },
+            )
+            .unwrap();
+        assert!(!ipa.is_empty(), "IPA for SSML <sub> compound should not be empty");
+    }
+
+    /// Verifies that SSML markup mode processes German weather text with
+    /// embedded `<sub>` tags correctly — the IPA should contain the alias
+    /// pronunciation, not the raw compound word.
+    #[test]
+    fn test_ssml_german_weather_with_compound_subs() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ssml = r#"Die <sub alias="Luft Qualität">Luftqualität</sub> ist gut."#;
+        let ipa = engine
+            .text_to_phonemes_with_options(
+                ssml,
+                espeak_ng::TextToPhonemesOptions {
+                    preserve_punctuation: true,
+                    flatten_clauses: true,
+                    markup: true,
+                },
+            )
+            .unwrap();
+        assert!(!ipa.is_empty(), "IPA for SSML weather text should not be empty");
+    }
+
+    /// Verifies that SSML `<break>` inserts a pause in the IPA output.
+    #[test]
+    fn test_ssml_break_tag() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ssml = "Hallo<break/>Welt";
+        let ipa = engine
+            .text_to_phonemes_with_options(
+                ssml,
+                espeak_ng::TextToPhonemesOptions {
+                    preserve_punctuation: true,
+                    flatten_clauses: true,
+                    markup: true,
+                },
+            )
+            .unwrap();
+        assert!(!ipa.is_empty(), "IPA for SSML <break> should not be empty");
+    }
+
+    /// Verifies that SSML `<say-as interpret-as="characters">` spells out
+    /// each character instead of reading the word.
+    #[test]
+    fn test_ssml_say_as_characters() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("en").expect("should create espeak-ng engine");
+        let ssml = r#"<say-as interpret-as="characters">ABC</say-as>"#;
+        let ipa = engine
+            .text_to_phonemes_with_options(
+                ssml,
+                espeak_ng::TextToPhonemesOptions {
+                    preserve_punctuation: true,
+                    flatten_clauses: true,
+                    markup: true,
+                },
+            )
+            .unwrap();
+        assert!(!ipa.is_empty(), "IPA for SSML <say-as characters> should not be empty");
     }
 }
