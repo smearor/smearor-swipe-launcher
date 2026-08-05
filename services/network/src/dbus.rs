@@ -287,6 +287,7 @@ pub async fn get_all_interfaces(connection: &Connection) -> Vec<InterfaceStatus>
 
         if let Ok(ip4_path) = device.ip4_config().await
             && !ip4_path.as_str().is_empty()
+            && ip4_path.as_str() != "/"
             && let Ok(ip4_config) = IP4ConfigProxy::new(connection, ip4_path).await
             && let Ok(addresses) = ip4_config.addresses().await
             && let Some(first_addr) = addresses.first()
@@ -297,6 +298,7 @@ pub async fn get_all_interfaces(connection: &Connection) -> Vec<InterfaceStatus>
 
         if let Ok(ip6_path) = device.ip6_config().await
             && !ip6_path.as_str().is_empty()
+            && ip6_path.as_str() != "/"
             && let Ok(ip6_config) = IP6ConfigProxy::new(connection, ip6_path).await
             && let Ok(addresses) = ip6_config.addresses().await
             && let Some(first_addr) = addresses.first()
