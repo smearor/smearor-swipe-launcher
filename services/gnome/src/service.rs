@@ -387,18 +387,15 @@ impl ServicePlugin for GnomeWorkspaceService {
         }
         unsafe {
             let envelope = &*(message as *mut FfiEnvelope);
-            debug!("GNOME service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
+            trace!("GNOME service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
             match envelope.type_id {
                 id if id == FfiEnvelopePayload::<SwitchWorkspaceMessage>::TYPE_ID => {
-                    debug!("SwitchWorkspaceMessage");
                     MessageHandler::<FfiEnvelopePayload<SwitchWorkspaceMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<CreateWorkspaceMessage>::TYPE_ID => {
-                    debug!("CreateWorkspaceMessage");
                     MessageHandler::<FfiEnvelopePayload<CreateWorkspaceMessage>>::handle_envelope_message(self, envelope);
                 }
                 id if id == FfiEnvelopePayload::<WorkspaceSnapshotRequestMessage>::TYPE_ID => {
-                    debug!("WorkspaceSnapshotRequestMessage");
                     MessageHandler::<FfiEnvelopePayload<WorkspaceSnapshotRequestMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {

@@ -226,7 +226,7 @@ impl ServicePlugin for WaylandWorkspaceService {
         }
         unsafe {
             let envelope = &*(message as *mut FfiEnvelope);
-            debug!("Wayland service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
+            trace!("Wayland service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
             match envelope.type_id {
                 id if id == FfiEnvelopePayload::<SwitchWorkspaceMessage>::TYPE_ID => {
                     MessageHandler::<FfiEnvelopePayload<SwitchWorkspaceMessage>>::handle_envelope_message(self, envelope);

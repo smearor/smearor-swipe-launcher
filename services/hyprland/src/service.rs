@@ -1742,7 +1742,7 @@ impl ServicePlugin for HyprlandService {
         }
         unsafe {
             let envelope = &*(message as *mut FfiEnvelope);
-            debug!("Hyprland service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
+            trace!("Hyprland service received message: topic={}, type_id={}", envelope.topic.to_string(), envelope.type_id);
             match envelope.type_id {
                 id if id == FfiEnvelopePayload::<HyprlandWindowDispatchMessage>::TYPE_ID => {
                     debug!("HyprlandWindowDispatchMessage");
