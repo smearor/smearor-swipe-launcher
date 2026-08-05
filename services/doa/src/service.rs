@@ -196,6 +196,9 @@ async fn run_doa_async(
         usb_reader_loop(config_for_usb, reading_sender, usb_control_receiver);
     });
 
+    let mut last_angle: Option<u16> = None;
+    let mut last_speech_detected: Option<bool> = None;
+
     loop {
         tokio::select! {
             command = command_receiver.recv() => {
@@ -224,19 +227,27 @@ async fn run_doa_async(
                             state.product_id = product_id;
                             state.last_updated = timestamp.clone();
                         }
-                        let status = DoaStatusMessage {
-                            connected: true,
-                            angle,
-                            calibrated_angle,
-                            direction,
-                            speech_detected,
-                            vendor_id,
-                            product_id,
-                            last_updated: stabby::string::String::from(timestamp),
-                        };
-                        broadcast_status(&meta, &core_context, status);
+
+                        let changed = last_angle != Some(angle) || last_speech_detected != Some(speech_detected);
+                        if changed {
+                            last_angle = Some(angle);
+                            last_speech_detected = Some(speech_detected);
+                            let status = DoaStatusMessage {
+                                connected: true,
+                                angle,
+                                calibrated_angle,
+                                direction,
+                                speech_detected,
+                                vendor_id,
+                                product_id,
+                                last_updated: stabby::string::String::from(timestamp),
+                            };
+                            broadcast_status(&meta, &core_context, status);
+                        }
                     }
                     DoaReading::Disconnected => {
+                        last_angle = None;
+                        last_speech_detected = None;
                         {
                             let mut state = shared_state.lock().unwrap();
                             state.connected = false;
