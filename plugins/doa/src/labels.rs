@@ -24,6 +24,8 @@ pub enum DoaLabel {
     Compass,
     /// Direction view label.
     Direction,
+    /// Paused state label.
+    Paused,
 }
 
 impl From<DoaDirection> for DoaLabel {
@@ -62,6 +64,7 @@ impl DoaLabel {
             DoaLabel::DeviceInfo => "Device",
             DoaLabel::Compass => "Compass",
             DoaLabel::Direction => "Direction",
+            DoaLabel::Paused => "Paused",
         }
     }
 
@@ -77,6 +80,7 @@ impl DoaLabel {
             DoaLabel::DeviceInfo => "Ger\u{e4}t",
             DoaLabel::Compass => "Kompass",
             DoaLabel::Direction => "Richtung",
+            DoaLabel::Paused => "Pausiert",
         }
     }
 
@@ -92,6 +96,7 @@ impl DoaLabel {
             DoaLabel::DeviceInfo => "Appareil",
             DoaLabel::Compass => "Boussole",
             DoaLabel::Direction => "Direction",
+            DoaLabel::Paused => "En pause",
         }
     }
 
@@ -107,6 +112,7 @@ impl DoaLabel {
             DoaLabel::DeviceInfo => "Dispositivo",
             DoaLabel::Compass => "Br\u{fa}jula",
             DoaLabel::Direction => "Direcci\u{f3}n",
+            DoaLabel::Paused => "Pausado",
         }
     }
 
@@ -122,6 +128,7 @@ impl DoaLabel {
             DoaLabel::DeviceInfo => "Dispositivo",
             DoaLabel::Compass => "Bussola",
             DoaLabel::Direction => "Direzione",
+            DoaLabel::Paused => "In pausa",
         }
     }
 }

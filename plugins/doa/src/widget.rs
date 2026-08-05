@@ -126,7 +126,30 @@ impl DoaWidget {
             return;
         }
         *current = new_view;
+        let view = *current;
         drop(current);
+
+        if let Some(status) = self.last_status.borrow().as_ref() {
+            let locale = self.personalization.borrow().effective_locale();
+            let (icon_name, main_text, info_text) = Self::render_view_data(status, &self.config, view, locale);
+            if let Ok(guard) = self.icon_image.lock() {
+                if let Some(image) = guard.as_ref() {
+                    Self::set_doa_icon(image, &icon_name);
+                }
+            }
+            if !self.config.icon_config.icon_only() {
+                if let Ok(guard) = self.main_label.lock() {
+                    if let Some(label) = guard.as_ref() {
+                        label.set_text(&main_text);
+                    }
+                }
+                if let Ok(guard) = self.info_label.lock() {
+                    if let Some(label) = guard.as_ref() {
+                        label.set_text(&info_text);
+                    }
+                }
+            }
+        }
         self.broadcast_widget_update();
     }
 
@@ -141,6 +164,10 @@ impl DoaWidget {
     pub(crate) fn render_view_data(status: &DoaStatusMessage, config: &DoaWidgetConfig, view: DoaView, locale: Locale) -> (String, String, String) {
         if !status.connected {
             let label = DoaLabel::Disconnected.localized_label(locale);
+            return (config.icon_disconnected.clone(), label.to_string(), String::new());
+        }
+        if status.paused {
+            let label = DoaLabel::Paused.localized_label(locale);
             return (config.icon_disconnected.clone(), label.to_string(), String::new());
         }
         match view {
@@ -229,10 +256,13 @@ impl DefaultFallback for DoaWidget {
                 });
             }
             ActionKind::DoublePress | ActionKind::MiddleClick => {
-                broadcaster.broadcast_message_to_topic(DoaCommandMessage {
-                    action: smearor_doa_model::DoaCommandAction::Pause,
-                    value: 0,
-                });
+                let paused = self.last_status.borrow().as_ref().map(|s| s.paused).unwrap_or(false);
+                let action = if paused {
+                    smearor_doa_model::DoaCommandAction::Resume
+                } else {
+                    smearor_doa_model::DoaCommandAction::Pause
+                };
+                broadcaster.broadcast_message_to_topic(DoaCommandMessage { action, value: 0 });
             }
             ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init => {}
         }
@@ -399,7 +429,7 @@ impl WidgetBuilder for DoaWidget {
             &GestureHandlersConfiguration {
                 swipe_threshold: 30.0,
                 scroll_throttling: Some(150),
-                group_gestures: false,
+                group_gestures: true,
                 ..Default::default()
             },
         );

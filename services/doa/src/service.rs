@@ -77,6 +77,7 @@ impl DoaService {
                 vendor_id: s.vendor_id,
                 product_id: s.product_id,
                 last_updated: s.last_updated.clone(),
+                paused: s.paused,
             })
             .unwrap_or_default()
     }
@@ -203,7 +204,7 @@ async fn run_doa_async(
         tokio::select! {
             command = command_receiver.recv() => {
                 match command {
-                    Some(cmd) => handle_command(&cmd, &shared_state, &usb_control_sender),
+                    Some(cmd) => handle_command(&cmd, &shared_state, &usb_control_sender, &meta, &core_context),
                     None => {
                         debug!("DoA async loop: command channel closed, shutting down");
                         break;
@@ -232,6 +233,7 @@ async fn run_doa_async(
                         if changed {
                             last_angle = Some(angle);
                             last_speech_detected = Some(speech_detected);
+                            let paused = shared_state.lock().map(|s| s.paused).unwrap_or(false);
                             let status = DoaStatusMessage {
                                 connected: true,
                                 angle,
@@ -241,6 +243,7 @@ async fn run_doa_async(
                                 vendor_id,
                                 product_id,
                                 last_updated: stabby::string::String::from(timestamp),
+                                paused,
                             };
                             broadcast_status(&meta, &core_context, status);
                         }
@@ -253,8 +256,10 @@ async fn run_doa_async(
                             state.connected = false;
                             state.last_updated = current_timestamp();
                         }
+                        let paused = shared_state.lock().map(|s| s.paused).unwrap_or(false);
                         let status = DoaStatusMessage {
                             connected: false,
+                            paused,
                             ..Default::default()
                         };
                         broadcast_status(&meta, &core_context, status);
@@ -265,22 +270,54 @@ async fn run_doa_async(
     }
 }
 
-fn handle_command(command: &DoaCommandMessage, _shared_state: &Arc<Mutex<DoaSharedState>>, usb_control: &tokio::sync::mpsc::UnboundedSender<UsbControl>) {
+fn handle_command(
+    command: &DoaCommandMessage,
+    shared_state: &Arc<Mutex<DoaSharedState>>,
+    usb_control: &tokio::sync::mpsc::UnboundedSender<UsbControl>,
+    meta: &PluginMeta,
+    core_context: &Option<FfiCoreContext>,
+) {
     match command.action {
         DoaCommandAction::Reconnect => {
             let _ = usb_control.send(UsbControl::Reconnect);
         }
         DoaCommandAction::Pause => {
+            {
+                let mut state = shared_state.lock().unwrap();
+                state.paused = true;
+            }
             let _ = usb_control.send(UsbControl::Pause);
+            broadcast_status_from_state(shared_state, meta, core_context);
         }
         DoaCommandAction::Resume => {
+            {
+                let mut state = shared_state.lock().unwrap();
+                state.paused = false;
+            }
             let _ = usb_control.send(UsbControl::Resume);
+            broadcast_status_from_state(shared_state, meta, core_context);
         }
         DoaCommandAction::SetPollInterval => {
             let interval = command.value.max(50);
             let _ = usb_control.send(UsbControl::SetInterval(interval));
         }
     }
+}
+
+fn broadcast_status_from_state(shared_state: &Arc<Mutex<DoaSharedState>>, meta: &PluginMeta, core_context: &Option<FfiCoreContext>) {
+    let state = shared_state.lock().map(|s| s.clone()).unwrap_or_default();
+    let status = DoaStatusMessage {
+        connected: state.connected,
+        angle: state.angle,
+        calibrated_angle: state.calibrated_angle,
+        direction: DoaDirection::from_angle(state.calibrated_angle),
+        speech_detected: state.speech_detected,
+        vendor_id: state.vendor_id,
+        product_id: state.product_id,
+        last_updated: stabby::string::String::from(state.last_updated),
+        paused: state.paused,
+    };
+    broadcast_status(meta, core_context, status);
 }
 
 fn broadcast_status(meta: &PluginMeta, core_context: &Option<FfiCoreContext>, status: DoaStatusMessage) {

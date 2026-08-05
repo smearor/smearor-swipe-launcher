@@ -13,16 +13,22 @@ pub const TOPIC_STATUS: &str = "service.doa.status";
 ///
 /// Contains the current DoA angle, calibrated angle, mapped compass direction,
 /// hardware VAD flag, and USB device identifiers.
-#[stabby::stabby]
+#[stabby::stabby(no_opt)]
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct DoaStatusMessage {
-    /// Whether the ReSpeaker XVF3800 device is connected and active.
-    pub connected: bool,
+    /// Timestamp of the last DoA reading (ISO 8601 or epoch seconds).
+    pub last_updated: stabby::string::String,
     /// Current DoA angle in degrees (0-359). Raw angle from the DSP, before rotation offset.
     pub angle: u16,
     /// Calibrated angle after applying `rotation_offset` from service config (0-359).
     /// This is the angle relative to the table's physical orientation.
     pub calibrated_angle: u16,
+    /// Vendor ID of the connected device (0x2886 = Seeed Studio, 0x20b1 = XMOS).
+    pub vendor_id: u16,
+    /// Product ID of the connected device.
+    pub product_id: u16,
+    /// Whether the ReSpeaker XVF3800 device is connected and active.
+    pub connected: bool,
     /// Mapped table side based on `calibrated_angle`. Derived via `DoaDirection::from_angle`.
     pub direction: DoaDirection,
     /// Whether speech/voice activity is currently detected by the DSP.
@@ -30,12 +36,8 @@ pub struct DoaStatusMessage {
     /// last detected direction (held in the register during silence).
     /// When `true`, active speech is coming from the indicated direction.
     pub speech_detected: bool,
-    /// Vendor ID of the connected device (0x2886 = Seeed Studio, 0x20b1 = XMOS).
-    pub vendor_id: u16,
-    /// Product ID of the connected device.
-    pub product_id: u16,
-    /// Timestamp of the last DoA reading (ISO 8601 or epoch seconds).
-    pub last_updated: stabby::string::String,
+    /// Whether DoA polling is currently paused (via Pause command).
+    pub paused: bool,
 }
 
 impl TypedMessage for DoaStatusMessage {
@@ -73,6 +75,7 @@ mod tests {
         assert_eq!(msg.vendor_id, 0);
         assert_eq!(msg.product_id, 0);
         assert_eq!(msg.last_updated.to_string(), "");
+        assert!(!msg.paused);
     }
 
     #[test]
@@ -86,6 +89,7 @@ mod tests {
             vendor_id: 0x2886,
             product_id: 0x0021,
             last_updated: stabby::string::String::from("2025-01-01T00:00:00Z"),
+            paused: false,
         };
         let json = serde_json::to_string(&msg).unwrap();
         let deserialized: DoaStatusMessage = serde_json::from_str(&json).unwrap();

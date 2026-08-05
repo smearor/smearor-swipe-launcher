@@ -3,6 +3,7 @@ use smearor_doa_model::DoaDirectionResponse;
 
 /// Shared state between the async control loop and the MCP tool handler.
 /// Updated only by the async loop — never accessed from the USB reader thread.
+#[derive(Clone)]
 pub struct DoaSharedState {
     /// Whether the ReSpeaker XVF3800 device is connected and active.
     pub connected: bool,
@@ -20,6 +21,8 @@ pub struct DoaSharedState {
     pub product_id: u16,
     /// Timestamp of the last DoA reading.
     pub last_updated: String,
+    /// Whether DoA polling is currently paused.
+    pub paused: bool,
 }
 
 impl Default for DoaSharedState {
@@ -33,6 +36,7 @@ impl Default for DoaSharedState {
             vendor_id: 0,
             product_id: 0,
             last_updated: String::new(),
+            paused: false,
         }
     }
 }
@@ -49,6 +53,7 @@ impl From<DoaSharedState> for DoaDirectionResponse {
             vendor_id: state.vendor_id,
             product_id: state.product_id,
             last_updated: state.last_updated,
+            paused: state.paused,
         }
     }
 }
@@ -70,6 +75,7 @@ mod tests {
         assert_eq!(state.vendor_id, 0);
         assert_eq!(state.product_id, 0);
         assert_eq!(state.last_updated, "");
+        assert!(!state.paused);
     }
 
     #[test]
@@ -83,6 +89,7 @@ mod tests {
             vendor_id: 0x2886,
             product_id: 0x0021,
             last_updated: "2025-01-01".to_string(),
+            paused: false,
         };
         let response = DoaDirectionResponse::from(state);
         assert!(response.connected);

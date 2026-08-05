@@ -30,6 +30,8 @@ pub struct DoaDirectionResponse {
     pub product_id: u16,
     /// Timestamp of the last DoA reading.
     pub last_updated: String,
+    /// Whether DoA polling is currently paused.
+    pub paused: bool,
 }
 
 fn serialize_hex_u16<S: serde::Serializer>(value: &u16, serializer: S) -> Result<S::Ok, S::Error> {
