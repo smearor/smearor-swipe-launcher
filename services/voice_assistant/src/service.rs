@@ -1195,7 +1195,7 @@ impl VoiceAssistantService {
                         if let Ok(mut speaking) = is_speaking.lock() {
                             *speaking = true;
                         }
-                        if let Err(error) = tts.speak(&final_answer) {
+                        if let Err(error) = tts.speak(&final_answer).await {
                             warn!("Voice Assistant: TTS playback failed: {error}");
                         }
                         if let Ok(mut speaking) = is_speaking.lock() {

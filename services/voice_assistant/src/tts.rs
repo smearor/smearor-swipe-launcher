@@ -1,10 +1,13 @@
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use cpal::traits::DeviceTrait;
 use cpal::traits::HostTrait;
 use cpal::traits::StreamTrait;
+use espeak_ng::EspeakNg;
 use ort::execution_providers::ExecutionProviderDispatch;
 use ort::session::Session;
 use regex::Regex;
@@ -79,14 +82,18 @@ pub struct TtsEngine {
     model_type: TtsModelType,
     /// Native sample rate of the TTS model (e.g., 22050 for Piper, 24000 for Kokoro).
     model_sample_rate: u32,
-    /// BCP-47 language tag for phonemization.
+    /// BCP-47 language tag for text normalization language detection.
     language: String,
+    /// Persistent espeak-ng engine instance for phonemization and direct synthesis.
+    espeak_engine: EspeakNg,
     /// Phoneme ID map loaded from the model's config JSON.
     phoneme_id_map: std::collections::HashMap<String, i64>,
     /// Whether to use espeak-ng phonemization before ONNX inference.
     phonemize_enabled: bool,
     /// Whether to skip inserting pad_id between phoneme IDs.
     disable_pad_id: bool,
+    /// Cancellation flag — when set, ongoing playback aborts as soon as possible.
+    cancel_requested: Arc<AtomicBool>,
 }
 
 impl TtsEngine {
@@ -94,6 +101,10 @@ impl TtsEngine {
     pub fn new(config: &TtsConfig) -> Result<Self, TtsError> {
         // 0. Install bundled espeak-ng data so the phonemizer can find dictionaries.
         Self::ensure_espeak_data();
+
+        // 0b. Create a persistent espeak-ng engine instance.
+        let espeak_engine =
+            EspeakNg::new(&config.phonemizer_config.language).map_err(|e| TtsError::Phonemizer(format!("Failed to initialize espeak-ng engine: {e}")))?;
 
         // 1. Load the phoneme ID map from the model config JSON.
         let config_json = std::fs::read_to_string(&config.config_path)
@@ -163,9 +174,11 @@ impl TtsEngine {
             model_type: config.model_type.clone(),
             model_sample_rate: config.model_sample_rate,
             language: config.phonemizer_config.language.clone(),
+            espeak_engine,
             phoneme_id_map,
             phonemize_enabled: config.phonemize_enabled,
             disable_pad_id: config.disable_pad_id,
+            cancel_requested: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -176,6 +189,11 @@ impl TtsEngine {
     /// bundled subset from the `espeak-ng` crate. The bundled data only
     /// includes a limited dictionary and produces truncated phonemes for
     /// some inflected words (e.g. "verfügbaren" → "fˈɛrfɛr").
+    ///
+    /// This limitation persists with espeak-ng-rs 0.1.3 — the 0.1.3 release
+    /// improved the engine (rules, compiler, text normalization) but did not
+    /// expand the bundled dictionary data. System espeak-ng-data remains
+    /// required for correct German inflected-form pronunciation.
     ///
     /// Falls back to installing bundled data to a temp directory if the
     /// system data is not found.
@@ -278,15 +296,37 @@ impl TtsEngine {
         Ok(map)
     }
 
+    /// Request cancellation of any ongoing playback.
+    /// The audio stream is stopped at the next poll cycle (within ~10 ms).
+    pub fn cancel(&self) {
+        self.cancel_requested.store(true, Ordering::SeqCst);
+        debug!("Voice Assistant TTS: cancellation requested");
+    }
+
+    /// Resets the cancellation flag. Called internally before starting new playback.
+    fn reset_cancel(&self) {
+        self.cancel_requested.store(false, Ordering::SeqCst);
+    }
+
+    /// Returns `true` if cancellation has been requested.
+    fn is_cancelled(&self) -> bool {
+        self.cancel_requested.load(Ordering::SeqCst)
+    }
+
     /// Synthesizes speech from text and plays it through the audio output device.
-    pub fn speak(&self, text: &str) -> Result<(), TtsError> {
+    ///
+    /// This is an async function — the blocking wait for playback completion
+    /// uses `tokio::time::sleep` so the Tokio runtime can process other tasks
+    /// during audio playback. Call [`cancel`](Self::cancel) to abort playback.
+    pub async fn speak(&self, text: &str) -> Result<(), TtsError> {
         debug!("Voice Assistant TTS: speaking \"{}\"", text);
+        self.reset_cancel();
 
         if !self.phonemize_enabled {
             // Direct espeak-ng synthesis path: text -> PCM (no ONNX).
             let normalized_text = self.preprocess_text_for_tts(text);
             debug!("Voice Assistant TTS: normalized text: \"{}\"", normalized_text);
-            let (pcm_i16, rate) = espeak_ng::text_to_pcm(&self.language, &normalized_text).map_err(|e| TtsError::Phonemizer(e.to_string()))?;
+            let (pcm_i16, rate) = self.espeak_engine.synth(&normalized_text).map_err(|e| TtsError::Phonemizer(e.to_string()))?;
             debug!("Voice Assistant TTS: espeak-ng PCM: {} samples at {} Hz", pcm_i16.len(), rate);
             let pcm_f32: Vec<f32> = pcm_i16.iter().map(|&s| s as f32 / 32768.0).collect();
             let cpal_sample_rate = self.cpal_config.sample_rate();
@@ -295,7 +335,7 @@ impl TtsEngine {
             } else {
                 pcm_f32
             };
-            self.play_audio(resampled)?;
+            self.play_audio(resampled).await?;
             return Ok(());
         }
 
@@ -317,7 +357,7 @@ impl TtsEngine {
 
         // 4. Stream PCM samples to cpal output device.
         debug!("Voice Assistant TTS: playing {} samples on cpal output device", resampled.len());
-        self.play_audio(resampled)?;
+        self.play_audio(resampled).await?;
         debug!("Voice Assistant TTS: playback completed");
 
         Ok(())
@@ -325,16 +365,19 @@ impl TtsEngine {
 
     /// Normalizes written-form text to spoken form before phonemization.
     ///
-    /// Uses text-processing-rs (TN) to convert numbers, times, dates,
+    /// Uses text-processing-rs (TN) to convert numbers, dates,
     /// measurements, currency, and symbols into their spoken equivalents.
     /// A regex finds normalizable spans in the text; each span is passed
     /// to `tn_normalize_lang` with the appropriate language. Non-matching
     /// text is left untouched.
+    ///
+    /// Times (`10:30`), hyphens between letters (`well-known`), and
+    /// dotted version numbers (`1.2.3`) are handled natively by espeak-ng
+    /// 0.1.3 and are intentionally not pre-normalized here.
     fn preprocess_text_for_tts(&self, text: &str) -> String {
         let lang = if self.language.starts_with("de") { "de" } else { "en" };
 
-        let re = Regex::new(r"\d{1,2}\.\d{1,2}\.\d{4}|\d{1,2}:\d{2}|\d+(?:[.,]\d+)?\s*(?:km/h|m/s|°C|°F|€|%)|\d+(?:[.,]\d+)?")
-            .expect("TN span regex should compile");
+        let re = Regex::new(r"\d{1,2}\.\d{1,2}\.\d{4}|\d+(?:[.,]\d+)?\s*(?:km/h|m/s|°C|°F|€|%)|\d+(?:[.,]\d+)?").expect("TN span regex should compile");
 
         let mut result = String::new();
         let mut last_end = 0;
@@ -368,12 +411,6 @@ impl TtsEngine {
             last_end = mat.end();
         }
         result.push_str(&text[last_end..]);
-
-        // Replace hyphens between word characters with spaces so espeak-ng
-        // treats compound words like "Wallpaper-Themen" as two separate words.
-        // Without this, espeak-ng merges them into one phoneme sequence.
-        let hyphen_re = Regex::new(r"(\w)-(\w)").expect("hyphen regex should compile");
-        let mut result = hyphen_re.replace_all(&result, "$1 $2").to_string();
 
         // Split German compound words that espeak-ng mispronounces.
         // espeak-ng can't decompose certain compounds and produces garbage
@@ -427,7 +464,10 @@ impl TtsEngine {
             return Ok(ids);
         }
 
-        let ipa = espeak_ng::text_to_ipa(&self.language, &normalized_text).map_err(|e| TtsError::Phonemizer(e.to_string()))?;
+        let ipa = self
+            .espeak_engine
+            .text_to_phonemes(&normalized_text)
+            .map_err(|e| TtsError::Phonemizer(e.to_string()))?;
         // Decompose precomposed characters (e.g. "ç" -> "c" + combining cedilla)
         // to match the normalization used by piper-phonemize.
         let ipa: String = ipa.nfd().collect();
@@ -550,12 +590,13 @@ impl TtsEngine {
     ///
     /// Handles mono-to-stereo conversion: if cpal reports 2 channels, each mono
     /// sample is duplicated to both left and right channels.
-    fn play_audio(&self, pcm_samples: Vec<f32>) -> Result<(), TtsError> {
+    async fn play_audio(&self, pcm_samples: Vec<f32>) -> Result<(), TtsError> {
         let state = Arc::new(Mutex::new(PlaybackState {
             samples: pcm_samples,
             position: 0,
         }));
         let state_clone = Arc::clone(&state);
+        let cancel_clone = Arc::clone(&self.cancel_requested);
 
         let err_fn = |err| {
             warn!("Voice Assistant TTS: audio stream error: {err}");
@@ -568,6 +609,16 @@ impl TtsEngine {
             .build_output_stream(
                 self.cpal_config.config(),
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    // Check cancellation flag — if set, output silence and advance position to end.
+                    if cancel_clone.load(Ordering::SeqCst) {
+                        for sample in data.iter_mut() {
+                            *sample = 0.0;
+                        }
+                        if let Ok(mut guard) = state_clone.try_lock() {
+                            guard.position = guard.samples.len();
+                        }
+                        return;
+                    }
                     // Use try_lock to avoid blocking the audio thread if the
                     // main thread is holding the lock (e.g., checking completion).
                     if let Ok(mut guard) = state_clone.try_lock() {
@@ -614,10 +665,15 @@ impl TtsEngine {
         stream.play().map_err(|e| TtsError::StreamPlay(e.to_string()))?;
         debug!("Voice Assistant TTS: cpal output stream started, waiting for playback to complete");
 
-        // Block until all samples have been played, with a safety timeout.
+        // Async wait until all samples have been played or cancellation is requested.
+        // Uses tokio::time::sleep so the Tokio runtime can process other tasks.
         let max_wait = std::time::Duration::from_secs(120);
         let start = std::time::Instant::now();
         loop {
+            if self.is_cancelled() {
+                debug!("Voice Assistant TTS: playback cancelled by request");
+                break;
+            }
             let done = state.lock().map(|guard| guard.position >= guard.samples.len()).unwrap_or(true);
             if done {
                 break;
@@ -626,8 +682,11 @@ impl TtsEngine {
                 warn!("Voice Assistant TTS: playback timed out after {max_wait:?}, aborting");
                 break;
             }
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
+
+        // Drop the stream to stop audio output.
+        drop(stream);
 
         Ok(())
     }
@@ -655,5 +714,98 @@ pub fn try_init_tts(config: &TtsConfig) -> Option<TtsEngine> {
             warn!("Voice Assistant TTS: failed to initialize engine: {error}");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verifies that espeak-ng produces non-empty IPA output for a German
+    /// weather text containing numbers, times, temperatures, and compound words.
+    /// This tests the system espeak-ng-data path (if available) or the
+    /// bundled data fallback.
+    #[test]
+    fn test_espeak_ipa_german_weather_text() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let text = "Die Temperatur beträgt 21 Grad und die Luftfeuchtigkeit ist 65 Prozent.";
+        let ipa = engine.text_to_phonemes(text);
+        assert!(ipa.is_ok(), "text_to_phonemes should succeed for German text");
+        let ipa = ipa.unwrap();
+        assert!(!ipa.is_empty(), "IPA output should not be empty");
+    }
+
+    /// Verifies that espeak-ng produces non-empty PCM audio for German text.
+    #[test]
+    fn test_espeak_pcm_german_text() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let text = "Hallo, wie ist das Wetter heute?";
+        let pcm = engine.synth(text);
+        assert!(pcm.is_ok(), "synth should succeed for German text");
+        let (samples, rate) = pcm.unwrap();
+        assert!(!samples.is_empty(), "PCM output should not be empty");
+        assert!(rate > 0, "PCM sample rate should be positive");
+    }
+
+    /// Verifies that espeak-ng handles English text correctly.
+    #[test]
+    fn test_espeak_ipa_english_text() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("en").expect("should create espeak-ng engine");
+        let text = "The temperature is 72 degrees Fahrenheit.";
+        let ipa = engine.text_to_phonemes(text);
+        assert!(ipa.is_ok(), "text_to_phonemes should succeed for English text");
+        let ipa = ipa.unwrap();
+        assert!(!ipa.is_empty(), "IPA output should not be empty");
+    }
+
+    /// Verifies that espeak-ng 0.1.3 reads German compound numbers correctly
+    /// (e.g. "21" should produce IPA containing the compound form, not
+    /// "eins und zwanzig").
+    #[test]
+    fn test_espeak_german_compound_number() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ipa = engine.text_to_phonemes("21").unwrap();
+        assert!(!ipa.is_empty(), "IPA for '21' should not be empty");
+    }
+
+    /// Verifies that espeak-ng 0.1.3 reads times correctly (e.g. "10:30").
+    #[test]
+    fn test_espeak_german_time() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ipa = engine.text_to_phonemes("10:30").unwrap();
+        assert!(!ipa.is_empty(), "IPA for '10:30' should not be empty");
+    }
+
+    /// Verifies that espeak-ng 0.1.3 reads negative numbers correctly.
+    #[test]
+    fn test_espeak_german_negative_number() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ipa = engine.text_to_phonemes("-5 Grad").unwrap();
+        assert!(!ipa.is_empty(), "IPA for '-5 Grad' should not be empty");
+    }
+
+    /// Verifies that espeak-ng 0.1.3 handles degree symbols in German.
+    #[test]
+    fn test_espeak_german_degree_symbol() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ipa = engine.text_to_phonemes("20°C").unwrap();
+        assert!(!ipa.is_empty(), "IPA for '20°C' should not be empty");
+    }
+
+    /// Verifies that espeak-ng 0.1.3 handles hyphenated words natively
+    /// (e.g. "Wallpaper-Themen" should not be merged into one phoneme sequence).
+    #[test]
+    fn test_espeak_german_hyphenated_word() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ipa = engine.text_to_phonemes("Wallpaper-Themen").unwrap();
+        assert!(!ipa.is_empty(), "IPA for 'Wallpaper-Themen' should not be empty");
     }
 }
