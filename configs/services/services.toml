@@ -96,9 +96,9 @@ path = "target/release/libsmearor_loupedeck_service.so"
 id = "personalization"
 path = "target/release/libsmearor_personalization_service.so"
 
-#[[services]]
-#id = "voice_assistant"
-#path = "target/release/libsmearor_voice_assistant_service.so"
+[[services]]
+id = "voice_assistant"
+path = "target/release/libsmearor_voice_assistant_service.so"
 
 [[services]]
 id = "doa"
@@ -324,7 +324,7 @@ model = "Alexa"
 threshold = 0.1
 
 [voice_assistant.doa_vad]
-enabled = false
+enabled = true
 grace_period_ms = 400
 min_speech_duration_ms = 100
 skip_wake_word_on_vad = true
@@ -332,7 +332,7 @@ aec_mirroring_enabled = false
 tts_mute_holdover_ms = 300
 
 [audio.ducking]
-enabled = false
+enabled = true
 ducking_volume = 0.2
 ducking_grace_period_ms = 500
 min_speech_duration_ms = 100
