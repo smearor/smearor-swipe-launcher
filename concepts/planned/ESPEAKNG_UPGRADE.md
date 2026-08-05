@@ -213,18 +213,45 @@ The system path is preferred because the bundled data only includes a limited di
 
 **Exit Criteria**: TTS synthesis runs non-blocking. Voice Assistant can process other messages during synthesis.
 
-### Phase 6: SSML and Word Events (Optional, Future)
+### Phase 6a: SSML Generation (Optional, Future)
 
-**Goal**: Use SSML markup and word-boundary events for fine-grained speech control.
+**Goal**: Replace remaining `preprocess_text_for_tts` regex workarounds with SSML markup.
 
 **Tasks**:
 
-- Replace remaining `preprocess_text_for_tts` regex workarounds with SSML markup (`<break>`, `<prosody>`, `<say-as>`)
-- Implement `SynthEvent` / `EventKind` handling for word-boundary events
-- Broadcast word-boundary events to the widget layer for visual highlighting
-- Add SSML generation utility for common patterns (numbers, dates, temperatures)
+- Add SSML generation utility for common patterns (numbers, dates, temperatures, compound words)
+- Replace compound-split regex with `<break>` or SSML markup
+- Replace decimal conversion regex with `<say-as interpret-as="cardinal">` where applicable
+- Enable SSML markup mode on the espeak-ng engine (`set_markup(true)`)
+- Test SSML output with German weather texts, app names, numbers
 
-**Exit Criteria**: `preprocess_text_for_tts` is reduced to SSML generation. Widget shows word-by-word highlighting during TTS playback.
+**Exit Criteria**: `preprocess_text_for_tts` generates SSML markup instead of regex replacements. espeak-ng renders SSML correctly.
+
+### Phase 6b: Word-Boundary Events (Optional, Future)
+
+**Goal**: Use `synth_with_events()` to extract word-boundary timing during synthesis.
+
+**Tasks**:
+
+- Replace `synth()` with `synth_with_events()` in the direct espeak-ng path
+- Parse `SynthEvent` / `EventKind` stream for word boundaries
+- Log word-boundary events with timestamps for debugging
+- Expose word events via a callback or channel from `TtsEngine`
+
+**Exit Criteria**: Word-boundary events are available during TTS playback with accurate timing.
+
+### Phase 6c: Widget Integration (Optional, Future)
+
+**Goal**: Broadcast word-boundary events to the widget layer for visual highlighting.
+
+**Tasks**:
+
+- Add `TtsWordEvent` message type to `model/voice_assistant`
+- Broadcast word events from the voice assistant service via the message system
+- Implement word-by-word visual highlighting in the voice assistant widget
+- Synchronize highlighting with audio playback timing
+
+**Exit Criteria**: Widget shows word-by-word highlighting during TTS playback.
 
 ---
 
