@@ -143,6 +143,20 @@ pub struct VoiceAssistantService {
     pub wake_word_threshold: Arc<Mutex<f32>>,
     /// Latest personalization status (locale, timezone, coordinates).
     pub personalization: Arc<RwLock<Option<PersonalizationStatusMessage>>>,
+    /// Previous `speech_detected` value from DoA status, used for edge detection.
+    pub previous_speech_detected: Arc<Mutex<bool>>,
+    /// Timestamp of the first rising edge of `speech_detected`, used for
+    /// `min_speech_duration_ms` false-trigger mitigation.
+    pub vad_onset_timestamp: Arc<Mutex<Option<std::time::Instant>>>,
+    /// Latest calibrated DoA angle (0–359), attached as context metadata
+    /// when VAD-triggered listening mode activates.
+    pub doa_angle: Arc<RwLock<u16>>,
+    /// Latest mapped compass direction from DoA status.
+    pub doa_direction: Arc<RwLock<smearor_doa_model::DoaDirection>>,
+    /// Cancellation token for the VAD grace period exit timer.
+    /// When speech resumes during the grace period, the sender is dropped
+    /// to abort the pending deactivation.
+    pub vad_grace_cancel: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 impl VoiceAssistantService {
@@ -219,6 +233,11 @@ impl VoiceAssistantService {
             wake_word_model: Arc::new(Mutex::new(wake_word_model_init)),
             wake_word_threshold: Arc::new(Mutex::new(wake_word_threshold_init)),
             personalization: Arc::new(RwLock::new(None)),
+            previous_speech_detected: Arc::new(Mutex::new(false)),
+            vad_onset_timestamp: Arc::new(Mutex::new(None)),
+            doa_angle: Arc::new(RwLock::new(0)),
+            doa_direction: Arc::new(RwLock::new(smearor_doa_model::DoaDirection::default())),
+            vad_grace_cancel: Arc::new(Mutex::new(None)),
         };
 
         // Ensure models are downloaded before loading.
@@ -1130,6 +1149,11 @@ impl VoiceAssistantService {
             wake_word_model: Arc::new(Mutex::new(WakeWordModelType::default())),
             wake_word_threshold: Arc::new(Mutex::new(0.1)),
             personalization: personalization.clone(),
+            previous_speech_detected: Arc::new(Mutex::new(false)),
+            vad_onset_timestamp: Arc::new(Mutex::new(None)),
+            doa_angle: Arc::new(RwLock::new(0)),
+            doa_direction: Arc::new(RwLock::new(smearor_doa_model::DoaDirection::default())),
+            vad_grace_cancel: Arc::new(Mutex::new(None)),
         };
 
         Self::set_state(state, AssistantState::ThinkingLlm, status_sender, transcript, answer).await;
@@ -1339,6 +1363,135 @@ impl MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>> for VoiceA
     }
 }
 
+impl MessageHandler<FfiEnvelopePayload<smearor_doa_model::DoaStatusMessage>> for VoiceAssistantService {
+    fn handle_message(&self, message: FfiEnvelopePayload<smearor_doa_model::DoaStatusMessage>, _sender_id: &str) {
+        let doa_status = message.0;
+
+        // Update latest DoA angle and direction.
+        if let Ok(mut angle) = self.doa_angle.write() {
+            *angle = doa_status.calibrated_angle;
+        }
+        if let Ok(mut direction) = self.doa_direction.write() {
+            *direction = doa_status.direction;
+        }
+
+        // Skip VAD edge detection if DoA VAD mode is disabled.
+        if !self.config.doa_vad.enabled {
+            return;
+        }
+
+        // TTS-Mute-Window: if TTS is speaking and AEC mirroring is not configured,
+        // ignore VAD edges to prevent self-triggering from TTS output.
+        if !self.config.doa_vad.aec_mirroring_enabled {
+            if let Ok(speaking) = self.is_speaking.lock() {
+                if *speaking {
+                    // Reset edge detection state during TTS.
+                    if let Ok(mut prev) = self.previous_speech_detected.lock() {
+                        *prev = false;
+                    }
+                    if let Ok(mut onset) = self.vad_onset_timestamp.lock() {
+                        *onset = None;
+                    }
+                    return;
+                }
+            }
+        }
+
+        let speech_detected = doa_status.speech_detected;
+        let previous_speech = self.previous_speech_detected.lock().map(|p| *p).unwrap_or(false);
+
+        if speech_detected && !previous_speech {
+            // Rising edge: speech started.
+            debug!("Voice Assistant: DoA VAD rising edge detected");
+            if let Ok(mut onset) = self.vad_onset_timestamp.lock() {
+                *onset = Some(std::time::Instant::now());
+            }
+            // Cancel any pending grace period exit.
+            if let Ok(mut cancel) = self.vad_grace_cancel.lock() {
+                if let Some(sender) = cancel.take() {
+                    let _ = sender.send(());
+                }
+            }
+        } else if speech_detected && previous_speech {
+            // Continuous speech: check min_speech_duration_ms for activation.
+            let should_activate = {
+                let onset_opt = self.vad_onset_timestamp.lock().map(|o| *o).unwrap_or(None);
+                if let Some(onset) = onset_opt {
+                    let elapsed = onset.elapsed().as_millis() as u64;
+                    elapsed >= self.config.doa_vad.min_speech_duration_ms
+                } else {
+                    false
+                }
+            };
+
+            if should_activate {
+                // Clear onset timestamp so we only activate once per rising edge.
+                if let Ok(mut onset) = self.vad_onset_timestamp.lock() {
+                    *onset = None;
+                }
+
+                // Check if already active.
+                let is_active = self.active.lock().map(|a| *a).unwrap_or(false);
+                if !is_active {
+                    debug!(
+                        "Voice Assistant: DoA VAD activating listening mode (angle={}, direction={})",
+                        doa_status.calibrated_angle, doa_status.direction
+                    );
+                    self.activate();
+                }
+            }
+        } else if !speech_detected && previous_speech {
+            // Falling edge: speech stopped.
+            debug!("Voice Assistant: DoA VAD falling edge detected, scheduling grace period exit");
+            if let Ok(mut onset) = self.vad_onset_timestamp.lock() {
+                *onset = None;
+            }
+
+            // Cancel any existing grace period timer.
+            if let Ok(mut cancel) = self.vad_grace_cancel.lock() {
+                if let Some(sender) = cancel.take() {
+                    let _ = sender.send(());
+                }
+            }
+
+            // Schedule a grace period exit.
+            let grace_period_ms = self.config.doa_vad.grace_period_ms;
+            let active_clone = self.active.clone();
+            let command_sender_clone = self.command_sender.clone();
+            let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
+
+            if let Ok(mut cancel) = self.vad_grace_cancel.lock() {
+                *cancel = Some(cancel_tx);
+            }
+
+            glib::MainContext::default().spawn_local(async move {
+                let timer = tokio::time::sleep(std::time::Duration::from_millis(grace_period_ms));
+                tokio::pin!(timer);
+
+                tokio::select! {
+                    _ = timer => {
+                        let is_active = active_clone.lock().map(|a| *a).unwrap_or(false);
+                        if is_active {
+                            debug!("Voice Assistant: DoA VAD grace period expired, deactivating listening mode");
+                            if let Some(sender) = &command_sender_clone {
+                                let _ = sender.send(smearor_voice_assistant_model::VoiceCommandMessage::deactivate());
+                            }
+                        }
+                    }
+                    _ = cancel_rx => {
+                        debug!("Voice Assistant: DoA VAD grace period cancelled (speech resumed)");
+                    }
+                }
+            });
+        }
+
+        // Update previous speech detected state.
+        if let Ok(mut prev) = self.previous_speech_detected.lock() {
+            *prev = speech_detected;
+        }
+    }
+}
+
 impl MessageHandler<FfiEnvelopePayload<RegisterToolMessage>> for VoiceAssistantService {
     fn handle_message(&self, message: FfiEnvelopePayload<RegisterToolMessage>, _sender_id: &str) {
         let name = message.0.name.to_string();
@@ -1383,6 +1536,8 @@ impl ServicePlugin for VoiceAssistantService {
                     MessageHandler::<FfiEnvelopePayload<VoiceCommandMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_PERSONALIZATION_STATUS && envelope.type_id == FfiEnvelopePayload::<PersonalizationStatusMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<PersonalizationStatusMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == smearor_doa_model::TOPIC_STATUS && envelope.type_id == FfiEnvelopePayload::<smearor_doa_model::DoaStatusMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<smearor_doa_model::DoaStatusMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_MCP_REGISTER_TOOL && envelope.type_id == FfiEnvelopePayload::<RegisterToolMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<RegisterToolMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_MCP_REGISTER_RESOURCE && envelope.type_id == FfiEnvelopePayload::<RegisterResourceMessage>::TYPE_ID {

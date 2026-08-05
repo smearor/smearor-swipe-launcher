@@ -11,6 +11,53 @@ use tracing::debug;
 /// Default wake word detection threshold.
 pub const DEFAULT_WAKE_WORD_THRESHOLD: f32 = 0.1;
 
+/// Default grace period in milliseconds after VAD falling edge before exiting Listening Mode.
+pub const DEFAULT_VAD_GRACE_PERIOD_MS: u64 = 400;
+
+/// Default minimum continuous VAD activity in milliseconds before activating Listening Mode.
+pub const DEFAULT_VAD_MIN_SPEECH_DURATION_MS: u64 = 100;
+
+/// Default holdover time in milliseconds after TTS ends before re-enabling VAD edge detection.
+pub const DEFAULT_TTS_MUTE_HOLDOVER_MS: u64 = 300;
+
+/// Configuration for DoA hardware-VAD-triggered listening mode.
+/// When enabled, the Voice Assistant uses the `speech_detected` flag from
+/// `DoaStatusMessage` (broadcast by the DoA service) to activate and
+/// deactivate the listening pipeline with near-zero latency.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct DoaVadConfig {
+    /// Whether DoA VAD-triggered listening mode is enabled.
+    pub enabled: bool,
+    /// Holdover time in milliseconds after VAD falling edge before exiting Listening Mode.
+    pub grace_period_ms: u64,
+    /// Minimum continuous VAD activity in milliseconds before activating Listening Mode.
+    /// Prevents false triggers from impulsive environmental noises.
+    pub min_speech_duration_ms: u64,
+    /// If true, skip software wake-word detection when hardware VAD triggers.
+    /// If false, wake-word detection is used as an additional confirmation criterion (Barge-In).
+    pub skip_wake_word_on_vad: bool,
+    /// Whether PipeWire AEC mirroring to XVF3800 is configured.
+    /// When true, the software TTS-Mute-Window is disabled because the DSP handles echo cancellation.
+    pub aec_mirroring_enabled: bool,
+    /// Holdover time in milliseconds after TTS ends before re-enabling VAD edge detection.
+    /// Only used when `aec_mirroring_enabled` is false.
+    pub tts_mute_holdover_ms: u64,
+}
+
+impl Default for DoaVadConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            grace_period_ms: DEFAULT_VAD_GRACE_PERIOD_MS,
+            min_speech_duration_ms: DEFAULT_VAD_MIN_SPEECH_DURATION_MS,
+            skip_wake_word_on_vad: true,
+            aec_mirroring_enabled: false,
+            tts_mute_holdover_ms: DEFAULT_TTS_MUTE_HOLDOVER_MS,
+        }
+    }
+}
+
 /// Wake word model type for configuration.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 pub enum WakeWordModelType {
@@ -368,6 +415,8 @@ pub struct VoiceAssistantServiceConfig {
     pub tts: TtsConfig,
     /// Wake word detection configuration.
     pub wake_word: WakeWordServiceConfig,
+    /// DoA hardware-VAD-triggered listening mode configuration.
+    pub doa_vad: DoaVadConfig,
 }
 
 impl Default for VoiceAssistantServiceConfig {
@@ -414,6 +463,7 @@ impl Default for VoiceAssistantServiceConfig {
             vad_threshold: DEFAULT_VAD_THRESHOLD,
             tts: TtsConfig::default(),
             wake_word: WakeWordServiceConfig::default(),
+            doa_vad: DoaVadConfig::default(),
         }
     }
 }
@@ -476,5 +526,65 @@ impl VoiceAssistantServiceConfig {
                 rolling_window_keep_last: self.rolling_window_keep_last,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DEFAULT_TTS_MUTE_HOLDOVER_MS;
+    use super::DEFAULT_VAD_GRACE_PERIOD_MS;
+    use super::DEFAULT_VAD_MIN_SPEECH_DURATION_MS;
+    use super::DoaVadConfig;
+
+    #[test]
+    fn test_doa_vad_config_default() {
+        let config = DoaVadConfig::default();
+        assert!(!config.enabled);
+        assert_eq!(config.grace_period_ms, DEFAULT_VAD_GRACE_PERIOD_MS);
+        assert_eq!(config.min_speech_duration_ms, DEFAULT_VAD_MIN_SPEECH_DURATION_MS);
+        assert!(config.skip_wake_word_on_vad);
+        assert!(!config.aec_mirroring_enabled);
+        assert_eq!(config.tts_mute_holdover_ms, DEFAULT_TTS_MUTE_HOLDOVER_MS);
+    }
+
+    #[test]
+    fn test_doa_vad_config_serde_deserialize() {
+        let json = serde_json::json!({
+            "enabled": true,
+            "grace_period_ms": 600,
+            "min_speech_duration_ms": 150,
+            "skip_wake_word_on_vad": false,
+            "aec_mirroring_enabled": true,
+            "tts_mute_holdover_ms": 500
+        });
+        let config: DoaVadConfig = serde_json::from_value(json).unwrap();
+        assert!(config.enabled);
+        assert_eq!(config.grace_period_ms, 600);
+        assert_eq!(config.min_speech_duration_ms, 150);
+        assert!(!config.skip_wake_word_on_vad);
+        assert!(config.aec_mirroring_enabled);
+        assert_eq!(config.tts_mute_holdover_ms, 500);
+    }
+
+    #[test]
+    fn test_doa_vad_config_partial_json_uses_defaults() {
+        let json = serde_json::json!({
+            "enabled": true
+        });
+        let config: DoaVadConfig = serde_json::from_value(json).unwrap();
+        assert!(config.enabled);
+        assert_eq!(config.grace_period_ms, DEFAULT_VAD_GRACE_PERIOD_MS);
+        assert_eq!(config.min_speech_duration_ms, DEFAULT_VAD_MIN_SPEECH_DURATION_MS);
+        assert!(config.skip_wake_word_on_vad);
+        assert!(!config.aec_mirroring_enabled);
+        assert_eq!(config.tts_mute_holdover_ms, DEFAULT_TTS_MUTE_HOLDOVER_MS);
+    }
+
+    #[test]
+    fn test_doa_vad_config_empty_json_uses_defaults() {
+        let json = serde_json::json!({});
+        let config: DoaVadConfig = serde_json::from_value(json).unwrap();
+        assert!(!config.enabled);
+        assert_eq!(config.grace_period_ms, DEFAULT_VAD_GRACE_PERIOD_MS);
     }
 }

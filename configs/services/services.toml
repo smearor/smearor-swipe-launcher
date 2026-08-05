@@ -100,6 +100,10 @@ path = "target/release/libsmearor_personalization_service.so"
 #id = "voice_assistant"
 #path = "target/release/libsmearor_voice_assistant_service.so"
 
+[[services]]
+id = "doa"
+path = "target/release/libsmearor_doa_service.so"
+
 [http]
 allowed_urls = ["192.168.178.*", "https://api.open-meteo.com/*", "https://api.sunrise-sunset.org/*"]
 default_timeout_ms = 10000
@@ -318,3 +322,27 @@ auto_enable = true
 model = "Alexa"
 # model = "HeyMycroft"
 threshold = 0.1
+
+[voice_assistant.doa_vad]
+enabled = false
+grace_period_ms = 400
+min_speech_duration_ms = 100
+skip_wake_word_on_vad = true
+aec_mirroring_enabled = false
+tts_mute_holdover_ms = 300
+
+[audio.ducking]
+enabled = false
+ducking_volume = 0.2
+ducking_grace_period_ms = 500
+min_speech_duration_ms = 100
+fade_ramp_ms = 500
+duck_notification_sounds = false
+duck_during_tts = true
+
+[doa]
+poll_interval_ms = 150
+mcp_enabled = true
+reconnect_delay_ms = 2000
+rotation_offset = 0
+# product_id = 0x0021

@@ -1,9 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 use smearor_swipe_launcher_plugin_api::ActionBindings;
-use smearor_swipe_launcher_plugin_api::ActionKind;
 use smearor_swipe_launcher_plugin_api::DEFAULT_ICON_SIZE;
-use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
 
@@ -69,12 +67,5 @@ impl Default for VoiceAssistantWidgetConfig {
             icon_error: "nf-md-alert_circle".to_string(),
             actions: ActionBindings::default(),
         }
-    }
-}
-
-impl VoiceAssistantWidgetConfig {
-    /// Returns the binding for the given action kind as a `&dyn DispatchableBinding`.
-    pub fn binding_for_kind(&self, kind: ActionKind) -> &dyn DispatchableBinding {
-        self.actions.binding_for_kind(kind)
     }
 }

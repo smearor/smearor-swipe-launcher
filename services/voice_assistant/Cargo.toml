@@ -35,6 +35,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 shellexpand = { workspace = true }
 smearor-personalization-model = { path = "../../model/personalization" }
+smearor-doa-model = { path = "../../model/doa" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 text-processing-rs = { workspace = true }
 unicode-normalization = { workspace = true }
