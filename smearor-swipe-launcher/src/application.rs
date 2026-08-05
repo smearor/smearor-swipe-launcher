@@ -1201,8 +1201,21 @@ impl LauncherHost {
             return;
         }
 
-        // Broadcast to all instances (used by shared services for status updates)
+        // Broadcast to all instances and services (used by shared services for status updates).
+        // Services also need status messages for cross-service features like DoA VAD triggering
+        // and audio ducking. Services without a matching MessageHandler ignore the message.
         if target == "*" || (target.is_empty() && topic.ends_with(".status")) {
+            if topic.starts_with("service.") {
+                let service_ids: Vec<String> = self.service_manager.services.iter().map(|s| s.key().to_string()).collect();
+                for service_id in service_ids {
+                    if let Some(service) = self.service_manager.services.get(&service_id) {
+                        trace!("Forwarding status {} to service {}", topic, service_id);
+                        unsafe {
+                            service.on_message(envelope.clone());
+                        }
+                    }
+                }
+            }
             if let Ok(instances) = self.instances.lock() {
                 for instance in instances.values() {
                     instance.handle_message(envelope.clone());
