@@ -192,6 +192,7 @@ async fn run_doa_async(
     let (usb_control_sender, usb_control_receiver) = tokio::sync::mpsc::unbounded_channel::<UsbControl>();
 
     let rotation_offset = config.rotation_offset;
+    let ceiling_mode = config.ceiling_mode;
     let config_for_usb = config.clone();
     std::thread::spawn(move || {
         usb_reader_loop(config_for_usb, reading_sender, usb_control_receiver);
@@ -214,7 +215,12 @@ async fn run_doa_async(
             Some(reading) = reading_receiver.recv() => {
                 match reading {
                     DoaReading::Reading { angle, speech_detected, vendor_id, product_id } => {
-                        let calibrated_angle = (angle as i16 + rotation_offset).rem_euclid(360) as u16;
+                        let raw_angle = if ceiling_mode {
+                            (360 - angle as i16).rem_euclid(360)
+                        } else {
+                            angle as i16
+                        };
+                        let calibrated_angle = (raw_angle + rotation_offset).rem_euclid(360) as u16;
                         let direction = DoaDirection::from_angle(calibrated_angle);
                         let timestamp = current_timestamp();
                         {

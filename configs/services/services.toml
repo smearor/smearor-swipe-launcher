@@ -345,4 +345,5 @@ poll_interval_ms = 150
 mcp_enabled = true
 reconnect_delay_ms = 2000
 rotation_offset = 0
+ceiling_mode = true
 # product_id = 0x0021
