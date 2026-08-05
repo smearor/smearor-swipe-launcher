@@ -156,7 +156,8 @@ adw = { package = "libadwaita", version = "0.9.1" }
 clap = { version = "4.5", features = ["derive"] }
 cpal = "0.18.1"
 encoding_rs = "0.8"
-llama-cpp-4 = { version = "0.4.2" }
+# llama-cpp-4 = { version = "0.4.2" }
+llama-cpp-4 = { version = "0.5.1" }
 whisper-rs = { version = "0.16" }
 async-channel = "2.5"
 dashmap = "6.2.1"
@@ -173,7 +174,7 @@ hf-hub = "0.3"
 #hyprland = "0.3.13"
 hyprland = { git = "https://github.com/hyprland-community/hyprland-rs", branch = "master" }
 libpulse-binding = "2.30"
-libloading = "0.8"
+libloading = "0.9"
 miette = { version = "7.4", features = ["fancy"] }
 nerd_gtk_icons = "0.1.1"
 paste = "1.0"
@@ -197,7 +198,7 @@ moka = { version = "0.12", features = ["sync", "future"] }
 notify = "8"
 fastembed = "5.17"
 ndarray = "0.17"
-ort = { version = "=2.0.0-rc.12", default-features = true }
+ort = { version = "=2.0.0-rc.12" } # , default-features = true, features = ["load-dynamic"]
 rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = "0.4"
 which = "8.0"

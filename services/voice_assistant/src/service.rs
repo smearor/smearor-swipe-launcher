@@ -153,10 +153,10 @@ pub struct VoiceAssistantService {
     pub doa_angle: Arc<RwLock<u16>>,
     /// Latest mapped compass direction from DoA status.
     pub doa_direction: Arc<RwLock<smearor_doa_model::DoaDirection>>,
-    /// Cancellation token for the VAD grace period exit timer.
-    /// When speech resumes during the grace period, the sender is dropped
+    /// Cancellation source ID for the VAD grace period exit timer.
+    /// When speech resumes during the grace period, the source is removed
     /// to abort the pending deactivation.
-    pub vad_grace_cancel: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub vad_grace_cancel: Arc<Mutex<Option<glib::SourceId>>>,
 }
 
 impl VoiceAssistantService {
@@ -1408,8 +1408,8 @@ impl MessageHandler<FfiEnvelopePayload<smearor_doa_model::DoaStatusMessage>> for
             }
             // Cancel any pending grace period exit.
             if let Ok(mut cancel) = self.vad_grace_cancel.lock() {
-                if let Some(sender) = cancel.take() {
-                    let _ = sender.send(());
+                if let Some(source_id) = cancel.take() {
+                    source_id.remove();
                 }
             }
         } else if speech_detected && previous_speech {
@@ -1449,40 +1449,37 @@ impl MessageHandler<FfiEnvelopePayload<smearor_doa_model::DoaStatusMessage>> for
 
             // Cancel any existing grace period timer.
             if let Ok(mut cancel) = self.vad_grace_cancel.lock() {
-                if let Some(sender) = cancel.take() {
-                    let _ = sender.send(());
+                if let Some(source_id) = cancel.take() {
+                    source_id.remove();
                 }
             }
 
-            // Schedule a grace period exit.
+            // Schedule a grace period exit using glib timeout (runs on main context,
+            // no Tokio runtime required).
             let grace_period_ms = self.config.doa_vad.grace_period_ms;
             let active_clone = self.active.clone();
             let command_sender_clone = self.command_sender.clone();
-            let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
+            let vad_grace_cancel_clone = self.vad_grace_cancel.clone();
 
-            if let Ok(mut cancel) = self.vad_grace_cancel.lock() {
-                *cancel = Some(cancel_tx);
-            }
-
-            glib::MainContext::default().spawn_local(async move {
-                let timer = tokio::time::sleep(std::time::Duration::from_millis(grace_period_ms));
-                tokio::pin!(timer);
-
-                tokio::select! {
-                    _ = timer => {
-                        let is_active = active_clone.lock().map(|a| *a).unwrap_or(false);
-                        if is_active {
-                            debug!("Voice Assistant: DoA VAD grace period expired, deactivating listening mode");
-                            if let Some(sender) = &command_sender_clone {
-                                let _ = sender.send(smearor_voice_assistant_model::VoiceCommandMessage::deactivate());
-                            }
-                        }
-                    }
-                    _ = cancel_rx => {
-                        debug!("Voice Assistant: DoA VAD grace period cancelled (speech resumed)");
+            let source_id = glib::source::timeout_add_local(std::time::Duration::from_millis(grace_period_ms), move || {
+                // Clear the stored SourceId so the next rising edge doesn't
+                // try to remove an already-consumed source.
+                if let Ok(mut cancel) = vad_grace_cancel_clone.lock() {
+                    cancel.take();
+                }
+                let is_active = active_clone.lock().map(|a| *a).unwrap_or(false);
+                if is_active {
+                    debug!("Voice Assistant: DoA VAD grace period expired, deactivating listening mode");
+                    if let Some(sender) = &command_sender_clone {
+                        let _ = sender.send(smearor_voice_assistant_model::VoiceCommandMessage::deactivate());
                     }
                 }
+                glib::ControlFlow::Break
             });
+
+            if let Ok(mut cancel) = self.vad_grace_cancel.lock() {
+                *cancel = Some(source_id);
+            }
         }
 
         // Update previous speech detected state.
