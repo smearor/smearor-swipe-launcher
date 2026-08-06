@@ -941,10 +941,10 @@ If the service exposes MCP tools, implement `McpCapabilitiesRegistrator` and reg
 
 ```rust
 let doa_resource = RegisterResourceMessage::new(
-    "doa://status",
-    "DoA Sensor Status",
-    "Current Direction of Arrival angle, mapped direction, and device connection status.",
-    "application/json",
+"doa://status",
+"DoA Sensor Status",
+"Current Direction of Arrival angle, mapped direction, and device connection status.",
+"application/json",
 );
 broadcaster.broadcast_message_to_topic(doa_resource);
 ```
@@ -953,23 +953,23 @@ broadcaster.broadcast_message_to_topic(doa_resource);
 
 ```rust
 let get_direction_tool = RegisterToolMessage::new(
-    "doa_get_direction",
-    "Returns the current DoA angle (0-359), mapped compass direction (N/E/S/W), and device connection status.",
-    r#"{ "type": "object", "properties": {}, "required": [] }"#,
+"doa_get_direction",
+"Returns the current DoA angle (0-359), mapped compass direction (N/E/S/W), and device connection status.",
+r#"{ "type": "object", "properties": {}, "required": [] }"#,
 );
 broadcaster.broadcast_message_to_topic(get_direction_tool);
 
 let set_poll_interval_tool = RegisterToolMessage::new(
-    "doa_set_poll_interval",
-    "Sets the DoA polling interval in milliseconds. Lower values give more responsive direction updates but increase USB traffic. Minimum: 50ms.",
-    r#"{ "type": "object", "properties": { "interval_ms": { "type": "integer", "description": "Polling interval in milliseconds (min: 50, default: 150)" } }, "required": ["interval_ms"] }"#,
+"doa_set_poll_interval",
+"Sets the DoA polling interval in milliseconds. Lower values give more responsive direction updates but increase USB traffic. Minimum: 50ms.",
+r#"{ "type": "object", "properties": { "interval_ms": { "type": "integer", "description": "Polling interval in milliseconds (min: 50, default: 150)" } }, "required": ["interval_ms"] }"#,
 );
 broadcaster.broadcast_message_to_topic(set_poll_interval_tool);
 
 let reconnect_tool = RegisterToolMessage::new(
-    "doa_reconnect",
-    "Forces a USB reconnection to the ReSpeaker XVF3800 device. Use this if the device was unplugged and reconnected.",
-    r#"{ "type": "object", "properties": {}, "required": [] }"#,
+"doa_reconnect",
+"Forces a USB reconnection to the ReSpeaker XVF3800 device. Use this if the device was unplugged and reconnected.",
+r#"{ "type": "object", "properties": {}, "required": [] }"#,
 );
 broadcaster.broadcast_message_to_topic(reconnect_tool);
 ```
@@ -1242,10 +1242,10 @@ Use the centralized `attach_gesture_handlers` trait method:
 
 ```rust
 widget_self.attach_gesture_handlers(
-    &button_widget,
-    &config.actions,
-    &broadcaster,
-    &GestureHandlersConfiguration::default(),
+& button_widget,
+& config.actions,
+& broadcaster,
+& GestureHandlersConfiguration::default (),
 );
 ```
 
@@ -1397,18 +1397,18 @@ The Voice Assistant implements edge detection on the `speech_detected` flag:
 
 ```rust
 // In Voice Assistant's MessageHandler<DoaStatusMessage>
-let was_speaking = self.previous_speech_detected;
+let was_speaking = self .previous_speech_detected;
 let is_speaking = status.speech_detected;
 
-if !was_speaking && is_speaking {
-    // Rising edge — enter listening mode immediately
-    self.enter_listening_mode(status.calibrated_angle, status.direction);
-} else if was_speaking && !is_speaking {
-    // Falling edge — schedule exit after grace period
-    self.schedule_listening_exit(Duration::from_millis(self.grace_period_ms));
+if ! was_speaking & & is_speaking {
+// Rising edge — enter listening mode immediately
+self .enter_listening_mode(status.calibrated_angle, status.direction);
+} else if was_speaking & & ! is_speaking {
+// Falling edge — schedule exit after grace period
+self .schedule_listening_exit(Duration::from_millis( self .grace_period_ms));
 }
 
-self.previous_speech_detected = is_speaking;
+self .previous_speech_detected = is_speaking;
 ```
 
 #### System Aspects & Latency
@@ -1419,17 +1419,17 @@ self.previous_speech_detected = is_speaking;
   (e.g., 100 ms of continuous VAD activity) prevents unwanted activations:
 
 ```rust
-if !was_speaking && is_speaking {
-    self.vad_onset_timestamp = Some(Instant::now());
-} else if was_speaking && is_speaking {
-    // Confirm activation only after minimum duration
-    if let Some(onset) = self.vad_onset_timestamp {
-        if onset.elapsed() >= Duration::from_millis(self.min_speech_duration_ms) {
-            if !self.listening_active {
-                self.enter_listening_mode(status.calibrated_angle, status.direction);
-            }
-        }
-    }
+if ! was_speaking & & is_speaking {
+self .vad_onset_timestamp = Some(Instant::now());
+} else if was_speaking & & is_speaking {
+// Confirm activation only after minimum duration
+if let Some(onset) = self .vad_onset_timestamp {
+if onset.elapsed() > = Duration::from_millis( self.min_speech_duration_ms) {
+if ! self.listening_active {
+self.enter_listening_mode(status.calibrated_angle, status.direction);
+}
+}
+}
 }
 ```
 
@@ -1464,42 +1464,42 @@ The Audio Service implements edge detection on the `speech_detected` flag, analo
 
 ```rust
 // In Audio Service's MessageHandler<DoaStatusMessage>
-if !self.vad_ducking_enabled {
-    return;
+if ! self .vad_ducking_enabled {
+return;
 }
 
-let was_speaking = self.previous_speech_detected;
+let was_speaking = self .previous_speech_detected;
 let is_speaking = status.speech_detected;
 
-if !was_speaking && is_speaking {
-    // Rising edge — record onset timestamp, confirm duck after min duration
-    self.vad_onset_timestamp = Some(Instant::now());
-    self.cancel_volume_restore();
-    // Duck immediately if no chatter guard, or confirm after min_speech_duration_ms
-    if self.min_speech_duration_ms == 0 {
-        self.duck_playback_streams(self.duck_level_percent);
-    }
-} else if was_speaking && is_speaking {
-    // Continuous speech — confirm duck after min duration threshold
-    if !self.is_ducked {
-        if let Some(onset) = self.vad_onset_timestamp {
-            if onset.elapsed() >= Duration::from_millis(self.min_speech_duration_ms) {
-                self.duck_playback_streams(self.duck_level_percent);
-            }
-        }
-    }
-} else if was_speaking && !is_speaking {
-    // Falling edge — schedule restore after grace period with fade ramp
-    self.vad_onset_timestamp = None;
-    if self.is_ducked {
-        self.schedule_volume_restore(
-            Duration::from_millis(self.audio_grace_period_ms),
-            Duration::from_millis(self.fade_ramp_ms),
-        );
-    }
+if ! was_speaking & & is_speaking {
+// Rising edge — record onset timestamp, confirm duck after min duration
+self .vad_onset_timestamp = Some(Instant::now());
+self .cancel_volume_restore();
+// Duck immediately if no chatter guard, or confirm after min_speech_duration_ms
+if self .min_speech_duration_ms == 0 {
+self.duck_playback_streams( self.duck_level_percent);
+}
+} else if was_speaking & & is_speaking {
+// Continuous speech — confirm duck after min duration threshold
+if ! self .is_ducked {
+if let Some(onset) = self.vad_onset_timestamp {
+if onset.elapsed() > = Duration::from_millis( self.min_speech_duration_ms) {
+self.duck_playback_streams( self.duck_level_percent);
+}
+}
+}
+} else if was_speaking & & ! is_speaking {
+// Falling edge — schedule restore after grace period with fade ramp
+self .vad_onset_timestamp = None;
+if self .is_ducked {
+self .schedule_volume_restore(
+Duration::from_millis( self .audio_grace_period_ms),
+Duration::from_millis( self .fade_ramp_ms),
+);
+}
 }
 
-self.previous_speech_detected = is_speaking;
+self .previous_speech_detected = is_speaking;
 ```
 
 #### Stream Selection
@@ -1634,27 +1634,37 @@ PipeWire, the XMOS DSP processes this stream internally as a Far-End Reference f
    of the 4 PDM microphones. This keeps the processed USB capture stream clean, and the VAD register (`0x0016` / `speech_detected`) does not trigger on the
    assistant's own TTS output.
 
-**PipeWire combine-sink configuration:**
+**PipeWire combine-stream configuration (PipeWire 1.6+):**
+
+The deprecated `libpipewire-module-combine-sink` was replaced by `libpipewire-module-combine-stream` in PipeWire 1.6+. The new module uses `stream.rules` with
+match-based routing instead of `combine.children`.
 
 ```conf
 # ~/.config/pipewire/pipewire.conf.d/99-respeaker-aec.conf
 
 context.modules = [
-    {   name = libpipewire-module-combine-sink
+    {   name = libpipewire-module-combine-stream
         args = {
             combine.mode = sink
-            sink.name = "aec_speaker_combined"
-            sink.properties = {
-                node.description = "Audio Output with ReSpeaker XVF3800 AEC Feed"
+            node.name = "aec_speaker_combined"
+            node.description = "Audio Output with ReSpeaker XVF3800 AEC Feed"
+            combine.props = {
+                audio.channels = 2
+                audio.position = [ FL FR ]
             }
-            combine.children = [
+            stream.props = {}
+            stream.rules = [
                 {
-                    # Primary speaker output (main audio)
-                    node.name = "alsa_output.pci-0000_00_1f.3.analog-stereo"
+                    matches = [
+                        { media.class = "Audio/Sink" node.name = "alsa_output.pci-0000_03_00.1.hdmi-stereo" }
+                    ]
+                    actions = { create-stream = {} }
                 }
                 {
-                    # ReSpeaker XVF3800 USB Playback (AEC Far-End Reference)
-                    node.name = "alsa_output.usb-SEEED_ReSpeaker_XVF3800-00.analog-stereo"
+                    matches = [
+                        { media.class = "Audio/Sink" node.name = "alsa_output.usb-Seeed_Studio_reSpeaker_XVF3800_4-Mic_Array_114993701262100698-00.analog-stereo" }
+                    ]
+                    actions = { create-stream = {} }
                 }
             ]
         }
@@ -1662,12 +1672,25 @@ context.modules = [
 ]
 ```
 
+**Setup steps:**
+
+1. Ensure the ReSpeaker XVF3800 card profile is set to a duplex profile with playback (e.g., `output:analog-stereo+input:analog-stereo`), otherwise no sink node
+   is created:
+   ```bash
+   pactl set-card-profile alsa_card.usb-Seeed_Studio_reSpeaker_XVF3800_4-Mic_Array_<serial>-00 output:analog-stereo+input:analog-stereo
+   ```
+2. Verify both sinks appear in `pactl list short sinks`.
+3. Place the config file in `~/.config/pipewire/pipewire.conf.d/99-respeaker-aec.conf`.
+4. Restart PipeWire: `systemctl --user restart pipewire pipewire-pulse`.
+5. Set the combine sink as default: `pactl set-default-sink aec_speaker_combined`.
+6. Set `aec_mirroring_enabled = true` in the Voice Assistant config to disable the software TTS mute window fallback.
+
 **Practical notes for PipeWire mirroring:**
 
 - **Independent of physical output**: It makes no difference to the XMOS DSP whether sound is actually played through the ReSpeaker's jack or through external
   monitors (DP/HDMI). As long as the audio data reaches the XVF3800's USB endpoint, the mathematical cancellation works.
 - **Latency synchronicity**: The signal sent to the main output (e.g., monitor) and the mirrored signal to the XVF3800 should arrive at the DSP largely
-  synchronously. PipeWire's `libpipewire-module-combine-sink` provides precise buffer synchronization by default.
+  synchronously. PipeWire's `libpipewire-module-combine-stream` provides precise buffer synchronization by default.
 - **Undistorted reference signal**: The mirrored reference signal must not be altered by software equalizers or dynamic compressors, as the XMOS firmware's
   adaptive filter model would deviate and fail to fully resolve the echo.
 
@@ -1681,22 +1704,22 @@ The Voice Assistant sets a `tts_active` flag during TTS output plus a holdover p
 
 ```rust
 // In Voice Assistant's MessageHandler<DoaStatusMessage>
-if self.tts_active {
-    // Ignore VAD during TTS playback — AEC may not be available
-    // if TTS routes through a different output device.
-    self.previous_speech_detected = status.speech_detected;
-    return;
+if self .tts_active {
+// Ignore VAD during TTS playback — AEC may not be available
+// if TTS routes through a different output device.
+self .previous_speech_detected = status.speech_detected;
+return;
 }
 
-let was_speaking = self.previous_speech_detected;
+let was_speaking = self .previous_speech_detected;
 let is_speaking = status.speech_detected;
 
-if !was_speaking && is_speaking {
-    self.enter_listening_mode(status.calibrated_angle, status.direction);
+if ! was_speaking & & is_speaking {
+self .enter_listening_mode(status.calibrated_angle, status.direction);
 }
 // ... normal edge detection logic ...
 
-self.previous_speech_detected = is_speaking;
+self .previous_speech_detected = is_speaking;
 ```
 
 The `tts_active` flag is set when TTS synthesis begins and cleared 300 ms after the TTS audio buffer finishes playback, accounting for output latency and room
@@ -1709,14 +1732,14 @@ volume during TTS, the `tts_active` flag can be used to suppress ducking:
 
 ```rust
 // In Audio Service's MessageHandler<DoaStatusMessage>
-if !self.vad_ducking_enabled {
-    return;
+if ! self .vad_ducking_enabled {
+return;
 }
 
 // If TTS is active and user configured no-duck-during-TTS, skip ducking
-if self.tts_active && !self.duck_during_tts {
-    self.previous_speech_detected = status.speech_detected;
-    return;
+if self .tts_active & & ! self .duck_during_tts {
+self .previous_speech_detected = status.speech_detected;
+return;
 }
 
 // ... normal ducking edge detection logic ...
