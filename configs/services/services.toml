@@ -328,7 +328,7 @@ enabled = true
 grace_period_ms = 400
 min_speech_duration_ms = 100
 skip_wake_word_on_vad = true
-aec_mirroring_enabled = false
+aec_mirroring_enabled = true
 tts_mute_holdover_ms = 300
 
 [audio.ducking]
