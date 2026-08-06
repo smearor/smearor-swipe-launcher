@@ -2,6 +2,7 @@ pub(crate) mod audio;
 #[cfg(test)]
 pub(crate) mod benchmark;
 pub(crate) mod catalog_router;
+pub(crate) mod compound_trie;
 pub(crate) mod config;
 pub(crate) mod embedding_engine;
 pub(crate) mod gpu_detection;

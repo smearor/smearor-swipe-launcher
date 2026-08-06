@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
@@ -17,6 +18,14 @@ use text_processing_rs::tn_normalize_lang;
 use tracing::debug;
 use tracing::warn;
 use unicode_normalization::UnicodeNormalization;
+
+use crate::compound_trie::CompoundTrie;
+use crate::compound_trie::build_german_compound_trie;
+
+fn german_compound_trie() -> &'static CompoundTrie {
+    static TRIE: OnceLock<CompoundTrie> = OnceLock::new();
+    TRIE.get_or_init(build_german_compound_trie)
+}
 
 /// Errors that can occur during TTS synthesis or playback.
 #[derive(Clone, Debug, thiserror::Error)]
@@ -372,9 +381,12 @@ impl TtsEngine {
     /// to `tn_normalize_lang` with the appropriate language. Non-matching
     /// text is left untouched.
     ///
-    /// German compound words that espeak-ng mispronounces are wrapped in
-    /// SSML `<sub alias="...">` tags so the engine speaks the alias text
-    /// instead of trying to decompose the compound.
+    /// German compound words that espeak-ng mispronounces are decomposed
+    /// via a Trie-based stem lookup and wrapped in SSML `<sub alias="...">`
+    /// tags so the engine speaks the decomposition.
+    ///
+    /// Sentence boundaries (`.` `!` `?`) are followed by an SSML `<break>`
+    /// tag for more natural speech rhythm.
     ///
     /// Times (`10:30`), hyphens between letters (`well-known`), and
     /// dotted version numbers (`1.2.3`) are handled natively by espeak-ng
@@ -417,22 +429,69 @@ impl TtsEngine {
         }
         result.push_str(&text[last_end..]);
 
-        // Wrap German compound words in SSML <sub alias="..."> tags so
-        // espeak-ng speaks the decomposition instead of producing garbage
-        // phonemes (e.g. "Luftqualität" → "Luft Luft").
+        // Decompose German compound words via Trie and wrap in SSML <sub alias>.
         if lang == "de" {
-            let compound_subs: &[(&str, &str)] = &[
-                ("Luftqualität", "Luft Qualität"),
-                ("Luftfeuchtigkeit", "Luft Feuchtigkeit"),
-                ("Luftfeuchte", "Luft Feuchte"),
-            ];
-            for &(original, alias) in compound_subs {
-                let replacement = format!("<sub alias=\"{}\">{}</sub>", alias, original);
-                result = result.replace(original, &replacement);
-            }
+            result = Self::wrap_german_compounds(&result);
         }
 
+        // Insert SSML <break> after sentence boundaries for natural rhythm.
+        result = Self::insert_sentence_breaks(&result);
+
         result
+    }
+
+    /// Find German compound words in the text and wrap them in SSML
+    /// `<sub alias="...">` tags using Trie-based decomposition.
+    /// Only words of 6+ characters that are not already inside SSML tags
+    /// are considered.
+    fn wrap_german_compounds(text: &str) -> String {
+        let word_re = Regex::new(r"\b[A-ZÄÖÜ][a-zäöüß]{5,}\b").expect("compound word regex should compile");
+
+        let mut result = String::with_capacity(text.len());
+        let mut last_end = 0;
+
+        for mat in word_re.find_iter(text) {
+            // Check if we're inside an SSML tag — skip if so.
+            let before = &text[last_end..mat.start()];
+            let open_tags = before.matches('<').count();
+            let close_tags = before.matches('>').count();
+            if open_tags > close_tags {
+                // Inside an SSML tag attribute or content — skip.
+                result.push_str(&text[last_end..mat.end()]);
+                last_end = mat.end();
+                continue;
+            }
+
+            result.push_str(&text[last_end..mat.start()]);
+            let word = mat.as_str();
+
+            if let Some(parts) = german_compound_trie().decompose(word) {
+                let alias = parts
+                    .iter()
+                    .map(|p| {
+                        let mut chars = p.chars();
+                        match chars.next() {
+                            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                            None => String::new(),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                result.push_str(&format!("<sub alias=\"{}\">{}</sub>", alias, word));
+            } else {
+                result.push_str(word);
+            }
+            last_end = mat.end();
+        }
+        result.push_str(&text[last_end..]);
+        result
+    }
+
+    /// Insert SSML `<break time="300ms"/>` after sentence-ending punctuation
+    /// (`. `, `! `, `? `) for more natural speech rhythm.
+    fn insert_sentence_breaks(text: &str) -> String {
+        let sentence_re = Regex::new(r"([.!?])\s+").expect("sentence break regex should compile");
+        sentence_re.replace_all(text, "$1<break time=\"300ms\"/> ").to_string()
     }
 
     /// Converts text to phoneme token IDs using espeak-ng.
@@ -900,5 +959,71 @@ mod tests {
             )
             .unwrap();
         assert!(!ipa.is_empty(), "IPA for SSML <say-as characters> should not be empty");
+    }
+
+    /// Verifies that the Trie-based compound decomposition correctly
+    /// wraps "Luftqualität" in an SSML <sub alias> tag.
+    #[test]
+    fn test_trie_decompose_luftqualitaet_ssml() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ssml = "<sub alias=\"Luft Qualität\">Luftqualität</sub>";
+        let ipa = engine
+            .text_to_phonemes_with_options(
+                ssml,
+                espeak_ng::TextToPhonemesOptions {
+                    preserve_punctuation: true,
+                    flatten_clauses: true,
+                    markup: true,
+                },
+            )
+            .unwrap();
+        assert!(!ipa.is_empty(), "IPA for Trie-decomposed compound should not be empty");
+    }
+
+    /// Verifies that sentence breaks insert <break> tags correctly.
+    #[test]
+    fn test_insert_sentence_breaks() {
+        let input = "Hallo. Wie geht es dir?";
+        let result = TtsEngine::insert_sentence_breaks(input);
+        assert!(result.contains("<break time=\"300ms\"/>"), "Should contain break tag after sentence");
+    }
+
+    /// Verifies that wrap_german_compounds produces SSML for known compounds.
+    #[test]
+    fn test_wrap_german_compounds_luftfeuchtigkeit() {
+        let input = "Die Luftfeuchtigkeit ist 65 Prozent.";
+        let result = TtsEngine::wrap_german_compounds(input);
+        assert!(
+            result.contains("<sub alias=\"Luft Feuchtigkeit\">Luftfeuchtigkeit</sub>"),
+            "Should wrap Luftfeuchtigkeit in SSML <sub alias>"
+        );
+    }
+
+    /// Verifies that wrap_german_compounds does not wrap non-compound words.
+    #[test]
+    fn test_wrap_german_compounds_non_compound() {
+        let input = "Das Wetter ist schön.";
+        let result = TtsEngine::wrap_german_compounds(input);
+        assert!(!result.contains("<sub"), "Should not wrap non-compound words");
+    }
+
+    /// Verifies that SSML <break> with time attribute works in synthesis.
+    #[test]
+    fn test_ssml_break_with_time() {
+        TtsEngine::ensure_espeak_data();
+        let engine = EspeakNg::new("de").expect("should create espeak-ng engine");
+        let ssml = "Hallo.<break time=\"300ms\"/> Wie geht es dir?";
+        let ipa = engine
+            .text_to_phonemes_with_options(
+                ssml,
+                espeak_ng::TextToPhonemesOptions {
+                    preserve_punctuation: true,
+                    flatten_clauses: true,
+                    markup: true,
+                },
+            )
+            .unwrap();
+        assert!(!ipa.is_empty(), "IPA for SSML <break time> should not be empty");
     }
 }
