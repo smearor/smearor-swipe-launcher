@@ -54,6 +54,8 @@ pub enum VoiceAssistantMcpTools {
     DisableWakeWord,
     /// Set the wake word model and optional threshold.
     SetWakeWordModel,
+    /// Speak text directly via TTS, bypassing the LLM.
+    Speak,
 }
 
 impl AsRef<str> for VoiceAssistantMcpTools {
@@ -82,6 +84,7 @@ impl AsRef<str> for VoiceAssistantMcpTools {
             Self::EnableWakeWord => "voice_assistant_enable_wake_word",
             Self::DisableWakeWord => "voice_assistant_disable_wake_word",
             Self::SetWakeWordModel => "voice_assistant_set_wake_word_model",
+            Self::Speak => "voice_assistant_speak",
         }
     }
 }
@@ -114,6 +117,7 @@ impl FromStr for VoiceAssistantMcpTools {
             "voice_assistant_enable_wake_word" => Ok(Self::EnableWakeWord),
             "voice_assistant_disable_wake_word" => Ok(Self::DisableWakeWord),
             "voice_assistant_set_wake_word_model" => Ok(Self::SetWakeWordModel),
+            "voice_assistant_speak" => Ok(Self::Speak),
             _ => Err(UnknownToolError::new(tool)),
         }
     }

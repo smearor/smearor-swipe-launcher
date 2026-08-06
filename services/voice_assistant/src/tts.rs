@@ -345,7 +345,8 @@ impl TtsEngine {
             } else {
                 pcm_f32
             };
-            self.play_audio(resampled).await?;
+            let padded = Self::pad_leading_silence(resampled, cpal_sample_rate as u32);
+            self.play_audio(padded).await?;
             return Ok(());
         }
 
@@ -365,9 +366,10 @@ impl TtsEngine {
             pcm_samples
         };
 
-        // 4. Stream PCM samples to cpal output device.
-        debug!("Voice Assistant TTS: playing {} samples on cpal output device", resampled.len());
-        self.play_audio(resampled).await?;
+        // 4. Pad leading silence to let cpal stream ramp up, then play.
+        let padded = Self::pad_leading_silence(resampled, cpal_sample_rate as u32);
+        debug!("Voice Assistant TTS: playing {} samples on cpal output device", padded.len());
+        self.play_audio(padded).await?;
         debug!("Voice Assistant TTS: playback completed");
 
         Ok(())
@@ -394,11 +396,17 @@ impl TtsEngine {
     fn preprocess_text_for_tts(&self, text: &str) -> String {
         let lang = if self.language.starts_with("de") { "de" } else { "en" };
 
-        let re = Regex::new(r"\d{1,2}\.\d{1,2}\.\d{4}|\d+(?:[.,]\d+)?\s*(?:km/h|m/s|°C|°F|€|%)|\d+(?:[.,]\d+)?").expect("TN span regex should compile");
+        let re = match Regex::new(r"\d{1,2}\.\d{1,2}\.\d{4}|\d+(?:[.,]\d+)?\s*(?:km/h|m/s|°C|°F|€|%)|\d+(?:[.,]\d+)?") {
+            Ok(r) => r,
+            Err(_) => return text.to_string(),
+        };
 
         let mut result = String::new();
         let mut last_end = 0;
-        let date_re = Regex::new(r"^\d{1,2}\.\d{1,2}\.\d{4}$").expect("date check regex should compile");
+        let date_re = match Regex::new(r"^\d{1,2}\.\d{1,2}\.\d{4}$") {
+            Ok(r) => r,
+            Err(_) => return text.to_string(),
+        };
         for mat in re.find_iter(text) {
             result.push_str(&text[last_end..mat.start()]);
             let span = mat.as_str();
@@ -429,6 +437,11 @@ impl TtsEngine {
         }
         result.push_str(&text[last_end..]);
 
+        // Sanitize text to work around espeak-ng prefix duplication bugs:
+        // - Hyphens between words (Audio-bezogene) cause prefix stuttering
+        // - Colons/semicolons directly after words (gefunden:) cause prefix doubling
+        result = Self::sanitize_espeak_text(&result);
+
         // Decompose German compound words via Trie and wrap in SSML <sub alias>.
         if lang == "de" {
             result = Self::wrap_german_compounds(&result);
@@ -440,12 +453,43 @@ impl TtsEngine {
         result
     }
 
+    /// Sanitizes text to work around espeak-ng prefix duplication bugs.
+    ///
+    /// espeak-ng's G2P state machine has two known triggers that cause
+    /// prefix syllable doubling (ge→gege, be→bebe, an→anan):
+    ///
+    /// 1. **Hyphens between words** ("Audio-bezogene") confuse the lookahead
+    ///    parser, causing the following word's prefix to be evaluated twice.
+    ///    Fix: replace hyphens between word characters with spaces.
+    ///
+    /// 2. **Colons/semicolons directly after a word** ("gefunden:") cause
+    ///    the prefix to be doubled during phonemization.
+    ///    Fix: replace with a period followed by a space.
+    fn sanitize_espeak_text(text: &str) -> String {
+        static HYPHEN_RE: OnceLock<Option<Regex>> = OnceLock::new();
+        static COLON_RE: OnceLock<Option<Regex>> = OnceLock::new();
+        let hyphen_re = HYPHEN_RE.get_or_init(|| Regex::new(r"(\p{L})-(\p{L})").ok());
+        let colon_re = COLON_RE.get_or_init(|| Regex::new(r"(\p{L})[:;](\s|$)").ok());
+
+        let result = match hyphen_re {
+            Some(re) => re.replace_all(text, "$1 $2").to_string(),
+            None => text.to_string(),
+        };
+        match colon_re {
+            Some(re) => re.replace_all(&result, "$1.$2").to_string(),
+            None => result,
+        }
+    }
+
     /// Find German compound words in the text and wrap them in SSML
     /// `<sub alias="...">` tags using Trie-based decomposition.
     /// Only words of 6+ characters that are not already inside SSML tags
     /// are considered.
     fn wrap_german_compounds(text: &str) -> String {
-        let word_re = Regex::new(r"\b[A-ZÄÖÜ][a-zäöüß]{5,}\b").expect("compound word regex should compile");
+        let word_re = match Regex::new(r"\b[A-ZÄÖÜ][a-zäöüß]{5,}\b") {
+            Ok(r) => r,
+            Err(_) => return text.to_string(),
+        };
 
         let mut result = String::with_capacity(text.len());
         let mut last_end = 0;
@@ -490,7 +534,10 @@ impl TtsEngine {
     /// Insert SSML `<break time="300ms"/>` after sentence-ending punctuation
     /// (`. `, `! `, `? `) for more natural speech rhythm.
     fn insert_sentence_breaks(text: &str) -> String {
-        let sentence_re = Regex::new(r"([.!?])\s+").expect("sentence break regex should compile");
+        let sentence_re = match Regex::new(r"([.!?])\s+") {
+            Ok(r) => r,
+            Err(_) => return text.to_string(),
+        };
         sentence_re.replace_all(text, "$1<break time=\"300ms\"/> ").to_string()
     }
 
@@ -634,6 +681,19 @@ impl TtsEngine {
         Ok(data.to_vec())
     }
 
+    /// Prepends silence to the PCM buffer to prevent truncation of the first words.
+    ///
+    /// cpal needs time to start the audio stream after `build_output_stream` + `play()`.
+    /// Without leading silence, the first samples are consumed before audio output
+    /// actually begins, causing the first few words to be inaudible.
+    fn pad_leading_silence(samples: Vec<f32>, sample_rate: u32) -> Vec<f32> {
+        let silence_samples = (sample_rate as f64 * 0.2) as usize;
+        let mut padded = Vec::with_capacity(silence_samples + samples.len());
+        padded.extend(std::iter::repeat_n(0.0f32, silence_samples));
+        padded.extend(samples);
+        padded
+    }
+
     /// Resamples PCM samples from one sample rate to another using linear interpolation.
     fn resample(samples: Vec<f32>, from_rate: u32, to_rate: u32) -> Vec<f32> {
         if from_rate == to_rate || samples.is_empty() {
@@ -755,6 +815,10 @@ impl TtsEngine {
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
+
+        // Wait for cpal to finish playing the remaining samples in the hardware buffer.
+        // Without this delay, dropping the stream immediately truncates the last word.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
         // Drop the stream to stop audio output.
         drop(stream);

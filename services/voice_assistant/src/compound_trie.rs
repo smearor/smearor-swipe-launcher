@@ -244,4 +244,14 @@ mod tests {
         assert_eq!(parts[0], "Regen");
         assert!(parts.last().unwrap().ends_with("keit"), "Last part should end with keit");
     }
+
+    #[test]
+    fn test_decompose_anwendungen() {
+        let trie = build_german_compound_trie();
+        let result = trie.decompose("Anwendungen");
+        assert!(result.is_some(), "Anwendungen should decompose");
+        let parts = result.unwrap();
+        assert_eq!(parts[0], "An");
+        assert_eq!(parts[1], "wendungen");
+    }
 }

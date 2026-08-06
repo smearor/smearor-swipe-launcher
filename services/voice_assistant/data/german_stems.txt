@@ -1,5 +1,6 @@
 Abend
 Alarm
+An
 Anzeige
 Arbeit
 Audio
@@ -146,6 +147,7 @@ Vogel
 Volumen
 Vorfall
 Warnung
+Wendung
 Wahr
 Wasser
 Welt

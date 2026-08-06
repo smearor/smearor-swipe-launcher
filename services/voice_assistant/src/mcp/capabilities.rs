@@ -266,5 +266,12 @@ impl McpCapabilitiesRegistrator for VoiceAssistantService {
             r#"{ "type": "object", "properties": { "model": { "type": "string", "description": "Wake word model name: Alexa, HeyMycroft, or Custom" }, "threshold": { "type": "number", "description": "Detection threshold (0.0-1.0). Lower = more sensitive. Optional." } }, "required": ["model"] }"#,
         );
         broadcaster.broadcast_message_to_topic(set_wake_word_model_tool);
+
+        let speak_tool = RegisterToolMessage::new(
+            "voice_assistant_speak",
+            "Speaks the given text directly via TTS, bypassing the LLM. The text is not processed by the voice pipeline — it is synthesized and played back immediately.",
+            r#"{ "type": "object", "properties": { "text": { "type": "string", "description": "The text to speak via TTS" } }, "required": ["text"] }"#,
+        );
+        broadcaster.broadcast_message_to_topic(speak_tool);
     }
 }

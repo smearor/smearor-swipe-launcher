@@ -505,6 +505,56 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 let response = InvokeToolResponse::success(&message.0.correlation_id, &msg);
                 broadcaster.broadcast_message_to_topic(response);
             }
+            VoiceAssistantMcpTools::Speak => {
+                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
+                let text = args.get("text").and_then(|v| v.as_str()).map(|s| s.to_string());
+                match text {
+                    Some(text) if !text.is_empty() => {
+                        let tts_engine = self.tts_engine.clone();
+                        let is_speaking = self.is_speaking.clone();
+                        let correlation_id = message.0.correlation_id.clone();
+                        match tts_engine {
+                            Some(tts) => {
+                                let response = InvokeToolResponse::success(&correlation_id, &format!("Speaking: {text}"));
+                                broadcaster.broadcast_message_to_topic(response);
+                                std::thread::spawn(move || {
+                                    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
+                                    match runtime {
+                                        Ok(runtime) => {
+                                            runtime.block_on(async move {
+                                                if let Ok(mut speaking) = is_speaking.lock() {
+                                                    *speaking = true;
+                                                }
+                                                if let Err(error) = tts.speak(&text).await {
+                                                    error!("Voice Assistant: speak tool TTS failed: {error}");
+                                                }
+                                                if let Ok(mut speaking) = is_speaking.lock() {
+                                                    *speaking = false;
+                                                }
+                                            });
+                                        }
+                                        Err(error) => {
+                                            error!("Voice Assistant: failed to create runtime for speak tool: {error}");
+                                        }
+                                    }
+                                });
+                            }
+                            None => {
+                                let response = InvokeToolResponse::error(&correlation_id, "TTS engine not initialized");
+                                broadcaster.broadcast_message_to_topic(response);
+                            }
+                        }
+                    }
+                    Some(_) => {
+                        let response = InvokeToolResponse::error(&message.0.correlation_id, "text must not be empty");
+                        broadcaster.broadcast_message_to_topic(response);
+                    }
+                    None => {
+                        let response = InvokeToolResponse::error(&message.0.correlation_id, "Missing required parameter: text");
+                        broadcaster.broadcast_message_to_topic(response);
+                    }
+                }
+            }
         }
     }
 }
