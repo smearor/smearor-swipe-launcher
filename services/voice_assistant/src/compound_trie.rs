@@ -65,6 +65,10 @@ impl CompoundTrie {
     /// Handles the German linking morpheme "s" (Fugen-s) between stems:
     /// "Arbeitsschutz" → "Arbeit" + "s" (skip) + "Schutz".
     /// Also handles "n" and "e" linking morphemes.
+    ///
+    /// Trailing inflectional endings (-en, -er, -e, -es, -em, -n, -s) are
+    /// accepted as valid word-final suffixes so that inflected forms like
+    /// "Tiefstwerten" decompose into "Tiefst" + "Wert" + "en".
     pub fn decompose(&self, word: &str) -> Option<Vec<String>> {
         if word.len() < 6 {
             return None;
@@ -93,11 +97,24 @@ impl CompoundTrie {
                     }
                 }
             } else {
+                let remaining_str: String = remaining.iter().collect();
+                if parts.len() >= 2 && Self::is_inflectional_ending(&remaining_str) {
+                    if let Some(last) = parts.last_mut() {
+                        last.push_str(&remaining_str);
+                    }
+                    break;
+                }
                 return None;
             }
         }
 
         if parts.len() >= 2 { Some(parts) } else { None }
+    }
+
+    /// Check if `suffix` is a common German noun inflectional ending
+    /// or noun-building suffix.
+    fn is_inflectional_ending(suffix: &str) -> bool {
+        matches!(suffix, "en" | "er" | "e" | "es" | "em" | "n" | "s" | "keit" | "heit" | "ung" | "ig")
     }
 
     /// Find the longest known stem starting at the beginning of `chars`.
@@ -197,5 +214,34 @@ mod tests {
         assert!(result.is_some(), "Temperaturmessung should decompose");
         let parts = result.unwrap();
         assert_eq!(parts[0], "Temperatur");
+    }
+
+    #[test]
+    fn test_decompose_tiefstwerten() {
+        let trie = build_german_compound_trie();
+        let result = trie.decompose("Tiefstwerten");
+        assert!(result.is_some(), "Tiefstwerten should decompose with inflectional ending");
+        let parts = result.unwrap();
+        assert!(parts.contains(&"Tiefst".to_string()), "Should contain Tiefst");
+        assert!(parts.contains(&"werten".to_string()), "Should contain werten (with inflectional ending)");
+    }
+
+    #[test]
+    fn test_decompose_hoechstwerten() {
+        let trie = build_german_compound_trie();
+        let result = trie.decompose("Höchstwerten");
+        assert!(result.is_some(), "Höchstwerten should decompose with inflectional ending");
+        let parts = result.unwrap();
+        assert!(parts.contains(&"Höchst".to_string()), "Should contain Höchst");
+    }
+
+    #[test]
+    fn test_decompose_regenwahrscheinlichkeit() {
+        let trie = build_german_compound_trie();
+        let result = trie.decompose("Regenwahrscheinlichkeit");
+        assert!(result.is_some(), "Regenwahrscheinlichkeit should decompose");
+        let parts = result.unwrap();
+        assert_eq!(parts[0], "Regen");
+        assert!(parts.last().unwrap().ends_with("keit"), "Last part should end with keit");
     }
 }
