@@ -38,6 +38,7 @@ Haupt
 Haus
 Herbst
 Hitze
+Höchst
 Höhe
 Hunger
 Karte
@@ -62,6 +63,7 @@ Licht
 Liebe
 Link
 Liste
+Lich
 Luft
 Macht
 Maß
@@ -127,6 +129,7 @@ Suche
 System
 Tastatur
 Teil
+Tiefst
 Temperatur
 Text
 Tonne
@@ -143,8 +146,10 @@ Vogel
 Volumen
 Vorfall
 Warnung
+Wahr
 Wasser
 Welt
+Wert
 Werk
 Wetter
 Widerstand
