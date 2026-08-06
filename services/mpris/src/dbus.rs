@@ -32,8 +32,22 @@ trait Player {
     #[zbus(property, name = "Position")]
     fn position(&self) -> zbus::Result<i64>;
 
+    #[zbus(property, name = "LoopStatus")]
+    fn loop_status(&self) -> zbus::Result<String>;
+    #[zbus(property, name = "LoopStatus")]
+    fn set_loop_status(&self, value: &str) -> zbus::Result<()>;
+
+    #[zbus(property, name = "Shuffle")]
+    fn shuffle(&self) -> zbus::Result<bool>;
+    #[zbus(property, name = "Shuffle")]
+    fn set_shuffle(&self, value: bool) -> zbus::Result<()>;
+
+    fn seek(&self, offset: i64) -> zbus::Result<()>;
+    fn set_position(&self, track_id: &str, position: i64) -> zbus::Result<()>;
+
     fn play(&self) -> zbus::Result<()>;
     fn pause(&self) -> zbus::Result<()>;
+    fn stop(&self) -> zbus::Result<()>;
     fn play_pause(&self) -> zbus::Result<()>;
     fn next(&self) -> zbus::Result<()>;
     fn previous(&self) -> zbus::Result<()>;
@@ -150,9 +164,27 @@ async fn send_player_command(conn: &Connection, bus_name: &str, command: &MprisC
                         proxy.play().await?;
                     }
                 }
-                MprisCommand::Stop => proxy.pause().await?,
+                MprisCommand::Stop => proxy.stop().await?,
                 MprisCommand::NextTrack => proxy.next().await?,
                 MprisCommand::PreviousTrack => proxy.previous().await?,
+                MprisCommand::Seek(offset) => proxy.seek(*offset).await?,
+                MprisCommand::SetPosition(pos) => {
+                    let track_id = "/org/mpris/MediaPlayer2";
+                    proxy.set_position(track_id, *pos).await?;
+                }
+                MprisCommand::CycleLoop => {
+                    let current = proxy.loop_status().await.unwrap_or_else(|_| "None".to_string());
+                    let next = match current.as_str() {
+                        "None" => "Track",
+                        "Track" => "Playlist",
+                        _ => "None",
+                    };
+                    proxy.set_loop_status(next).await?;
+                }
+                MprisCommand::ToggleShuffle => {
+                    let current = proxy.shuffle().await.unwrap_or(false);
+                    proxy.set_shuffle(!current).await?;
+                }
                 _ => {}
             }
         }

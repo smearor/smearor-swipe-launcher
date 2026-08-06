@@ -221,11 +221,15 @@ impl MprisWidget {
                     }
 
                     let title_text = if status.has_player {
-                        status
-                            .metadata
-                            .as_ref()
-                            .and_then(|m| if m.title.is_empty() { None } else { Some(m.title.as_str()) })
-                            .unwrap_or(MprisLabel::Playing.localized_label(locale))
+                        match status.playback_status {
+                            MprisPlaybackStatus::Paused => MprisLabel::Paused.localized_label(locale),
+                            MprisPlaybackStatus::Stopped => MprisLabel::Stopped.localized_label(locale),
+                            _ => status
+                                .metadata
+                                .as_ref()
+                                .and_then(|m| if m.title.is_empty() { None } else { Some(m.title.as_str()) })
+                                .unwrap_or(MprisLabel::Playing.localized_label(locale)),
+                        }
                     } else {
                         MprisLabel::NoPlayer.localized_label(locale)
                     };
