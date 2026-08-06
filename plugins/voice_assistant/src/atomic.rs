@@ -253,7 +253,7 @@ atomic_widget_impl! {
 
 impl MessageHandler<AssistantStatusMessage> for VoiceAssistantAtomicWidget {
     fn handle_message(&self, message: AssistantStatusMessage, _sender_id: &str) {
-        debug!("voice assistant atomic widget: received status {:?}", message.current_state);
+        trace!("voice assistant atomic widget: received status {:?}", message.current_state);
         *self.latest_status.borrow_mut() = Some(message.clone());
         self.update_ui_with_status(&message);
         self.broadcast_widget_update();
