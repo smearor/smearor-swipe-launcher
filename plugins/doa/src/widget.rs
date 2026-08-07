@@ -437,3 +437,170 @@ impl WidgetBuilder for DoaWidget {
         button_widget
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::DEFAULT_ICON_COMPASS;
+    use crate::config::DEFAULT_ICON_DEVICE;
+    use crate::config::DEFAULT_ICON_DIRECTION_EAST;
+    use crate::config::DEFAULT_ICON_DIRECTION_NORTH;
+    use crate::config::DEFAULT_ICON_DIRECTION_SOUTH;
+    use crate::config::DEFAULT_ICON_DIRECTION_WEST;
+    use crate::config::DEFAULT_ICON_DISCONNECTED;
+    use crate::config::DEFAULT_ICON_SPEECH;
+    use smearor_doa_model::DoaDirection;
+
+    fn make_status(connected: bool, angle: u16, speech: bool, paused: bool) -> DoaStatusMessage {
+        DoaStatusMessage {
+            connected,
+            angle,
+            calibrated_angle: angle,
+            direction: DoaDirection::from_angle(angle),
+            speech_detected: speech,
+            vendor_id: 0x2886,
+            product_id: 0x0021,
+            last_updated: stabby::string::String::from("1234567890"),
+            paused,
+        }
+    }
+
+    fn make_config() -> DoaWidgetConfig {
+        DoaWidgetConfig::default()
+    }
+
+    #[test]
+    fn test_render_disconnected_compass() {
+        let status = make_status(false, 0, false, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Compass, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_DISCONNECTED);
+        assert_eq!(main, "Disconnected");
+        assert_eq!(info, "");
+    }
+
+    #[test]
+    fn test_render_disconnected_direction() {
+        let status = make_status(false, 0, false, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Direction, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_DISCONNECTED);
+        assert_eq!(main, "Disconnected");
+        assert_eq!(info, "");
+    }
+
+    #[test]
+    fn test_render_disconnected_device_info() {
+        let status = make_status(false, 0, false, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::DeviceInfo, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_DISCONNECTED);
+        assert_eq!(main, "Disconnected");
+        assert_eq!(info, "");
+    }
+
+    #[test]
+    fn test_render_paused_compass() {
+        let status = make_status(true, 90, false, true);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Compass, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_DISCONNECTED);
+        assert_eq!(main, "Paused");
+        assert_eq!(info, "");
+    }
+
+    #[test]
+    fn test_render_compass_view_connected() {
+        let status = make_status(true, 0, false, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Compass, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_COMPASS);
+        assert_eq!(main, "0°");
+        assert!(info.contains("Compass"));
+        assert!(info.contains("North"));
+    }
+
+    #[test]
+    fn test_render_compass_view_east() {
+        let status = make_status(true, 90, true, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Compass, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_COMPASS);
+        assert_eq!(main, "90°");
+        assert!(info.contains("East"));
+    }
+
+    #[test]
+    fn test_render_direction_view_north_silence() {
+        let status = make_status(true, 0, false, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Direction, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_DIRECTION_NORTH);
+        assert_eq!(main, "North");
+        assert!(info.contains("Direction"));
+        assert!(info.contains("Silence"));
+    }
+
+    #[test]
+    fn test_render_direction_view_south_speech() {
+        let status = make_status(true, 180, true, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Direction, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_DIRECTION_SOUTH);
+        assert_eq!(main, "South");
+        assert!(info.contains("Speech"));
+    }
+
+    #[test]
+    fn test_render_direction_view_east_speech_german() {
+        let status = make_status(true, 90, true, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Direction, Locale::DeDe);
+        assert_eq!(icon, DEFAULT_ICON_DIRECTION_EAST);
+        assert_eq!(main, "Osten");
+        assert!(info.contains("Sprache"));
+    }
+
+    #[test]
+    fn test_render_direction_view_west_silence_french() {
+        let status = make_status(true, 270, false, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Direction, Locale::FrFr);
+        assert_eq!(icon, DEFAULT_ICON_DIRECTION_WEST);
+        assert_eq!(main, "Ouest");
+        assert!(info.contains("Silence"));
+    }
+
+    #[test]
+    fn test_render_device_info_view_silence() {
+        let status = make_status(true, 45, false, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::DeviceInfo, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_DEVICE);
+        assert_eq!(main, "Device");
+        assert!(info.contains("VID:0x2886"));
+        assert!(info.contains("PID:0x0021"));
+    }
+
+    #[test]
+    fn test_render_device_info_view_speech() {
+        let status = make_status(true, 45, true, false);
+        let (icon, main, info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::DeviceInfo, Locale::EnUs);
+        assert_eq!(icon, DEFAULT_ICON_SPEECH);
+        assert_eq!(main, "Device");
+        assert!(info.contains("VID:0x2886"));
+    }
+
+    #[test]
+    fn test_render_device_info_view_german() {
+        let status = make_status(true, 45, false, false);
+        let (_icon, main, _info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::DeviceInfo, Locale::DeDe);
+        assert_eq!(main, "Ger\u{e4}t");
+    }
+
+    #[test]
+    fn test_render_compass_360_wraps_to_north() {
+        let status = make_status(true, 359, false, false);
+        let (_icon, main, _info) = DoaWidget::render_view_data(&status, &make_config(), DoaView::Compass, Locale::EnUs);
+        assert_eq!(main, "359°");
+    }
+
+    #[test]
+    fn test_render_all_views_disconnected_show_same_icon() {
+        let status = make_status(false, 0, false, false);
+        let config = make_config();
+        for &view in &[DoaView::Compass, DoaView::Direction, DoaView::DeviceInfo] {
+            let (icon, _, _) = DoaWidget::render_view_data(&status, &config, view, Locale::EnUs);
+            assert_eq!(icon, DEFAULT_ICON_DISCONNECTED, "View {:?} should show disconnected icon", view);
+        }
+    }
+}

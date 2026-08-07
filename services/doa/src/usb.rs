@@ -273,3 +273,53 @@ pub fn usb_reader_loop(
         std::thread::sleep(remaining);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::usb_transfer_timeout;
+    use std::time::Duration;
+
+    #[test]
+    fn test_timeout_half_of_poll_interval() {
+        assert_eq!(usb_transfer_timeout(50), Duration::from_millis(25));
+        assert_eq!(usb_transfer_timeout(150), Duration::from_millis(75));
+        assert_eq!(usb_transfer_timeout(200), Duration::from_millis(100));
+    }
+
+    #[test]
+    fn test_timeout_clamped_to_floor() {
+        assert_eq!(usb_transfer_timeout(10), Duration::from_millis(20));
+        assert_eq!(usb_transfer_timeout(0), Duration::from_millis(20));
+        assert_eq!(usb_transfer_timeout(39), Duration::from_millis(20));
+    }
+
+    #[test]
+    fn test_timeout_clamped_to_ceiling() {
+        assert_eq!(usb_transfer_timeout(200), Duration::from_millis(100));
+        assert_eq!(usb_transfer_timeout(300), Duration::from_millis(100));
+        assert_eq!(usb_transfer_timeout(1000), Duration::from_millis(100));
+    }
+
+    #[test]
+    fn test_timeout_boundary_values() {
+        assert_eq!(usb_transfer_timeout(40), Duration::from_millis(20));
+        assert_eq!(usb_transfer_timeout(41), Duration::from_millis(20));
+        assert_eq!(usb_transfer_timeout(42), Duration::from_millis(21));
+        assert_eq!(usb_transfer_timeout(199), Duration::from_millis(99));
+        assert_eq!(usb_transfer_timeout(200), Duration::from_millis(100));
+        assert_eq!(usb_transfer_timeout(201), Duration::from_millis(100));
+    }
+
+    #[test]
+    fn test_two_consecutive_timeouts_fit_one_poll_cycle() {
+        for &interval in &[50, 100, 150, 200, 500] {
+            let timeout = usb_transfer_timeout(interval);
+            assert!(
+                timeout.as_millis() as u64 * 2 <= interval,
+                "Two consecutive timeouts ({}ms) exceed poll interval {}ms",
+                timeout.as_millis() * 2,
+                interval
+            );
+        }
+    }
+}

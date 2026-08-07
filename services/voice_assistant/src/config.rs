@@ -587,4 +587,61 @@ mod tests {
         assert!(!config.enabled);
         assert_eq!(config.grace_period_ms, DEFAULT_VAD_GRACE_PERIOD_MS);
     }
+
+    #[test]
+    fn test_vad_rising_edge_classification() {
+        use smearor_doa_model::VadTransition;
+        use smearor_doa_model::classify_vad_transition;
+        assert_eq!(classify_vad_transition(false, true), VadTransition::RisingEdge);
+    }
+
+    #[test]
+    fn test_vad_falling_edge_classification() {
+        use smearor_doa_model::VadTransition;
+        use smearor_doa_model::classify_vad_transition;
+        assert_eq!(classify_vad_transition(true, false), VadTransition::FallingEdge);
+    }
+
+    #[test]
+    fn test_vad_continuous_speech_classification() {
+        use smearor_doa_model::VadTransition;
+        use smearor_doa_model::classify_vad_transition;
+        assert_eq!(classify_vad_transition(true, true), VadTransition::ContinuousSpeech);
+    }
+
+    #[test]
+    fn test_vad_no_change_classification() {
+        use smearor_doa_model::VadTransition;
+        use smearor_doa_model::classify_vad_transition;
+        assert_eq!(classify_vad_transition(false, false), VadTransition::NoChange);
+    }
+
+    #[test]
+    fn test_vad_should_activate_after_min_duration() {
+        use smearor_doa_model::should_activate_after_min_duration;
+        let onset = std::time::Instant::now();
+        let now = onset + std::time::Duration::from_millis(150);
+        assert!(should_activate_after_min_duration(Some(onset), 100, now));
+    }
+
+    #[test]
+    fn test_vad_should_not_activate_before_min_duration() {
+        use smearor_doa_model::should_activate_after_min_duration;
+        let onset = std::time::Instant::now();
+        let now = onset + std::time::Duration::from_millis(50);
+        assert!(!should_activate_after_min_duration(Some(onset), 100, now));
+    }
+
+    #[test]
+    fn test_vad_should_not_activate_without_onset() {
+        use smearor_doa_model::should_activate_after_min_duration;
+        assert!(!should_activate_after_min_duration(None, 100, std::time::Instant::now()));
+    }
+
+    #[test]
+    fn test_vad_should_activate_with_zero_min_duration() {
+        use smearor_doa_model::should_activate_after_min_duration;
+        let onset = std::time::Instant::now();
+        assert!(should_activate_after_min_duration(Some(onset), 0, onset));
+    }
 }

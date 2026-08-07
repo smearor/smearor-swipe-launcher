@@ -139,7 +139,57 @@ mod tests {
         };
         let response = DoaDirectionResponse::from(state);
         let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains("\"0x2886\""));
-        assert!(json.contains("\"0x0021\""));
+        assert!(json.contains(r#""0x2886""#));
+        assert!(json.contains(r#""0x0021""#));
+    }
+
+    #[test]
+    fn test_response_json_contains_all_fields() {
+        let state = DoaSharedState {
+            connected: true,
+            angle: 45,
+            calibrated_angle: 135,
+            rotation_offset: 90,
+            speech_detected: true,
+            vendor_id: 0x2886,
+            product_id: 0x0021,
+            last_updated: "2025-01-01T00:00:00Z".to_string(),
+            paused: false,
+        };
+        let response = DoaDirectionResponse::from(state);
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(r#""connected":true"#));
+        assert!(json.contains(r#""angle":45"#));
+        assert!(json.contains(r#""calibrated_angle":135"#));
+        assert!(json.contains(r#""rotation_offset":90"#));
+        assert!(json.contains(r#""direction":"South""#));
+        assert!(json.contains(r#""speech_detected":true"#));
+        assert!(json.contains(r#""paused":false"#));
+        assert!(json.contains(r#""last_updated":"2025-01-01T00:00:00Z""#));
+    }
+
+    #[test]
+    fn test_response_disconnected_state() {
+        let state = DoaSharedState::default();
+        let response = DoaDirectionResponse::from(state);
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(r#""connected":false"#));
+        assert!(json.contains(r#""direction":"North""#));
+        assert!(json.contains(r#""speech_detected":false"#));
+    }
+
+    #[test]
+    fn test_response_paused_state() {
+        let state = DoaSharedState {
+            paused: true,
+            connected: true,
+            angle: 90,
+            calibrated_angle: 90,
+            ..Default::default()
+        };
+        let response = DoaDirectionResponse::from(state);
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(r#""paused":true"#));
+        assert!(json.contains(r#""connected":true"#));
     }
 }

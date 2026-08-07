@@ -125,4 +125,41 @@ mod tests {
         assert!(!config.duck_notification_sounds);
         assert!(config.duck_during_tts);
     }
+
+    #[test]
+    fn test_vad_rising_edge_for_ducking() {
+        use smearor_doa_model::VadTransition;
+        use smearor_doa_model::classify_vad_transition;
+        assert_eq!(classify_vad_transition(false, true), VadTransition::RisingEdge);
+    }
+
+    #[test]
+    fn test_vad_falling_edge_for_ducking() {
+        use smearor_doa_model::VadTransition;
+        use smearor_doa_model::classify_vad_transition;
+        assert_eq!(classify_vad_transition(true, false), VadTransition::FallingEdge);
+    }
+
+    #[test]
+    fn test_vad_should_duck_after_min_duration() {
+        use smearor_doa_model::should_activate_after_min_duration;
+        let onset = std::time::Instant::now();
+        let now = onset + std::time::Duration::from_millis(150);
+        assert!(should_activate_after_min_duration(Some(onset), 100, now));
+    }
+
+    #[test]
+    fn test_vad_should_not_duck_before_min_duration() {
+        use smearor_doa_model::should_activate_after_min_duration;
+        let onset = std::time::Instant::now();
+        let now = onset + std::time::Duration::from_millis(50);
+        assert!(!should_activate_after_min_duration(Some(onset), 100, now));
+    }
+
+    #[test]
+    fn test_vad_instant_duck_with_zero_min_duration() {
+        use smearor_doa_model::should_activate_after_min_duration;
+        let onset = std::time::Instant::now();
+        assert!(should_activate_after_min_duration(Some(onset), 0, onset));
+    }
 }

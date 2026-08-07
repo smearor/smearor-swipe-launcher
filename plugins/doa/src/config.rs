@@ -101,3 +101,112 @@ impl Default for DoaWidgetConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use smearor_doa_model::DoaDirection;
+
+    #[test]
+    fn test_default_values() {
+        let config = DoaWidgetConfig::default();
+        assert_eq!(config.icon_compass, DEFAULT_ICON_COMPASS);
+        assert_eq!(config.icon_direction_north, DEFAULT_ICON_DIRECTION_NORTH);
+        assert_eq!(config.icon_direction_east, DEFAULT_ICON_DIRECTION_EAST);
+        assert_eq!(config.icon_direction_south, DEFAULT_ICON_DIRECTION_SOUTH);
+        assert_eq!(config.icon_direction_west, DEFAULT_ICON_DIRECTION_WEST);
+        assert_eq!(config.icon_disconnected, DEFAULT_ICON_DISCONNECTED);
+        assert_eq!(config.icon_device, DEFAULT_ICON_DEVICE);
+        assert_eq!(config.icon_speech, DEFAULT_ICON_SPEECH);
+        assert_eq!(config.views, vec![DoaView::Compass, DoaView::Direction, DoaView::DeviceInfo]);
+    }
+
+    #[test]
+    fn test_parse_with_defaults_from_empty_json() {
+        let json = serde_json::json!({});
+        let config = DoaWidgetConfig::parse(&json).unwrap();
+        assert_eq!(config.icon_compass, DEFAULT_ICON_COMPASS);
+        assert_eq!(config.icon_direction_north, DEFAULT_ICON_DIRECTION_NORTH);
+        assert_eq!(config.views, vec![DoaView::Compass, DoaView::Direction, DoaView::DeviceInfo]);
+    }
+
+    #[test]
+    fn test_parse_with_partial_json() {
+        let json = serde_json::json!({
+            "icon_compass": "nf-md-compass",
+            "width": 120,
+            "height": 120
+        });
+        let config = DoaWidgetConfig::parse(&json).unwrap();
+        assert_eq!(config.icon_compass, "nf-md-compass");
+        assert_eq!(config.icon_direction_north, DEFAULT_ICON_DIRECTION_NORTH);
+        assert_eq!(config.dimensions.width, Some(120));
+        assert_eq!(config.dimensions.height, Some(120));
+    }
+
+    #[test]
+    fn test_parse_with_custom_icons() {
+        let json = serde_json::json!({
+            "icon_compass": "custom-compass",
+            "icon_direction_north": "custom-north",
+            "icon_direction_east": "custom-east",
+            "icon_direction_south": "custom-south",
+            "icon_direction_west": "custom-west",
+            "icon_disconnected": "custom-disconnect",
+            "icon_device": "custom-device",
+            "icon_speech": "custom-speech"
+        });
+        let config = DoaWidgetConfig::parse(&json).unwrap();
+        assert_eq!(config.icon_compass, "custom-compass");
+        assert_eq!(config.icon_direction_north, "custom-north");
+        assert_eq!(config.icon_direction_east, "custom-east");
+        assert_eq!(config.icon_direction_south, "custom-south");
+        assert_eq!(config.icon_direction_west, "custom-west");
+        assert_eq!(config.icon_disconnected, "custom-disconnect");
+        assert_eq!(config.icon_device, "custom-device");
+        assert_eq!(config.icon_speech, "custom-speech");
+    }
+
+    #[test]
+    fn test_parse_with_custom_views() {
+        let json = serde_json::json!({
+            "views": ["Direction", "DeviceInfo"]
+        });
+        let config = DoaWidgetConfig::parse(&json).unwrap();
+        assert_eq!(config.views, vec![DoaView::Direction, DoaView::DeviceInfo]);
+    }
+
+    #[test]
+    fn test_direction_icon_north() {
+        let config = DoaWidgetConfig::default();
+        assert_eq!(config.direction_icon(&DoaDirection::North), DEFAULT_ICON_DIRECTION_NORTH);
+    }
+
+    #[test]
+    fn test_direction_icon_east() {
+        let config = DoaWidgetConfig::default();
+        assert_eq!(config.direction_icon(&DoaDirection::East), DEFAULT_ICON_DIRECTION_EAST);
+    }
+
+    #[test]
+    fn test_direction_icon_south() {
+        let config = DoaWidgetConfig::default();
+        assert_eq!(config.direction_icon(&DoaDirection::South), DEFAULT_ICON_DIRECTION_SOUTH);
+    }
+
+    #[test]
+    fn test_direction_icon_west() {
+        let config = DoaWidgetConfig::default();
+        assert_eq!(config.direction_icon(&DoaDirection::West), DEFAULT_ICON_DIRECTION_WEST);
+    }
+
+    #[test]
+    fn test_direction_icon_custom() {
+        let json = serde_json::json!({
+            "icon_direction_north": "custom-n"
+        });
+        let config = DoaWidgetConfig::parse(&json).unwrap();
+        assert_eq!(config.direction_icon(&DoaDirection::North), "custom-n");
+        assert_eq!(config.direction_icon(&DoaDirection::East), DEFAULT_ICON_DIRECTION_EAST);
+    }
+}

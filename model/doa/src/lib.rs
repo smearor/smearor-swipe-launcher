@@ -2,6 +2,7 @@ mod direction;
 mod mcp_tools;
 mod messages;
 mod response;
+mod vad;
 
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
@@ -15,6 +16,10 @@ pub use messages::status::DoaStatusMessage;
 pub use messages::status::TOPIC_STATUS;
 pub use messages::view::DoaView;
 pub use response::DoaDirectionResponse;
+pub use vad::VadSpeakingState;
+pub use vad::VadTransition;
+pub use vad::classify_vad_transition;
+pub use vad::should_activate_after_min_duration;
 
 smearor_swipe_launcher_plugin_api::impl_json_convertible!(DoaStatusMessageConverter, DoaStatusMessage, |json: serde_json::Value| serde_json::from_value(json)
     .unwrap_or_default());

@@ -213,63 +213,8 @@ async fn run_doa_async(
                 }
             }
             Some(reading) = reading_receiver.recv() => {
-                match reading {
-                    DoaReading::Reading { angle, speech_detected, vendor_id, product_id } => {
-                        let raw_angle = if ceiling_mode {
-                            (360 - angle as i16).rem_euclid(360)
-                        } else {
-                            angle as i16
-                        };
-                        let calibrated_angle = (raw_angle + rotation_offset).rem_euclid(360) as u16;
-                        let direction = DoaDirection::from_angle(calibrated_angle);
-                        let timestamp = current_timestamp();
-                        {
-                            let mut state = shared_state.lock().unwrap();
-                            state.connected = true;
-                            state.angle = angle;
-                            state.calibrated_angle = calibrated_angle;
-                            state.rotation_offset = rotation_offset;
-                            state.speech_detected = speech_detected;
-                            state.vendor_id = vendor_id;
-                            state.product_id = product_id;
-                            state.last_updated = timestamp.clone();
-                        }
-
-                        let changed = last_angle != Some(angle) || last_speech_detected != Some(speech_detected);
-                        if changed {
-                            last_angle = Some(angle);
-                            last_speech_detected = Some(speech_detected);
-                            let paused = shared_state.lock().map(|s| s.paused).unwrap_or(false);
-                            let status = DoaStatusMessage {
-                                connected: true,
-                                angle,
-                                calibrated_angle,
-                                direction,
-                                speech_detected,
-                                vendor_id,
-                                product_id,
-                                last_updated: stabby::string::String::from(timestamp),
-                                paused,
-                            };
-                            broadcast_status(&meta, &core_context, status);
-                        }
-                    }
-                    DoaReading::Disconnected => {
-                        last_angle = None;
-                        last_speech_detected = None;
-                        {
-                            let mut state = shared_state.lock().unwrap();
-                            state.connected = false;
-                            state.last_updated = current_timestamp();
-                        }
-                        let paused = shared_state.lock().map(|s| s.paused).unwrap_or(false);
-                        let status = DoaStatusMessage {
-                            connected: false,
-                            paused,
-                            ..Default::default()
-                        };
-                        broadcast_status(&meta, &core_context, status);
-                    }
+                if let Some(status) = process_reading(&reading, &shared_state, rotation_offset, ceiling_mode, &mut last_angle, &mut last_speech_detected) {
+                    broadcast_status(&meta, &core_context, status);
                 }
             }
         }
@@ -348,4 +293,418 @@ fn current_timestamp() -> String {
     let now = std::time::SystemTime::now();
     let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     format!("{}", duration.as_secs())
+}
+
+/// Computes the calibrated angle from the raw angle, rotation offset, and ceiling mode.
+///
+/// When `ceiling_mode` is true, the raw angle is mirrored (360 - angle) before
+/// applying the rotation offset, compensating for a ceiling-mounted installation.
+pub fn compute_calibrated_angle(angle: u16, rotation_offset: i16, ceiling_mode: bool) -> u16 {
+    let raw_angle = if ceiling_mode { (360 - angle as i16).rem_euclid(360) } else { angle as i16 };
+    (raw_angle + rotation_offset).rem_euclid(360) as u16
+}
+
+/// Processes a `DoaReading` and updates the shared state.
+///
+/// Returns `Some(DoaStatusMessage)` if the status changed (angle or speech detection),
+/// or `None` if the reading is identical to the previous one.
+pub fn process_reading(
+    reading: &DoaReading,
+    shared_state: &Arc<Mutex<DoaSharedState>>,
+    rotation_offset: i16,
+    ceiling_mode: bool,
+    last_angle: &mut Option<u16>,
+    last_speech_detected: &mut Option<bool>,
+) -> Option<DoaStatusMessage> {
+    match reading {
+        DoaReading::Reading {
+            angle,
+            speech_detected,
+            vendor_id,
+            product_id,
+        } => {
+            let calibrated_angle = compute_calibrated_angle(*angle, rotation_offset, ceiling_mode);
+            let direction = DoaDirection::from_angle(calibrated_angle);
+            let timestamp = current_timestamp();
+            {
+                let mut state = shared_state.lock().unwrap();
+                state.connected = true;
+                state.angle = *angle;
+                state.calibrated_angle = calibrated_angle;
+                state.rotation_offset = rotation_offset;
+                state.speech_detected = *speech_detected;
+                state.vendor_id = *vendor_id;
+                state.product_id = *product_id;
+                state.last_updated = timestamp.clone();
+            }
+
+            let changed = *last_angle != Some(*angle) || *last_speech_detected != Some(*speech_detected);
+            if changed {
+                *last_angle = Some(*angle);
+                *last_speech_detected = Some(*speech_detected);
+                let paused = shared_state.lock().map(|s| s.paused).unwrap_or(false);
+                Some(DoaStatusMessage {
+                    connected: true,
+                    angle: *angle,
+                    calibrated_angle,
+                    direction,
+                    speech_detected: *speech_detected,
+                    vendor_id: *vendor_id,
+                    product_id: *product_id,
+                    last_updated: stabby::string::String::from(timestamp),
+                    paused,
+                })
+            } else {
+                None
+            }
+        }
+        DoaReading::Disconnected => {
+            *last_angle = None;
+            *last_speech_detected = None;
+            {
+                let mut state = shared_state.lock().unwrap();
+                state.connected = false;
+                state.last_updated = current_timestamp();
+            }
+            let paused = shared_state.lock().map(|s| s.paused).unwrap_or(false);
+            Some(DoaStatusMessage {
+                connected: false,
+                paused,
+                ..Default::default()
+            })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::usb::DoaReading;
+    use smearor_doa_model::DoaCommandAction;
+
+    fn test_meta() -> PluginMeta {
+        PluginMeta::new("test".to_string(), "test".to_string(), None)
+    }
+
+    #[test]
+    fn test_compute_calibrated_angle_no_offset_no_ceiling() {
+        assert_eq!(compute_calibrated_angle(0, 0, false), 0);
+        assert_eq!(compute_calibrated_angle(90, 0, false), 90);
+        assert_eq!(compute_calibrated_angle(180, 0, false), 180);
+        assert_eq!(compute_calibrated_angle(270, 0, false), 270);
+        assert_eq!(compute_calibrated_angle(359, 0, false), 359);
+    }
+
+    #[test]
+    fn test_compute_calibrated_angle_with_positive_offset() {
+        assert_eq!(compute_calibrated_angle(0, 90, false), 90);
+        assert_eq!(compute_calibrated_angle(270, 90, false), 0);
+        assert_eq!(compute_calibrated_angle(180, 90, false), 270);
+    }
+
+    #[test]
+    fn test_compute_calibrated_angle_with_negative_offset() {
+        assert_eq!(compute_calibrated_angle(0, -90, false), 270);
+        assert_eq!(compute_calibrated_angle(90, -90, false), 0);
+        assert_eq!(compute_calibrated_angle(0, -360, false), 0);
+    }
+
+    #[test]
+    fn test_compute_calibrated_angle_ceiling_mode() {
+        assert_eq!(compute_calibrated_angle(0, 0, true), 0);
+        assert_eq!(compute_calibrated_angle(90, 0, true), 270);
+        assert_eq!(compute_calibrated_angle(180, 0, true), 180);
+        assert_eq!(compute_calibrated_angle(270, 0, true), 90);
+    }
+
+    #[test]
+    fn test_compute_calibrated_angle_ceiling_mode_with_offset() {
+        assert_eq!(compute_calibrated_angle(90, 45, true), 315);
+        assert_eq!(compute_calibrated_angle(0, 180, true), 180);
+    }
+
+    #[test]
+    fn test_compute_calibrated_angle_wraps_360() {
+        assert_eq!(compute_calibrated_angle(350, 20, false), 10);
+        assert_eq!(compute_calibrated_angle(10, -20, false), 350);
+    }
+
+    #[test]
+    fn test_process_reading_disconnected() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let mut last_angle = Some(90);
+        let mut last_speech = Some(true);
+        let result = process_reading(&DoaReading::Disconnected, &state, 0, false, &mut last_angle, &mut last_speech);
+        let status = result.unwrap();
+        assert!(!status.connected);
+        assert_eq!(last_angle, None);
+        assert_eq!(last_speech, None);
+        assert!(!state.lock().unwrap().connected);
+    }
+
+    #[test]
+    fn test_process_reading_first_reading_emits_status() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let mut last_angle = None;
+        let mut last_speech = None;
+        let result = process_reading(
+            &DoaReading::Reading {
+                angle: 90,
+                speech_detected: true,
+                vendor_id: 0x2886,
+                product_id: 0x0021,
+            },
+            &state,
+            0,
+            false,
+            &mut last_angle,
+            &mut last_speech,
+        );
+        let status = result.unwrap();
+        assert!(status.connected);
+        assert_eq!(status.angle, 90);
+        assert_eq!(status.calibrated_angle, 90);
+        assert!(status.speech_detected);
+        assert_eq!(status.vendor_id, 0x2886);
+        assert_eq!(last_angle, Some(90));
+        assert_eq!(last_speech, Some(true));
+    }
+
+    #[test]
+    fn test_process_reading_unchanged_does_not_emit() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let mut last_angle = Some(90);
+        let mut last_speech = Some(false);
+        let result = process_reading(
+            &DoaReading::Reading {
+                angle: 90,
+                speech_detected: false,
+                vendor_id: 0x2886,
+                product_id: 0x0021,
+            },
+            &state,
+            0,
+            false,
+            &mut last_angle,
+            &mut last_speech,
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_process_reading_angle_changed_emits() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let mut last_angle = Some(45);
+        let mut last_speech = Some(false);
+        let result = process_reading(
+            &DoaReading::Reading {
+                angle: 90,
+                speech_detected: false,
+                vendor_id: 0x2886,
+                product_id: 0x0021,
+            },
+            &state,
+            0,
+            false,
+            &mut last_angle,
+            &mut last_speech,
+        );
+        let status = result.unwrap();
+        assert_eq!(status.angle, 90);
+        assert_eq!(last_angle, Some(90));
+    }
+
+    #[test]
+    fn test_process_reading_speech_changed_emits() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let mut last_angle = Some(90);
+        let mut last_speech = Some(false);
+        let result = process_reading(
+            &DoaReading::Reading {
+                angle: 90,
+                speech_detected: true,
+                vendor_id: 0x2886,
+                product_id: 0x0021,
+            },
+            &state,
+            0,
+            false,
+            &mut last_angle,
+            &mut last_speech,
+        );
+        let status = result.unwrap();
+        assert!(status.speech_detected);
+        assert_eq!(last_speech, Some(true));
+    }
+
+    #[test]
+    fn test_process_reading_with_offset() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let mut last_angle = None;
+        let mut last_speech = None;
+        let result = process_reading(
+            &DoaReading::Reading {
+                angle: 0,
+                speech_detected: false,
+                vendor_id: 0x2886,
+                product_id: 0x0021,
+            },
+            &state,
+            90,
+            false,
+            &mut last_angle,
+            &mut last_speech,
+        );
+        let status = result.unwrap();
+        assert_eq!(status.angle, 0);
+        assert_eq!(status.calibrated_angle, 90);
+        assert_eq!(status.direction, DoaDirection::East);
+    }
+
+    #[test]
+    fn test_process_reading_with_ceiling_mode() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let mut last_angle = None;
+        let mut last_speech = None;
+        let result = process_reading(
+            &DoaReading::Reading {
+                angle: 90,
+                speech_detected: false,
+                vendor_id: 0x2886,
+                product_id: 0x0021,
+            },
+            &state,
+            0,
+            true,
+            &mut last_angle,
+            &mut last_speech,
+        );
+        let status = result.unwrap();
+        assert_eq!(status.angle, 90);
+        assert_eq!(status.calibrated_angle, 270);
+        assert_eq!(status.direction, DoaDirection::West);
+    }
+
+    #[test]
+    fn test_process_reading_updates_shared_state() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let mut last_angle = None;
+        let mut last_speech = None;
+        let _ = process_reading(
+            &DoaReading::Reading {
+                angle: 180,
+                speech_detected: true,
+                vendor_id: 0x2886,
+                product_id: 0x0021,
+            },
+            &state,
+            0,
+            false,
+            &mut last_angle,
+            &mut last_speech,
+        );
+        let s = state.lock().unwrap();
+        assert!(s.connected);
+        assert_eq!(s.angle, 180);
+        assert_eq!(s.calibrated_angle, 180);
+        assert!(s.speech_detected);
+        assert_eq!(s.vendor_id, 0x2886);
+        assert_eq!(s.product_id, 0x0021);
+        assert!(!s.last_updated.is_empty());
+    }
+
+    #[test]
+    fn test_handle_command_reconnect() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let (usb_tx, mut usb_rx) = tokio::sync::mpsc::unbounded_channel::<UsbControl>();
+        let meta = test_meta();
+        handle_command(
+            &DoaCommandMessage {
+                action: DoaCommandAction::Reconnect,
+                value: 0,
+            },
+            &state,
+            &usb_tx,
+            &meta,
+            &None,
+        );
+        assert!(matches!(usb_rx.try_recv(), Ok(UsbControl::Reconnect)));
+    }
+
+    #[test]
+    fn test_handle_command_pause() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let (usb_tx, mut usb_rx) = tokio::sync::mpsc::unbounded_channel::<UsbControl>();
+        let meta = test_meta();
+        handle_command(
+            &DoaCommandMessage {
+                action: DoaCommandAction::Pause,
+                value: 0,
+            },
+            &state,
+            &usb_tx,
+            &meta,
+            &None,
+        );
+        assert!(state.lock().unwrap().paused);
+        assert!(matches!(usb_rx.try_recv(), Ok(UsbControl::Pause)));
+    }
+
+    #[test]
+    fn test_handle_command_resume() {
+        let state = Arc::new(Mutex::new(DoaSharedState {
+            paused: true,
+            ..Default::default()
+        }));
+        let (usb_tx, mut usb_rx) = tokio::sync::mpsc::unbounded_channel::<UsbControl>();
+        let meta = test_meta();
+        handle_command(
+            &DoaCommandMessage {
+                action: DoaCommandAction::Resume,
+                value: 0,
+            },
+            &state,
+            &usb_tx,
+            &meta,
+            &None,
+        );
+        assert!(!state.lock().unwrap().paused);
+        assert!(matches!(usb_rx.try_recv(), Ok(UsbControl::Resume)));
+    }
+
+    #[test]
+    fn test_handle_command_set_poll_interval() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let (usb_tx, mut usb_rx) = tokio::sync::mpsc::unbounded_channel::<UsbControl>();
+        let meta = test_meta();
+        handle_command(
+            &DoaCommandMessage {
+                action: DoaCommandAction::SetPollInterval,
+                value: 200,
+            },
+            &state,
+            &usb_tx,
+            &meta,
+            &None,
+        );
+        assert!(matches!(usb_rx.try_recv(), Ok(UsbControl::SetInterval(200))));
+    }
+
+    #[test]
+    fn test_handle_command_set_poll_interval_clamped_to_min() {
+        let state = Arc::new(Mutex::new(DoaSharedState::default()));
+        let (usb_tx, mut usb_rx) = tokio::sync::mpsc::unbounded_channel::<UsbControl>();
+        let meta = test_meta();
+        handle_command(
+            &DoaCommandMessage {
+                action: DoaCommandAction::SetPollInterval,
+                value: 10,
+            },
+            &state,
+            &usb_tx,
+            &meta,
+            &None,
+        );
+        assert!(matches!(usb_rx.try_recv(), Ok(UsbControl::SetInterval(50))));
+    }
 }
