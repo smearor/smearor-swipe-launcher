@@ -15,6 +15,7 @@
 - [Inter-Instance Events](./architecture/inter-instance-events.md)
 - [Native GTK Widgets via FFI](./architecture/native-gtk-ffi.md)
 - [Message Broker](./architecture/message-broker.md)
+- [DoA Service Architecture](./architecture/doa.md)
 - [Instance Types](./architecture/instance-types.md)
 
 # Features
@@ -28,6 +29,7 @@
 - [Icon Rendering](./features/icon-rendering.md)
 - [Layout Profiles](./features/layout-profiles.md)
 - [MCP Server and AI Integration](./features/mcp-server.md)
+- [Direction of Arrival](./features/doa.md)
 - [Web Interface](./features/web-interface.md)
 
 # Plugin API
@@ -45,6 +47,7 @@
 - [app-launcher](./plugins/app-launcher.md)
 - [audio](./plugins/audio.md)
 - [button](./plugins/button.md)
+- [doa](./plugins/doa.md)
 - [clock](./plugins/clock.md)
 - [mpris](./plugins/mpris.md)
 - [network](./plugins/network.md)
@@ -60,6 +63,7 @@
 
 - [app-launcher](./services/app-launcher.md)
 - [audio](./services/audio.md)
+- [doa](./services/doa.md)
 - [gnome](./services/gnome.md)
 - [http](./services/http.md)
 - [hyprland](./services/hyprland.md)

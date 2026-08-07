@@ -48,6 +48,15 @@ rotation = 0
 [weather]
 latitude = 52.52
 longitude = 13.405
+
+# DoA service config
+[doa]
+poll_interval_ms = 150
+mcp_enabled = true
+product_id = 0x0021
+reconnect_delay_ms = 1000
+rotation_offset = 0
+ceiling_mode = false
 ```
 
 See individual [service pages](../services/audio.md) for service-specific configuration fields.
@@ -81,6 +90,7 @@ On first run, the launcher copies default configs from `/usr/share/smearor/` to 
 Service topics follow the pattern `service.{id}.{action}`:
 
 - `service.audio.command` → routed to the `audio` service
+- `service.doa.command` → routed to the `doa` service
 - `service.hyprland.dispatch` → routed to the `hyprland` service
 - `service.weather.command` → routed to the `weather` service
 

@@ -64,6 +64,7 @@ with:
 - **Action bindings** — configurable input-to-message mappings
 - **Icon rendering** — freedesktop icon themes with fallback support
 - **MCP server** — Model Context Protocol server for AI integration
+- **Direction of Arrival** — ReSpeaker XVF3800 USB 4-Mic Array integration with hardware VAD
 - **Web interface** — browser-based control
 - **Inter-instance events** — message broker routes events between instances
 
@@ -103,7 +104,8 @@ Plugins communicate via the message broker using typed messages defined in model
 | Service              | Description                                                                      |
 |----------------------|----------------------------------------------------------------------------------|
 | **app-launcher**     | Scans `.desktop` files, provides application search and launch                   |
-| **audio**            | PulseAudio volume control, mute toggling, sink management                        |
+| **audio**            | PulseAudio volume control, mute toggling, sink management, VAD-triggered ducking |
+| **doa**              | ReSpeaker XVF3800 USB 4-Mic Array: direction detection, hardware VAD, MCP tools  |
 | **gnome**            | GNOME Shell integration via D-Bus (settings, extensions)                         |
 | **http**             | Generic HTTP client for outbound requests from plugins                           |
 | **hyprland**         | Hyprland IPC: workspace tracking, window management, dispatch                    |
@@ -131,6 +133,7 @@ Plugins communicate via the message broker using typed messages defined in model
 | **audio**              | Volume control widget with dynamic icon, click-to-mute, scroll-to-adjust                |
 | **button**             | Generic configurable button — icon, text, colors, and action bindings from config       |
 | **clock**              | Clock widget with configurable formats and timezones                                    |
+| **doa**                | Direction of Arrival widget with compass, direction, and device info views              |
 | **mpris**              | Media player control: album art, track info, play/pause/next/previous                   |
 | **network**            | Network status with 7 views: WiFi, Ethernet, throughput, scan, VPN, airplane mode, QR   |
 | **notifications**      | Notification badge counter and slide-in banners                                         |
