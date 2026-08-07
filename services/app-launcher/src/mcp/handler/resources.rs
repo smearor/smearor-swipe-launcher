@@ -30,23 +30,19 @@ impl McpResourceHandler<AppLauncherMcpResources> for AppLauncherService {
                 let total = apps.len();
                 let offset = offset.min(total);
                 let end = if limit == 0 { total } else { (offset + limit).min(total) };
-                let page = &apps[offset..end];
-                let json = serde_json::json!({
-                    "available_apps": page.iter().map(|(path, name)| {
-                        serde_json::json!({
-                            "desktop_file": path,
-                            "name": name,
-                        })
-                    }).collect::<Vec<_>>(),
-                    "pagination": {
-                        "offset": offset,
-                        "limit": if limit == 0 { total } else { limit },
-                        "total": total,
-                        "returned": page.len(),
-                        "has_more": end < total,
+                let page = apps[offset..end].to_vec();
+                let response = smearor_app_launcher_model::AvailableAppsResponse {
+                    available_apps: page,
+                    pagination: smearor_app_launcher_model::Pagination {
+                        offset,
+                        limit: if limit == 0 { total } else { limit },
+                        total,
+                        returned: end - offset,
+                        has_more: end < total,
                     },
-                });
-                InvokeResourceResponse::success(correlation_id, &json.to_string())
+                };
+                let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
+                InvokeResourceResponse::success(correlation_id, &json)
             }
         }
     }

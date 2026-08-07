@@ -1,8 +1,12 @@
+mod app_info;
 mod mcp;
 mod messages;
 
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
+pub use app_info::AppInfo;
+pub use app_info::AvailableAppsResponse;
+pub use app_info::Pagination;
 pub use mcp::prompts::AppLauncherMcpPrompts;
 pub use mcp::resources::AppLauncherMcpResources;
 pub use mcp::tools::AppLauncherMcpTools;

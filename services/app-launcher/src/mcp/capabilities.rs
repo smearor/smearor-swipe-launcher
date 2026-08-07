@@ -47,8 +47,8 @@ impl McpCapabilitiesRegistrator for AppLauncherService {
 
         let search_tool = RegisterToolMessage::new(
             "app_launcher_search_apps",
-            "Search for available applications by name. Returns matching .desktop file paths and names. Use this to find the correct desktop_file path before calling app_launcher_exec.",
-            r#"{ "type": "object", "properties": { "query": { "type": "string", "description": "Search query (e.g., 'calculator', 'browser', 'gimp'). Matches against app names case-insensitively." } }, "required": ["query"] }"#,
+            "Search for available applications by name, generic name, comment, keywords, or categories. Returns matching .desktop file paths with full metadata (name, generic_name, comment, keywords, categories). Use this to find the correct desktop_file path before calling app_launcher_exec.",
+            r#"{ "type": "object", "properties": { "query": { "type": "string", "description": "Search query (e.g., 'calculator', 'browser', 'game', 'audio'). Matches against app name, generic name, comment, keywords, and categories case-insensitively." } }, "required": ["query"] }"#,
         );
         broadcaster.broadcast_message_to_topic(search_tool);
 

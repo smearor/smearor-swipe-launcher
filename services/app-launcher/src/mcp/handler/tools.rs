@@ -50,14 +50,19 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for AppLauncherServic
                 } else {
                     let apps = self.available_apps_snapshot();
                     let query_lower = query.to_lowercase();
-                    let matches: Vec<_> = apps.iter().filter(|(_, name)| name.to_lowercase().contains(&query_lower)).collect();
+                    let matches: Vec<_> = apps
+                        .iter()
+                        .filter(|app| {
+                            app.name.to_lowercase().contains(&query_lower)
+                                || app.generic_name.as_ref().is_some_and(|s| s.to_lowercase().contains(&query_lower))
+                                || app.comment.as_ref().is_some_and(|s| s.to_lowercase().contains(&query_lower))
+                                || app.keywords.as_ref().is_some_and(|s| s.to_lowercase().contains(&query_lower))
+                                || app.categories.as_ref().is_some_and(|s| s.to_lowercase().contains(&query_lower))
+                        })
+                        .cloned()
+                        .collect();
                     let json = serde_json::json!({
-                        "available_apps": matches.iter().map(|(path, name)| {
-                            serde_json::json!({
-                                "desktop_file": path,
-                                "name": name,
-                            })
-                        }).collect::<Vec<_>>(),
+                        "available_apps": matches,
                         "count": matches.len(),
                     });
                     let response = InvokeToolResponse::success(&message.0.correlation_id, &json.to_string());

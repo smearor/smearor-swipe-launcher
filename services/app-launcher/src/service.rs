@@ -5,6 +5,7 @@ use glib::MainContext;
 use nix::sys::signal::Signal;
 use nix::sys::signal::kill;
 use nix::unistd::Pid;
+use smearor_app_launcher_model::AppInfo;
 use smearor_app_launcher_model::DesktopFileCommandAction;
 use smearor_app_launcher_model::DesktopFileCommandMessage;
 use smearor_app_launcher_model::DesktopFileStatusMessage;
@@ -278,7 +279,7 @@ impl AppLauncherService {
             .collect()
     }
 
-    pub(crate) fn available_apps_snapshot(&self) -> Vec<(String, String)> {
+    pub(crate) fn available_apps_snapshot(&self) -> Vec<AppInfo> {
         let mut apps = Vec::new();
         let mut seen = std::collections::HashSet::new();
 
@@ -299,16 +300,44 @@ impl AppLauncherService {
                     if path.extension().map(|e| e == "desktop").unwrap_or(false) {
                         let path_str = path.to_string_lossy().to_string();
                         if seen.insert(path_str.clone()) {
-                            let name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| path_str.clone());
-                            apps.push((path_str, name));
+                            let fallback_name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| path_str.clone());
+                            let info = Self::parse_desktop_metadata(&path_str, &fallback_name);
+                            apps.push(info);
                         }
                     }
                 }
             }
         }
 
-        apps.sort_by(|a, b| a.1.cmp(&b.1));
+        apps.sort_by(|a, b| a.name.cmp(&b.name));
         apps
+    }
+
+    /// Parses a `.desktop` file and extracts metadata fields.
+    fn parse_desktop_metadata(path: &str, fallback_name: &str) -> AppInfo {
+        let entry = match Entry::parse_file(path) {
+            Ok(entry) => entry,
+            Err(_) => {
+                return AppInfo {
+                    desktop_file: path.to_string(),
+                    name: fallback_name.to_string(),
+                    generic_name: None,
+                    comment: None,
+                    keywords: None,
+                    categories: None,
+                };
+            }
+        };
+        let first = |section: &str, attr: &str| -> Option<String> { entry.get(section, attr).and_then(|v| v.first()).map(|s| s.to_string()) };
+        let joined = |section: &str, attr: &str| -> Option<String> { entry.get(section, attr).map(|v| v.join(";")) };
+        AppInfo {
+            desktop_file: path.to_string(),
+            name: first("Desktop Entry", "Name").unwrap_or_else(|| fallback_name.to_string()),
+            generic_name: first("Desktop Entry", "GenericName"),
+            comment: first("Desktop Entry", "Comment"),
+            keywords: joined("Desktop Entry", "Keywords"),
+            categories: joined("Desktop Entry", "Categories"),
+        }
     }
 }
 
