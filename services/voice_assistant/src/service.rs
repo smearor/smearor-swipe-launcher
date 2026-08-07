@@ -34,6 +34,7 @@ use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use smearor_voice_assistant_model::AssistantState;
@@ -1562,16 +1563,16 @@ impl ServicePlugin for VoiceAssistantService {
 }
 
 fn broadcast_status(meta: &PluginMeta, core_context: &Option<FfiCoreContext>, status: AssistantStatusMessage) {
-    let payload_ptr = Box::into_raw(Box::new(status)) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: stabby::string::String::from(meta.id.clone()),
-        target_instance_id: stabby::string::String::from(""),
-        topic: stabby::string::String::from(AssistantStatusMessage::topic()),
-        type_id: AssistantStatusMessage::TYPE_ID,
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<AssistantStatusMessage>),
-    };
+    let payload_ptr = box_payload(status);
+    let envelope = FfiEnvelope::builder()
+        .sender_id(meta.id.clone())
+        .target_instance_id("")
+        .topic(AssistantStatusMessage::topic())
+        .type_id(AssistantStatusMessage::TYPE_ID)
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<AssistantStatusMessage>))
+        .build();
     if let Some(context) = core_context {
         context.send_message(envelope);
     }

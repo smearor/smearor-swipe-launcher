@@ -13,6 +13,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
@@ -217,16 +218,16 @@ fn broadcast_response_string(meta: &PluginMeta, core_context: &Option<FfiCoreCon
         }
     };
 
-    let payload_ptr = Box::into_raw(Box::new(payload_str)) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: stabby::string::String::from(meta.id.clone()),
-        target_instance_id: stabby::string::String::from(""),
-        topic: stabby::string::String::from(response_topic),
-        type_id: generate_type_id("std::string::String"),
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<String>),
-    };
+    let payload_ptr = box_payload(payload_str);
+    let envelope = FfiEnvelope::builder()
+        .sender_id(meta.id.clone())
+        .target_instance_id("")
+        .topic(response_topic)
+        .type_id(generate_type_id("std::string::String"))
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<String>))
+        .build();
 
     if let Some(context) = core_context {
         context.send_message(envelope);

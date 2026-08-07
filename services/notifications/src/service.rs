@@ -20,6 +20,7 @@ use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::collections::BTreeMap;
@@ -329,16 +330,16 @@ impl ServicePlugin for NotificationService {
 }
 
 fn send_status(meta: &PluginMeta, core_context: &FfiCoreContext, status: NotificationStatusMessage) {
-    let payload_ptr = Box::into_raw(Box::new(status)) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: stabby::string::String::from(meta.id.clone()),
-        target_instance_id: stabby::string::String::from("*"),
-        topic: stabby::string::String::from(NotificationStatusMessage::topic()),
-        type_id: NotificationStatusMessage::TYPE_ID,
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<NotificationStatusMessage>),
-    };
+    let payload_ptr = box_payload(status);
+    let envelope = FfiEnvelope::builder()
+        .sender_id(meta.id.clone())
+        .target_instance_id("*")
+        .topic(NotificationStatusMessage::topic())
+        .type_id(NotificationStatusMessage::TYPE_ID)
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<NotificationStatusMessage>))
+        .build();
     core_context.send_message(envelope);
 }
 

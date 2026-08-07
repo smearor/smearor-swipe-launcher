@@ -123,7 +123,6 @@ use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
 use tracing::trace;
-use tracing::warn;
 
 /// Internal union of all command types the service handles.
 pub enum HyprlandCommand {

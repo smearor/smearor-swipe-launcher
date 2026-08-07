@@ -78,15 +78,15 @@ unsafe extern "C" fn broker_send_wrapper(
     };
     unsafe {
         let ctx = &*(context as *const SimpleCoreContext);
-        let envelope = FfiEnvelope {
-            sender_id: stabby::string::String::from(ctx.sender_id.clone()),
-            target_instance_id: stabby::string::String::from(target_instance_id),
-            topic: stabby::string::String::from(topic),
-            type_id,
-            payload,
-            destroy_payload,
-            clone_payload,
-        };
+        let envelope = FfiEnvelope::builder()
+            .sender_id(ctx.sender_id.clone())
+            .target_instance_id(target_instance_id.as_str())
+            .topic(topic)
+            .type_id(type_id)
+            .payload(payload)
+            .destroy_payload(destroy_payload)
+            .clone_payload(clone_payload)
+            .build();
         if let Err(e) = ctx.sender.send(envelope) {
             error!("Failed to send message to core: {}", e);
         }

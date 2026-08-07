@@ -68,6 +68,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -293,16 +294,16 @@ impl LauncherHost {
         debug!("Replaying {} registered tools to voice_assistant", tools.len());
         for tool in tools {
             let message = RegisterToolMessage::new(&tool.name, &tool.description, &tool.input_schema.to_string());
-            let payload_ptr = Box::into_raw(Box::new(message)) as *mut core::ffi::c_void;
-            let envelope = FfiEnvelope {
-                sender_id: stabby::string::String::from(tool.plugin_id.as_str()),
-                target_instance_id: stabby::string::String::from(""),
-                topic: stabby::string::String::from(RegisterToolMessage::topic()),
-                type_id: RegisterToolMessage::TYPE_ID,
-                payload: payload_ptr,
-                destroy_payload: Some(default_destroy_payload),
-                clone_payload: Some(default_clone_payload::<RegisterToolMessage>),
-            };
+            let payload_ptr = box_payload(message);
+            let envelope = FfiEnvelope::builder()
+                .sender_id(tool.plugin_id.as_str())
+                .target_instance_id("")
+                .topic(RegisterToolMessage::topic())
+                .type_id(RegisterToolMessage::TYPE_ID)
+                .payload(payload_ptr)
+                .destroy_payload(Some(default_destroy_payload))
+                .clone_payload(Some(default_clone_payload::<RegisterToolMessage>))
+                .build();
             if let Err(error) = self.broker_sender.send(envelope) {
                 error!("Failed to replay tool registration {}: {}", tool.name, error);
             }
@@ -606,16 +607,16 @@ impl LauncherHost {
                     let correlation_id = format!("macropad-{}-{}", instance_id, button_index);
                     let arguments = format!(r#"{{"action":"{}"}}"#, action);
                     let invoke_msg = InvokeToolMessage::new(&tool_name, &correlation_id, &arguments);
-                    let payload_ptr = Box::into_raw(Box::new(invoke_msg)) as *mut core::ffi::c_void;
-                    let invoke_envelope = FfiEnvelope {
-                        sender_id: stabby::string::String::from(instance_id),
-                        target_instance_id: stabby::string::String::from("*"),
-                        topic: stabby::string::String::from(InvokeToolMessage::topic()),
-                        type_id: FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID,
-                        payload: payload_ptr,
-                        destroy_payload: Some(default_destroy_payload),
-                        clone_payload: Some(default_clone_payload::<InvokeToolMessage>),
-                    };
+                    let payload_ptr = box_payload(invoke_msg);
+                    let invoke_envelope = FfiEnvelope::builder()
+                        .sender_id(instance_id)
+                        .target_instance_id("*")
+                        .topic(InvokeToolMessage::topic())
+                        .type_id(FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID)
+                        .payload(payload_ptr)
+                        .destroy_payload(Some(default_destroy_payload))
+                        .clone_payload(Some(default_clone_payload::<InvokeToolMessage>))
+                        .build();
                     instance.handle_message(invoke_envelope);
                     debug!("MacroPad: dispatched {} to plugin '{}' for instance '{}'", action, plugin_id, instance_id);
                 } else {
@@ -1195,16 +1196,18 @@ impl LauncherHost {
                                 Ok(text) => InvokeToolResponse::success(&correlation_id, &text),
                                 Err(error) => InvokeToolResponse::error(&correlation_id, &error),
                             };
-                            let payload_ptr = Box::into_raw(Box::new(response)) as *mut core::ffi::c_void;
-                            let _ = broker_sender.send(FfiEnvelope {
-                                sender_id: stabby::string::String::from("launcher-core"),
-                                target_instance_id: stabby::string::String::from("*"),
-                                topic: stabby::string::String::from(InvokeToolResponse::topic()),
-                                type_id: FfiEnvelopePayload::<InvokeToolResponse>::TYPE_ID,
-                                payload: payload_ptr,
-                                destroy_payload: Some(default_destroy_payload),
-                                clone_payload: Some(default_clone_payload::<InvokeToolResponse>),
-                            });
+                            let payload_ptr = box_payload(response);
+                            let _ = broker_sender.send(
+                                FfiEnvelope::builder()
+                                    .sender_id("launcher-core")
+                                    .target_instance_id("*")
+                                    .topic(InvokeToolResponse::topic())
+                                    .type_id(FfiEnvelopePayload::<InvokeToolResponse>::TYPE_ID)
+                                    .payload(payload_ptr)
+                                    .destroy_payload(Some(default_destroy_payload))
+                                    .clone_payload(Some(default_clone_payload::<InvokeToolResponse>))
+                                    .build(),
+                            );
                         });
                         return;
                     }
@@ -1219,16 +1222,18 @@ impl LauncherHost {
                                 Ok((contents, _mime_type)) => InvokeResourceResponse::success(&correlation_id, &contents),
                                 Err(error) => InvokeResourceResponse::error(&correlation_id, &error),
                             };
-                            let payload_ptr = Box::into_raw(Box::new(response)) as *mut core::ffi::c_void;
-                            let _ = broker_sender.send(FfiEnvelope {
-                                sender_id: stabby::string::String::from("launcher-core"),
-                                target_instance_id: stabby::string::String::from("*"),
-                                topic: stabby::string::String::from(InvokeResourceResponse::topic()),
-                                type_id: FfiEnvelopePayload::<InvokeResourceResponse>::TYPE_ID,
-                                payload: payload_ptr,
-                                destroy_payload: Some(default_destroy_payload),
-                                clone_payload: Some(default_clone_payload::<InvokeResourceResponse>),
-                            });
+                            let payload_ptr = box_payload(response);
+                            let _ = broker_sender.send(
+                                FfiEnvelope::builder()
+                                    .sender_id("launcher-core")
+                                    .target_instance_id("*")
+                                    .topic(InvokeResourceResponse::topic())
+                                    .type_id(FfiEnvelopePayload::<InvokeResourceResponse>::TYPE_ID)
+                                    .payload(payload_ptr)
+                                    .destroy_payload(Some(default_destroy_payload))
+                                    .clone_payload(Some(default_clone_payload::<InvokeResourceResponse>))
+                                    .build(),
+                            );
                         });
                         return;
                     }
@@ -1678,16 +1683,16 @@ impl LauncherHost {
                 tokio::time::sleep(std::time::Duration::from_secs(ttl)).await;
                 debug!("Auto-stop TTL expired for instance '{}', stopping", instance_id_owned);
                 let stop_msg = InstanceStopMessage::new(&instance_id_owned, "");
-                let payload_ptr = Box::into_raw(Box::new(stop_msg)) as *mut core::ffi::c_void;
-                let envelope = FfiEnvelope {
-                    sender_id: stabby::string::String::from("auto-stop-ttl"),
-                    target_instance_id: stabby::string::String::from("launcher-host"),
-                    topic: stabby::string::String::from(TOPIC_CORE_INSTANCE_STOP),
-                    type_id: <InstanceStopMessage as TypedMessage>::TYPE_ID,
-                    payload: payload_ptr,
-                    destroy_payload: Some(default_destroy_payload),
-                    clone_payload: Some(default_clone_payload::<InstanceStopMessage>),
-                };
+                let payload_ptr = box_payload(stop_msg);
+                let envelope = FfiEnvelope::builder()
+                    .sender_id("auto-stop-ttl")
+                    .target_instance_id("launcher-host")
+                    .topic(TOPIC_CORE_INSTANCE_STOP)
+                    .type_id(<InstanceStopMessage as TypedMessage>::TYPE_ID)
+                    .payload(payload_ptr)
+                    .destroy_payload(Some(default_destroy_payload))
+                    .clone_payload(Some(default_clone_payload::<InstanceStopMessage>))
+                    .build();
                 let _ = broker_sender.send(envelope);
             });
             if let Ok(instances) = self.instances.lock() {
@@ -2042,16 +2047,16 @@ impl LauncherHost {
             if !rendered_buttons[idx] {
                 let command = MacroPadCommand::clear_button(idx as u8);
                 let msg = MacroPadCommandMessage::new(&device_id, command);
-                let payload_ptr = Box::into_raw(Box::new(msg)) as *mut core::ffi::c_void;
-                let envelope = FfiEnvelope {
-                    sender_id: stabby::string::String::from(instance_id),
-                    target_instance_id: stabby::string::String::from(driver.as_str()),
-                    topic: stabby::string::String::from(MacroPadCommandMessage::topic()),
-                    type_id: FfiEnvelopePayload::<MacroPadCommandMessage>::TYPE_ID,
-                    payload: payload_ptr,
-                    destroy_payload: Some(default_destroy_payload),
-                    clone_payload: Some(default_clone_payload::<MacroPadCommandMessage>),
-                };
+                let payload_ptr = box_payload(msg);
+                let envelope = FfiEnvelope::builder()
+                    .sender_id(instance_id)
+                    .target_instance_id(driver.as_str())
+                    .topic(MacroPadCommandMessage::topic())
+                    .type_id(FfiEnvelopePayload::<MacroPadCommandMessage>::TYPE_ID)
+                    .payload(payload_ptr)
+                    .destroy_payload(Some(default_destroy_payload))
+                    .clone_payload(Some(default_clone_payload::<MacroPadCommandMessage>))
+                    .build();
                 let _ = self.broker_sender.send(envelope);
                 trace!("Cleared unrendered button {} on device '{}'", idx, device_id);
             }
@@ -2071,16 +2076,16 @@ impl LauncherHost {
     fn send_button_image(&self, device_id: &str, driver: &str, instance_id: &str, button_index: u8, width: u32, height: u32, pixels: Vec<u8>) {
         let command = MacroPadCommand::set_button_image(button_index, width, height, pixels);
         let msg = MacroPadCommandMessage::new(device_id, command);
-        let payload_ptr = Box::into_raw(Box::new(msg)) as *mut core::ffi::c_void;
-        let envelope = FfiEnvelope {
-            sender_id: stabby::string::String::from(instance_id),
-            target_instance_id: stabby::string::String::from(driver),
-            topic: stabby::string::String::from(MacroPadCommandMessage::topic()),
-            type_id: FfiEnvelopePayload::<MacroPadCommandMessage>::TYPE_ID,
-            payload: payload_ptr,
-            destroy_payload: Some(default_destroy_payload),
-            clone_payload: Some(default_clone_payload::<MacroPadCommandMessage>),
-        };
+        let payload_ptr = box_payload(msg);
+        let envelope = FfiEnvelope::builder()
+            .sender_id(instance_id)
+            .target_instance_id(driver)
+            .topic(MacroPadCommandMessage::topic())
+            .type_id(FfiEnvelopePayload::<MacroPadCommandMessage>::TYPE_ID)
+            .payload(payload_ptr)
+            .destroy_payload(Some(default_destroy_payload))
+            .clone_payload(Some(default_clone_payload::<MacroPadCommandMessage>))
+            .build();
         let _ = self.broker_sender.send(envelope);
     }
 
@@ -2500,16 +2505,16 @@ impl LauncherHost {
     /// Broadcast an instance status message to all instances and services.
     fn broadcast_instance_status(&self, instance_id: &str, event: LauncherInstanceLifecycle) {
         let status_msg = InstanceStatusMessage::new(instance_id, event);
-        let payload_ptr = Box::into_raw(Box::new(status_msg)) as *mut core::ffi::c_void;
-        let envelope = FfiEnvelope {
-            sender_id: stabby::string::String::from("launcher-host"),
-            target_instance_id: stabby::string::String::from("*"),
-            topic: stabby::string::String::from(TOPIC_CORE_INSTANCE_STATUS),
-            type_id: <InstanceStatusMessage as TypedMessage>::TYPE_ID,
-            payload: payload_ptr,
-            destroy_payload: Some(default_destroy_payload),
-            clone_payload: Some(default_clone_payload::<InstanceStatusMessage>),
-        };
+        let payload_ptr = box_payload(status_msg);
+        let envelope = FfiEnvelope::builder()
+            .sender_id("launcher-host")
+            .target_instance_id("*")
+            .topic(TOPIC_CORE_INSTANCE_STATUS)
+            .type_id(<InstanceStatusMessage as TypedMessage>::TYPE_ID)
+            .payload(payload_ptr)
+            .destroy_payload(Some(default_destroy_payload))
+            .clone_payload(Some(default_clone_payload::<InstanceStatusMessage>))
+            .build();
         self.route_message(envelope);
     }
 
@@ -2523,16 +2528,16 @@ impl LauncherHost {
             "message": result.as_ref().map(|s| s.as_str()).unwrap_or_else(|e| e.as_str()),
         });
         let payload_str = payload.to_string();
-        let payload_ptr = Box::into_raw(Box::new(payload_str)) as *mut core::ffi::c_void;
-        let envelope = FfiEnvelope {
-            sender_id: stabby::string::String::from("launcher-host"),
-            target_instance_id: stabby::string::String::from("*"),
-            topic: stabby::string::String::from(response_topic),
-            type_id: 0,
-            payload: payload_ptr,
-            destroy_payload: Some(default_destroy_payload),
-            clone_payload: Some(default_clone_payload::<String>),
-        };
+        let payload_ptr = box_payload(payload_str);
+        let envelope = FfiEnvelope::builder()
+            .sender_id("launcher-host")
+            .target_instance_id("*")
+            .topic(response_topic)
+            .type_id(0)
+            .payload(payload_ptr)
+            .destroy_payload(Some(default_destroy_payload))
+            .clone_payload(Some(default_clone_payload::<String>))
+            .build();
         self.route_message(envelope);
     }
 

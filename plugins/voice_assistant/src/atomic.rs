@@ -23,7 +23,6 @@ use smearor_voice_assistant_model::AssistantStatusMessage;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
-use tracing::debug;
 use tracing::trace;
 
 /// Which voice assistant view an atomic widget renders.

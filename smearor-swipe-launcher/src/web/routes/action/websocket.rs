@@ -11,6 +11,7 @@ use smearor_model_mcp::InvokeToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::sync::Arc;
@@ -135,16 +136,16 @@ fn handle_websocket_action(text: &str, instance_id: &str, state: &WebAppState) {
 
     let message = InvokeToolMessage::new(&plugin_id, &correlation_id, &arguments.to_string());
 
-    let payload_ptr = Box::into_raw(Box::new(message)) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: stabby::string::String::from(format!("web:{}", instance_id).as_str()),
-        target_instance_id: stabby::string::String::from(plugin_id.as_str()),
-        topic: stabby::string::String::from(InvokeToolMessage::topic()),
-        type_id: InvokeToolMessage::TYPE_ID,
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<InvokeToolMessage>),
-    };
+    let payload_ptr = box_payload(message);
+    let envelope = FfiEnvelope::builder()
+        .sender_id(format!("web:{}", instance_id))
+        .target_instance_id(plugin_id.as_str())
+        .topic(InvokeToolMessage::topic())
+        .type_id(InvokeToolMessage::TYPE_ID)
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<InvokeToolMessage>))
+        .build();
 
     let instances = state.instances.lock();
     let Ok(instances) = instances else {

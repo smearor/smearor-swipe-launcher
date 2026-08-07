@@ -20,6 +20,7 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
@@ -113,19 +114,19 @@ impl SysinfoService {
     }
 
     pub(crate) fn send_response<T: TypedMessage + SharedMessage + Clone>(&self, message: T, sender_id: &str) {
-        let payload_ptr = Box::into_raw(Box::new(message.clone())) as *mut core::ffi::c_void;
+        let payload_ptr = box_payload(message.clone());
         let sender_id_string = sender_id.to_string();
         let topic = message.topic();
         debug!("sysinfo: send_response topic={} to sender_id={}", topic, sender_id);
-        let envelope = FfiEnvelope {
-            sender_id: stabby::string::String::from(self.meta.id.clone()),
-            target_instance_id: stabby::string::String::from(sender_id_string.as_str()),
-            topic: stabby::string::String::from(topic),
-            type_id: T::TYPE_ID,
-            payload: payload_ptr,
-            destroy_payload: Some(default_destroy_payload),
-            clone_payload: Some(default_clone_payload::<T>),
-        };
+        let envelope = FfiEnvelope::builder()
+            .sender_id(self.meta.id.clone())
+            .target_instance_id(sender_id_string.as_str())
+            .topic(topic)
+            .type_id(T::TYPE_ID)
+            .payload(payload_ptr)
+            .destroy_payload(Some(default_destroy_payload))
+            .clone_payload(Some(default_clone_payload::<T>))
+            .build();
         if let Some(context) = &self.core_context {
             debug!("sysinfo: calling context.send_message");
             context.send_message(envelope);
@@ -261,16 +262,16 @@ async fn run_update_loop(
 }
 
 fn broadcast<T: Clone + MessageTopic + TypedMessage>(meta: &PluginMeta, core_context: &Option<FfiCoreContext>, message: T) {
-    let payload_ptr = Box::into_raw(Box::new(message.clone())) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: stabby::string::String::from(meta.id.clone()),
-        target_instance_id: stabby::string::String::from(""),
-        topic: stabby::string::String::from(T::topic()),
-        type_id: T::TYPE_ID,
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<T>),
-    };
+    let payload_ptr = box_payload(message.clone());
+    let envelope = FfiEnvelope::builder()
+        .sender_id(meta.id.clone())
+        .target_instance_id("")
+        .topic(T::topic())
+        .type_id(T::TYPE_ID)
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<T>))
+        .build();
 
     if let Some(context) = core_context {
         context.send_message(envelope);
@@ -281,15 +282,11 @@ impl TypedMessage for SysinfoCommandMessage {
     const TYPE_ID: u64 = generate_type_id("smearor_sysinfo_service::SysinfoCommandMessage");
 }
 
-// TODO: Check if this works actually
-
 impl MessageTopic for SysinfoCommandMessage {
     fn topic() -> &'static str {
         "service.sysinfo.command"
     }
 }
-
-// TODO: Check if this works actually
 
 impl SharedMessage for SysinfoCommandMessage {
     fn topic(&self) -> &'static str {

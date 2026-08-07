@@ -8,7 +8,6 @@ use smearor_network_model::NetworkConnectionState;
 use smearor_network_model::NetworkInterfaceType;
 use smearor_network_model::NetworkStatusMessage;
 use smearor_network_model::TOPIC_STATUS;
-use smearor_network_model::TOPIC_VPN_PROFILES;
 use smearor_network_model::VpnProfilesMessage;
 use smearor_network_model::WifiSignalLevel;
 use smearor_personalization_model::PersonalizationCommandMessage;

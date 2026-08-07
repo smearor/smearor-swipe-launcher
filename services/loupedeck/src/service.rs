@@ -32,6 +32,7 @@ use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use tracing::debug;
@@ -512,16 +513,16 @@ fn broadcast_connection(
 }
 
 fn broadcast_message<T: Clone + MessageTopic + TypedMessage>(meta: &PluginMeta, core_context: &Option<FfiCoreContext>, message: T) {
-    let payload_ptr = Box::into_raw(Box::new(message.clone())) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: meta.id.clone(),
-        target_instance_id: stabby::string::String::from(""),
-        topic: stabby::string::String::from(T::topic()),
-        type_id: T::TYPE_ID,
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<T>),
-    };
+    let payload_ptr = box_payload(message.clone());
+    let envelope = FfiEnvelope::builder()
+        .sender_id(meta.id.clone())
+        .target_instance_id("")
+        .topic(T::topic())
+        .type_id(T::TYPE_ID)
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<T>))
+        .build();
     if let Some(context) = core_context {
         context.send_message(envelope);
     }

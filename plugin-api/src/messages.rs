@@ -33,11 +33,19 @@ impl MessageTopic for () {
     }
 }
 
-// TODO: Check if this works actually
 impl<T: MessageTopic> MessageTopic for FfiEnvelopePayload<T> {
     fn topic() -> &'static str {
         T::topic()
     }
+}
+
+/// Box a payload and return a raw pointer suitable for `FfiEnvelope::payload`.
+///
+/// This is the standard way to transfer ownership of a message into an
+/// `FfiEnvelope`. The corresponding `destroy_payload` must be
+/// `default_destroy_payload` (or equivalent) to reclaim the allocation.
+pub fn box_payload<T>(payload: T) -> *mut core::ffi::c_void {
+    Box::into_raw(Box::new(payload)) as *mut core::ffi::c_void
 }
 
 /// A default `extern "C"` destructor for boxed messages.
@@ -72,10 +80,14 @@ pub extern "C" fn default_clone_payload<T: Clone>(ptr: *mut core::ffi::c_void) -
 ///
 /// The Host constructs this and passes it to plugin/service VTables.
 /// Receivers down-cast `payload` using the stable `type_id`.
+#[derive(typed_builder::TypedBuilder)]
 #[stabby::stabby(no_opt)]
 pub struct FfiEnvelope {
+    #[builder(setter(into))]
     pub sender_id: stabby::string::String,
+    #[builder(setter(into))]
     pub target_instance_id: stabby::string::String,
+    #[builder(setter(into))]
     pub topic: stabby::string::String,
     pub type_id: u64,
     pub payload: *mut core::ffi::c_void,
@@ -198,16 +210,16 @@ impl MessageBroadcasterInner {
 
     pub fn broadcast_message_to_instance<T: Clone + TypedMessage>(&self, target_instance_id: &str, topic: &str, payload: &T) {
         if let Some(ctx) = &self.core_context {
-            let payload_ptr = Box::into_raw(Box::new(payload.clone())) as *mut core::ffi::c_void;
-            let envelope = FfiEnvelope {
-                sender_id: stabby::string::String::from(self.meta.id.clone()),
-                target_instance_id: stabby::string::String::from(target_instance_id),
-                topic: stabby::string::String::from(topic),
-                type_id: T::TYPE_ID,
-                payload: payload_ptr,
-                destroy_payload: Some(default_destroy_payload),
-                clone_payload: Some(default_clone_payload::<T>),
-            };
+            let payload_ptr = box_payload(payload.clone());
+            let envelope = FfiEnvelope::builder()
+                .sender_id(self.meta.id.clone())
+                .target_instance_id(target_instance_id)
+                .topic(topic)
+                .type_id(T::TYPE_ID)
+                .payload(payload_ptr)
+                .destroy_payload(Some(default_destroy_payload))
+                .clone_payload(Some(default_clone_payload::<T>))
+                .build();
             ctx.send_message(envelope);
         }
     }
@@ -229,16 +241,16 @@ impl MessageBroadcasterInner {
 
     pub fn broadcast_string_to_instance(&self, target_instance_id: &str, topic: &str, payload: &str) {
         if let Some(ctx) = &self.core_context {
-            let boxed = Box::into_raw(Box::new(payload.to_string())) as *mut core::ffi::c_void;
-            let envelope = FfiEnvelope {
-                sender_id: stabby::string::String::from(self.meta.id.clone()),
-                target_instance_id: stabby::string::String::from(target_instance_id),
-                topic: stabby::string::String::from(topic),
-                type_id: generate_type_id("std::string::String"),
-                payload: boxed,
-                destroy_payload: Some(default_destroy_payload),
-                clone_payload: Some(default_clone_payload::<String>),
-            };
+            let boxed = box_payload(payload.to_string());
+            let envelope = FfiEnvelope::builder()
+                .sender_id(self.meta.id.clone())
+                .target_instance_id(target_instance_id)
+                .topic(topic)
+                .type_id(generate_type_id("std::string::String"))
+                .payload(boxed)
+                .destroy_payload(Some(default_destroy_payload))
+                .clone_payload(Some(default_clone_payload::<String>))
+                .build();
             ctx.send_message(envelope);
         }
     }

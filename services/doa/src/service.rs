@@ -26,6 +26,7 @@ use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::sync::Arc;
@@ -273,16 +274,16 @@ fn broadcast_status_from_state(shared_state: &Arc<Mutex<DoaSharedState>>, meta: 
 
 fn broadcast_status(meta: &PluginMeta, core_context: &Option<FfiCoreContext>, status: DoaStatusMessage) {
     if let Some(ctx) = core_context {
-        let payload_ptr = Box::into_raw(Box::new(status)) as *mut core::ffi::c_void;
-        let envelope = FfiEnvelope {
-            sender_id: stabby::string::String::from(meta.id.clone()),
-            target_instance_id: stabby::string::String::from("*"),
-            topic: stabby::string::String::from(DoaStatusMessage::topic()),
-            type_id: DoaStatusMessage::TYPE_ID,
-            payload: payload_ptr,
-            destroy_payload: Some(default_destroy_payload),
-            clone_payload: Some(default_clone_payload::<DoaStatusMessage>),
-        };
+        let payload_ptr = box_payload(status);
+        let envelope = FfiEnvelope::builder()
+            .sender_id(meta.id.clone())
+            .target_instance_id("*")
+            .topic(DoaStatusMessage::topic())
+            .type_id(DoaStatusMessage::TYPE_ID)
+            .payload(payload_ptr)
+            .destroy_payload(Some(default_destroy_payload))
+            .clone_payload(Some(default_clone_payload::<DoaStatusMessage>))
+            .build();
         ctx.send_message(envelope);
     } else {
         warn!("DoA Service: no core context available, cannot broadcast status");

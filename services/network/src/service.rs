@@ -43,6 +43,7 @@ use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
@@ -245,44 +246,44 @@ fn current_iso8601() -> String {
 }
 
 fn send_status(meta: &PluginMeta, core_context: &FfiCoreContext, status: NetworkStatusMessage) {
-    let payload_ptr = Box::into_raw(Box::new(status)) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: meta.id.clone(),
-        target_instance_id: stabby::string::String::from("*"),
-        topic: stabby::string::String::from(NetworkStatusMessage::topic()),
-        type_id: NetworkStatusMessage::TYPE_ID,
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<NetworkStatusMessage>),
-    };
+    let payload_ptr = box_payload(status);
+    let envelope = FfiEnvelope::builder()
+        .sender_id(meta.id.clone())
+        .target_instance_id("*")
+        .topic(NetworkStatusMessage::topic())
+        .type_id(NetworkStatusMessage::TYPE_ID)
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<NetworkStatusMessage>))
+        .build();
     core_context.send_message(envelope);
 }
 
 fn send_scan_results(meta: &PluginMeta, core_context: &FfiCoreContext, scan: ScanResultsMessage) {
-    let payload_ptr = Box::into_raw(Box::new(scan)) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: meta.id.clone(),
-        target_instance_id: stabby::string::String::from("*"),
-        topic: stabby::string::String::from(ScanResultsMessage::topic()),
-        type_id: ScanResultsMessage::TYPE_ID,
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<ScanResultsMessage>),
-    };
+    let payload_ptr = box_payload(scan);
+    let envelope = FfiEnvelope::builder()
+        .sender_id(meta.id.clone())
+        .target_instance_id("*")
+        .topic(ScanResultsMessage::topic())
+        .type_id(ScanResultsMessage::TYPE_ID)
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<ScanResultsMessage>))
+        .build();
     core_context.send_message(envelope);
 }
 
 fn send_vpn_profiles(meta: &PluginMeta, core_context: &FfiCoreContext, profiles: VpnProfilesMessage) {
-    let payload_ptr = Box::into_raw(Box::new(profiles)) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: meta.id.clone(),
-        target_instance_id: stabby::string::String::from("*"),
-        topic: stabby::string::String::from(VpnProfilesMessage::topic()),
-        type_id: VpnProfilesMessage::TYPE_ID,
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<VpnProfilesMessage>),
-    };
+    let payload_ptr = box_payload(profiles);
+    let envelope = FfiEnvelope::builder()
+        .sender_id(meta.id.clone())
+        .target_instance_id("*")
+        .topic(VpnProfilesMessage::topic())
+        .type_id(VpnProfilesMessage::TYPE_ID)
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<VpnProfilesMessage>))
+        .build();
     core_context.send_message(envelope);
 }
 
@@ -484,16 +485,16 @@ async fn run_network_async(
                                 continue;
                             }
                         };
-                        let payload_ptr = Box::into_raw(Box::new(payload)) as *mut core::ffi::c_void;
-                        let envelope = FfiEnvelope {
-                            sender_id: meta.id.clone(),
-                            target_instance_id: stabby::string::String::from("*"),
-                            topic: stabby::string::String::from(TOPIC_HTTP_REQUEST),
-                            type_id: generate_type_id("std::string::String"),
-                            payload: payload_ptr,
-                            destroy_payload: Some(default_destroy_payload),
-                            clone_payload: Some(default_clone_payload::<String>),
-                        };
+                        let payload_ptr = box_payload(payload);
+                        let envelope = FfiEnvelope::builder()
+                            .sender_id(meta.id.clone())
+                            .target_instance_id("*")
+                            .topic(TOPIC_HTTP_REQUEST)
+                            .type_id(generate_type_id("std::string::String"))
+                            .payload(payload_ptr)
+                            .destroy_payload(Some(default_destroy_payload))
+                            .clone_payload(Some(default_clone_payload::<String>))
+                            .build();
                         core_context.send_message(envelope);
                     }
                     None => {

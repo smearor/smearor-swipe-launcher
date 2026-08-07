@@ -34,6 +34,7 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
+use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 use std::str::FromStr;
@@ -91,19 +92,19 @@ impl PersonalizationService {
     }
 
     pub(crate) fn send_response<T: TypedMessage + SharedMessage + Clone>(&self, message: T, sender_id: &str) {
-        let payload_ptr = Box::into_raw(Box::new(message.clone())) as *mut core::ffi::c_void;
+        let payload_ptr = box_payload(message.clone());
         let sender_id_string = sender_id.to_string();
         let topic = message.topic();
         trace!("personalization: send_response topic={} to sender_id={}", topic, sender_id);
-        let envelope = FfiEnvelope {
-            sender_id: self.meta.id.clone(),
-            target_instance_id: stabby::string::String::from(sender_id_string.as_str()),
-            topic: stabby::string::String::from(topic),
-            type_id: T::TYPE_ID,
-            payload: payload_ptr,
-            destroy_payload: Some(default_destroy_payload),
-            clone_payload: Some(default_clone_payload::<T>),
-        };
+        let envelope = FfiEnvelope::builder()
+            .sender_id(self.meta.id.clone())
+            .target_instance_id(sender_id_string.as_str())
+            .topic(topic)
+            .type_id(T::TYPE_ID)
+            .payload(payload_ptr)
+            .destroy_payload(Some(default_destroy_payload))
+            .clone_payload(Some(default_clone_payload::<T>))
+            .build();
         if let Some(context) = &self.core_context {
             context.send_message(envelope);
         } else {
@@ -431,16 +432,16 @@ pub(crate) fn parse_locale(arguments: &str) -> Result<String, String> {
 }
 
 fn broadcast<T: Clone + MessageTopic + TypedMessage>(meta: &PluginMeta, core_context: &Option<FfiCoreContext>, message: T) {
-    let payload_ptr = Box::into_raw(Box::new(message.clone())) as *mut core::ffi::c_void;
-    let envelope = FfiEnvelope {
-        sender_id: meta.id.clone(),
-        target_instance_id: stabby::string::String::from(""),
-        topic: stabby::string::String::from(T::topic()),
-        type_id: T::TYPE_ID,
-        payload: payload_ptr,
-        destroy_payload: Some(default_destroy_payload),
-        clone_payload: Some(default_clone_payload::<T>),
-    };
+    let payload_ptr = box_payload(message.clone());
+    let envelope = FfiEnvelope::builder()
+        .sender_id(meta.id.clone())
+        .target_instance_id("")
+        .topic(T::topic())
+        .type_id(T::TYPE_ID)
+        .payload(payload_ptr)
+        .destroy_payload(Some(default_destroy_payload))
+        .clone_payload(Some(default_clone_payload::<T>))
+        .build();
 
     if let Some(context) = core_context {
         context.send_message(envelope);

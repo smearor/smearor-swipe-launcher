@@ -87,6 +87,7 @@ pub use messages::MessageRouter;
 pub use messages::MessageTopic;
 pub use messages::MessageTopicBroadcaster;
 pub use messages::SharedMessage;
+pub use messages::box_payload;
 pub use messages::default_clone_payload;
 pub use messages::default_destroy_payload;
 pub use meta::PluginMeta;
