@@ -13,6 +13,7 @@
 mod command_message;
 mod connection_status;
 mod device_command;
+mod device_metadata;
 mod dimming_config;
 mod dimming_phase;
 mod dimming_state;
@@ -28,6 +29,7 @@ pub use command_message::MacroPadCommandMessage;
 pub use command_message::MacroPadCommandType;
 pub use connection_status::MacroPadConnectionStatus;
 pub use device_command::DeviceCommand;
+pub use device_metadata::MacroPadDeviceMetadata;
 pub use dimming_config::DimmingConfig;
 pub use dimming_config::DimmingConfigOverride;
 pub use dimming_phase::DimmingPhase;

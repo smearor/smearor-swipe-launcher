@@ -31,16 +31,20 @@ use smearor_model_compositor::TOPIC_WORKSPACE_CHANGED;
 use smearor_model_compositor::TOPIC_WORKSPACE_LIFECYCLE;
 use smearor_model_compositor::TOPIC_WORKSPACE_SNAPSHOT;
 use smearor_model_compositor::TOPIC_WORKSPACE_SNAPSHOT_REQUEST;
-use smearor_model_instance_control::InstanceLifecycleEvent;
 use smearor_model_instance_control::InstanceLoadMessage;
 use smearor_model_instance_control::InstanceReloadMessage;
+use smearor_model_instance_control::InstanceStartMessage;
 use smearor_model_instance_control::InstanceStatusMessage;
 use smearor_model_instance_control::InstanceStopMessage;
 use smearor_model_instance_control::InstanceType as ModelInstanceType;
+use smearor_model_instance_control::InstanceUnloadMessage;
+use smearor_model_instance_control::LauncherInstanceLifecycle;
 use smearor_model_instance_control::TOPIC_CORE_INSTANCE_LOAD;
 use smearor_model_instance_control::TOPIC_CORE_INSTANCE_RELOAD;
+use smearor_model_instance_control::TOPIC_CORE_INSTANCE_START;
 use smearor_model_instance_control::TOPIC_CORE_INSTANCE_STATUS;
 use smearor_model_instance_control::TOPIC_CORE_INSTANCE_STOP;
+use smearor_model_instance_control::TOPIC_CORE_INSTANCE_UNLOAD;
 use smearor_model_macropad::MacroPadCommand;
 use smearor_model_macropad::MacroPadCommandMessage;
 use smearor_model_macropad::MacroPadConnectionStatus;
@@ -150,6 +154,18 @@ pub struct LauncherHost {
     pub(crate) css_watcher: Arc<CssWatcher>,
     /// Config file watcher for TOML hot-reload.
     pub(crate) config_watcher: Arc<ConfigWatcher>,
+    /// Registry mapping `auto_start_topic` / `auto_stop_topic` strings to instance IDs and actions.
+    /// Used for event-driven lifecycle control via the message broker.
+    pub(crate) topic_instance_registry: Arc<Mutex<HashMap<String, (String, TopicAction)>>>,
+}
+
+/// Action to perform when a message is received on an `auto_start_topic` or `auto_stop_topic`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TopicAction {
+    /// Start the associated instance.
+    Start,
+    /// Stop the associated instance.
+    Stop,
 }
 
 impl LauncherHost {
@@ -177,6 +193,7 @@ impl LauncherHost {
             macropad_compound_dispatched: Arc::new(Mutex::new(HashMap::new())),
             css_watcher: Arc::new(CssWatcher::new()),
             config_watcher: Arc::new(ConfigWatcher::new()),
+            topic_instance_registry: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -207,7 +224,11 @@ impl LauncherHost {
 
     /// Start the embedded web server with the given configuration.
     pub fn start_web_server(&self, config: crate::web::WebServerConfig) {
-        let web_server = crate::web::WebServer::new(config, self.instances.clone(), self.broker_sender.clone());
+        let mcp_command_sender = self.mcp_command_sender.lock().ok().and_then(|g| g.clone()).unwrap_or_else(|| {
+            let (_tx, _rx) = async_channel::unbounded::<smearor_mcp_server::McpCommand>();
+            _tx
+        });
+        let web_server = crate::web::WebServer::new(config, self.instances.clone(), self.broker_sender.clone(), mcp_command_sender);
 
         // Register all existing Web instances for WebSocket updates
         if let Ok(instances) = self.instances.lock() {
@@ -745,8 +766,19 @@ impl LauncherHost {
                     ModelInstanceType::Headless => crate::instance::InstanceType::Headless,
                     ModelInstanceType::Web => crate::instance::InstanceType::Web,
                 };
+                let persist = msg.persist;
                 let response_topic = msg.response_topic.to_string();
-                let result = self.load_instance(instance_id, &config_path, instance_type);
+                let result = self.load_instance(instance_id, &config_path, instance_type, persist, true);
+                self.send_broker_response(&response_topic, &result);
+            }
+            return;
+        }
+        if topic == TOPIC_CORE_INSTANCE_START {
+            if !envelope.payload.is_null() {
+                let msg = unsafe { &*(envelope.payload as *const InstanceStartMessage) };
+                let instance_id = msg.instance_id.to_string();
+                let response_topic = msg.response_topic.to_string();
+                let result = self.start_instance(&instance_id);
                 self.send_broker_response(&response_topic, &result);
             }
             return;
@@ -761,6 +793,16 @@ impl LauncherHost {
             }
             return;
         }
+        if topic == TOPIC_CORE_INSTANCE_UNLOAD {
+            if !envelope.payload.is_null() {
+                let msg = unsafe { &*(envelope.payload as *const InstanceUnloadMessage) };
+                let instance_id = msg.instance_id.to_string();
+                let response_topic = msg.response_topic.to_string();
+                let result = self.unload_instance(&instance_id);
+                self.send_broker_response(&response_topic, &result);
+            }
+            return;
+        }
         if topic == TOPIC_CORE_INSTANCE_RELOAD {
             if !envelope.payload.is_null() {
                 let msg = unsafe { &*(envelope.payload as *const InstanceReloadMessage) };
@@ -769,6 +811,28 @@ impl LauncherHost {
                 let response_topic = msg.response_topic.to_string();
                 let result = self.reload_instance(&instance_id, &config_path);
                 self.send_broker_response(&response_topic, &result);
+            }
+            return;
+        }
+
+        // Handle auto_start_topic / auto_stop_topic for event-driven lifecycle control.
+        let topic_action = {
+            if let Ok(registry) = self.topic_instance_registry.lock() {
+                registry.get(&topic).map(|(id, action)| (id.clone(), *action))
+            } else {
+                None
+            }
+        };
+        if let Some((instance_id, action)) = topic_action {
+            match action {
+                TopicAction::Start => {
+                    debug!("auto_start_topic '{}' triggered start for instance '{}'", topic, instance_id);
+                    let _ = self.start_instance(&instance_id);
+                }
+                TopicAction::Stop => {
+                    debug!("auto_stop_topic '{}' triggered stop for instance '{}'", topic, instance_id);
+                    let _ = self.stop_instance(&instance_id);
+                }
             }
             return;
         }
@@ -810,7 +874,7 @@ impl LauncherHost {
                     // Try to load a config file for this instance.
                     let config_path = format!("configs/launcher/{}.toml", instance_id);
                     if std::path::Path::new(&config_path).exists() {
-                        match self.load_instance(instance_id.clone(), &config_path, crate::instance::InstanceType::Headless) {
+                        match self.load_instance(instance_id.clone(), &config_path, crate::instance::InstanceType::Headless, false, true) {
                             Ok(_) => {
                                 debug!("Loaded headless instance '{}' for MacroPad device '{}'", instance_id, device_id);
                                 // Attach device metadata to the instance.
@@ -859,12 +923,12 @@ impl LauncherHost {
                     self.render_buttons_to_device(&instance_id);
                 }
             } else {
-                // Stop the instance on disconnect.
+                // Unload the instance on disconnect.
                 let exists = self.instances.lock().map(|instances| instances.contains_key(&instance_id)).unwrap_or(false);
                 if exists {
-                    match self.stop_instance(&instance_id) {
-                        Ok(_) => debug!("Stopped headless instance '{}' for MacroPad device '{}'", instance_id, device_id),
-                        Err(e) => error!("Failed to stop instance '{}': {}", instance_id, e),
+                    match self.unload_instance(&instance_id) {
+                        Ok(_) => debug!("Unloaded headless instance '{}' for MacroPad device '{}'", instance_id, device_id),
+                        Err(e) => error!("Failed to unload instance '{}': {}", instance_id, e),
                     }
                 }
             }
@@ -1397,7 +1461,7 @@ impl LauncherHost {
         }
 
         let payload = crate::web::routes::extract_payload_as_json(envelope);
-        let update = crate::web::routes::WebUpdate {
+        let update = crate::web::web_update::WebUpdate {
             instance_id: instance_id.to_string(),
             topic: envelope.topic.to_string(),
             sender_id: envelope.sender_id.to_string(),
@@ -1420,7 +1484,7 @@ impl LauncherHost {
             return;
         }
 
-        let update = crate::web::routes::WebUpdate {
+        let update = crate::web::web_update::WebUpdate {
             instance_id: instance_id.to_string(),
             topic: "area.changed".to_string(),
             sender_id: "system".to_string(),
@@ -1443,7 +1507,7 @@ impl LauncherHost {
             return;
         }
 
-        let update = crate::web::routes::WebUpdate {
+        let update = crate::web::web_update::WebUpdate {
             instance_id: instance_id.to_string(),
             topic: "widget.update".to_string(),
             sender_id: "system".to_string(),
@@ -1453,8 +1517,18 @@ impl LauncherHost {
     }
 
     /// Dynamically load a new launcher instance from a config file path.
-    /// Called at runtime (after GTK activation).
-    pub fn load_instance(&self, instance_id: String, config_path: &str, instance_type: crate::instance::InstanceType) -> Result<String, String> {
+    ///
+    /// Loads the instance into `Ready` state. If `persist` is true, the instance
+    /// is written to the state file. If `auto_start` is true and the config's
+    /// `auto_start` field is true, the instance is automatically started.
+    pub fn load_instance(
+        &self,
+        instance_id: String,
+        config_path: &str,
+        instance_type: crate::instance::InstanceType,
+        persist: bool,
+        auto_start: bool,
+    ) -> Result<String, String> {
         validate_config_path(config_path)?;
         validate_instance_id(&instance_id)?;
 
@@ -1468,15 +1542,85 @@ impl LauncherHost {
             }
         }
 
-        self.create_instance(instance_id.clone(), config, instance_type);
+        // Set lifecycle to Loading before creating the instance.
+        self.create_instance(instance_id.clone(), config.clone(), instance_type);
+
+        // Store the config path for later reload.
+        if let Ok(instances) = self.instances.lock() {
+            if let Some(instance) = instances.get(&instance_id) {
+                if let Ok(mut config_path_guard) = instance.config_path.lock() {
+                    *config_path_guard = Some(config_path.to_string());
+                }
+            }
+        }
+
+        // Set lifecycle to Ready.
+        if let Ok(instances) = self.instances.lock() {
+            if let Some(instance) = instances.get(&instance_id) {
+                if let Ok(mut lifecycle) = instance.lifecycle.lock() {
+                    *lifecycle = LauncherInstanceLifecycle::Ready;
+                }
+            }
+        }
 
         if instance_type == crate::instance::InstanceType::Gtk {
             self.css_watcher.watch_instance_css(std::path::Path::new(config_path));
         }
 
+        // Subscribe to auto_start_topic / auto_stop_topic if configured.
+        self.subscribe_instance_topics(&instance_id, &config);
+
+        if persist {
+            self.persist_instance(&instance_id, config_path, instance_type);
+        }
+
+        self.broadcast_instance_status(&instance_id, LauncherInstanceLifecycle::Ready);
+
+        // Auto-start if requested and config allows it.
+        if auto_start && config.launcher.auto_start {
+            self.start_instance(&instance_id)?;
+        }
+
+        Ok(format!("Instance '{}' loaded from {}", instance_id, config_path))
+    }
+
+    /// Start a loaded (Ready) launcher instance — builds its window or headless areas.
+    ///
+    /// Transitions the instance from `Ready` to `Running` via the `Starting` intermediate state.
+    /// If the instance is already `Running`, this is a no-op (idempotent).
+    /// If `auto_stop_ttl` is configured, spawns a TTL timer task.
+    pub fn start_instance(&self, instance_id: &str) -> Result<String, String> {
+        let instance_type = {
+            let instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
+            let instance = instances.get(instance_id).ok_or_else(|| format!("Instance '{}' not found", instance_id))?;
+            instance.instance_type
+        };
+
+        // Check current lifecycle state and abort stale TTL timer.
+        {
+            let instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
+            let instance = instances.get(instance_id).ok_or_else(|| format!("Instance '{}' not found", instance_id))?;
+            let mut lifecycle_guard = instance.lifecycle.lock().map_err(|e| format!("Failed to lock lifecycle: {}", e))?;
+            if *lifecycle_guard == LauncherInstanceLifecycle::Running {
+                return Ok(format!("Instance '{}' is already running", instance_id));
+            }
+            if *lifecycle_guard != LauncherInstanceLifecycle::Ready {
+                return Err(format!("Instance '{}' is not in Ready state (current: {:?})", instance_id, *lifecycle_guard));
+            }
+            *lifecycle_guard = LauncherInstanceLifecycle::Starting;
+
+            // Abort any stale TTL timer from a previous run.
+            if let Ok(mut auto_stop_guard) = instance.auto_stop_handle.lock() {
+                if let Some(old_handle) = auto_stop_guard.take() {
+                    old_handle.abort();
+                }
+            }
+        }
+
+        // Build window or headless areas.
         if instance_type == crate::instance::InstanceType::Gtk {
             let self_clone = self.clone();
-            let instance_id_clone = instance_id.clone();
+            let instance_id_clone = instance_id.to_string();
             gtk4::glib::idle_add_local_once(move || {
                 if let Ok(instances) = self_clone.instances.lock() {
                     if let Some(instance) = instances.get(&instance_id_clone) {
@@ -1485,32 +1629,178 @@ impl LauncherHost {
                                 if let Ok(mut window_guard) = instance.window.lock() {
                                     *window_guard = Some(window);
                                 }
-                                debug!("Dynamically loaded GTK instance '{}'", instance_id_clone);
+                                debug!("Started GTK instance '{}'", instance_id_clone);
                             }
                             Err(e) => {
-                                error!("Failed to build window for dynamic instance '{}': {}", instance_id_clone, e);
+                                error!("Failed to build window for instance '{}': {}", instance_id_clone, e);
+                                // Rollback lifecycle to Ready.
+                                if let Ok(mut lifecycle) = instance.lifecycle.lock() {
+                                    *lifecycle = LauncherInstanceLifecycle::Ready;
+                                }
                             }
                         }
                     }
                 }
             });
         } else {
-            debug!("Dynamically loaded {:?} instance '{}'", instance_type, instance_id);
-            // Set up areas for headless and web instances (no GTK window).
+            debug!("Started {:?} instance '{}'", instance_type, instance_id);
             if instance_type == crate::instance::InstanceType::Headless || instance_type == crate::instance::InstanceType::Web {
                 if let Ok(instances) = self.instances.lock() {
-                    if let Some(instance) = instances.get(&instance_id) {
+                    if let Some(instance) = instances.get(instance_id) {
                         instance.build_headless();
                     }
                 }
             }
         }
 
-        self.calculate_coordinated_sizes();
-        self.persist_instance(&instance_id, config_path, instance_type);
-        self.broadcast_instance_status(&instance_id, InstanceLifecycleEvent::Loaded);
+        // Set lifecycle to Running.
+        let auto_stop_ttl = {
+            let instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
+            let instance = instances.get(instance_id).ok_or_else(|| format!("Instance '{}' not found", instance_id))?;
+            if let Ok(mut lifecycle) = instance.lifecycle.lock() {
+                *lifecycle = LauncherInstanceLifecycle::Running;
+            }
+            instance.config.launcher.auto_stop_ttl
+        };
 
-        Ok(format!("Instance '{}' loaded from {}", instance_id, config_path))
+        self.calculate_coordinated_sizes();
+
+        // Update persisted state to running.
+        self.update_persisted_lifecycle(instance_id, "running");
+
+        self.broadcast_instance_status(instance_id, LauncherInstanceLifecycle::Running);
+
+        // Spawn auto-stop TTL timer if configured.
+        if let Some(ttl) = auto_stop_ttl {
+            let instance_id_owned = instance_id.to_string();
+            let broker_sender = self.broker_sender.clone();
+            let handle = tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(ttl)).await;
+                debug!("Auto-stop TTL expired for instance '{}', stopping", instance_id_owned);
+                let stop_msg = InstanceStopMessage::new(&instance_id_owned, "");
+                let payload_ptr = Box::into_raw(Box::new(stop_msg)) as *mut core::ffi::c_void;
+                let envelope = FfiEnvelope {
+                    sender_id: stabby::string::String::from("auto-stop-ttl"),
+                    target_instance_id: stabby::string::String::from("launcher-host"),
+                    topic: stabby::string::String::from(TOPIC_CORE_INSTANCE_STOP),
+                    type_id: <InstanceStopMessage as TypedMessage>::TYPE_ID,
+                    payload: payload_ptr,
+                    destroy_payload: Some(default_destroy_payload),
+                    clone_payload: Some(default_clone_payload::<InstanceStopMessage>),
+                };
+                let _ = broker_sender.send(envelope);
+            });
+            if let Ok(instances) = self.instances.lock() {
+                if let Some(instance) = instances.get(instance_id) {
+                    if let Ok(mut auto_stop_guard) = instance.auto_stop_handle.lock() {
+                        *auto_stop_guard = Some(handle);
+                    }
+                }
+            }
+        }
+
+        Ok(format!("Instance '{}' started", instance_id))
+    }
+
+    /// Subscribe to `auto_start_topic` and `auto_stop_topic` for event-driven lifecycle control.
+    ///
+    /// Called during `load_instance`. The subscriptions are topic-based — any message
+    /// sent to the configured topic triggers the corresponding lifecycle action.
+    fn subscribe_instance_topics(&self, instance_id: &str, config: &SwipeLauncherConfig) {
+        if let Some(ref start_topic) = config.launcher.auto_start_topic {
+            debug!("Instance '{}' subscribed to auto_start_topic '{}'", instance_id, start_topic);
+            // Topic subscriptions are handled by the broker routing in route_message.
+            // We store the mapping so that when a message arrives on this topic,
+            // we know which instance to start.
+            if let Ok(mut registry) = self.topic_instance_registry.lock() {
+                registry.insert(start_topic.clone(), (instance_id.to_string(), TopicAction::Start));
+            }
+        }
+        if let Some(ref stop_topic) = config.launcher.auto_stop_topic {
+            debug!("Instance '{}' subscribed to auto_stop_topic '{}'", instance_id, stop_topic);
+            if let Ok(mut registry) = self.topic_instance_registry.lock() {
+                registry.insert(stop_topic.clone(), (instance_id.to_string(), TopicAction::Stop));
+            }
+        }
+    }
+
+    /// Unsubscribe from `auto_start_topic` and `auto_stop_topic`.
+    fn unsubscribe_instance_topics(&self, instance_id: &str) {
+        if let Ok(mut registry) = self.topic_instance_registry.lock() {
+            registry.retain(|_, (id, _)| id != instance_id);
+        }
+    }
+
+    /// Update the lifecycle field in the persisted state file without reloading the instance.
+    fn update_persisted_lifecycle(&self, instance_id: &str, lifecycle: &str) {
+        let state_path = get_instances_state_path();
+        let mut entries = read_instances_state(&state_path);
+        for entry in &mut entries {
+            if entry.instance_id == instance_id {
+                entry.lifecycle = lifecycle.to_string();
+                break;
+            }
+        }
+        write_instances_state(&state_path, &entries);
+    }
+
+    /// Unload a stopped (Ready) launcher instance — removes plugins, watchers, and persistence.
+    ///
+    /// Transitions the instance from `Ready` to removed. If the instance is `Running`,
+    /// it is stopped first. This is the full removal — the instance ID is freed.
+    pub fn unload_instance(&self, instance_id: &str) -> Result<String, String> {
+        // Check if instance exists and its lifecycle state.
+        let current_lifecycle = {
+            let instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
+            let instance = instances.get(instance_id).ok_or_else(|| format!("Instance '{}' not found", instance_id))?;
+            instance.lifecycle.lock().map(|g| g.clone()).unwrap_or(LauncherInstanceLifecycle::Ready)
+        };
+
+        // If running, stop first.
+        if current_lifecycle == LauncherInstanceLifecycle::Running {
+            self.stop_instance(instance_id)?;
+        }
+
+        // Now instance should be in Ready. Remove it.
+        let instance = {
+            let mut instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
+            instances.remove(instance_id).ok_or_else(|| format!("Instance '{}' not found", instance_id))?
+        };
+
+        // Cancel any remaining TTL timer.
+        if let Ok(mut auto_stop_guard) = instance.auto_stop_handle.lock() {
+            if let Some(handle) = auto_stop_guard.take() {
+                handle.abort();
+            }
+        }
+
+        // Unsubscribe from topic-based lifecycle control.
+        self.unsubscribe_instance_topics(instance_id);
+
+        // Remove CSS provider and file watch for this instance (GTK only).
+        if instance.instance_type == crate::instance::InstanceType::Gtk {
+            if let Some(config_path) = self.config_watcher.get_config_path(instance_id) {
+                self.css_watcher.remove_instance_css(&config_path);
+            }
+        }
+
+        // Remove config file watches.
+        self.config_watcher.remove_instance(instance_id);
+
+        // Unload plugins.
+        instance.plugin_manager.unload_plugins();
+
+        // Remove MCP tools/resources/prompts.
+        self.mcp_registry.remove_tools_by_instance(instance_id);
+        self.mcp_registry.remove_resources_by_instance(instance_id);
+        self.mcp_registry.remove_prompts_by_instance(instance_id);
+
+        // Unpersist.
+        self.unpersist_instance(instance_id);
+
+        self.broadcast_instance_status(instance_id, LauncherInstanceLifecycle::Unloading);
+
+        Ok(format!("Instance '{}' unloaded", instance_id))
     }
 
     /// Render all visible area plugins to button images and send them to the MacroPad device.
@@ -2006,73 +2296,121 @@ impl LauncherHost {
         }
     }
 
-    /// Stop and remove a running launcher instance.
+    /// Stop a running launcher instance — closes its window or headless areas.
+    ///
+    /// Transitions the instance from `Running` to `Ready`. The instance remains
+    /// loaded (plugins stay in memory) and can be started again with `start_instance`.
+    /// If the instance is already `Ready`, this is a no-op (idempotent).
+    /// Cancels any active `auto_stop_ttl` timer.
     pub fn stop_instance(&self, instance_id: &str) -> Result<String, String> {
-        let instance = {
-            let mut instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
-            instances.remove(instance_id).ok_or_else(|| format!("Instance '{}' not found", instance_id))?
-        };
+        // Check lifecycle state and cancel TTL timer.
+        {
+            let instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
+            let instance = instances.get(instance_id).ok_or_else(|| format!("Instance '{}' not found", instance_id))?;
+            let mut lifecycle_guard = instance.lifecycle.lock().map_err(|e| format!("Failed to lock lifecycle: {}", e))?;
+            if *lifecycle_guard == LauncherInstanceLifecycle::Ready {
+                return Ok(format!("Instance '{}' is already stopped (Ready)", instance_id));
+            }
+            if *lifecycle_guard != LauncherInstanceLifecycle::Running {
+                return Err(format!("Instance '{}' is not in Running state (current: {:?})", instance_id, *lifecycle_guard));
+            }
+            *lifecycle_guard = LauncherInstanceLifecycle::Stopping;
+
+            // Cancel any active TTL timer.
+            if let Ok(mut auto_stop_guard) = instance.auto_stop_handle.lock() {
+                if let Some(handle) = auto_stop_guard.take() {
+                    handle.abort();
+                }
+            }
+        }
 
         let instance_id_owned = instance_id.to_string();
-        if instance.instance_type == crate::instance::InstanceType::Gtk {
+        let instance_type = {
+            let instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
+            instances
+                .get(instance_id)
+                .map(|i| i.instance_type)
+                .unwrap_or(crate::instance::InstanceType::Gtk)
+        };
+
+        if instance_type == crate::instance::InstanceType::Gtk {
+            let self_clone = self.clone();
             let instance_id_for_closure = instance_id_owned.clone();
             gtk4::glib::idle_add_local_once(move || {
-                if let Some(handler_id) = instance.close_handler_id.lock().ok().and_then(|mut g| g.take()) {
-                    if let Ok(window_guard) = instance.window.lock() {
-                        if let Some(ref window) = *window_guard {
-                            window.disconnect(handler_id);
+                if let Ok(instances) = self_clone.instances.lock() {
+                    if let Some(instance) = instances.get(&instance_id_for_closure) {
+                        if let Some(handler_id) = instance.close_handler_id.lock().ok().and_then(|mut g| g.take()) {
+                            if let Ok(window_guard) = instance.window.lock() {
+                                if let Some(ref window) = *window_guard {
+                                    window.disconnect(handler_id);
+                                }
+                            }
                         }
+                        if let Ok(mut window_guard) = instance.window.lock() {
+                            if let Some(window) = window_guard.take() {
+                                window.close();
+                            }
+                        }
+                        if let Ok(area_manager) = instance.area_manager.lock() {
+                            area_manager.remove_all_areas_keep_plugins();
+                        }
+                        debug!("Stopped GTK instance '{}'", instance_id_for_closure);
                     }
                 }
-                if let Ok(mut window_guard) = instance.window.lock() {
-                    if let Some(window) = window_guard.take() {
-                        window.close();
-                    }
-                }
-                if let Ok(area_manager) = instance.area_manager.lock() {
-                    area_manager.remove_all_areas_immediate();
-                }
-                instance.plugin_manager.unload_plugins();
-                debug!("Stopped and removed GTK instance '{}'", instance_id_for_closure);
             });
         } else {
-            if instance.instance_type == crate::instance::InstanceType::Web {
+            if instance_type == crate::instance::InstanceType::Web {
                 if let Ok(ws_guard) = self.web_server.lock() {
                     if let Some(ref web_server) = *ws_guard {
                         web_server.unregister_instance(&instance_id_owned);
                     }
                 }
             }
-            if let Ok(area_manager) = instance.area_manager.lock() {
-                area_manager.remove_all_areas_immediate();
+            if let Ok(instances) = self.instances.lock() {
+                if let Some(instance) = instances.get(&instance_id_owned) {
+                    if let Ok(area_manager) = instance.area_manager.lock() {
+                        area_manager.remove_all_areas_keep_plugins();
+                    }
+                }
             }
-            instance.plugin_manager.unload_plugins();
-            debug!("Stopped and removed {:?} instance '{}'", instance.instance_type, instance_id_owned);
+            debug!("Stopped {:?} instance '{}'", instance_type, instance_id_owned);
         }
 
-        self.mcp_registry.remove_tools_by_instance(instance_id);
-        self.mcp_registry.remove_resources_by_instance(instance_id);
-        self.mcp_registry.remove_prompts_by_instance(instance_id);
-
-        // Remove CSS provider and file watch for this instance (GTK only).
-        if instance.instance_type == crate::instance::InstanceType::Gtk {
-            if let Some(config_path) = self.config_watcher.get_config_path(instance_id) {
-                self.css_watcher.remove_instance_css(&config_path);
+        // Set lifecycle to Ready.
+        if let Ok(instances) = self.instances.lock() {
+            if let Some(instance) = instances.get(instance_id) {
+                if let Ok(mut lifecycle) = instance.lifecycle.lock() {
+                    *lifecycle = LauncherInstanceLifecycle::Ready;
+                }
             }
         }
-
-        // Remove config file watches for this instance.
-        self.config_watcher.remove_instance(instance_id);
 
         self.calculate_coordinated_sizes();
-        self.unpersist_instance(instance_id);
-        self.broadcast_instance_status(instance_id, InstanceLifecycleEvent::Stopped);
+        self.update_persisted_lifecycle(instance_id, "ready");
+        self.broadcast_instance_status(instance_id, LauncherInstanceLifecycle::Ready);
 
         Ok(format!("Instance '{}' stopped", instance_id))
     }
 
-    /// Hot-reload an instance: stop and re-load with the same ID atomically.
+    /// Hot-reload an instance: stop, unload, re-load, and restore the previous lifecycle state.
+    ///
+    /// The previous lifecycle state (Running or Ready) is preserved across the reload.
+    /// `auto_start` from the config file is suppressed during reload — the instance
+    /// returns to whatever state it was in before the reload.
     pub fn reload_instance(&self, instance_id: &str, config_path: &str) -> Result<String, String> {
+        // Save previous lifecycle state.
+        let previous_lifecycle = {
+            if let Ok(instances) = self.instances.lock() {
+                if let Some(instance) = instances.get(instance_id) {
+                    instance.lifecycle.lock().map(|g| g.clone()).unwrap_or(LauncherInstanceLifecycle::Ready)
+                } else {
+                    return Err(format!("Instance '{}' not found", instance_id));
+                }
+            } else {
+                return Err(format!("Failed to lock instances for reload of '{}'", instance_id));
+            }
+        };
+
         let instance_type = {
             if let Ok(instances) = self.instances.lock() {
                 instances
@@ -2083,23 +2421,37 @@ impl LauncherHost {
                 crate::instance::InstanceType::Gtk
             }
         };
-        let _ = self.stop_instance(instance_id);
-        let result = self.load_instance(instance_id.to_string(), config_path, instance_type);
-        self.broadcast_instance_status(instance_id, InstanceLifecycleEvent::Reloaded);
+
+        // Unload the instance entirely.
+        self.unload_instance(instance_id)?;
+
+        // Re-load with auto_start suppressed (false) — we'll restore the previous state manually.
+        let result = self.load_instance(instance_id.to_string(), config_path, instance_type, true, false);
+
+        // Restore previous lifecycle state.
+        if previous_lifecycle == LauncherInstanceLifecycle::Running {
+            if let Err(e) = self.start_instance(instance_id) {
+                error!("Failed to restore Running state after reload of '{}': {}", instance_id, e);
+            }
+        }
+
+        self.broadcast_instance_status(instance_id, LauncherInstanceLifecycle::Ready);
         result
     }
 
-    /// List all currently running launcher instances.
+    /// List all currently loaded launcher instances with their lifecycle state.
     pub fn list_instances(&self) -> Result<String, String> {
         let instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
         let list: Vec<serde_json::Value> = instances
             .values()
             .map(|inst| {
                 let has_window = inst.window.lock().ok().map(|g| g.is_some()).unwrap_or(false);
+                let lifecycle = inst.lifecycle.lock().map(|g| g.as_str().to_string()).unwrap_or_else(|_| "unknown".to_string());
                 serde_json::json!({
                     "instance_id": inst.instance_id,
                     "instance_type": inst.instance_type.as_str(),
                     "has_window": has_window,
+                    "lifecycle": lifecycle,
                 })
             })
             .collect();
@@ -2146,7 +2498,7 @@ impl LauncherHost {
     }
 
     /// Broadcast an instance status message to all instances and services.
-    fn broadcast_instance_status(&self, instance_id: &str, event: InstanceLifecycleEvent) {
+    fn broadcast_instance_status(&self, instance_id: &str, event: LauncherInstanceLifecycle) {
         let status_msg = InstanceStatusMessage::new(instance_id, event);
         let payload_ptr = Box::into_raw(Box::new(status_msg)) as *mut core::ffi::c_void;
         let envelope = FfiEnvelope {
@@ -2186,6 +2538,16 @@ impl LauncherHost {
 
     /// Persist a dynamically loaded instance to the state file.
     fn persist_instance(&self, instance_id: &str, config_path: &str, instance_type: crate::instance::InstanceType) {
+        let lifecycle = self
+            .instances
+            .lock()
+            .ok()
+            .and_then(|instances| {
+                instances
+                    .get(instance_id)
+                    .and_then(|inst| inst.lifecycle.lock().ok().map(|g| g.as_str().to_string()))
+            })
+            .unwrap_or_else(|| "ready".to_string());
         let state_path = get_instances_state_path();
         let mut entries = read_instances_state(&state_path);
         entries.retain(|e| e.instance_id != instance_id);
@@ -2193,6 +2555,7 @@ impl LauncherHost {
             instance_id: instance_id.to_string(),
             config_path: config_path.to_string(),
             instance_type: instance_type.as_str().to_string(),
+            lifecycle,
         });
         write_instances_state(&state_path, &entries);
     }
@@ -2206,6 +2569,9 @@ impl LauncherHost {
     }
 
     /// Load persisted instances from the state file on startup.
+    ///
+    /// Each persisted instance's `lifecycle` field determines whether it is
+    /// auto-started (`running`) or only loaded into `Ready` state (`ready`).
     pub fn load_persisted_instances(&self) {
         let state_path = get_instances_state_path();
         let entries = read_instances_state(&state_path);
@@ -2222,7 +2588,8 @@ impl LauncherHost {
                     continue;
                 }
             };
-            match self.load_instance(entry.instance_id.clone(), &entry.config_path, instance_type) {
+            let auto_start = entry.lifecycle == "running";
+            match self.load_instance(entry.instance_id.clone(), &entry.config_path, instance_type, true, auto_start) {
                 Ok(msg) => debug!("Loaded persisted instance: {}", msg),
                 Err(e) => error!("Failed to load persisted instance '{}': {}", entry.instance_id, e),
             }

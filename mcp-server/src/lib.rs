@@ -171,11 +171,30 @@ pub enum McpCommand {
         instance_id: String,
         config_path: String,
         instance_type: String,
+        /// Whether to persist this instance to the state file (survive restarts).
+        persist: bool,
         response: oneshot::Sender<Result<String, String>>,
     },
-    /// Stop a running launcher instance.
+    /// Start a loaded (Ready) launcher instance.
+    StartInstance {
+        instance_id: String,
+        response: oneshot::Sender<Result<String, String>>,
+    },
+    /// Stop a running launcher instance (transitions to Ready).
     StopInstance {
         instance_id: String,
+        response: oneshot::Sender<Result<String, String>>,
+    },
+    /// Unload a stopped (Ready) launcher instance entirely.
+    UnloadInstance {
+        instance_id: String,
+        response: oneshot::Sender<Result<String, String>>,
+    },
+    /// Hot-reload an instance (stop, unload, re-load, restore previous state).
+    ReloadInstance {
+        instance_id: String,
+        /// Config path to reload from. If empty, the existing config path is reused.
+        config_path: String,
         response: oneshot::Sender<Result<String, String>>,
     },
     /// List all running launcher instances.

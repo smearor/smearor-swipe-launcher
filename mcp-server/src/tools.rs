@@ -346,6 +346,11 @@ pub fn core_tools() -> Vec<ToolDefinition> {
                         "enum": ["gtk", "headless", "web"],
                         "default": "gtk",
                         "description": "Instance type: 'gtk' creates a visible window, 'headless' runs without a window (for hardware devices), 'web' serves the instance via HTTP"
+                    },
+                    "persist": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Whether to persist this instance to the state file so it survives restarts. Set to true for config-file instances, false for transient runtime instances."
                     }
                 },
                 "required": ["instance_id", "config_path"]
@@ -358,6 +363,7 @@ pub fn core_tools() -> Vec<ToolDefinition> {
                     return Box::pin(async move { Err("Missing config_path".to_string()) }) as ToolFuture;
                 };
                 let instance_type = get_string_param(params, "instance_type").unwrap_or_else(|| "gtk".to_string());
+                let persist = params.and_then(|p| p.get("persist")).and_then(|v| v.as_bool()).unwrap_or(false);
                 Box::pin(async move {
                     send_command_and_wait(
                         sender,
@@ -365,6 +371,36 @@ pub fn core_tools() -> Vec<ToolDefinition> {
                             instance_id,
                             config_path,
                             instance_type,
+                            persist,
+                            response: oneshot::channel().0,
+                        },
+                    )
+                        .await
+                })
+            }),
+        },
+        ToolDefinition {
+            name: "launcher_start_instance".to_string(),
+            description: "Starts a loaded (Ready) launcher instance by its instance_id. Builds the window or headless areas and transitions the instance to Running state. If the instance is already running, this is a no-op.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "instance_id": {
+                        "type": "string",
+                        "description": "Unique identifier of the instance to start"
+                    }
+                },
+                "required": ["instance_id"]
+            }),
+            handler: Box::new(|sender, params| {
+                let Some(instance_id) = get_string_param(params, "instance_id") else {
+                    return Box::pin(async move { Err("Missing instance_id".to_string()) }) as ToolFuture;
+                };
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::StartInstance {
+                            instance_id,
                             response: oneshot::channel().0,
                         },
                     )
@@ -374,7 +410,7 @@ pub fn core_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "launcher_stop_instance".to_string(),
-            description: "Stops a running launcher instance by its instance_id. Closes the window, unloads plugins, and removes the instance from the message broker. Other instances are not affected.".to_string(),
+            description: "Stops a running launcher instance by its instance_id. Closes the window and transitions the instance to Ready state. The instance remains loaded and can be started again. Other instances are not affected.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -394,6 +430,70 @@ pub fn core_tools() -> Vec<ToolDefinition> {
                         sender,
                         McpCommand::StopInstance {
                             instance_id,
+                            response: oneshot::channel().0,
+                        },
+                    )
+                        .await
+                })
+            }),
+        },
+        ToolDefinition {
+            name: "launcher_unload_instance".to_string(),
+            description: "Unloads a launcher instance entirely by its instance_id. If the instance is running, it is stopped first. Then removes plugins, watchers, persistence, and frees the instance ID.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "instance_id": {
+                        "type": "string",
+                        "description": "Unique identifier of the instance to unload"
+                    }
+                },
+                "required": ["instance_id"]
+            }),
+            handler: Box::new(|sender, params| {
+                let Some(instance_id) = get_string_param(params, "instance_id") else {
+                    return Box::pin(async move { Err("Missing instance_id".to_string()) }) as ToolFuture;
+                };
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::UnloadInstance {
+                            instance_id,
+                            response: oneshot::channel().0,
+                        },
+                    )
+                        .await
+                })
+            }),
+        },
+        ToolDefinition {
+            name: "launcher_reload_instance".to_string(),
+            description: "Hot-reloads a launcher instance by its instance_id. Stops the instance if running, unloads it, re-loads from its config file, and restores the previous lifecycle state (Running or Ready).".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "instance_id": {
+                        "type": "string",
+                        "description": "Unique identifier of the instance to reload"
+                    },
+                    "config_path": {
+                        "type": "string",
+                        "description": "Optional path to a new config file. If omitted, the original config path is reused."
+                    }
+                },
+                "required": ["instance_id"]
+            }),
+            handler: Box::new(|sender, params| {
+                let Some(instance_id) = get_string_param(params, "instance_id") else {
+                    return Box::pin(async move { Err("Missing instance_id".to_string()) }) as ToolFuture;
+                };
+                let config_path = get_string_param(params, "config_path").unwrap_or_default();
+                Box::pin(async move {
+                    send_command_and_wait(
+                        sender,
+                        McpCommand::ReloadInstance {
+                            instance_id,
+                            config_path,
                             response: oneshot::channel().0,
                         },
                     )
@@ -500,15 +600,34 @@ async fn send_command_and_wait(sender: Sender<McpCommand>, command: McpCommand) 
             instance_id,
             config_path,
             instance_type,
+            persist,
             response: _,
         } => McpCommand::LoadInstance {
             instance_id,
             config_path,
             instance_type,
+            persist,
+            response: response_tx,
+        },
+        McpCommand::StartInstance { instance_id, response: _ } => McpCommand::StartInstance {
+            instance_id,
             response: response_tx,
         },
         McpCommand::StopInstance { instance_id, response: _ } => McpCommand::StopInstance {
             instance_id,
+            response: response_tx,
+        },
+        McpCommand::UnloadInstance { instance_id, response: _ } => McpCommand::UnloadInstance {
+            instance_id,
+            response: response_tx,
+        },
+        McpCommand::ReloadInstance {
+            instance_id,
+            config_path,
+            response: _,
+        } => McpCommand::ReloadInstance {
+            instance_id,
+            config_path,
             response: response_tx,
         },
         McpCommand::ListInstances { response: _ } => McpCommand::ListInstances { response: response_tx },

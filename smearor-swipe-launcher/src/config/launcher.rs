@@ -429,6 +429,43 @@ pub struct SwipeLauncherSettings {
     /// in addition to the automatic `instance-{id}` class.
     #[serde(default)]
     pub css_classes: Vec<String>,
+
+    /// Whether this instance should automatically start (build its window or headless areas)
+    /// when the launcher process starts or when the instance is dynamically loaded.
+    /// Defaults to `true` for backward compatibility.
+    /// Set to `false` to load the instance into `Ready` state without starting it.
+    #[serde(default = "default_true")]
+    pub auto_start: bool,
+
+    /// Optional time-to-live in seconds after which a running instance is automatically stopped.
+    /// When the TTL expires, the instance transitions from `Running` back to `Ready`.
+    /// The instance is not unloaded and can be started again.
+    /// Useful for transient overlays, temporary menus, or secondary launchers.
+    /// Defaults to `None` (no auto-stop).
+    #[serde(default)]
+    pub auto_stop_ttl: Option<u64>,
+
+    /// Optional message broker topic that triggers `start_instance` when a message is received.
+    /// When configured, the launcher subscribes to this topic on the message broker.
+    /// Any message sent to this topic causes the instance to start (if in `Ready` state).
+    /// This enables event-driven instance activation — e.g. a volume-change event opens an OSD.
+    /// Defaults to `None` (no event-driven auto-start).
+    #[serde(default)]
+    pub auto_start_topic: Option<String>,
+
+    /// Optional message broker topic that triggers `stop_instance` when a message is received.
+    /// When configured, the launcher subscribes to this topic on the message broker.
+    /// Any message sent to this topic causes the instance to stop (if in `Running` state).
+    /// This enables event-driven instance deactivation — e.g. a "hide-osd" event stops the OSD
+    /// instance without waiting for the TTL to expire.
+    /// Defaults to `None` (no event-driven auto-stop).
+    #[serde(default)]
+    pub auto_stop_topic: Option<String>,
+}
+
+/// Default value helper for `auto_start` — returns `true`.
+fn default_true() -> bool {
+    true
 }
 
 impl MergeWithArguments<SwipeLauncherArguments> for SwipeLauncherSettings {

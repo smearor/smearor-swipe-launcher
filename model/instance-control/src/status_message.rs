@@ -5,7 +5,7 @@ use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
 
-use crate::lifecycle_event::InstanceLifecycleEvent;
+use crate::lifecycle_event::LauncherInstanceLifecycle;
 use crate::topics::TOPIC_CORE_INSTANCE_STATUS;
 
 /// Status message broadcast when an instance is loaded or stopped.
@@ -14,13 +14,13 @@ use crate::topics::TOPIC_CORE_INSTANCE_STATUS;
 pub struct InstanceStatusMessage {
     /// The instance ID that changed.
     pub instance_id: stabby::string::String,
-    /// The lifecycle event type.
-    pub event: InstanceLifecycleEvent,
+    /// The lifecycle state of the instance.
+    pub event: LauncherInstanceLifecycle,
 }
 
 impl InstanceStatusMessage {
     /// Create a new instance status message.
-    pub fn new(instance_id: &str, event: InstanceLifecycleEvent) -> Self {
+    pub fn new(instance_id: &str, event: LauncherInstanceLifecycle) -> Self {
         Self {
             instance_id: instance_id.into(),
             event,

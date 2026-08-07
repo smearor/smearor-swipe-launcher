@@ -52,6 +52,7 @@ use std::sync::atomic::Ordering;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
 
@@ -103,19 +104,12 @@ async fn main() -> Result<()> {
         let include_paths = config.collect_include_paths(config_path);
         host.config_watcher.add_config(config_path, &instance_id, &include_paths);
         let instance_type = config.launcher.instance_type.to_instance_type();
-        host.create_instance(instance_id.clone(), config, instance_type);
 
-        if instance_type == crate::instance::InstanceType::Gtk {
-            host.css_watcher.watch_instance_css(config_path);
-        }
-
-        // For web and headless instances, build areas (no GTK window).
-        if instance_type == crate::instance::InstanceType::Web || instance_type == crate::instance::InstanceType::Headless {
-            if let Ok(instances) = host.instances.lock() {
-                if let Some(instance) = instances.get(&instance_id) {
-                    instance.build_headless();
-                }
-            }
+        // Load instance via the unified lifecycle path.
+        // persist=true so config-file instances survive restarts.
+        // auto_start is controlled by the config file's `auto_start` field.
+        if let Err(e) = host.load_instance(instance_id.clone(), &config_path.to_string_lossy(), instance_type, true, true) {
+            error!("Failed to load instance '{}': {}", instance_id, e);
         }
     }
 
@@ -385,6 +379,7 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
             instance_id,
             config_path,
             instance_type,
+            persist,
             response,
         } => {
             let parsed_type = match instance_type.as_str() {
@@ -392,11 +387,51 @@ async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
                 "web" => crate::instance::InstanceType::Web,
                 _ => crate::instance::InstanceType::Gtk,
             };
-            let result = host.load_instance(instance_id, &config_path, parsed_type);
+            let result = host.load_instance(instance_id, &config_path, parsed_type, persist, true);
             let _ = response.send(result);
         }
         McpCommand::StopInstance { instance_id, response } => {
             let result = host.stop_instance(&instance_id);
+            let _ = response.send(result);
+        }
+        McpCommand::StartInstance { instance_id, response } => {
+            let result = host.start_instance(&instance_id);
+            let _ = response.send(result);
+        }
+        McpCommand::UnloadInstance { instance_id, response } => {
+            let result = host.unload_instance(&instance_id);
+            let _ = response.send(result);
+        }
+        McpCommand::ReloadInstance {
+            instance_id,
+            config_path,
+            response,
+        } => {
+            let result = if config_path.is_empty() {
+                let path = {
+                    let instances = host.instances.lock();
+                    match instances {
+                        Ok(instances) => match instances.get(&instance_id) {
+                            Some(instance) => instance.config_path.lock().ok().and_then(|g| g.clone()).unwrap_or_default(),
+                            None => {
+                                let _ = response.send(Err(format!("Instance '{}' not found", instance_id)));
+                                return;
+                            }
+                        },
+                        Err(e) => {
+                            let _ = response.send(Err(format!("Failed to lock instances: {}", e)));
+                            return;
+                        }
+                    }
+                };
+                if path.is_empty() {
+                    Err(format!("No config path stored for instance '{}'", instance_id))
+                } else {
+                    host.reload_instance(&instance_id, &path)
+                }
+            } else {
+                host.reload_instance(&instance_id, &config_path)
+            };
             let _ = response.send(result);
         }
         McpCommand::ListInstances { response } => {

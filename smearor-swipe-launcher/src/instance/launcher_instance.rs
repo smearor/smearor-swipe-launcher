@@ -6,7 +6,6 @@ use crate::context::GLOBAL_JSON_CONVERTER_REGISTRY;
 use crate::display::AreaSize;
 use crate::display::validate_monitor_index;
 use crate::instance::instance_type::InstanceType;
-use crate::instance::macropad_metadata::MacroPadDeviceMetadata;
 use crate::json_converter::JsonConverterRegistry;
 use crate::plugin_manager::PluginManager;
 use crate::window::create_window;
@@ -19,6 +18,8 @@ use gtk4::glib::SignalHandlerId;
 use gtk4::prelude::*;
 use smearor_model_compositor::MonitorChangeType;
 use smearor_model_compositor::WorkspaceLifecycleType;
+use smearor_model_instance_control::LauncherInstanceLifecycle;
+use smearor_model_macropad::MacroPadDeviceMetadata;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::sanitize_css_class_name;
 use smearor_wrot_rotation::RotationWidget;
@@ -39,6 +40,7 @@ use tracing::trace;
 /// them to the correct instance using `target_instance_id`.
 pub struct LauncherInstance {
     pub(crate) config: SwipeLauncherConfig,
+    pub(crate) config_path: Mutex<Option<String>>,
     pub(crate) plugin_manager: Arc<PluginManager>,
     pub(crate) area_manager: Arc<Mutex<InstanceAreaManager>>,
     pub(crate) topic_rate_limiter: Arc<Mutex<HashMap<String, Instant>>>,
@@ -53,6 +55,14 @@ pub struct LauncherInstance {
     /// alignment shifts. Index `None` means the button is empty/cleared.
     pub(crate) button_map: Mutex<Option<Vec<Option<String>>>>,
     pub(crate) close_handler_id: Mutex<Option<SignalHandlerId>>,
+    /// Current lifecycle state of this instance.
+    pub(crate) lifecycle: Mutex<LauncherInstanceLifecycle>,
+    /// Optional auto-stop TTL timer task handle.
+    /// When `auto_stop_ttl` is set, a `tokio::spawn` task is created that
+    /// sleeps for the TTL duration and then calls `stop_instance`.
+    /// This handle is used to cancel the timer if the instance is stopped
+    /// or unloaded before the TTL expires, or if the instance is re-started.
+    pub(crate) auto_stop_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl LauncherInstance {
@@ -72,6 +82,7 @@ impl LauncherInstance {
 
         LauncherInstance {
             config,
+            config_path: Mutex::new(None),
             plugin_manager,
             area_manager,
             topic_rate_limiter: Arc::new(Mutex::new(HashMap::new())),
@@ -82,6 +93,8 @@ impl LauncherInstance {
             device_metadata: Mutex::new(None),
             button_map: Mutex::new(None),
             close_handler_id: Mutex::new(None),
+            lifecycle: Mutex::new(LauncherInstanceLifecycle::Ready),
+            auto_stop_handle: Mutex::new(None),
         }
     }
 

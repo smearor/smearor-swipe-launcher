@@ -6,6 +6,11 @@ use tracing::error;
 const PLACEHOLDER_PREFIX: &str = "{{";
 const PLACEHOLDER_SUFFIX: &str = "}}";
 
+/// The default HTML template used when no custom template is configured.
+///
+/// Compiled into the binary via `include_str!` from `resources/web/template-default.html`.
+pub const DEFAULT_TEMPLATE: &str = include_str!("../../../resources/web/template-default.html");
+
 /// Template engine for composing web instance pages.
 ///
 /// Loads an HTML template file and replaces `{{placeholder}}` markers with
@@ -38,11 +43,11 @@ impl TemplateEngine {
                 Ok(content) => content,
                 Err(e) => {
                     error!("Failed to load template from {}: {}, using default", path, e);
-                    default_template()
+                    DEFAULT_TEMPLATE.to_string()
                 }
             }
         } else {
-            default_template()
+            DEFAULT_TEMPLATE.to_string()
         };
 
         if let Ok(mut cache) = self.template_cache.lock() {
@@ -81,38 +86,5 @@ impl TemplateEngine {
 impl Default for TemplateEngine {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-/// The default HTML template used when no custom template is configured.
-///
-/// Loads from `resources/web/template-default.html`, falling back to an
-/// inline template if the file cannot be read.
-pub fn default_template() -> String {
-    match std::fs::read_to_string("resources/web/template-default.html") {
-        Ok(content) => content,
-        Err(_) => {
-            error!("Failed to load default template from resources/web/template-default.html, using inline fallback");
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="instance-id" content="{{instance_id}}">
-    <title>{{instance_id}}</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="/static/nerdfont.css">
-</head>
-<body>
-    <div class="launcher-instance" data-instance-id="{{instance_id}}">
-        <div class="launcher-areas {{orientation}}">
-            {{widgets}}
-        </div>
-    </div>
-    <script src="/static/app.js"></script>
-</body>
-</html>"#
-                .to_string()
-        }
     }
 }

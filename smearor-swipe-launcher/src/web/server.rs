@@ -1,12 +1,24 @@
-use crate::web::routes::WebAppState;
-use crate::web::routes::WebSocketManager;
+use crate::web::config::WebServerConfig;
+use crate::web::routes::api_list_instances;
+use crate::web::routes::api_load_instance;
+use crate::web::routes::api_reload_instance;
+use crate::web::routes::api_start_instance;
+use crate::web::routes::api_stop_instance;
+use crate::web::routes::api_unload_instance;
 use crate::web::routes::handle_action;
 use crate::web::routes::handle_websocket;
 use crate::web::routes::list_web_instances;
 use crate::web::routes::serve_instance_page;
+use crate::web::routes::serve_static_css;
+use crate::web::routes::serve_static_js;
+use crate::web::routes::serve_static_nerdfont_css;
+use crate::web::routes::serve_static_nerdfont_woff2;
+use crate::web::state::WebAppState;
 use crate::web::template::TemplateEngine;
+use crate::web::ws_manager::WebSocketManager;
 use axum::Router;
 use axum::response::IntoResponse;
+use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::post;
 use std::collections::HashMap;
@@ -15,33 +27,6 @@ use std::sync::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 use tracing::error;
-
-/// Configuration for the embedded web server.
-#[derive(Clone, Debug)]
-pub struct WebServerConfig {
-    /// TCP port to listen on.
-    pub port: u16,
-    /// Whether the web server is enabled.
-    pub enabled: bool,
-    /// Address to bind to.
-    pub bind_address: String,
-    /// Optional bearer token for authentication.
-    pub auth_token: Option<String>,
-    /// Allowed CORS origins.
-    pub allowed_origins: Vec<String>,
-}
-
-impl Default for WebServerConfig {
-    fn default() -> Self {
-        Self {
-            port: 8080,
-            enabled: false,
-            bind_address: "127.0.0.1".to_string(),
-            auth_token: None,
-            allowed_origins: Vec::new(),
-        }
-    }
-}
 
 /// Embedded HTTP server that serves web launcher instances.
 ///
@@ -58,6 +43,7 @@ impl WebServer {
         config: WebServerConfig,
         instances: Arc<Mutex<HashMap<String, crate::instance::LauncherInstance>>>,
         broker_sender: UnboundedSender<smearor_swipe_launcher_plugin_api::FfiEnvelope>,
+        mcp_command_sender: async_channel::Sender<smearor_mcp_server::McpCommand>,
     ) -> Self {
         let ws_manager = Arc::new(WebSocketManager::new());
         let state = Arc::new(WebAppState {
@@ -65,6 +51,7 @@ impl WebServer {
             broker_sender,
             template_engine: TemplateEngine::new(),
             ws_manager: ws_manager.clone(),
+            mcp_command_sender,
         });
 
         Self { config, state, ws_manager }
@@ -128,31 +115,16 @@ impl WebServer {
             .route("/instances/{id}", get(serve_instance_page))
             .route("/instances/{id}/ws", get(handle_websocket))
             .route("/instances/{id}/{plugin_id}/{action}", post(handle_action))
+            .route("/api/instances", get(api_list_instances).post(api_load_instance))
+            .route("/api/instances/{id}/start", post(api_start_instance))
+            .route("/api/instances/{id}/stop", post(api_stop_instance))
+            .route("/api/instances/{id}/reload", post(api_reload_instance))
+            .route("/api/instances/{id}", delete(api_unload_instance))
             .route("/static/style.css", get(serve_static_css))
             .route("/static/app.js", get(serve_static_js))
             .route("/static/nerdfont.css", get(serve_static_nerdfont_css))
             .route("/static/nerdfont.woff2", get(serve_static_nerdfont_woff2))
     }
-}
-
-async fn serve_static_css() -> impl axum::response::IntoResponse {
-    let css = include_str!("../../../resources/web/style.css");
-    (axum::http::StatusCode::OK, [("content-type", "text/css")], css)
-}
-
-async fn serve_static_js() -> impl axum::response::IntoResponse {
-    let js = include_str!("../../../resources/web/app.js");
-    (axum::http::StatusCode::OK, [("content-type", "application/javascript")], js)
-}
-
-async fn serve_static_nerdfont_css() -> impl axum::response::IntoResponse {
-    let css = include_str!("../../../resources/web/nerdfont.css");
-    (axum::http::StatusCode::OK, [("content-type", "text/css")], css)
-}
-
-async fn serve_static_nerdfont_woff2() -> impl axum::response::IntoResponse {
-    let font = include_bytes!("../../../resources/web/nerdfont.woff2");
-    (axum::http::StatusCode::OK, [("content-type", "font/woff2")], font.as_slice())
 }
 
 /// Bearer token authentication middleware.

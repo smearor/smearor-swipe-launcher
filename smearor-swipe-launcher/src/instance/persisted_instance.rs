@@ -1,11 +1,19 @@
 use tracing::error;
 
+/// Default lifecycle state for persisted instances without the `lifecycle` field.
+fn default_lifecycle() -> String {
+    "running".to_string()
+}
+
 /// A persisted instance entry in the state file.
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct PersistedInstance {
     pub instance_id: String,
     pub config_path: String,
     pub instance_type: String,
+    /// Lifecycle state at time of persistence: "ready" or "running".
+    #[serde(default = "default_lifecycle")]
+    pub lifecycle: String,
 }
 
 /// Returns the path to the instances state file.

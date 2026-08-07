@@ -18,6 +18,10 @@ pub struct InstanceLoadMessage {
     pub config_path: stabby::string::String,
     /// Whether to create a GTK window (Gtk) or run headless (Headless) or web (Web).
     pub instance_type: InstanceType,
+    /// Whether to persist this instance to the state file so it survives restarts.
+    /// Set to `true` for config-file instances discovered at startup.
+    /// Set to `false` for transient instances loaded at runtime (default).
+    pub persist: bool,
     /// Optional broker topic to send the result response to.
     /// Empty string means no response is expected.
     pub response_topic: stabby::string::String,
@@ -25,11 +29,12 @@ pub struct InstanceLoadMessage {
 
 impl InstanceLoadMessage {
     /// Create a new instance load message.
-    pub fn new(instance_id: &str, config_path: &str, instance_type: InstanceType, response_topic: &str) -> Self {
+    pub fn new(instance_id: &str, config_path: &str, instance_type: InstanceType, persist: bool, response_topic: &str) -> Self {
         Self {
             instance_id: instance_id.into(),
             config_path: config_path.into(),
             instance_type,
+            persist,
             response_topic: response_topic.into(),
         }
     }

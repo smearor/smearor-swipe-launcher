@@ -18,6 +18,8 @@ rotation = 90
 layer = "top"
 namespace = "smearor-swipe-launcher"
 exclusive_zone = 150
+auto_start = false
+auto_stop_ttl = 5
 
 [layout]
 orientation = "horizontal"
