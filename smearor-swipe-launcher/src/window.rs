@@ -66,17 +66,6 @@ pub fn create_window(app: &gtk4::Application, config: &SwipeLauncherSettings, co
     window
 }
 
-// /// Maps the internal layer enum to the gtk4-layer-shell layer enum.
-// fn map_smearor_layer(layer: SmearorLayer) -> Layer {
-//     layer.into()
-//     // match layer {
-//     //     SmearorLayer::Background => Layer::Background,
-//     //     SmearorLayer::Bottom => Layer::Bottom,
-//     //     SmearorLayer::Top => Layer::Top,
-//     //     SmearorLayer::Overlay => Layer::Overlay,
-//     // }
-// }
-
 /// Updates layer-shell anchors based on the current screen rotation.
 pub fn set_anchors_for_rotation(window: &ApplicationWindow, rotation: SmearorRotation) {
     let degrees = rotation.to_degrees();

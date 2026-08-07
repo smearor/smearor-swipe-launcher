@@ -13,7 +13,7 @@ use crate::area::error::RemoveAreaError;
 use crate::area::managed_area::ManagedArea;
 use crate::area::overlay::AreaOverlay;
 use crate::area::widget::AreaWidget;
-use crate::plugin_manager::PluginManager;
+use crate::plugin::PluginManager;
 use dashmap::DashMap;
 use gtk4::ScrolledWindow;
 use gtk4::prelude::*;

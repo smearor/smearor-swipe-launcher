@@ -3,7 +3,7 @@ use crate::area::container::AreaContainer;
 use crate::area::error::CreateAreaError;
 use crate::area::overlay::AreaOverlay;
 use crate::area::widget::AreaWidget;
-use crate::plugin_manager::PluginManager;
+use crate::plugin::PluginManager;
 use smearor_model_area::AreaConfig;
 use smearor_model_area::AreaTransition;
 

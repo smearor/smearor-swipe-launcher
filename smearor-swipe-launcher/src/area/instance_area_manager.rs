@@ -27,7 +27,7 @@ pub enum InstanceAreaManager {
 impl InstanceAreaManager {
     /// Create a new GTK-backed area manager.
     pub fn new_gtk(
-        plugin_manager: Arc<crate::plugin_manager::PluginManager>,
+        plugin_manager: Arc<crate::plugin::PluginManager>,
         config: Arc<SwipeLauncherConfig>,
         json_converter_registry: Arc<smearor_swipe_launcher_plugin_api::JsonConverterRegistry>,
     ) -> Self {
@@ -36,7 +36,7 @@ impl InstanceAreaManager {
 
     /// Create a new headless-backed area manager.
     pub fn new_headless(
-        plugin_manager: Arc<crate::plugin_manager::PluginManager>,
+        plugin_manager: Arc<crate::plugin::PluginManager>,
         config: Arc<SwipeLauncherConfig>,
         json_converter_registry: Arc<smearor_swipe_launcher_plugin_api::JsonConverterRegistry>,
     ) -> Self {

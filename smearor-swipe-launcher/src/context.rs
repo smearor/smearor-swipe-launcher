@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::error;
 
-use crate::json_converter::JsonConverterRegistry;
+use smearor_swipe_launcher_plugin_api::JsonConverterRegistry;
 
 pub static GLOBAL_JSON_CONVERTER_REGISTRY: OnceLock<Arc<JsonConverterRegistry>> = OnceLock::new();
 

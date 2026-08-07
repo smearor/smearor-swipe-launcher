@@ -2,7 +2,7 @@ use crate::SwipeLauncherConfig;
 use crate::area::backend::area::AreaBackend;
 use crate::area::container::area::AreaContainer;
 use crate::area::error::CreateAreaError;
-use crate::plugin_manager::PluginManager;
+use crate::plugin::PluginManager;
 use gtk4::Box as GtkBox;
 use gtk4::Overlay;
 use gtk4::Widget;

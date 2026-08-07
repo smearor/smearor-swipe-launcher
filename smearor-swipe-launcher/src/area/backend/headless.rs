@@ -4,7 +4,7 @@ use crate::area::container::headless::HeadlessContainer;
 use crate::area::error::CreateAreaError;
 use crate::area::overlay::headless::HeadlessOverlay;
 use crate::area::widget::headless::HeadlessWidget;
-use crate::plugin_manager::PluginManager;
+use crate::plugin::PluginManager;
 use smearor_model_area::AreaConfig;
 use smearor_model_area::AreaTransition;
 

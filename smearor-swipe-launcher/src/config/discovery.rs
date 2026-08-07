@@ -240,3 +240,24 @@ impl Default for ConfigDiscoveryService {
         Self::new()
     }
 }
+
+/// Bootstrap user configs from system defaults and discover launcher configuration files.
+///
+/// This is the top-level entry point for config discovery: it bootstraps user
+/// configs on first run, then discovers and validates launcher config files
+/// using the standard fallback order (CLI > working dir > XDG > system default).
+pub fn bootstrap_configs(args: &crate::SwipeLauncherArguments) -> Result<Vec<PathBuf>> {
+    let discovery_service = ConfigDiscoveryService::new();
+    discovery_service.bootstrap_user_configs();
+
+    let config_paths = discovery_service.discover_launcher_configs(&args.config)?;
+    if config_paths.is_empty() {
+        return Err(miette!(
+            "No launcher configuration files found. \
+            Specify via --config, or place *.toml files in the working directory or ~/.config/smearor/launcher/"
+        ));
+    }
+    discovery_service.validate_config_paths(&config_paths)?;
+    debug!("Starting smearor-swipe-launcher with config files: {:?}", config_paths);
+    Ok(config_paths)
+}
