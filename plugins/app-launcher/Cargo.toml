@@ -19,6 +19,7 @@ glib = { workspace = true }
 miette = { workspace = true }
 paste = { workspace = true }
 serde = { workspace = true }
+schemars = { workspace = true }
 serde_json = { workspace = true }
 smearor-app-launcher-model = { path = "../../model/app-launcher" }
 smearor-model-mcp = { path = "../../model/mcp" }

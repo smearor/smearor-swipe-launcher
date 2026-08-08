@@ -28,6 +28,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::GestureHandler;
 use smearor_swipe_launcher_plugin_api::GestureHandlersConfiguration;
 use smearor_swipe_launcher_plugin_api::Locale;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -92,6 +93,7 @@ impl WallpaperWidget {
             widget_view: Rc::new(RefCell::new(WidgetView::Compact)),
             personalization: Rc::new(RefCell::new(PersonalizationOverride::default())),
         };
+        widget.register_mcp_capabilities();
         widget.request_initial_status();
         widget.request_personalization_status();
         Ok(widget)

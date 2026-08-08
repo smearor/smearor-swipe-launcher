@@ -1,9 +1,10 @@
-pub mod atomic;
-pub mod config;
-pub mod graphic;
-pub mod html;
-pub mod personalization;
-pub mod widget;
+pub(crate) mod atomic;
+pub(crate) mod config;
+pub(crate) mod graphic;
+pub(crate) mod html;
+pub(crate) mod mcp;
+pub(crate) mod personalization;
+pub(crate) mod widget;
 
 use crate::atomic::WorkspaceAtomicWidget;
 use crate::widget::WorkspaceSwitcherWidget;

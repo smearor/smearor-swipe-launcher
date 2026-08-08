@@ -17,6 +17,7 @@ miette = { workspace = true }
 paste = { workspace = true }
 qrcode = "0.14"
 serde = { workspace = true }
+schemars = { workspace = true }
 serde_json = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }
 smearor-model-widget = { path = "../../model/widget" }

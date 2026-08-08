@@ -25,9 +25,7 @@ use smearor_model_compositor::WorkspaceLifecycleEvent;
 use smearor_model_compositor::WorkspaceLifecycleType;
 use smearor_model_compositor::WorkspaceSnapshotMessage;
 use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
-use smearor_model_mcp::ButtonActionArgs;
 use smearor_model_mcp::InvokeToolMessage;
-use smearor_model_mcp::InvokeToolResponse;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_personalization_model::PersonalizationCommandMessage;
 use smearor_personalization_model::PersonalizationStatusMessage;
@@ -41,6 +39,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::GestureHandler;
 use smearor_swipe_launcher_plugin_api::GestureHandlersConfiguration;
 use smearor_swipe_launcher_plugin_api::Locale;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -105,6 +104,8 @@ impl WorkspaceSwitcherWidget {
             scrollbar: Rc::new(RefCell::new(None)),
             personalization: Rc::new(RefCell::new(PersonalizationOverride::default())),
         };
+
+        widget.register_mcp_capabilities();
 
         // Request initial workspace snapshot
         let broadcaster = widget.get_broadcaster();
@@ -420,27 +421,6 @@ impl PluginMetaGetter for WorkspaceSwitcherWidget {
 impl AsRef<Option<FfiCoreContext>> for WorkspaceSwitcherWidget {
     fn as_ref(&self) -> &Option<FfiCoreContext> {
         &self.core_context
-    }
-}
-
-impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for WorkspaceSwitcherWidget {
-    fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, _sender_id: &str) {
-        let tool_name = message.0.name.to_string();
-        let own_button_name = format!("button_{}", self.meta.id);
-        if tool_name != own_button_name {
-            return;
-        }
-        let args: ButtonActionArgs = serde_json::from_str(&message.0.arguments).unwrap_or_default();
-        let action_kind = args.action;
-        let action_str = action_kind.as_ref().to_string();
-
-        let broadcaster = self.get_broadcaster();
-
-        let binding = self.config.binding_for_kind(action_kind);
-        binding.dispatch_with_fallback(&broadcaster, Box::new(|| self.default_fallback(&action_kind, &broadcaster)));
-
-        let response = InvokeToolResponse::success(&message.0.correlation_id, &format!("{} handled", action_str));
-        broadcaster.broadcast_message_to_topic(response);
     }
 }
 

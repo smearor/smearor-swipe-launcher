@@ -36,6 +36,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::GestureHandler;
 use smearor_swipe_launcher_plugin_api::GestureHandlersConfiguration;
 use smearor_swipe_launcher_plugin_api::Locale;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -102,7 +103,7 @@ impl MprisWidget {
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         let meta = PluginMeta::try_from(&config)?;
         let (status_sender, status_receiver) = tokio::sync::mpsc::unbounded_channel();
-        Ok(MprisWidget {
+        let widget = MprisWidget {
             meta,
             core_context,
             config: mpris_config,
@@ -119,7 +120,9 @@ impl MprisWidget {
             last_status: Rc::new(RefCell::new(None)),
             current_view: Rc::new(RefCell::new(MprisView::Compact)),
             personalization: Rc::new(RefCell::new(PersonalizationOverride::default())),
-        })
+        };
+        widget.register_mcp_capabilities();
+        Ok(widget)
     }
 
     fn broadcast_widget_update(&self) {
