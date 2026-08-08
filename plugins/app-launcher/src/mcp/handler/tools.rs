@@ -1,12 +1,11 @@
 use crate::widget::AppLauncherWidget;
+use smearor_model_mcp::ButtonActionArgs;
 use smearor_model_mcp::InvokeToolMessage;
 use smearor_model_mcp::InvokeToolResponse;
-use smearor_swipe_launcher_plugin_api::ActionKind;
 use smearor_swipe_launcher_plugin_api::DefaultFallback;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
-use std::str::FromStr;
 
 impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for AppLauncherWidget {
     fn handle_message(&self, message: FfiEnvelopePayload<InvokeToolMessage>, _sender_id: &str) {
@@ -15,20 +14,16 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for AppLauncherWidget
         if tool_name != own_button_name {
             return;
         }
-        let action_str = serde_json::from_str::<serde_json::Value>(&message.0.arguments)
-            .ok()
-            .and_then(|v| v.get("action").and_then(|a| a.as_str()).map(|s| s.to_string()))
-            .unwrap_or_else(|| "click".to_string());
+        let args: ButtonActionArgs = serde_json::from_str(&message.0.arguments).unwrap_or_default();
+        let action_kind = args.action;
+        let action_str = action_kind.as_ref().to_string();
 
-        let action_kind = ActionKind::from_str(&action_str).ok();
         let broadcaster = self.get_broadcaster();
 
-        if let Some(kind) = action_kind {
-            let binding = self.config.binding_for_kind(kind);
-            binding.dispatch_with_fallback(&broadcaster, Box::new(|| self.default_fallback(&kind, &broadcaster)));
-        }
+        let binding = self.config.binding_for_kind(action_kind);
+        binding.dispatch_with_fallback(&broadcaster, Box::new(|| self.default_fallback(&action_kind, &broadcaster)));
 
-        let response = InvokeToolResponse::success(&message.0.correlation_id.to_string(), &format!("{} handled", action_str));
+        let response = InvokeToolResponse::success(&message.0.correlation_id, &format!("{} handled", action_str));
         broadcaster.broadcast_message_to_topic(response);
     }
 }
