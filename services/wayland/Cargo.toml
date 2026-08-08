@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 paste = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 stabby = { workspace = true }
@@ -21,6 +22,7 @@ tracing-subscriber = { workspace = true }
 wayland-client = { workspace = true }
 wayland-protocols = { workspace = true }
 smearor-model-compositor = { path = "../../model/workspace" }
+smearor-model-mcp = { path = "../../model/mcp" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 
 [package.metadata.deb]

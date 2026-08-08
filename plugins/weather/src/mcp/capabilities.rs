@@ -1,4 +1,7 @@
 use crate::widget::WeatherWidget;
+use schemars::schema_for;
+use smearor_model_mcp::ButtonActionArgs;
+use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
@@ -16,19 +19,14 @@ impl McpCapabilitiesRegistrator for WeatherWidget {
         );
         broadcaster.broadcast_message_to_topic(resource);
 
-        let refresh_tool = RegisterToolMessage::new(
-            "weather_widget_refresh",
-            "Force the weather widget to request a data refresh.",
-            r#"{ "type": "object", "properties": {} }"#,
-        );
+        let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();
+        let refresh_tool = RegisterToolMessage::new("weather_widget_refresh", "Force the weather widget to request a data refresh.", &no_args_schema);
         broadcaster.broadcast_message_to_topic(refresh_tool);
 
+        let button_schema = serde_json::to_string(&schema_for!(ButtonActionArgs)).unwrap_or_default();
         let button_tool_name = format!("button_{}", self.meta.id);
-        let button_tool = RegisterToolMessage::new(
-            &button_tool_name,
-            "Trigger an action on the weather widget (view switching or input action).",
-            r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "double_press", "swipe_up", "swipe_down", "right_click", "middle_click", "scroll_up", "scroll_down", "expand", "collapse", "toggle_view"], "description": "The action to trigger" } }, "required": ["action"] }"#,
-        );
+        let button_tool =
+            RegisterToolMessage::new(&button_tool_name, "Trigger an action on the weather widget (view switching or input action).", &button_schema);
         broadcaster.broadcast_message_to_topic(button_tool);
     }
 }

@@ -1,9 +1,14 @@
 use crate::service::TerminalCommandService;
+use schemars::schema_for;
+use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
+use smearor_terminal_command_model::TerminalCommandLaunchArgs;
+use smearor_terminal_command_model::TerminalCommandRestartArgs;
+use smearor_terminal_command_model::TerminalCommandTerminateArgs;
 
 impl McpCapabilitiesRegistrator for TerminalCommandService {
     fn register_mcp_capabilities(&self) {
@@ -25,31 +30,27 @@ impl McpCapabilitiesRegistrator for TerminalCommandService {
         );
         broadcaster.broadcast_message_to_topic(configured_resource);
 
-        let launch_tool = RegisterToolMessage::new(
-            "terminal_command_launch",
-            "Launch a configured terminal command by command_id.",
-            r#"{ "type": "object", "properties": { "command_id": { "type": "string", "description": "The configured command identifier" }, "forked": { "type": "boolean", "description": "Whether the process should be detached from the launcher (default: false)" }, "terminate_on_exit": { "type": "boolean", "description": "Whether to terminate the process when the launcher exits (default: true)" } }, "required": ["command_id"] }"#,
-        );
+        let launch_schema = serde_json::to_string(&schema_for!(TerminalCommandLaunchArgs)).unwrap_or_default();
+        let launch_tool = RegisterToolMessage::new("terminal_command_launch", "Launch a configured terminal command by command_id.", &launch_schema);
         broadcaster.broadcast_message_to_topic(launch_tool);
 
-        let terminate_tool = RegisterToolMessage::new(
-            "terminal_command_terminate",
-            "Terminate a running terminal command by command_id.",
-            r#"{ "type": "object", "properties": { "command_id": { "type": "string", "description": "The configured command identifier" } }, "required": ["command_id"] }"#,
-        );
+        let terminate_schema = serde_json::to_string(&schema_for!(TerminalCommandTerminateArgs)).unwrap_or_default();
+        let terminate_tool = RegisterToolMessage::new("terminal_command_terminate", "Terminate a running terminal command by command_id.", &terminate_schema);
         broadcaster.broadcast_message_to_topic(terminate_tool);
 
+        let restart_schema = serde_json::to_string(&schema_for!(TerminalCommandRestartArgs)).unwrap_or_default();
         let restart_tool = RegisterToolMessage::new(
             "terminal_command_restart",
             "Restart a terminal command by command_id (terminate then launch).",
-            r#"{ "type": "object", "properties": { "command_id": { "type": "string", "description": "The configured command identifier" }, "forked": { "type": "boolean", "description": "Whether the process should be detached from the launcher (default: false)" }, "terminate_on_exit": { "type": "boolean", "description": "Whether to terminate the process when the launcher exits (default: true)" } }, "required": ["command_id"] }"#,
+            &restart_schema,
         );
         broadcaster.broadcast_message_to_topic(restart_tool);
 
+        let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();
         let prompt = RegisterPromptMessage::with_memory(
             "terminal_command_guide",
             "Lists configured terminal commands and launch instructions.",
-            r#"{ "type": "object", "properties": {} }"#,
+            &no_args_schema,
             "terminal command preferences and frequently used commands",
             "terminal,command",
         );
@@ -58,7 +59,7 @@ impl McpCapabilitiesRegistrator for TerminalCommandService {
         let lifecycle_prompt = RegisterPromptMessage::with_memory(
             "terminal_lifecycle_guide",
             "Returns instructions for the terminal command lifecycle: check configuration before launching, monitor running processes, and handle restarts.",
-            r#"{ "type": "object", "properties": {} }"#,
+            &no_args_schema,
             "terminal command lifecycle preferences and restart behavior",
             "terminal,command",
         );

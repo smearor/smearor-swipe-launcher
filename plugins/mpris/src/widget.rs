@@ -339,6 +339,15 @@ impl DefaultFallback for MprisWidget {
                 broadcaster.broadcast_message_to_topic(MprisCommandMessage::quit());
             }
             ActionKind::Click | ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init => {}
+            ActionKind::Expand => {
+                self.set_view(MprisView::Expanded);
+            }
+            ActionKind::Collapse => {
+                self.set_view(MprisView::Compact);
+            }
+            ActionKind::ToggleView => {
+                self.toggle_view();
+            }
         }
     }
 

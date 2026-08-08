@@ -227,7 +227,10 @@ impl DefaultFallback for VoiceAssistantWidget {
             | ActionKind::MiddleClick
             | ActionKind::Hold
             | ActionKind::CompoundLongpress
-            | ActionKind::Init => {}
+            | ActionKind::Init
+            | ActionKind::Expand
+            | ActionKind::Collapse
+            | ActionKind::ToggleView => {}
         }
     }
 }

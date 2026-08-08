@@ -15,6 +15,7 @@ dashmap = { workspace = true }
 glib = { workspace = true }
 nix = { version = "0.29", features = ["signal"] }
 paste = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }

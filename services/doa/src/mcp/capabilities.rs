@@ -1,4 +1,8 @@
 use crate::service::DoaService;
+use schemars::schema_for;
+use smearor_doa_model::DoaGetDirectionArgs;
+use smearor_doa_model::DoaReconnectArgs;
+use smearor_doa_model::DoaSetPollIntervalArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
@@ -23,31 +27,34 @@ impl McpCapabilitiesRegistrator for DoaService {
         );
         broadcaster.broadcast_message_to_topic(doa_resource);
 
+        let get_direction_schema = serde_json::to_string(&schema_for!(DoaGetDirectionArgs)).unwrap_or_default();
         let get_direction_tool = RegisterToolMessage::new(
             "doa_get_direction",
             "Returns the current DoA angle (0-359), mapped compass direction (N/E/S/W), and device connection status.",
-            r#"{ "type": "object", "properties": {}, "required": [] }"#,
+            &get_direction_schema,
         );
         broadcaster.broadcast_message_to_topic(get_direction_tool);
 
+        let set_poll_interval_schema = serde_json::to_string(&schema_for!(DoaSetPollIntervalArgs)).unwrap_or_default();
         let set_poll_interval_tool = RegisterToolMessage::new(
             "doa_set_poll_interval",
             "Sets the DoA polling interval in milliseconds. Lower values give more responsive direction updates but increase USB traffic. Minimum: 50ms.",
-            r#"{ "type": "object", "properties": { "interval_ms": { "type": "integer", "description": "Polling interval in milliseconds (min: 50, default: 150)" } }, "required": ["interval_ms"] }"#,
+            &set_poll_interval_schema,
         );
         broadcaster.broadcast_message_to_topic(set_poll_interval_tool);
 
+        let reconnect_schema = serde_json::to_string(&schema_for!(DoaReconnectArgs)).unwrap_or_default();
         let reconnect_tool = RegisterToolMessage::new(
             "doa_reconnect",
             "Forces a USB reconnection to the ReSpeaker XVF3800 device. Use this if the device was unplugged and reconnected.",
-            r#"{ "type": "object", "properties": {}, "required": [] }"#,
+            &reconnect_schema,
         );
         broadcaster.broadcast_message_to_topic(reconnect_tool);
 
         let prompt = RegisterPromptMessage::with_memory(
             "doa_guide",
             "Returns a system prompt with DoA sensor tools, resources, and current direction snapshot.",
-            r#"{ "type": "object", "properties": {} }"#,
+            &serde_json::to_string(&schema_for!(DoaGetDirectionArgs)).unwrap_or_default(),
             "DoA sensor preferences and polling interval settings",
             "doa,direction,sensor,microphone",
         );

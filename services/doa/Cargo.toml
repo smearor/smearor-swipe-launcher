@@ -16,6 +16,7 @@ stabby = { workspace = true }
 glib = { workspace = true }
 miette = { workspace = true }
 paste = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-doa-model = { path = "../../model/doa" }

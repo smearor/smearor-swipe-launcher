@@ -35,6 +35,7 @@ pub use dimming_config::DimmingConfigOverride;
 pub use dimming_phase::DimmingPhase;
 pub use dimming_state::DimmingState;
 pub use input_message::MacroPadInputMessage;
+pub use mcp::requests::MacroPadSetBrightnessArgs;
 pub use mcp::tools::MacroPadMcpTools;
 pub use topics::TOPIC_MACROPAD_COMMAND;
 pub use topics::TOPIC_MACROPAD_CONNECTION;

@@ -7,7 +7,9 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 stabby = { workspace = true, features = ["serde"] }
+smearor-model-mcp = { path = "../mcp" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }

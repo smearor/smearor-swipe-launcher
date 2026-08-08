@@ -4,9 +4,10 @@ mod messages;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
 pub use mcp::prompts::MprisMcpPrompts;
+pub use mcp::requests::MprisSeekArgs;
+pub use mcp::requests::MprisSetPositionArgs;
 pub use mcp::resources::MprisMcpResources;
 pub use mcp::tools::MprisMcpTools;
-pub use mcp::widget_action::MprisWidgetAction;
 pub use messages::command::MprisCommandAction;
 pub use messages::command::MprisCommandMessage;
 pub use messages::command::TOPIC_COMMAND;

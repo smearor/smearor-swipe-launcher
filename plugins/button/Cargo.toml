@@ -21,6 +21,7 @@ imageproc = { workspace = true }
 miette = { workspace = true }
 paste = { workspace = true }
 regex = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }

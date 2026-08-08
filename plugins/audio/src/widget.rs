@@ -240,6 +240,15 @@ impl DefaultFallback for AudioWidget {
                 broadcaster.broadcast_message_to_topic(AudioCommandMessage::volume_down());
             }
             ActionKind::Click | ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init => {}
+            ActionKind::Expand => {
+                self.set_view(AudioView::Expanded);
+            }
+            ActionKind::Collapse => {
+                self.set_view(AudioView::Compact);
+            }
+            ActionKind::ToggleView => {
+                self.toggle_view();
+            }
         }
     }
 

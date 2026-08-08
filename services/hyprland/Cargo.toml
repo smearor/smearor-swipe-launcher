@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 [dependencies]
 hyprland = { workspace = true }
 paste = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 stabby = { workspace = true }
@@ -25,6 +26,7 @@ smearor-hyprland-dispatch = { path = "../../model/hyprland-dispatch" }
 smearor-hyprland-status = { path = "../../model/hyprland-status" }
 smearor-hyprland-command = { path = "../../model/hyprland-command" }
 smearor-model-compositor = { path = "../../model/workspace" }
+smearor-model-mcp = { path = "../../model/mcp" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 
 [package.metadata.deb]

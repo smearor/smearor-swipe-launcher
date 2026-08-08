@@ -1,6 +1,10 @@
+mod mcp;
 mod messages;
 mod topics;
 
+pub use mcp::requests::HttpRequestArgs;
+pub use mcp::requests::HttpRequestResponse;
+pub use mcp::tools::HttpMcpTools;
 pub use messages::header::HttpHeader;
 pub use messages::header::HttpHeaderStabby;
 pub use messages::method::HttpMethod;

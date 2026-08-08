@@ -8,9 +8,12 @@ mod topics;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
 pub use mcp::prompts::WeatherMcpPrompts;
+pub use mcp::requests::WeatherGetForecastArgs;
+pub use mcp::requests::WeatherLookupCoordinatesArgs;
+pub use mcp::requests::WeatherLookupLocationNameArgs;
+pub use mcp::requests::WeatherQueryGuideArgs;
 pub use mcp::resources::WeatherMcpResources;
 pub use mcp::tools::WeatherMcpTools;
-pub use mcp::widget_action::WeatherWidgetAction;
 pub use messages::air_quality::AirQualityData;
 pub use messages::command::WeatherCommandAction;
 pub use messages::command::WeatherCommandMessage;

@@ -17,6 +17,7 @@ glib = { workspace = true }
 gtk4 = { workspace = true, features = ["unsafe-assume-initialized"] }
 miette = { workspace = true }
 paste = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }

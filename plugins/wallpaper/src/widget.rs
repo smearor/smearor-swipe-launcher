@@ -211,6 +211,15 @@ impl DefaultFallback for WallpaperWidget {
                 self.select_next_theme();
             }
             ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init => {}
+            ActionKind::Expand => {
+                self.expand_view();
+            }
+            ActionKind::Collapse => {
+                self.collapse_view();
+            }
+            ActionKind::ToggleView => {
+                self.toggle_view();
+            }
         }
     }
 }

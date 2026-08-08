@@ -1,5 +1,6 @@
 pub mod config;
 pub mod event_listener;
+pub mod mcp;
 pub mod monitor;
 pub mod service;
 pub mod status;

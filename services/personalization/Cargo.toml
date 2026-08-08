@@ -17,6 +17,7 @@ futures-util = { workspace = true }
 iana-time-zone = { workspace = true }
 paste = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }

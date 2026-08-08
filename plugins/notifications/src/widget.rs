@@ -298,6 +298,15 @@ impl DefaultFallback for NotificationWidget {
                 broadcaster.broadcast_message_to_topic(NotificationCommandMessage::toggle_do_not_disturb());
             }
             ActionKind::SwipeDown | ActionKind::ScrollDown | ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init => {}
+            ActionKind::Expand => {
+                self.set_view(NotificationView::Expanded);
+            }
+            ActionKind::Collapse => {
+                self.set_view(NotificationView::Compact);
+            }
+            ActionKind::ToggleView => {
+                self.toggle_view();
+            }
         }
     }
 }

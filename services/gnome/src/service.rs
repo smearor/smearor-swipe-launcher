@@ -11,9 +11,12 @@ use smearor_model_compositor::WorkspaceCreatePosition;
 use smearor_model_compositor::WorkspaceInfo;
 use smearor_model_compositor::WorkspaceSnapshotMessage;
 use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
+use smearor_model_mcp::InvokeResourceMessage;
+use smearor_model_mcp::InvokeToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -25,6 +28,7 @@ use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
@@ -57,6 +61,8 @@ pub struct GnomeWorkspaceService {
     pub command_sender: mpsc::UnboundedSender<GnomeCommand>,
     /// Shared configuration for the service.
     pub config: Arc<GnomeWorkspaceServiceConfig>,
+    /// Last workspace snapshot (updated on snapshot requests).
+    pub last_snapshot: Arc<Mutex<Option<WorkspaceSnapshotMessage>>>,
 }
 
 impl GnomeWorkspaceService {
@@ -74,14 +80,18 @@ impl GnomeWorkspaceService {
         let (command_sender, mut command_receiver) = mpsc::unbounded_channel::<GnomeCommand>();
 
         let service_config = Arc::new(service_config);
+        let last_snapshot = Arc::new(Mutex::new(None));
         let service = GnomeWorkspaceService {
             meta: PluginMeta::try_from(&config)?,
             core_context,
             command_sender,
             config: service_config,
+            last_snapshot,
         };
+        service.register_mcp_capabilities();
 
         let cmd_core_context = service.core_context;
+        let shared_last_snapshot = Arc::clone(&service.last_snapshot);
         std::thread::spawn(move || {
             let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                 Ok(rt) => rt,
@@ -101,7 +111,7 @@ impl GnomeWorkspaceService {
                             handle_create_workspace(message).await;
                         }
                         GnomeCommand::SnapshotRequest(message) => {
-                            handle_snapshot_request(message, cmd_core_context.clone()).await;
+                            handle_snapshot_request(message, cmd_core_context.clone(), &shared_last_snapshot).await;
                         }
                     }
                 }
@@ -138,6 +148,10 @@ impl GnomeWorkspaceService {
         }
 
         Ok(service)
+    }
+
+    pub(crate) fn status_snapshot(&self) -> Option<WorkspaceSnapshotMessage> {
+        self.last_snapshot.lock().ok().and_then(|s| s.clone())
     }
 }
 
@@ -194,7 +208,11 @@ async fn handle_create_workspace(message: CreateWorkspaceMessage) {
 /// workspaces and broadcasting a WorkspaceSnapshotMessage.
 ///
 /// Tries Introspect.GetWindows first, then Shell.Eval, then GSettings-only.
-async fn handle_snapshot_request(_message: WorkspaceSnapshotRequestMessage, core_context: Option<FfiCoreContext>) {
+async fn handle_snapshot_request(
+    _message: WorkspaceSnapshotRequestMessage,
+    core_context: Option<FfiCoreContext>,
+    last_snapshot: &Arc<Mutex<Option<WorkspaceSnapshotMessage>>>,
+) {
     debug!("GNOME service: building workspace snapshot");
 
     let connection = match zbus::Connection::session().await {
@@ -283,6 +301,10 @@ async fn handle_snapshot_request(_message: WorkspaceSnapshotRequestMessage, core
         snapshot.workspaces.len(),
         snapshot.active_workspace_id
     );
+
+    if let Ok(mut guard) = last_snapshot.lock() {
+        *guard = Some(snapshot.clone());
+    }
 
     let Some(ctx) = core_context else {
         return;
@@ -397,6 +419,12 @@ impl ServicePlugin for GnomeWorkspaceService {
                 }
                 id if id == FfiEnvelopePayload::<WorkspaceSnapshotRequestMessage>::TYPE_ID => {
                     MessageHandler::<FfiEnvelopePayload<WorkspaceSnapshotRequestMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {
                     trace!("GNOME service: unhandled message type for topic {}", envelope.topic.to_string());

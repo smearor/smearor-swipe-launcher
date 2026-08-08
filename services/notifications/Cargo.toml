@@ -17,9 +17,11 @@ glib = { workspace = true }
 gtk4 = { workspace = true }
 miette = { workspace = true }
 paste = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-notifications-model = { path = "../../model/notifications" }
+smearor-model-mcp = { path = "../../model/mcp" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 thiserror = { workspace = true }
 tokio = { workspace = true }

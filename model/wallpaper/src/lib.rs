@@ -5,6 +5,9 @@ mod topics;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
 pub use mcp::prompts::WallpaperMcpPrompts;
+pub use mcp::requests::AddWallpaperThemeArgs;
+pub use mcp::requests::RemoveWallpaperThemeArgs;
+pub use mcp::requests::SelectWallpaperThemeArgs;
 pub use mcp::resources::WallpaperMcpResources;
 pub use mcp::tools::WallpaperMcpTools;
 pub use messages::app_config::AppConfig;

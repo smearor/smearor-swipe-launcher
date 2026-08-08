@@ -25,6 +25,7 @@ use smearor_model_compositor::WorkspaceLifecycleEvent;
 use smearor_model_compositor::WorkspaceLifecycleType;
 use smearor_model_compositor::WorkspaceSnapshotMessage;
 use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
+use smearor_model_mcp::ButtonActionArgs;
 use smearor_model_mcp::InvokeToolMessage;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_personalization_model::PersonalizationCommandMessage;
@@ -227,7 +228,10 @@ impl DefaultFallback for WorkspaceSwitcherWidget {
             | ActionKind::RightClick
             | ActionKind::Hold
             | ActionKind::CompoundLongpress
-            | ActionKind::Init => {}
+            | ActionKind::Init
+            | ActionKind::Expand
+            | ActionKind::Collapse
+            | ActionKind::ToggleView => {}
         }
     }
 }
@@ -426,16 +430,24 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for WorkspaceSwitcher
 
         let own_button_name = format!("button_{}", self.meta.id);
         if tool_name == own_button_name {
-            let action_str = serde_json::from_str::<serde_json::Value>(&arguments)
-                .ok()
-                .and_then(|v| v.get("action").and_then(|a| a.as_str()).map(|s| s.to_string()))
-                .unwrap_or_else(|| "click".to_string());
+            let args: ButtonActionArgs = serde_json::from_str(&arguments).unwrap_or_default();
+            let action_kind = args.action;
+            let action_str = action_kind.as_ref().to_string();
 
-            match action_str.as_str() {
-                "click" => self.next_view(),
-                "longpress" => self.prev_view(),
-                _ => debug!("Workspace switcher: unhandled action '{}'", action_str),
+            let broadcaster = self.get_broadcaster();
+
+            let binding = self.config.binding_for_kind(action_kind);
+            if binding.is_configured() {
+                binding.dispatch(&broadcaster);
+                if binding.is_supplement() {
+                    self.default_fallback(&action_kind, &broadcaster);
+                }
+            } else {
+                self.default_fallback(&action_kind, &broadcaster);
             }
+
+            let response = smearor_model_mcp::InvokeToolResponse::success(&message.0.correlation_id, &format!("{} handled", action_str));
+            broadcaster.broadcast_message_to_topic(response);
         }
     }
 }

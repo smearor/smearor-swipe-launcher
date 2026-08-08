@@ -101,9 +101,12 @@ use smearor_model_compositor::WorkspaceCreatePosition;
 use smearor_model_compositor::WorkspaceInfo;
 use smearor_model_compositor::WorkspaceSnapshotMessage;
 use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
+use smearor_model_mcp::InvokeResourceMessage;
+use smearor_model_mcp::InvokeToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -119,6 +122,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
@@ -157,6 +161,8 @@ pub struct HyprlandService {
     pub command_sender: mpsc::UnboundedSender<HyprlandCommand>,
     /// Shared configuration for the service.
     pub config: Arc<HyprlandServiceConfig>,
+    /// Last known Hyprland state (updated on state requests).
+    pub last_state: Arc<Mutex<Option<HyprlandStateMessage>>>,
 }
 
 impl HyprlandService {
@@ -175,14 +181,18 @@ impl HyprlandService {
         let (command_sender, mut command_receiver) = mpsc::unbounded_channel::<HyprlandCommand>();
 
         let service_config = Arc::new(service_config);
+        let last_state = Arc::new(Mutex::new(None));
         let service = HyprlandService {
             meta: PluginMeta::try_from(&config)?,
             core_context,
             command_sender,
             config: service_config,
+            last_state,
         };
+        service.register_mcp_capabilities();
 
         let service_meta = service.meta.clone();
+        let shared_last_state = Arc::clone(&service.last_state);
         std::thread::spawn(move || {
             let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                 Ok(rt) => rt,
@@ -250,7 +260,7 @@ impl HyprlandService {
                             handle_ctl_switch_xkb_layout(message).await;
                         }
                         HyprlandCommand::StateRequest => {
-                            handle_state_request(core_context.clone(), &service_meta).await;
+                            handle_state_request(core_context.clone(), &service_meta, &shared_last_state).await;
                         }
                     }
                 }
@@ -1065,7 +1075,7 @@ async fn handle_snapshot_request(_message: WorkspaceSnapshotRequestMessage, core
 ///
 /// Synchronous IPC calls are wrapped in `tokio::task::spawn_blocking` to prevent
 /// blocking the async event worker when the compositor is under load.
-async fn handle_state_request(core_context: Option<FfiCoreContext>, meta: &PluginMeta) {
+async fn handle_state_request(core_context: Option<FfiCoreContext>, meta: &PluginMeta, last_state: &Arc<Mutex<Option<HyprlandStateMessage>>>) {
     ensure_hyprland_instance_signature();
 
     let state = tokio::task::spawn_blocking(|| {
@@ -1104,6 +1114,10 @@ async fn handle_state_request(core_context: Option<FfiCoreContext>, meta: &Plugi
     .await
     .unwrap_or_default();
 
+    if let Ok(mut guard) = last_state.lock() {
+        *guard = Some(state.clone());
+    }
+
     let Some(ctx) = core_context else {
         return;
     };
@@ -1117,6 +1131,12 @@ async fn handle_state_request(core_context: Option<FfiCoreContext>, meta: &Plugi
 impl MessageHandler<FfiEnvelopePayload<HyprlandStateRequestMessage>> for HyprlandService {
     fn handle_message(&self, _message: FfiEnvelopePayload<HyprlandStateRequestMessage>, _sender_id: &str) {
         let _ = self.command_sender.send(HyprlandCommand::StateRequest);
+    }
+}
+
+impl HyprlandService {
+    pub(crate) fn status_snapshot(&self) -> Option<HyprlandStateMessage> {
+        self.last_state.lock().ok().and_then(|s| s.clone())
     }
 }
 
@@ -1838,6 +1858,14 @@ impl ServicePlugin for HyprlandService {
                 id if id == FfiEnvelopePayload::<HyprlandStateRequestMessage>::TYPE_ID => {
                     debug!("HyprlandStateRequestMessage");
                     MessageHandler::<FfiEnvelopePayload<HyprlandStateRequestMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID => {
+                    debug!("InvokeToolMessage");
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID => {
+                    debug!("InvokeResourceMessage");
+                    MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {
                     trace!("Hyprland service: unhandled message type for topic {}", envelope.topic.to_string());

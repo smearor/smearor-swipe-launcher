@@ -1,7 +1,17 @@
 #![recursion_limit = "512"]
 #![allow(long_running_const_eval)]
 
+mod mcp;
+
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+
+pub use mcp::requests::MoveWindowArgs;
+pub use mcp::requests::SwitchWorkspaceArgs;
+pub use mcp::requests::ToggleFloatingArgs;
+pub use mcp::resources::HyprlandMcpResources;
+pub use mcp::responses::ActiveWindowEntry;
+pub use mcp::responses::HyprlandStateResponse;
+pub use mcp::tools::HyprlandMcpTools;
 
 pub use smearor_hyprland_command::*;
 pub use smearor_hyprland_dispatch::*;

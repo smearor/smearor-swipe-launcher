@@ -1,6 +1,7 @@
 use crate::config::WorkspaceAtomicConfig;
 use gtk4::Label;
 use gtk4::glib::MainContext;
+use schemars::schema_for;
 use smearor_model_compositor::CreateWorkspaceMessage;
 use smearor_model_compositor::SwitchWorkspaceMessage;
 use smearor_model_compositor::TOPIC_WORKSPACE_CHANGED;
@@ -12,6 +13,7 @@ use smearor_model_compositor::WorkspaceLifecycleEvent;
 use smearor_model_compositor::WorkspaceLifecycleType;
 use smearor_model_compositor::WorkspaceSnapshotMessage;
 use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
+use smearor_model_mcp::ButtonActionArgs;
 use smearor_model_mcp::InvokeToolMessage;
 use smearor_model_mcp::InvokeToolResponse;
 use smearor_model_mcp::RegisterToolMessage;
@@ -326,10 +328,11 @@ impl WorkspaceAtomicWidget {
 impl McpCapabilitiesRegistrator for WorkspaceAtomicWidget {
     fn register_mcp_capabilities(&self) {
         if self.config.atomic.description.is_some() {
+            let schema = serde_json::to_string(&schema_for!(ButtonActionArgs)).unwrap_or_default();
             let tool = RegisterToolMessage::new(
                 &format!("button_{}", self.meta.id),
                 self.config.atomic.description.as_deref().unwrap_or("Workspace atomic widget"),
-                r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "hold_start", "hold_stop", "double_press", "compound_longpress"], "description": "The action to trigger" } }, "required": ["action"] }"#,
+                &schema,
             );
             MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(tool);
         }

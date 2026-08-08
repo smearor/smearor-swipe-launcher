@@ -10,6 +10,7 @@ authors.workspace = true
 dashmap = { workspace = true }
 glib = { workspace = true }
 gtk4 = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-render-utils = { path = "../plugins/render-utils" }

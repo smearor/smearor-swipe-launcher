@@ -6,6 +6,7 @@ pub mod disks;
 pub mod graphic;
 pub mod html;
 pub mod labels;
+pub mod mcp;
 pub mod memory;
 pub mod multi_widget;
 pub mod network;

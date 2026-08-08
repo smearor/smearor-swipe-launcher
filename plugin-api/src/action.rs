@@ -6,6 +6,7 @@
 
 use std::str::FromStr;
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -16,9 +17,11 @@ use crate::MessageBroadcasterInner;
 ///
 /// Used by the `action_binding!` macro to generate per-kind wrapper structs
 /// with correct `#[serde(rename)]` attributes.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum ActionKind {
     /// Single-click action (press duration < 500 ms, fires on release).
+    #[default]
     Click,
     /// Long-press action (press duration >= 500 ms, fires on release).
     Longpress,
@@ -42,6 +45,12 @@ pub enum ActionKind {
     CompoundLongpress,
     /// Initial one-shot request (sent on widget construction).
     Init,
+    /// Expand widget to expanded view (MCP tool action).
+    Expand,
+    /// Collapse widget to compact view (MCP tool action).
+    Collapse,
+    /// Toggle between compact and expanded views (MCP tool action).
+    ToggleView,
 }
 
 /// Error returned when parsing an unknown action kind string.
@@ -70,6 +79,9 @@ impl FromStr for ActionKind {
             "scroll_down" => Ok(Self::ScrollDown),
             "compound_longpress" => Ok(Self::CompoundLongpress),
             "init" => Ok(Self::Init),
+            "expand" => Ok(Self::Expand),
+            "collapse" => Ok(Self::Collapse),
+            "toggle_view" => Ok(Self::ToggleView),
             _ => Err(UnknownActionKindError),
         }
     }
@@ -94,6 +106,9 @@ impl AsRef<str> for ActionKind {
             Self::ScrollDown => "scroll_down",
             Self::CompoundLongpress => "compound_longpress",
             Self::Init => "init",
+            Self::Expand => "expand",
+            Self::Collapse => "collapse",
+            Self::ToggleView => "toggle_view",
         }
     }
 }
@@ -563,6 +578,78 @@ pub struct InitBinding {
     pub mode: BindingMode,
 }
 
+/// Wrapper struct for the **expand** action binding.
+///
+/// Flattened into widget config structs via `#[serde(flatten)]`.
+/// TOML field names: `expand_topic`, `expand_payload`, `expand_instance`, `expand_description`.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct ExpandBinding {
+    /// Message topic for expand action.
+    #[serde(rename = "expand_topic")]
+    pub topic: Option<String>,
+    /// Message payload for expand action (JSON/TOML).
+    #[serde(rename = "expand_payload")]
+    pub payload: Option<Value>,
+    /// Target instance for expand message.
+    #[serde(rename = "expand_instance")]
+    pub instance: Option<String>,
+    /// Human-readable description of what the expand action does.
+    #[serde(rename = "expand_description")]
+    pub description: Option<String>,
+    /// Dispatch mode: `replace` (default) or `supplement`.
+    #[serde(rename = "expand_mode")]
+    pub mode: BindingMode,
+}
+
+/// Wrapper struct for the **collapse** action binding.
+///
+/// Flattened into widget config structs via `#[serde(flatten)]`.
+/// TOML field names: `collapse_topic`, `collapse_payload`, `collapse_instance`, `collapse_description`.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct CollapseBinding {
+    /// Message topic for collapse action.
+    #[serde(rename = "collapse_topic")]
+    pub topic: Option<String>,
+    /// Message payload for collapse action (JSON/TOML).
+    #[serde(rename = "collapse_payload")]
+    pub payload: Option<Value>,
+    /// Target instance for collapse message.
+    #[serde(rename = "collapse_instance")]
+    pub instance: Option<String>,
+    /// Human-readable description of what the collapse action does.
+    #[serde(rename = "collapse_description")]
+    pub description: Option<String>,
+    /// Dispatch mode: `replace` (default) or `supplement`.
+    #[serde(rename = "collapse_mode")]
+    pub mode: BindingMode,
+}
+
+/// Wrapper struct for the **toggle_view** action binding.
+///
+/// Flattened into widget config structs via `#[serde(flatten)]`.
+/// TOML field names: `toggle_view_topic`, `toggle_view_payload`, `toggle_view_instance`, `toggle_view_description`.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct ToggleViewBinding {
+    /// Message topic for toggle_view action.
+    #[serde(rename = "toggle_view_topic")]
+    pub topic: Option<String>,
+    /// Message payload for toggle_view action (JSON/TOML).
+    #[serde(rename = "toggle_view_payload")]
+    pub payload: Option<Value>,
+    /// Target instance for toggle_view message.
+    #[serde(rename = "toggle_view_instance")]
+    pub instance: Option<String>,
+    /// Human-readable description of what the toggle_view action does.
+    #[serde(rename = "toggle_view_description")]
+    pub description: Option<String>,
+    /// Dispatch mode: `replace` (default) or `supplement`.
+    #[serde(rename = "toggle_view_mode")]
+    pub mode: BindingMode,
+}
+
 /// Generates the `as_binding()` method and `DispatchableBinding` impl for a wrapper struct.
 ///
 /// Since all wrapper structs share the same four fields (`topic`, `payload`,
@@ -648,6 +735,9 @@ impl_as_binding!(ScrollUpBinding);
 impl_as_binding!(ScrollDownBinding);
 impl_as_binding!(CompoundLongpressBinding);
 impl_as_binding!(InitBinding);
+impl_as_binding!(ExpandBinding);
+impl_as_binding!(CollapseBinding);
+impl_as_binding!(ToggleViewBinding);
 
 /// A reusable collection of all action binding types for a widget.
 ///
@@ -695,6 +785,15 @@ pub struct ActionBindings {
     /// Initial one-shot request binding (sent on widget construction).
     #[serde(flatten)]
     pub init: InitBinding,
+    /// Expand action binding (MCP tool action).
+    #[serde(flatten)]
+    pub expand: ExpandBinding,
+    /// Collapse action binding (MCP tool action).
+    #[serde(flatten)]
+    pub collapse: CollapseBinding,
+    /// Toggle view action binding (MCP tool action).
+    #[serde(flatten)]
+    pub toggle_view: ToggleViewBinding,
 }
 
 impl ActionBindings {
@@ -713,6 +812,9 @@ impl ActionBindings {
             ActionKind::ScrollDown => &self.scroll_down,
             ActionKind::CompoundLongpress => &self.compound_longpress,
             ActionKind::Init => &self.init,
+            ActionKind::Expand => &self.expand,
+            ActionKind::Collapse => &self.collapse,
+            ActionKind::ToggleView => &self.toggle_view,
         }
     }
 
@@ -798,6 +900,9 @@ mod tests {
         assert_eq!(ActionKind::from_str("scroll_down"), Ok(ActionKind::ScrollDown));
         assert_eq!(ActionKind::from_str("compound_longpress"), Ok(ActionKind::CompoundLongpress));
         assert_eq!(ActionKind::from_str("init"), Ok(ActionKind::Init));
+        assert_eq!(ActionKind::from_str("expand"), Ok(ActionKind::Expand));
+        assert_eq!(ActionKind::from_str("collapse"), Ok(ActionKind::Collapse));
+        assert_eq!(ActionKind::from_str("toggle_view"), Ok(ActionKind::ToggleView));
         assert!(ActionKind::from_str("unknown").is_err());
     }
 
@@ -815,6 +920,9 @@ mod tests {
         assert_eq!(ActionKind::ScrollDown.as_ref(), "scroll_down");
         assert_eq!(ActionKind::CompoundLongpress.as_ref(), "compound_longpress");
         assert_eq!(ActionKind::Init.as_ref(), "init");
+        assert_eq!(ActionKind::Expand.as_ref(), "expand");
+        assert_eq!(ActionKind::Collapse.as_ref(), "collapse");
+        assert_eq!(ActionKind::ToggleView.as_ref(), "toggle_view");
     }
 
     #[test]

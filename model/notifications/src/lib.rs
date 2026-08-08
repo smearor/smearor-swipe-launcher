@@ -3,7 +3,14 @@ mod messages;
 
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
-pub use mcp::widget_action::NotificationWidgetAction;
+pub use mcp::requests::NotificationClearArgs;
+pub use mcp::requests::NotificationSendArgs;
+pub use mcp::requests::NotificationToggleDndArgs;
+pub use mcp::resources::NotificationMcpResources;
+pub use mcp::responses::NotificationDndResponse;
+pub use mcp::responses::NotificationHistoryEntry;
+pub use mcp::responses::NotificationHistoryResponse;
+pub use mcp::tools::NotificationMcpTools;
 pub use messages::command::NotificationCommandAction;
 pub use messages::command::NotificationCommandMessage;
 pub use messages::command::TOPIC_COMMAND;

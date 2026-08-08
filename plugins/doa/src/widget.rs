@@ -264,7 +264,7 @@ impl DefaultFallback for DoaWidget {
                 };
                 broadcaster.broadcast_message_to_topic(DoaCommandMessage { action, value: 0 });
             }
-            ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init => {}
+            ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init | ActionKind::Expand | ActionKind::Collapse | ActionKind::ToggleView => {}
         }
     }
 

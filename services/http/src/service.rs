@@ -3,8 +3,11 @@ use std::time::Duration;
 use smearor_http_model::HttpRequestMessage;
 use smearor_http_model::HttpResponseMessage;
 use smearor_http_model::HttpResponseStatus;
+use smearor_model_mcp::InvokeToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
+use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
@@ -13,6 +16,7 @@ use smearor_swipe_launcher_plugin_api::PluginConstructionErrorWrapper;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::PluginMetaGetter;
 use smearor_swipe_launcher_plugin_api::ServicePlugin;
+use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::box_payload;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
@@ -56,12 +60,14 @@ impl HttpService {
             });
         });
 
-        Ok(HttpService {
+        let service = HttpService {
             meta,
             core_context,
             config: service_config,
             request_sender,
-        })
+        };
+        service.register_mcp_capabilities();
+        Ok(service)
     }
 }
 
@@ -102,6 +108,8 @@ impl ServicePlugin for HttpService {
             let envelope = &*(message as *mut FfiEnvelope);
             if envelope.type_id == generate_type_id("std::string::String") && envelope.topic.to_string() == smearor_http_model::TOPIC_HTTP_REQUEST {
                 MessageHandler::<String>::handle_envelope_message(self, envelope);
+            } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
             }
         }
     }

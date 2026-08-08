@@ -1,5 +1,9 @@
 use crate::config::NotificationServiceConfig;
 use futures_util::StreamExt;
+use smearor_model_mcp::InvokeResourceMessage;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_notifications_model::NotificationAction;
 use smearor_notifications_model::NotificationCommandAction;
 use smearor_notifications_model::NotificationCommandMessage;
@@ -9,6 +13,7 @@ use smearor_notifications_model::UrgencyLevel;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_swipe_launcher_plugin_api::MessageTopic;
@@ -45,6 +50,8 @@ pub enum NotificationCommand {
     DismissLast,
     InvokeAction(u32, String),
     ToggleDoNotDisturb,
+    SetDoNotDisturb(bool),
+    Send { summary: String, body: String, urgency: UrgencyLevel },
     Refresh,
 }
 
@@ -210,6 +217,7 @@ pub struct NotificationService {
     pub config: NotificationServiceConfig,
     pub command_sender: tokio::sync::mpsc::Sender<NotificationCommand>,
     pub command_receiver: Option<tokio::sync::mpsc::Receiver<NotificationCommand>>,
+    pub last_status: Arc<Mutex<Option<NotificationStatusMessage>>>,
 }
 
 impl NotificationService {
@@ -220,13 +228,16 @@ impl NotificationService {
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
         let (command_sender, command_receiver) = tokio::sync::mpsc::channel::<NotificationCommand>(100);
         let meta = PluginMeta::try_from(&config)?;
+        let last_status = Arc::new(Mutex::new(None));
         let service = NotificationService {
             meta,
             core_context,
             config: notification_config,
             command_sender,
             command_receiver: Some(command_receiver),
+            last_status,
         };
+        service.register_mcp_capabilities();
         Ok(service)
     }
 
@@ -252,6 +263,10 @@ impl NotificationService {
 
     fn handle_refresh(&self) {
         let _ = self.command_sender.send(NotificationCommand::Refresh);
+    }
+
+    pub(crate) fn status_snapshot(&self) -> Option<NotificationStatusMessage> {
+        self.last_status.lock().ok().and_then(|s| s.clone())
     }
 }
 
@@ -297,8 +312,13 @@ impl ServicePlugin for NotificationService {
         if !message.is_null() {
             unsafe {
                 let envelope = &*(message as *mut FfiEnvelope);
+                let topic = envelope.topic.to_string();
                 if envelope.type_id == FfiEnvelopePayload::<NotificationCommandMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<NotificationCommandMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_TOOL && envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_RESOURCE && envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }
@@ -310,6 +330,7 @@ impl ServicePlugin for NotificationService {
             let core_context = *ctx;
             let command_receiver = self.command_receiver.take();
             let config = self.config.clone();
+            let last_status = Arc::clone(&self.last_status);
             std::thread::spawn(move || {
                 let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                     Ok(rt) => rt,
@@ -321,7 +342,7 @@ impl ServicePlugin for NotificationService {
                 let local_set = tokio::task::LocalSet::new();
                 local_set.block_on(&rt, async move {
                     if let Some(receiver) = command_receiver {
-                        run_notification_async(meta, core_context, receiver, config).await;
+                        run_notification_async(meta, core_context, receiver, config, last_status).await;
                     }
                 });
             });
@@ -329,7 +350,15 @@ impl ServicePlugin for NotificationService {
     }
 }
 
-fn send_status(meta: &PluginMeta, core_context: &FfiCoreContext, status: NotificationStatusMessage) {
+fn send_status(
+    meta: &PluginMeta,
+    core_context: &FfiCoreContext,
+    status: NotificationStatusMessage,
+    last_status: &Arc<Mutex<Option<NotificationStatusMessage>>>,
+) {
+    if let Ok(mut guard) = last_status.lock() {
+        *guard = Some(status.clone());
+    }
     let payload_ptr = box_payload(status);
     let envelope = FfiEnvelope::builder()
         .sender_id(meta.id.clone())
@@ -348,6 +377,7 @@ async fn run_notification_async(
     core_context: FfiCoreContext,
     mut command_receiver: tokio::sync::mpsc::Receiver<NotificationCommand>,
     _config: NotificationServiceConfig,
+    last_status: Arc<Mutex<Option<NotificationStatusMessage>>>,
 ) {
     debug!("Notification Service: starting notification async task");
     let state = Arc::new(Mutex::new(NotificationState::default()));
@@ -357,9 +387,10 @@ async fn run_notification_async(
 
     let forward_meta = meta.clone();
     let forward_core = core_context.clone();
+    let forward_last_status = Arc::clone(&last_status);
     tokio::task::spawn_local(async move {
         while let Some(status) = status_receiver.recv().await {
-            send_status(&forward_meta, &forward_core, status);
+            send_status(&forward_meta, &forward_core, status, &forward_last_status);
         }
     });
 
@@ -475,6 +506,7 @@ async fn run_notification_async(
             let monitor_state = Arc::clone(&state);
             let monitor_meta = meta.clone();
             let monitor_core = core_context.clone();
+            let monitor_last_status = Arc::clone(&last_status);
             let conn_for_monitor = monitor_conn.clone();
             let pending_notifications: Arc<Mutex<HashMap<u32, NotificationInfo>>> = Arc::new(Mutex::new(HashMap::new()));
             tokio::task::spawn_local(async move {
@@ -553,7 +585,7 @@ async fn run_notification_async(
                                 let status = guard.to_status_message();
                                 let count = guard.notifications.len();
                                 drop(guard);
-                                send_status(&monitor_meta, &monitor_core, status);
+                                send_status(&monitor_meta, &monitor_core, status, &monitor_last_status);
                                 debug!("Notification Service: monitor replaced notification id={replaces_id} app={app_name} total={count}");
                             } else {
                                 let mut pending = pending_notifications.lock().unwrap();
@@ -585,7 +617,7 @@ async fn run_notification_async(
                             let status = guard.to_status_message();
                             let count = guard.notifications.len();
                             drop(guard);
-                            send_status(&monitor_meta, &monitor_core, status);
+                            send_status(&monitor_meta, &monitor_core, status, &monitor_last_status);
                             debug!("Notification Service: monitor added notification id={id} total={count}");
                         }
                         zbus::message::Type::Signal => {
@@ -602,7 +634,7 @@ async fn run_notification_async(
                                 guard.remove_by_id(id);
                                 let status = guard.to_status_message();
                                 drop(guard);
-                                send_status(&monitor_meta, &monitor_core, status);
+                                send_status(&monitor_meta, &monitor_core, status, &monitor_last_status);
                                 debug!("Notification Service: monitor removed notification id={id}");
                             }
                         }
@@ -616,7 +648,7 @@ async fn run_notification_async(
     };
 
     let initial_status = state.lock().unwrap().to_status_message();
-    send_status(&meta, &core_context, initial_status.clone());
+    send_status(&meta, &core_context, initial_status.clone(), &last_status);
     let mut last_broadcast = Some(initial_status);
 
     let mut last_periodic_broadcast = Instant::now();
@@ -625,7 +657,7 @@ async fn run_notification_async(
     loop {
         if Instant::now().duration_since(last_periodic_broadcast) >= PERIODIC_INTERVAL {
             let status = state.lock().unwrap().to_status_message();
-            send_status(&meta, &core_context, status);
+            send_status(&meta, &core_context, status, &last_status);
             last_periodic_broadcast = Instant::now();
         }
 
@@ -678,10 +710,40 @@ async fn run_notification_async(
                 s.do_not_disturb = !s.do_not_disturb;
                 debug!("Notification Service: Do Not Disturb = {}", s.do_not_disturb);
             }
+            Ok(Some(NotificationCommand::SetDoNotDisturb(enabled))) => {
+                let mut s = state.lock().unwrap();
+                s.do_not_disturb = enabled;
+                debug!("Notification Service: Do Not Disturb = {enabled}");
+            }
+            Ok(Some(NotificationCommand::Send { summary, body, urgency })) => {
+                debug!("Notification Service: sending notification: {summary}");
+                let mut state_guard = state.lock().unwrap();
+                state_guard.next_id += 1;
+                let id = state_guard.next_id;
+                let notification = NotificationInfo {
+                    id,
+                    app_name: stabby::string::String::from("MCP"),
+                    summary: stabby::string::String::from(summary),
+                    body: stabby::string::String::from(body),
+                    icon: stabby::option::Option::None(),
+                    urgency,
+                    actions: stabby::vec::Vec::new(),
+                    timestamp: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64,
+                    timeout_ms: 5000,
+                };
+                state_guard.notifications.insert(id, notification);
+                drop(state_guard);
+                if let Err(e) = signal_sender.send(SignalCommand::NotificationClosed(id, 2)).await {
+                    error!("Notification Service: failed to queue NotificationClosed signal: {e}");
+                }
+            }
             Ok(Some(NotificationCommand::Refresh)) => {
                 debug!("Notification Service: refreshing status");
                 let status = state.lock().unwrap().to_status_message();
-                send_status(&meta, &core_context, status.clone());
+                send_status(&meta, &core_context, status.clone(), &last_status);
                 last_broadcast = Some(status);
             }
             Ok(Some(NotificationCommand::InvokeAction(id, key))) => {
@@ -699,7 +761,7 @@ async fn run_notification_async(
 
         let status = state.lock().unwrap().to_status_message();
         if last_broadcast.as_ref() != Some(&status) {
-            send_status(&meta, &core_context, status.clone());
+            send_status(&meta, &core_context, status.clone(), &last_status);
             last_broadcast = Some(status);
         }
     }

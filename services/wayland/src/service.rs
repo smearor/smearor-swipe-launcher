@@ -8,9 +8,12 @@ use smearor_model_compositor::CreateWorkspaceMessage;
 use smearor_model_compositor::SwitchWorkspaceMessage;
 use smearor_model_compositor::WorkspaceSnapshotMessage;
 use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
+use smearor_model_mcp::InvokeResourceMessage;
+use smearor_model_mcp::InvokeToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -81,6 +84,7 @@ impl WaylandWorkspaceService {
             shared_snapshot: shared_snapshot.clone(),
             config: service_config,
         };
+        service.register_mcp_capabilities();
 
         let cmd_core_context = service.core_context;
         let cmd_shared_snapshot = shared_snapshot.clone();
@@ -130,6 +134,10 @@ impl WaylandWorkspaceService {
         }
 
         Ok(service)
+    }
+
+    pub(crate) fn status_snapshot(&self) -> Option<WorkspaceSnapshotMessage> {
+        self.shared_snapshot.lock().ok().and_then(|s| s.clone())
     }
 }
 
@@ -236,6 +244,12 @@ impl ServicePlugin for WaylandWorkspaceService {
                 }
                 id if id == FfiEnvelopePayload::<WorkspaceSnapshotRequestMessage>::TYPE_ID => {
                     MessageHandler::<FfiEnvelopePayload<WorkspaceSnapshotRequestMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
+                }
+                id if id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID => {
+                    MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
                 }
                 _ => {
                     trace!("Wayland service: unhandled message type for topic {}", envelope.topic.to_string());

@@ -1,7 +1,12 @@
 use crate::service::NetworkService;
+use schemars::schema_for;
+use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_network_model::NetworkConnectWifiArgs;
+use smearor_network_model::NetworkToggleRadioArgs;
+use smearor_network_model::NetworkToggleVpnArgs;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 
@@ -33,38 +38,30 @@ impl McpCapabilitiesRegistrator for NetworkService {
         );
         broadcaster.broadcast_message_to_topic(vpn_resource);
 
-        let toggle_radio_tool = RegisterToolMessage::new(
-            "network_toggle_radio",
-            "Toggles WLAN or airplane mode on/off.",
-            r#"{ "type": "object", "properties": { "technology": { "type": "string", "enum": ["wifi", "wwan", "all"], "description": "The radio technology to toggle" }, "enabled": { "type": "boolean", "description": "Whether the radio should be enabled" } }, "required": ["technology", "enabled"] }"#,
-        );
+        let toggle_radio_schema = serde_json::to_string(&schema_for!(NetworkToggleRadioArgs)).unwrap_or_default();
+        let toggle_radio_tool = RegisterToolMessage::new("network_toggle_radio", "Toggles WLAN or airplane mode on/off.", &toggle_radio_schema);
         broadcaster.broadcast_message_to_topic(toggle_radio_tool);
 
-        let connect_wifi_tool = RegisterToolMessage::new(
-            "network_connect_wifi",
-            "Connects the system to a specific access point.",
-            r#"{ "type": "object", "properties": { "ssid": { "type": "string", "description": "The SSID of the WLAN to connect to" }, "password": { "type": "string", "description": "The password for the WLAN (optional for known networks)" } }, "required": ["ssid"] }"#,
-        );
+        let connect_wifi_schema = serde_json::to_string(&schema_for!(NetworkConnectWifiArgs)).unwrap_or_default();
+        let connect_wifi_tool = RegisterToolMessage::new("network_connect_wifi", "Connects the system to a specific access point.", &connect_wifi_schema);
         broadcaster.broadcast_message_to_topic(connect_wifi_tool);
 
-        let toggle_vpn_tool = RegisterToolMessage::new(
-            "network_toggle_vpn",
-            "Starts or stops a specific VPN connection.",
-            r#"{ "type": "object", "properties": { "profile_name": { "type": "string", "description": "The VPN profile name or UUID" }, "active": { "type": "boolean", "description": "Whether the VPN should be active" } }, "required": ["profile_name", "active"] }"#,
-        );
+        let toggle_vpn_schema = serde_json::to_string(&schema_for!(NetworkToggleVpnArgs)).unwrap_or_default();
+        let toggle_vpn_tool = RegisterToolMessage::new("network_toggle_vpn", "Starts or stops a specific VPN connection.", &toggle_vpn_schema);
         broadcaster.broadcast_message_to_topic(toggle_vpn_tool);
 
+        let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();
         let get_public_ip_tool = RegisterToolMessage::new(
             "network_get_public_ip",
             "Queries the external IP address and provider (GeoIP) via the internal HTTP service.",
-            r#"{ "type": "object", "properties": {} }"#,
+            &no_args_schema,
         );
         broadcaster.broadcast_message_to_topic(get_public_ip_tool);
 
         let prompt = RegisterPromptMessage::with_memory(
             "network_guide",
             "Returns a system prompt with network management tools, resources, and current status snapshot.",
-            r#"{ "type": "object", "properties": {} }"#,
+            &no_args_schema,
             "network preferences including WiFi and VPN settings",
             "network,wifi,vpn,radio",
         );

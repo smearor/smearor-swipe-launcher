@@ -4,6 +4,9 @@ mod messages;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
 pub use mcp::prompts::TerminalCommandMcpPrompts;
+pub use mcp::requests::TerminalCommandLaunchArgs;
+pub use mcp::requests::TerminalCommandRestartArgs;
+pub use mcp::requests::TerminalCommandTerminateArgs;
 pub use mcp::resources::TerminalCommandMcpResources;
 pub use mcp::tools::TerminalCommandMcpTools;
 pub use messages::command::TerminalCommandAction;

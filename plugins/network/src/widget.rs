@@ -705,7 +705,7 @@ impl DefaultFallback for NetworkWidget {
             ActionKind::SwipeDown | ActionKind::ScrollDown => {
                 self.prev_view();
             }
-            ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init => {}
+            ActionKind::Hold | ActionKind::CompoundLongpress | ActionKind::Init | ActionKind::Expand | ActionKind::Collapse | ActionKind::ToggleView => {}
         }
     }
 }

@@ -1,5 +1,6 @@
 mod direction;
 mod mcp_prompts;
+mod mcp_requests;
 mod mcp_tools;
 mod messages;
 mod response;
@@ -9,6 +10,9 @@ use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
 pub use direction::DoaDirection;
 pub use mcp_prompts::DoaMcpPrompts;
+pub use mcp_requests::DoaGetDirectionArgs;
+pub use mcp_requests::DoaReconnectArgs;
+pub use mcp_requests::DoaSetPollIntervalArgs;
 pub use mcp_tools::DoaMcpResources;
 pub use mcp_tools::DoaMcpTools;
 pub use messages::command::DoaCommandAction;

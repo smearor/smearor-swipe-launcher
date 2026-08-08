@@ -17,6 +17,7 @@ glib = { workspace = true }
 miette = { workspace = true }
 nix = { version = "0.29", features = ["signal"] }
 paste = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shellexpand = { workspace = true }

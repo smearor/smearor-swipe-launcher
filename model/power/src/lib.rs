@@ -4,6 +4,8 @@ mod messages;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
 pub use mcp::prompts::PowerMcpPrompts;
+pub use mcp::requests::SystemPowerActionArgs;
+pub use mcp::requests::SystemSchedulePowerActionArgs;
 pub use mcp::resources::PowerMcpResources;
 pub use mcp::tools::PowerMcpTools;
 pub use messages::capabilities::PowerCapabilities;

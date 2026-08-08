@@ -1,9 +1,15 @@
+mod mcp;
 mod monitor;
 mod workspace;
 
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::impl_json_convertible;
 
+pub use mcp::requests::SwitchWorkspaceArgs;
+pub use mcp::resources::CompositorMcpResources;
+pub use mcp::responses::WorkspaceEntry;
+pub use mcp::responses::WorkspacesResponse;
+pub use mcp::tools::CompositorMcpTools;
 pub use monitor::MonitorChangeType;
 pub use monitor::MonitorChangedEvent;
 pub use monitor::TOPIC_MONITOR_CHANGED;

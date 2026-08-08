@@ -1,4 +1,6 @@
 use crate::widget::ButtonWidget;
+use schemars::schema_for;
+use smearor_model_mcp::ButtonActionArgs;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
@@ -10,11 +12,8 @@ impl McpCapabilitiesRegistrator for ButtonWidget {
             return;
         };
         let tool_name = format!("button_{}", self.meta.id);
-        let tool = RegisterToolMessage::new(
-            &tool_name,
-            description,
-            r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "hold_start", "hold_stop", "double_press", "compound_longpress", "swipe_up", "swipe_down", "right_click", "middle_click", "scroll_up", "scroll_down"], "description": "The button action to trigger" } }, "required": ["action"] }"#,
-        );
+        let schema = serde_json::to_string(&schema_for!(ButtonActionArgs)).unwrap_or_default();
+        let tool = RegisterToolMessage::new(&tool_name, description, &schema);
         let broadcaster = self.get_broadcaster();
         broadcaster.broadcast_message_to_topic(tool);
         debug!("ButtonWidget registered MCP tool: {}", tool_name);

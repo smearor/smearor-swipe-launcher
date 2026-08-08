@@ -1,4 +1,5 @@
 pub mod config;
+pub mod mcp;
 pub mod monitor;
 pub mod service;
 pub mod workspace;

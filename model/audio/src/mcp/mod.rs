@@ -1,4 +1,4 @@
 pub mod prompts;
+pub mod requests;
 pub mod resources;
 pub mod tools;
-pub mod widget_action;

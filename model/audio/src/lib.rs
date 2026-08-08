@@ -6,9 +6,9 @@ use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
 pub use device::AudioDevice;
 pub use mcp::prompts::AudioMcpPrompts;
+pub use mcp::requests::AudioSetVolumeArgs;
 pub use mcp::resources::AudioMcpResources;
 pub use mcp::tools::AudioMcpTools;
-pub use mcp::widget_action::AudioWidgetAction;
 pub use messages::command::AudioCommandAction;
 pub use messages::command::AudioCommandMessage;
 pub use messages::command::TOPIC_COMMAND;

@@ -14,10 +14,12 @@ crate-type = ["cdylib"]
 miette = { workspace = true }
 paste = { workspace = true }
 regex = "1.11"
-reqwest = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, features = ["json", "blocking"] }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 smearor-http-model = { path = "../../model/http" }
+smearor-model-mcp = { path = "../../model/mcp" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 stabby = { workspace = true }
 thiserror = { workspace = true }
