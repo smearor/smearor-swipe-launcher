@@ -1,4 +1,5 @@
 use crate::config::WorkspaceAtomicConfig;
+use crate::nav_target::WorkspaceNavTarget;
 use gtk4::Label;
 use gtk4::glib::MainContext;
 use schemars::schema_for;
@@ -175,24 +176,16 @@ impl WorkspaceAtomicWidget {
         let broadcaster = MessageBroadcaster::get_broadcaster(self);
 
         MainContext::default().spawn_local(async move {
-            let (_idx, has_next, next_id, last_id) = {
-                let ws_list = workspaces.borrow();
-                if ws_list.is_empty() {
-                    return;
-                }
-                let idx = *current_index.borrow();
-                let has_next = idx + 1 < ws_list.len();
-                let next_id = if has_next { ws_list[idx + 1].workspace_id } else { -1 };
-                let last_id = ws_list[idx].workspace_id;
-                (idx, has_next, next_id, last_id)
+            let Some(nav) = WorkspaceNavTarget::next(&workspaces.borrow(), *current_index.borrow()) else {
+                return;
             };
 
-            if has_next {
-                let msg = SwitchWorkspaceMessage { workspace_id: next_id };
+            if nav.has_target {
+                let msg = SwitchWorkspaceMessage { workspace_id: nav.target_id };
                 broadcaster.broadcast_message_to_topic(msg);
             } else {
                 let msg = CreateWorkspaceMessage {
-                    relative_to: last_id,
+                    relative_to: nav.anchor_id,
                     position: smearor_model_compositor::WorkspaceCreatePosition::After,
                 };
                 broadcaster.broadcast_message_to_topic(msg);
@@ -207,24 +200,16 @@ impl WorkspaceAtomicWidget {
         let broadcaster = MessageBroadcaster::get_broadcaster(self);
 
         MainContext::default().spawn_local(async move {
-            let (_idx, has_prev, prev_id, first_id) = {
-                let ws_list = workspaces.borrow();
-                if ws_list.is_empty() {
-                    return;
-                }
-                let idx = *current_index.borrow();
-                let has_prev = idx > 0;
-                let prev_id = if has_prev { ws_list[idx - 1].workspace_id } else { -1 };
-                let first_id = ws_list[idx].workspace_id;
-                (idx, has_prev, prev_id, first_id)
+            let Some(nav) = WorkspaceNavTarget::prev(&workspaces.borrow(), *current_index.borrow()) else {
+                return;
             };
 
-            if has_prev {
-                let msg = SwitchWorkspaceMessage { workspace_id: prev_id };
+            if nav.has_target {
+                let msg = SwitchWorkspaceMessage { workspace_id: nav.target_id };
                 broadcaster.broadcast_message_to_topic(msg);
             } else {
                 let msg = CreateWorkspaceMessage {
-                    relative_to: first_id,
+                    relative_to: nav.anchor_id,
                     position: smearor_model_compositor::WorkspaceCreatePosition::Before,
                 };
                 broadcaster.broadcast_message_to_topic(msg);

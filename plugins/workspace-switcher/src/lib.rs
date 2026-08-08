@@ -3,6 +3,7 @@ pub(crate) mod config;
 pub(crate) mod graphic;
 pub(crate) mod html;
 pub(crate) mod mcp;
+pub(crate) mod nav_target;
 pub(crate) mod personalization;
 pub(crate) mod widget;
 

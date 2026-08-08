@@ -4,7 +4,6 @@ use serde_json::json;
 use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use std::collections::HashMap;
-use tracing::debug;
 use tracing::trace;
 
 /// Configuration for the MCP server section in `services.toml`.

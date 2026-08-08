@@ -15,7 +15,6 @@ use smearor_model_area::AreaType;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
 use std::collections::HashMap;
 use std::str::FromStr;
-use tracing::debug;
 use tracing::trace;
 
 /// Main configuration for the swipe launcher
