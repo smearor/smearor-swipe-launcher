@@ -29,13 +29,13 @@ use crate::InvokePluginPromptParams;
 use crate::InvokePluginResourceParams;
 use crate::InvokePluginToolParams;
 use crate::prompts::IntoSdkPrompt;
-use crate::prompts::get_prompt_sdk;
+use crate::prompts::PromptResolver;
 use crate::resources::IntoSdkResource;
-use crate::resources::read_resource_sdk;
+use crate::resources::ResourceResolver;
 use crate::server::McpServerState;
 use crate::tools::IntoSdkTool;
 use crate::tools::ToolInvocation;
-use crate::tools::invoke_tool_sdk;
+use crate::tools::ToolResolver;
 
 /// ServerHandler implementation that bridges rust-mcp-sdk with the existing
 /// McpCommand channel system for launcher core and plugin communication.
@@ -143,7 +143,8 @@ impl ServerHandler for SwipeLauncherHandler {
         }
 
         // Core resource
-        match read_resource_sdk(&state.resources, state.command_sender.clone(), &uri).await {
+        let resolver = ResourceResolver::new(&state.resources);
+        match resolver.read_sdk(state.command_sender.clone(), &uri).await {
             Ok(output) => Ok(ReadResourceResult {
                 contents: vec![ReadResourceContent::TextResourceContents(TextResourceContents {
                     meta: None,
@@ -223,7 +224,8 @@ impl ServerHandler for SwipeLauncherHandler {
             }
         }
 
-        match get_prompt_sdk(&state.prompts, &name, &arguments) {
+        let resolver = PromptResolver::new(&state.prompts);
+        match resolver.get_sdk(&name, &arguments) {
             Ok(result) => Ok(result),
             Err(e) => Err(RpcError::internal_error().with_message(e.to_string())),
         }
@@ -293,7 +295,8 @@ impl ServerHandler for SwipeLauncherHandler {
         // Core tool
         let arguments_value = arguments.map(serde_json::Value::Object).unwrap_or(serde_json::Value::Null);
         let invocation = ToolInvocation::new(state.command_sender.clone(), Some(&arguments_value));
-        let result = invoke_tool_sdk(&state.tools, invocation, &name).await;
+        let resolver = ToolResolver::new(&state.tools);
+        let result = resolver.invoke_sdk(invocation, &name).await;
         match result {
             Ok(text) => Ok(CallToolResult::text_content(vec![TextContent::new(text, None, None)])),
             Err(e) => Ok(CallToolResult::with_error(CallToolError::from_message(e.to_string()))),

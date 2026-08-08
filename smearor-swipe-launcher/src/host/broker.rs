@@ -617,7 +617,8 @@ impl super::LauncherHost {
                         tokio::spawn(async move {
                             let tools = smearor_mcp_server::tools::ToolDefinition::core_tools();
                             let invocation = smearor_mcp_server::tools::ToolInvocation::new(sender, Some(&arguments));
-                            let result = smearor_mcp_server::tools::invoke_tool_sdk(&tools, invocation, &name).await;
+                            let resolver = smearor_mcp_server::tools::ToolResolver::new(&tools);
+                            let result = resolver.invoke_sdk(invocation, &name).await;
                             let response = match result {
                                 Ok(text) => InvokeToolResponse::success(&correlation_id, &text),
                                 Err(error) => InvokeToolResponse::error(&correlation_id, &error.to_string()),
@@ -643,7 +644,8 @@ impl super::LauncherHost {
                         let correlation_id = msg.correlation_id.to_string();
                         tokio::spawn(async move {
                             let resources = smearor_mcp_server::resources::ResourceDefinition::core_resources();
-                            let result = smearor_mcp_server::resources::read_resource_sdk(&resources, sender, &uri).await;
+                            let resolver = smearor_mcp_server::resources::ResourceResolver::new(&resources);
+                            let result = resolver.read_sdk(sender, &uri).await;
                             let response = match result {
                                 Ok(output) => InvokeResourceResponse::success(&correlation_id, &output.contents),
                                 Err(error) => InvokeResourceResponse::error(&correlation_id, &error.to_string()),

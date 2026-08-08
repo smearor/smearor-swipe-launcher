@@ -1,6 +1,6 @@
 use rust_mcp_sdk::schema::Tool;
 
-use crate::tools::json_schema_to_tool_input_schema;
+use crate::tools::ToolResolver;
 
 /// Trait for converting tool-like types into the SDK `Tool` type.
 pub trait IntoSdkTool {
@@ -23,7 +23,7 @@ impl<T: SdkToolFields> IntoSdkTool for T {
         Tool {
             name: self.name().to_string(),
             description: Some(self.description().to_string()),
-            input_schema: json_schema_to_tool_input_schema(self.input_schema()),
+            input_schema: ToolResolver::json_schema_to_tool_input_schema(self.input_schema()),
             annotations: None,
             execution: None,
             icons: vec![],

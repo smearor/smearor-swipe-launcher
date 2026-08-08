@@ -1,6 +1,6 @@
 use rust_mcp_sdk::schema::Prompt;
 
-use crate::prompts::schema_to_prompt_arguments;
+use crate::prompts::PromptResolver;
 
 /// Trait for converting prompt-like types into the SDK `Prompt` type.
 pub trait IntoSdkPrompt {
@@ -23,7 +23,7 @@ impl<T: SdkPromptFields> IntoSdkPrompt for T {
         Prompt {
             name: self.name().to_string(),
             description: Some(self.description().to_string()),
-            arguments: schema_to_prompt_arguments(self.arguments_schema()),
+            arguments: PromptResolver::schema_to_prompt_arguments(self.arguments_schema()),
             icons: vec![],
             meta: None,
             title: None,

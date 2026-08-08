@@ -1,9 +1,10 @@
 use async_channel::Sender;
 
 use crate::McpCommand;
-use crate::resources::definition::ResourceDefinition;
-use crate::resources::definition::ResourceFuture;
-use crate::resources::definition::ResourceHandler;
+use crate::resources::ResourceDefinition;
+use crate::resources::ResourceFuture;
+use crate::resources::ResourceHandler;
+use crate::resources::ResourceResolver;
 
 /// Trait that lets a resource type generate its own `ResourceDefinition`.
 pub trait ResourceDefinitionCreator {
@@ -31,7 +32,7 @@ pub trait ResourceDefinitionCreator {
     fn resource_handler() -> ResourceHandler {
         Box::new(|sender: Sender<McpCommand>, _uri: String| -> ResourceFuture {
             Box::pin(async move {
-                super::read_resource(sender, Self::resource_uri().to_string(), Self::resource_mime_type().to_string())
+                ResourceResolver::read_resource(sender, Self::resource_uri().to_string(), Self::resource_mime_type().to_string())
                     .await
                     .map(|output| output.contents)
             })

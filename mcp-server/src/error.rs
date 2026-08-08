@@ -1,3 +1,5 @@
+use crate::McpCommand;
+use async_channel::SendError;
 use thiserror::Error;
 
 /// Error type for MCP tool and resource operations.
@@ -29,8 +31,8 @@ pub enum McpError {
     LauncherError(String),
 }
 
-impl From<async_channel::SendError<crate::McpCommand>> for McpError {
-    fn from(e: async_channel::SendError<crate::McpCommand>) -> Self {
+impl From<SendError<McpCommand>> for McpError {
+    fn from(e: SendError<McpCommand>) -> Self {
         McpError::ChannelSend(e.to_string())
     }
 }
