@@ -6,16 +6,16 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
 
 /// Topic for workspace snapshot requests (Widget -> Service).
-pub const TOPIC_WORKSPACE_SNAPSHOT_REQUEST: &str = "compositor::workspace_snapshot_request";
+pub const TOPIC_WORKSPACE_SNAPSHOT_REQUEST: &str = "compositor.workspace.snapshot.request";
 
 /// Topic for workspace snapshot responses (Service -> Widget).
-pub const TOPIC_WORKSPACE_SNAPSHOT: &str = "compositor::workspace_snapshot";
+pub const TOPIC_WORKSPACE_SNAPSHOT: &str = "compositor.workspace.snapshot";
 
 /// Topic for workspace switch commands (Widget -> Service).
-pub const TOPIC_SWITCH_WORKSPACE: &str = "compositor::switch_workspace";
+pub const TOPIC_SWITCH_WORKSPACE: &str = "compositor.workspace.switch";
 
 /// Topic for workspace creation commands (Widget -> Service).
-pub const TOPIC_CREATE_WORKSPACE: &str = "compositor::create_workspace";
+pub const TOPIC_CREATE_WORKSPACE: &str = "compositor.workspace.create";
 
 /// Information about a single workspace.
 ///

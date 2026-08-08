@@ -464,7 +464,7 @@ impl WidgetPlugin for WorkspaceSwitcherWidget {
         unsafe {
             let envelope = &*(message as *mut FfiEnvelope);
             let topic = envelope.topic.to_string();
-            if topic.starts_with("compositor::") {
+            if topic.starts_with("compositor.") {
                 trace!("Workspace switcher: on_message topic={} type_id={}", topic, envelope.type_id);
             }
             if envelope.type_id == WorkspaceSnapshotMessage::TYPE_ID {

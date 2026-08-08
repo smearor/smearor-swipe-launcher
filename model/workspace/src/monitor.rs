@@ -6,7 +6,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
 
 /// Topic for monitor change events broadcast by compositor services.
-pub const TOPIC_MONITOR_CHANGED: &str = "compositor::monitor_changed";
+pub const TOPIC_MONITOR_CHANGED: &str = "compositor.monitor.changed";
 
 /// Type of monitor change.
 #[repr(u8)]

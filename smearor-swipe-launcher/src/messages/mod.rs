@@ -182,7 +182,7 @@ impl LauncherInstance {
         // Broadcast compositor events to all plugins so widgets like the
         // workspace switcher can receive workspace snapshots, changes, and
         // lifecycle events from compositor services.
-        if topic.starts_with("compositor::") {
+        if topic.starts_with("compositor.") {
             for r in self.plugin_manager.plugins.iter() {
                 let plugin = r.value();
                 unsafe {

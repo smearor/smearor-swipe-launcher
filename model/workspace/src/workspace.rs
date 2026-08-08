@@ -6,7 +6,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
 
 /// Topic for workspace change events broadcast by compositor services.
-pub const TOPIC_WORKSPACE_CHANGED: &str = "compositor::workspace_changed";
+pub const TOPIC_WORKSPACE_CHANGED: &str = "compositor.workspace.changed";
 
 /// Event broadcast when the active workspace changes on a monitor.
 ///
@@ -42,7 +42,7 @@ impl SharedMessage for WorkspaceChangedEvent {
 }
 
 /// Topic for workspace lifecycle events broadcast by compositor services.
-pub const TOPIC_WORKSPACE_LIFECYCLE: &str = "compositor::workspace_lifecycle";
+pub const TOPIC_WORKSPACE_LIFECYCLE: &str = "compositor.workspace.lifecycle";
 
 /// Type of workspace lifecycle event.
 #[repr(u8)]
