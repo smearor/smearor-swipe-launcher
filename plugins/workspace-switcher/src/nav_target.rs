@@ -1,4 +1,8 @@
+use smearor_model_compositor::CreateWorkspaceMessage;
+use smearor_model_compositor::SwitchWorkspaceMessage;
+use smearor_model_compositor::WorkspaceCreatePosition;
 use smearor_model_compositor::WorkspaceInfo;
+use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 
 /// Navigation target computed from the current workspace list and view index.
 ///
@@ -14,6 +18,8 @@ pub struct WorkspaceNavTarget {
     pub target_id: i32,
     /// Workspace ID of the current workspace, used as anchor for create-relative positioning.
     pub anchor_id: i32,
+    /// Position for workspace creation when no target exists (`After` for next, `Before` for prev).
+    pub create_position: WorkspaceCreatePosition,
 }
 
 impl WorkspaceNavTarget {
@@ -30,6 +36,7 @@ impl WorkspaceNavTarget {
             has_target,
             target_id,
             anchor_id,
+            create_position: WorkspaceCreatePosition::After,
         })
     }
 
@@ -46,6 +53,22 @@ impl WorkspaceNavTarget {
             has_target,
             target_id,
             anchor_id,
+            create_position: WorkspaceCreatePosition::Before,
         })
+    }
+
+    /// Broadcasts either a `SwitchWorkspaceMessage` (if a target exists) or a `CreateWorkspaceMessage`
+    /// (if no target exists, using the stored create position relative to the anchor).
+    pub fn broadcast_switch_or_create(&self, broadcaster: &MessageBroadcasterInner) {
+        if self.has_target {
+            let msg = SwitchWorkspaceMessage { workspace_id: self.target_id };
+            broadcaster.broadcast_message_to_topic(msg);
+        } else {
+            let msg = CreateWorkspaceMessage {
+                relative_to: self.anchor_id,
+                position: self.create_position,
+            };
+            broadcaster.broadcast_message_to_topic(msg);
+        }
     }
 }

@@ -14,13 +14,10 @@ use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
 use gtk4::prelude::WidgetExt;
 use gtk4::prelude::*;
-use smearor_model_compositor::CreateWorkspaceMessage;
-use smearor_model_compositor::SwitchWorkspaceMessage;
 use smearor_model_compositor::TOPIC_WORKSPACE_CHANGED;
 use smearor_model_compositor::TOPIC_WORKSPACE_LIFECYCLE;
 use smearor_model_compositor::TOPIC_WORKSPACE_SNAPSHOT;
 use smearor_model_compositor::WorkspaceChangedEvent;
-use smearor_model_compositor::WorkspaceCreatePosition;
 use smearor_model_compositor::WorkspaceInfo;
 use smearor_model_compositor::WorkspaceLifecycleEvent;
 use smearor_model_compositor::WorkspaceLifecycleType;
@@ -135,16 +132,11 @@ impl WorkspaceSwitcherWidget {
             };
 
             if nav.has_target {
-                let msg = SwitchWorkspaceMessage { workspace_id: nav.target_id };
-                broadcaster.broadcast_message_to_topic(msg);
+                nav.broadcast_switch_or_create(&broadcaster);
                 *current_view.borrow_mut() = nav.idx + 1;
                 update_ui_internal(&workspaces, &current_view, &icon_image, &main_label, &info_label, &scrollbar, &config);
             } else {
-                let msg = CreateWorkspaceMessage {
-                    relative_to: nav.anchor_id,
-                    position: WorkspaceCreatePosition::After,
-                };
-                broadcaster.broadcast_message_to_topic(msg);
+                nav.broadcast_switch_or_create(&broadcaster);
             }
         });
     }
@@ -166,16 +158,11 @@ impl WorkspaceSwitcherWidget {
             };
 
             if nav.has_target {
-                let msg = SwitchWorkspaceMessage { workspace_id: nav.target_id };
-                broadcaster.broadcast_message_to_topic(msg);
+                nav.broadcast_switch_or_create(&broadcaster);
                 *current_view.borrow_mut() = nav.idx - 1;
                 update_ui_internal(&workspaces, &current_view, &icon_image, &main_label, &info_label, &scrollbar, &config);
             } else {
-                let msg = CreateWorkspaceMessage {
-                    relative_to: nav.anchor_id,
-                    position: WorkspaceCreatePosition::Before,
-                };
-                broadcaster.broadcast_message_to_topic(msg);
+                nav.broadcast_switch_or_create(&broadcaster);
             }
         });
     }

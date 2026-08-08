@@ -3,7 +3,6 @@ use crate::nav_target::WorkspaceNavTarget;
 use gtk4::Label;
 use gtk4::glib::MainContext;
 use schemars::schema_for;
-use smearor_model_compositor::CreateWorkspaceMessage;
 use smearor_model_compositor::SwitchWorkspaceMessage;
 use smearor_model_compositor::TOPIC_WORKSPACE_CHANGED;
 use smearor_model_compositor::TOPIC_WORKSPACE_LIFECYCLE;
@@ -180,16 +179,7 @@ impl WorkspaceAtomicWidget {
                 return;
             };
 
-            if nav.has_target {
-                let msg = SwitchWorkspaceMessage { workspace_id: nav.target_id };
-                broadcaster.broadcast_message_to_topic(msg);
-            } else {
-                let msg = CreateWorkspaceMessage {
-                    relative_to: nav.anchor_id,
-                    position: smearor_model_compositor::WorkspaceCreatePosition::After,
-                };
-                broadcaster.broadcast_message_to_topic(msg);
-            }
+            nav.broadcast_switch_or_create(&broadcaster);
         });
     }
 
@@ -204,16 +194,7 @@ impl WorkspaceAtomicWidget {
                 return;
             };
 
-            if nav.has_target {
-                let msg = SwitchWorkspaceMessage { workspace_id: nav.target_id };
-                broadcaster.broadcast_message_to_topic(msg);
-            } else {
-                let msg = CreateWorkspaceMessage {
-                    relative_to: nav.anchor_id,
-                    position: smearor_model_compositor::WorkspaceCreatePosition::Before,
-                };
-                broadcaster.broadcast_message_to_topic(msg);
-            }
+            nav.broadcast_switch_or_create(&broadcaster);
         });
     }
 
