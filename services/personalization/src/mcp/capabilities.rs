@@ -1,4 +1,5 @@
 use crate::service::PersonalizationService;
+use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
@@ -64,5 +65,14 @@ impl McpCapabilitiesRegistrator for PersonalizationService {
             r#"{ "type": "object", "properties": {} }"#,
         );
         broadcaster.broadcast_message_to_topic(refresh_tool);
+
+        let prompt = RegisterPromptMessage::with_memory(
+            "personalization_guide",
+            "Returns a system prompt with personalization tools, resources, and current profile snapshot.",
+            r#"{ "type": "object", "properties": {} }"#,
+            "personalization preferences including locale, timezone, and location",
+            "personalization,locale,timezone,location",
+        );
+        broadcaster.broadcast_message_to_topic(prompt);
     }
 }

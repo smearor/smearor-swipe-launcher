@@ -136,6 +136,8 @@ impl ServicePlugin for WallpaperService {
                     MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == FfiEnvelopePayload::<smearor_model_mcp::InvokePromptMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<smearor_model_mcp::InvokePromptMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }

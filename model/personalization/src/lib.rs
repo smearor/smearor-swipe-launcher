@@ -4,6 +4,7 @@ mod topics;
 
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
+pub use mcp::prompts::PersonalizationMcpPrompts;
 pub use mcp::resources::PersonalizationMcpResources;
 pub use mcp::tools::PersonalizationMcpTools;
 pub use messages::color_scheme::ColorScheme;

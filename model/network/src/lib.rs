@@ -4,6 +4,7 @@ mod model;
 
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
+pub use mcp::prompts::NetworkMcpPrompts;
 pub use mcp::resources::NetworkMcpResources;
 pub use mcp::tools::NetworkMcpTools;
 pub use messages::access_point::AccessPointInfo;

@@ -19,6 +19,7 @@ use smearor_http_model::HttpRequestMessage;
 use smearor_http_model::TOPIC_HTTP_REQUEST;
 use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_PROMPT;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_network_model::InterfaceStatus;
@@ -206,6 +207,8 @@ impl ServicePlugin for NetworkService {
                     MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_MCP_INVOKE_RESOURCE && envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_PROMPT && envelope.type_id == FfiEnvelopePayload::<smearor_model_mcp::InvokePromptMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<smearor_model_mcp::InvokePromptMessage>>::handle_envelope_message(self, envelope);
                 }
             }
         }

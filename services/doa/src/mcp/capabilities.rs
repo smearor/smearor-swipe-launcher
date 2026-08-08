@@ -1,4 +1,5 @@
 use crate::service::DoaService;
+use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
@@ -42,5 +43,14 @@ impl McpCapabilitiesRegistrator for DoaService {
             r#"{ "type": "object", "properties": {}, "required": [] }"#,
         );
         broadcaster.broadcast_message_to_topic(reconnect_tool);
+
+        let prompt = RegisterPromptMessage::with_memory(
+            "doa_guide",
+            "Returns a system prompt with DoA sensor tools, resources, and current direction snapshot.",
+            r#"{ "type": "object", "properties": {} }"#,
+            "DoA sensor preferences and polling interval settings",
+            "doa,direction,sensor,microphone",
+        );
+        broadcaster.broadcast_message_to_topic(prompt);
     }
 }

@@ -1,4 +1,5 @@
 use crate::service::NetworkService;
+use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
@@ -59,5 +60,14 @@ impl McpCapabilitiesRegistrator for NetworkService {
             r#"{ "type": "object", "properties": {} }"#,
         );
         broadcaster.broadcast_message_to_topic(get_public_ip_tool);
+
+        let prompt = RegisterPromptMessage::with_memory(
+            "network_guide",
+            "Returns a system prompt with network management tools, resources, and current status snapshot.",
+            r#"{ "type": "object", "properties": {} }"#,
+            "network preferences including WiFi and VPN settings",
+            "network,wifi,vpn,radio",
+        );
+        broadcaster.broadcast_message_to_topic(prompt);
     }
 }

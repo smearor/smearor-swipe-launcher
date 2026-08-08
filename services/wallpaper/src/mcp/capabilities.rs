@@ -1,4 +1,5 @@
 use crate::service::WallpaperService;
+use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
@@ -58,5 +59,14 @@ impl McpCapabilitiesRegistrator for WallpaperService {
             r#"{ "type": "object", "properties": {} }"#,
         );
         broadcaster.broadcast_message_to_topic(tool_stop);
+
+        let prompt = RegisterPromptMessage::with_memory(
+            "wallpaper_guide",
+            "Returns a system prompt with wallpaper theme management tools, resources, and current status snapshot.",
+            r#"{ "type": "object", "properties": {} }"#,
+            "wallpaper theme preferences and default theme",
+            "wallpaper,theme,background",
+        );
+        broadcaster.broadcast_message_to_topic(prompt);
     }
 }

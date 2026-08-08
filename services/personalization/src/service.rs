@@ -142,7 +142,7 @@ impl ServicePlugin for PersonalizationService {
                 } else if envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_MCP_INVOKE_PROMPT && envelope.type_id == FfiEnvelopePayload::<smearor_model_mcp::InvokePromptMessage>::TYPE_ID {
-                    trace!("personalization: received InvokePromptMessage, no prompts registered, ignoring");
+                    MessageHandler::<FfiEnvelopePayload<smearor_model_mcp::InvokePromptMessage>>::handle_envelope_message(self, envelope);
                 } else {
                     trace!("personalization: unknown type_id");
                 }
