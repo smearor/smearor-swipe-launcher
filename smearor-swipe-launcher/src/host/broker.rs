@@ -49,10 +49,10 @@ use tracing::trace;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 
-use super::MACROPAD_COMPOUND_PRESS_WINDOW;
-use super::MACROPAD_DOUBLE_PRESS_WINDOW;
-use super::MACROPAD_LONGPRESS_THRESHOLD;
 use super::TopicAction;
+use super::macropad::MACROPAD_COMPOUND_PRESS_WINDOW;
+use super::macropad::MACROPAD_DOUBLE_PRESS_WINDOW;
+use super::macropad::MACROPAD_LONGPRESS_THRESHOLD;
 
 impl super::LauncherHost {
     pub(crate) fn route_message(&self, envelope: FfiEnvelope) {
@@ -381,10 +381,12 @@ impl super::LauncherHost {
                     self.dispatch_macropad_action(&instance_id, button_index, "hold_start");
                 }
                 // Compound longpress: track span group presses.
-                if let Some((span_group, group_buttons)) = self.get_span_group_for_button(&instance_id, button_index) {
+                if let Some(span_group) = self.get_span_group_for_button(&instance_id, button_index) {
+                    let span_group_name = span_group.name.clone();
+                    let group_buttons = span_group.button_indexes;
                     let now = Instant::now();
                     if let Ok(mut compound) = self.macropad_compound_presses.lock() {
-                        let entry = compound.entry((instance_id.clone(), span_group.clone())).or_default();
+                        let entry = compound.entry((instance_id.clone(), span_group_name.clone())).or_default();
                         // Only add if not already pressed.
                         if !entry.iter().any(|(b, _)| *b == button_index) {
                             entry.push((button_index, now));
@@ -394,7 +396,7 @@ impl super::LauncherHost {
                         if recent_count >= 2 {
                             // Schedule compound longpress check after threshold.
                             let self_clone = self.clone();
-                            let key = (instance_id.clone(), span_group.clone());
+                            let key = (instance_id.clone(), span_group_name.clone());
                             gtk4::glib::timeout_add_local_once(MACROPAD_LONGPRESS_THRESHOLD, move || {
                                 if let Ok(compound) = self_clone.macropad_compound_presses.lock() {
                                     if let Some(presses) = compound.get(&key) {
@@ -427,19 +429,20 @@ impl super::LauncherHost {
 
                 // Check if this button is part of a span group and if a compound
                 // longpress was triggered (all buttons held >= 500ms).
-                let compound_triggered = if let Some((span_group, _)) = self.get_span_group_for_button(&instance_id, button_index) {
+                let compound_triggered = if let Some(span_group) = self.get_span_group_for_button(&instance_id, button_index) {
+                    let span_group_name = span_group.name;
                     // Remove this button from compound tracking regardless.
                     if let Ok(mut compound) = self.macropad_compound_presses.lock() {
-                        if let Some(presses) = compound.get_mut(&(instance_id.clone(), span_group.clone())) {
+                        if let Some(presses) = compound.get_mut(&(instance_id.clone(), span_group_name.clone())) {
                             presses.retain(|(b, _)| *b != button_index);
                         }
-                        if compound.get(&(instance_id.clone(), span_group.clone())).map_or(false, |p| p.is_empty()) {
-                            compound.remove(&(instance_id.clone(), span_group.clone()));
+                        if compound.get(&(instance_id.clone(), span_group_name.clone())).map_or(false, |p| p.is_empty()) {
+                            compound.remove(&(instance_id.clone(), span_group_name.clone()));
                         }
                     }
                     // Check if compound longpress was actually dispatched for this span group.
                     let dispatched = if let Ok(mut dispatched) = self.macropad_compound_dispatched.lock() {
-                        dispatched.remove(&(instance_id.clone(), span_group)).is_some()
+                        dispatched.remove(&(instance_id.clone(), span_group_name)).is_some()
                     } else {
                         false
                     };

@@ -24,6 +24,15 @@ pub use plugin::PluginManager;
 pub use service::LoadedService;
 pub use service::ServiceManager;
 
+use crate::config::discovery::bootstrap_configs;
+use crate::config::services::ServicesConfig;
+use crate::config::watcher::ConfigReloadRequest;
+use crate::instance::get_instances_state_path;
+use crate::instance::read_instances_state;
+use crate::mcp::process_mcp_command;
+use crate::mcp::process_plugin_command;
+use crate::mcp::start_mcp_server;
+use crate::web::WebServerConfig;
 use clap::Parser;
 use gtk4::Application;
 use gtk4::glib::ControlFlow;
@@ -39,17 +48,13 @@ use std::sync::atomic::Ordering;
 use tracing::debug;
 use tracing::error;
 
-use crate::config::services::ServicesConfig;
-use crate::config::watcher::ConfigReloadRequest;
-use crate::mcp::start_mcp_server;
-
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let args = SwipeLauncherArguments::parse();
 
     crate::init_tracing::init()?;
 
-    let config_paths = crate::config::discovery::bootstrap_configs(&args)?;
+    let config_paths = bootstrap_configs(&args)?;
 
     let gtk_app = Application::builder().application_id("com.smearor.swipe-launcher").build();
     let host = LauncherHost::new(gtk_app.clone());
@@ -98,8 +103,8 @@ fn setup_host(host: &LauncherHost, args: &SwipeLauncherArguments, config_paths: 
 
     host.load_persisted_instances();
 
-    let state_path = crate::instance::get_instances_state_path();
-    for entry in crate::instance::read_instances_state(&state_path) {
+    let state_path = get_instances_state_path();
+    for entry in read_instances_state(&state_path) {
         let persisted_config_path = PathBuf::from(&entry.config_path);
         if !config_paths.iter().any(|p| *p == persisted_config_path) {
             if let Ok(config) = args.load_config_from_file(&persisted_config_path) {
@@ -116,13 +121,13 @@ fn setup_host(host: &LauncherHost, args: &SwipeLauncherArguments, config_paths: 
 /// Start the web server, CSS watcher, build the UI, and start the config file watcher.
 fn start_infrastructure(host: &LauncherHost, services_config: &ServicesConfig) -> Result<async_channel::Receiver<ConfigReloadRequest>> {
     if services_config.web.enabled {
-        let web_config = crate::web::WebServerConfig {
-            port: services_config.web.port,
-            enabled: true,
-            bind_address: services_config.web.bind_address.clone(),
-            auth_token: services_config.web.auth_token.clone(),
-            allowed_origins: services_config.web.allowed_origins.clone(),
-        };
+        let web_config = WebServerConfig::builder()
+            .port(services_config.web.port)
+            .enabled(true)
+            .bind_address(services_config.web.bind_address.clone())
+            .auth_token(services_config.web.auth_token.clone())
+            .allowed_origins(services_config.web.allowed_origins.clone())
+            .build();
         host.start_web_server(web_config);
         debug!("Web server started on {}:{}", services_config.web.bind_address, services_config.web.port);
     }
@@ -153,10 +158,10 @@ fn spawn_main_loop_tasks(
                 let broker_sender = host_clone.broker_sender.clone();
                 let response_tracker = host_clone.mcp_response_tracker.clone();
                 tokio::spawn(async move {
-                    crate::mcp::process_plugin_command(broker_sender, response_tracker, command).await;
+                    process_plugin_command(broker_sender, response_tracker, command).await;
                 });
             } else {
-                crate::mcp::process_mcp_command(host_clone.clone(), command).await;
+                process_mcp_command(host_clone.clone(), command).await;
             }
         }
     });

@@ -1,8 +1,9 @@
 use serde::Deserialize;
 use serde::Serialize;
+use typed_builder::TypedBuilder;
 
 /// Configuration for the embedded web server.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TypedBuilder)]
 pub struct WebServerConfig {
     /// TCP port to listen on.
     pub port: u16,

@@ -12,21 +12,22 @@ use tracing::trace;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 
-/// Extract a grid slice from an RGBA pixel buffer.
-///
-/// Used to split a 2D span group's combined render into individual button
-/// images. Crops the region (x_offset, y_offset) to (slice_width, slice_height)
-/// from the source buffer.
-fn extract_grid_slice(pixels: &[u8], src_width: u32, src_height: u32, x_offset: u32, y_offset: u32, slice_width: u32, slice_height: u32) -> Vec<u8> {
-    let _ = src_height;
-    let mut result = Vec::with_capacity((slice_width * slice_height * 4) as usize);
-    for y in y_offset..(y_offset + slice_height) {
-        let start = ((y * src_width + x_offset) * 4) as usize;
-        let end = start + (slice_width * 4) as usize;
-        result.extend_from_slice(&pixels[start..end]);
-    }
-    result
-}
+use std::time::Duration;
+
+use super::button_indexes::ButtonIndexes;
+use super::button_indexes::SpanGroup;
+use super::device_render_info::DeviceRenderInfo;
+use super::rgba_pixels::RgbaPixels;
+
+/// Duration threshold for MacroPad longpress detection (500ms).
+pub(super) const MACROPAD_LONGPRESS_THRESHOLD: Duration = Duration::from_millis(500);
+
+/// Time window for MacroPad double-press detection (300ms).
+pub(super) const MACROPAD_DOUBLE_PRESS_WINDOW: Duration = Duration::from_millis(300);
+
+/// Time window for compound longpress detection — buttons must be pressed
+/// within this duration of each other to qualify as a compound press.
+pub(super) const MACROPAD_COMPOUND_PRESS_WINDOW: Duration = Duration::from_millis(100);
 
 impl super::LauncherHost {
     /// Check if a specific trigger type (e.g. "hold_topic", "double_press_topic")
@@ -59,7 +60,7 @@ impl super::LauncherHost {
     /// part of a span group.
     ///
     /// Uses the physical-to-logical button map built during rendering.
-    pub(crate) fn get_span_group_for_button(&self, instance_id: &str, button_index: u8) -> Option<(String, Vec<u8>)> {
+    pub(crate) fn get_span_group_for_button(&self, instance_id: &str, button_index: u8) -> Option<SpanGroup> {
         if let Ok(instances) = self.instances.lock() {
             if let Some(instance) = instances.get(instance_id) {
                 let button_map = if let Ok(map) = instance.button_map.lock() {
@@ -91,10 +92,63 @@ impl super::LauncherHost {
                     .collect();
                 group_buttons.sort();
 
-                return Some((span_group, group_buttons));
+                return Some(SpanGroup {
+                    name: span_group,
+                    button_indexes: ButtonIndexes::new(group_buttons),
+                });
             }
         }
         None
+    }
+
+    /// Look up the physical button index for a plugin in the button_map.
+    ///
+    /// Returns `None` if the instance, button_map, or plugin is not found.
+    fn button_index_for_plugin(&self, instance_id: &str, plugin_id: &str) -> Option<usize> {
+        let instances = self.instances.lock().ok()?;
+        let instance = instances.get(instance_id)?;
+        let map = instance.button_map.lock().ok()?;
+        let button_map = map.as_ref()?;
+        button_map.iter().position(|id| id.as_deref() == Some(plugin_id))
+    }
+
+    /// Store the physical-to-logical button map for the given instance.
+    fn store_button_map(&self, instance_id: &str, button_map: Vec<Option<String>>) {
+        if let Ok(instances) = self.instances.lock() {
+            if let Some(instance) = instances.get(instance_id) {
+                if let Ok(mut map) = instance.button_map.lock() {
+                    *map = Some(button_map);
+                }
+            }
+        }
+    }
+
+    /// Get the visible area plugin entries for the given instance.
+    ///
+    /// Returns `None` if the instance or area manager is not available.
+    fn visible_plugin_entries(&self, instance_id: &str) -> Option<Vec<smearor_model_plugin::PluginEntry>> {
+        let instances = self.instances.lock().ok()?;
+        let instance = instances.get(instance_id)?;
+        let area_manager = instance.area_manager.lock().ok()?;
+        Some(area_manager.visible_area_plugin_entries())
+    }
+
+    /// Get device rendering parameters for the given instance.
+    ///
+    /// Returns `None` if the instance or device metadata is not available.
+    fn device_render_info(&self, instance_id: &str) -> Option<DeviceRenderInfo> {
+        let instances = self.instances.lock().ok()?;
+        let instance = instances.get(instance_id)?;
+        let metadata_guard = instance.device_metadata.lock().ok()?;
+        let metadata = metadata_guard.as_ref()?;
+        Some(DeviceRenderInfo {
+            device_id: metadata.device_id.clone(),
+            driver: metadata.driver.clone(),
+            key_count: metadata.key_count,
+            key_columns: metadata.key_columns,
+            key_width: metadata.key_width,
+            key_height: metadata.key_height,
+        })
     }
 
     /// Dispatch a `InvokeToolMessage` with the given action to the plugin at
@@ -142,54 +196,25 @@ impl super::LauncherHost {
     /// with the device's key dimensions and sends a `SetButtonImage` command
     /// to the MacroPad service via the message broker.
     pub fn render_buttons_to_device(&self, instance_id: &str) {
-        let (device_id, driver, key_count, key_columns, key_width, key_height) = {
-            let Ok(instances) = self.instances.lock() else {
-                return;
-            };
-            let Some(instance) = instances.get(instance_id) else {
-                return;
-            };
-            let Ok(metadata_guard) = instance.device_metadata.lock() else {
-                return;
-            };
-            let Some(ref metadata) = *metadata_guard else {
-                return;
-            };
-            (
-                metadata.device_id.clone(),
-                metadata.driver.clone(),
-                metadata.key_count,
-                metadata.key_columns,
-                metadata.key_width,
-                metadata.key_height,
-            )
+        let Some(info) = self.device_render_info(instance_id) else {
+            return;
         };
-
-        let plugin_entries: Vec<smearor_model_plugin::PluginEntry> = {
-            let Ok(instances) = self.instances.lock() else {
-                return;
-            };
-            let Some(instance) = instances.get(instance_id) else {
-                return;
-            };
-            let Ok(area_manager) = instance.area_manager.lock() else {
-                return;
-            };
-            area_manager.visible_area_plugin_entries()
+        let Some(plugin_entries) = self.visible_plugin_entries(instance_id) else {
+            return;
         };
 
         debug!(
             "Rendering {} buttons to device '{}' ({}x{}) for instance '{}'",
             plugin_entries.len(),
-            device_id,
-            key_width,
-            key_height,
+            info.device_id,
+            info.key_width,
+            info.key_height,
             instance_id
         );
 
         // Track which physical buttons are rendered, for gap clearing and button_map.
-        let mut rendered_buttons: Vec<bool> = vec![false; key_count as usize];
-        let mut button_map: Vec<Option<String>> = vec![None; key_count as usize];
+        let mut rendered_buttons: Vec<bool> = vec![false; info.key_count as usize];
+        let mut button_map: Vec<Option<String>> = vec![None; info.key_count as usize];
 
         // Group plugins by span_group. Plugins without span_group are individual.
         // We iterate in order, collecting consecutive plugins with the same span_group.
@@ -197,7 +222,7 @@ impl super::LauncherHost {
         let mut iter = plugin_entries.iter().enumerate().peekable();
 
         while let Some((_, entry)) = iter.next() {
-            if button_index as u8 >= key_count {
+            if button_index as u8 >= info.key_count {
                 break;
             }
 
@@ -238,16 +263,16 @@ impl super::LauncherHost {
 
                 // Find the next available position where the entire span_rows × span_cols
                 // rectangle fits without overlapping any already-rendered button.
-                let device_rows = if key_columns > 0 { key_count / key_columns } else { 0 };
+                let device_rows = if info.key_columns > 0 { info.key_count / info.key_columns } else { 0 };
                 let mut effective_base: Option<u32> = None;
                 let start_button = button_index as u32;
 
-                'search: for candidate in start_button..(key_count as u32) {
-                    let cand_col = candidate % key_columns as u32;
-                    let cand_row = candidate / key_columns as u32;
+                'search: for candidate in start_button..(info.key_count as u32) {
+                    let cand_col = candidate % info.key_columns as u32;
+                    let cand_row = candidate / info.key_columns as u32;
 
                     // Check column overflow.
-                    if cand_col + span_cols > key_columns as u32 {
+                    if cand_col + span_cols > info.key_columns as u32 {
                         continue;
                     }
 
@@ -259,8 +284,8 @@ impl super::LauncherHost {
                     // Check all buttons in the rectangle are free.
                     for r in 0..span_rows {
                         for c in 0..span_cols {
-                            let physical = candidate + r * key_columns as u32 + c;
-                            if physical as u8 >= key_count || rendered_buttons[physical as usize] {
+                            let physical = candidate + r * info.key_columns as u32 + c;
+                            if physical as u8 >= info.key_count || rendered_buttons[physical as usize] {
                                 continue 'search;
                             }
                         }
@@ -279,12 +304,12 @@ impl super::LauncherHost {
                     "Span group '{}': placed at button {} (col={}, row={})",
                     span_group,
                     effective_base,
-                    effective_base % key_columns as u32,
-                    effective_base / key_columns as u32
+                    effective_base % info.key_columns as u32,
+                    effective_base / info.key_columns as u32
                 );
 
-                let combined_width = key_width * span_cols;
-                let combined_height = key_height * span_rows;
+                let combined_width = info.key_width * span_cols;
+                let combined_height = info.key_height * span_rows;
 
                 // Render the first member at combined dimensions.
                 let first_plugin_id = &group_members[0].id;
@@ -312,17 +337,29 @@ impl super::LauncherHost {
                     for (i, member) in group_members.iter().enumerate() {
                         let row = i as u32 / span_cols;
                         let col = i as u32 % span_cols;
-                        let physical_button = effective_base + row * key_columns as u32 + col;
-                        if physical_button as u8 >= key_count {
+                        let physical_button = effective_base + row * info.key_columns as u32 + col;
+                        if physical_button as u8 >= info.key_count {
                             break;
                         }
-                        let x_offset = col * key_width;
-                        let y_offset = row * key_height;
-                        let slice_pixels = extract_grid_slice(pixels, graphic_width, graphic_height, x_offset, y_offset, key_width, key_height);
-                        self.send_button_image(&device_id, &driver, instance_id, physical_button as u8, key_width, key_height, slice_pixels);
+                        let x_offset = col * info.key_width;
+                        let y_offset = row * info.key_height;
+                        let slice_pixels =
+                            RgbaPixels::extract_grid_slice(pixels, graphic_width, graphic_height, x_offset, y_offset, info.key_width, info.key_height);
+                        self.send_button_image(
+                            &info.device_id,
+                            &info.driver,
+                            instance_id,
+                            physical_button as u8,
+                            info.key_width,
+                            info.key_height,
+                            slice_pixels,
+                        );
                         rendered_buttons[physical_button as usize] = true;
                         button_map[physical_button as usize] = Some(member.id.clone());
-                        debug!("Sent span group slice {} (plugin '{}') to button {} on device '{}'", i, member.id, physical_button, device_id);
+                        debug!(
+                            "Sent span group slice {} (plugin '{}') to button {} on device '{}'",
+                            i, member.id, physical_button, info.device_id
+                        );
                     }
                 } else {
                     debug!("Span group: plugin '{}' has no render_graphic, skipping {} buttons", first_plugin_id, group_size);
@@ -333,10 +370,10 @@ impl super::LauncherHost {
                 // Search from the beginning for the first free button to fill gaps
                 // left by span groups that were placed further ahead.
                 button_index = 0;
-                while button_index < key_count as usize && rendered_buttons[button_index] {
+                while button_index < info.key_count as usize && rendered_buttons[button_index] {
                     button_index += 1;
                 }
-                if button_index as u8 >= key_count {
+                if button_index as u8 >= info.key_count {
                     break;
                 }
 
@@ -354,15 +391,15 @@ impl super::LauncherHost {
                         button_index += 1;
                         continue;
                     };
-                    unsafe { plugin.render_graphic(key_width, key_height) }
+                    unsafe { plugin.render_graphic(info.key_width, info.key_height) }
                 };
 
                 if let Some(graphic) = graphic {
-                    let pixels = graphic.as_pixels().to_vec();
-                    self.send_button_image(&device_id, &driver, instance_id, button_index as u8, graphic.width, graphic.height, pixels);
+                    let pixels = RgbaPixels::from(graphic.as_pixels().to_vec());
+                    self.send_button_image(&info.device_id, &info.driver, instance_id, button_index as u8, graphic.width, graphic.height, pixels);
                     rendered_buttons[button_index] = true;
                     button_map[button_index] = Some(plugin_id.clone());
-                    trace!("Sent button image for index {} (plugin '{}') to device '{}'", button_index, plugin_id, device_id);
+                    trace!("Sent button image for index {} (plugin '{}') to device '{}'", button_index, plugin_id, info.device_id);
                 } else {
                     debug!("Plugin '{}' has no render_graphic, skipping button {}", plugin_id, button_index);
                 }
@@ -371,14 +408,14 @@ impl super::LauncherHost {
         }
 
         // Clear all buttons that were not rendered (gaps from alignment shifts + trailing empty buttons).
-        for idx in 0..key_count as usize {
+        for idx in 0..info.key_count as usize {
             if !rendered_buttons[idx] {
                 let command = MacroPadCommand::clear_button(idx as u8);
-                let msg = MacroPadCommandMessage::new(&device_id, command);
+                let msg = MacroPadCommandMessage::new(&info.device_id, command);
                 let payload_ptr = box_payload(msg);
                 let envelope = FfiEnvelope::builder()
                     .sender_id(instance_id)
-                    .target_instance_id(driver.as_str())
+                    .target_instance_id(info.driver.as_str())
                     .topic(MacroPadCommandMessage::topic())
                     .type_id(FfiEnvelopePayload::<MacroPadCommandMessage>::TYPE_ID)
                     .payload(payload_ptr)
@@ -386,23 +423,16 @@ impl super::LauncherHost {
                     .clone_payload(Some(default_clone_payload::<MacroPadCommandMessage>))
                     .build();
                 let _ = self.broker_sender.send(envelope);
-                trace!("Cleared unrendered button {} on device '{}'", idx, device_id);
+                trace!("Cleared unrendered button {} on device '{}'", idx, info.device_id);
             }
         }
 
-        // Store the button map for input dispatch.
-        if let Ok(instances) = self.instances.lock() {
-            if let Some(instance) = instances.get(instance_id) {
-                if let Ok(mut map) = instance.button_map.lock() {
-                    *map = Some(button_map);
-                }
-            }
-        }
+        self.store_button_map(instance_id, button_map);
     }
 
     /// Send a `SetButtonImage` command for a single button to the MacroPad device.
-    pub(crate) fn send_button_image(&self, device_id: &str, driver: &str, instance_id: &str, button_index: u8, width: u32, height: u32, pixels: Vec<u8>) {
-        let command = MacroPadCommand::set_button_image(button_index, width, height, pixels);
+    pub(crate) fn send_button_image(&self, device_id: &str, driver: &str, instance_id: &str, button_index: u8, width: u32, height: u32, pixels: RgbaPixels) {
+        let command = MacroPadCommand::set_button_image(button_index, width, height, pixels.into_vec());
         let msg = MacroPadCommandMessage::new(device_id, command);
         let payload_ptr = box_payload(msg);
         let envelope = FfiEnvelope::builder()
@@ -424,40 +454,11 @@ impl super::LauncherHost {
     /// visible area and sends only that button's updated image.
     /// If the plugin is part of a span group, re-renders the entire group.
     pub fn render_single_button_to_device(&self, instance_id: &str, plugin_id: &str) {
-        let (device_id, driver, key_count, key_columns, key_width, key_height) = {
-            let Ok(instances) = self.instances.lock() else {
-                return;
-            };
-            let Some(instance) = instances.get(instance_id) else {
-                return;
-            };
-            let Ok(metadata_guard) = instance.device_metadata.lock() else {
-                return;
-            };
-            let Some(ref metadata) = *metadata_guard else {
-                return;
-            };
-            (
-                metadata.device_id.clone(),
-                metadata.driver.clone(),
-                metadata.key_count,
-                metadata.key_columns,
-                metadata.key_width,
-                metadata.key_height,
-            )
+        let Some(info) = self.device_render_info(instance_id) else {
+            return;
         };
-
-        let plugin_entries: Vec<smearor_model_plugin::PluginEntry> = {
-            let Ok(instances) = self.instances.lock() else {
-                return;
-            };
-            let Some(instance) = instances.get(instance_id) else {
-                return;
-            };
-            let Ok(area_manager) = instance.area_manager.lock() else {
-                return;
-            };
-            area_manager.visible_area_plugin_entries()
+        let Some(plugin_entries) = self.visible_plugin_entries(instance_id) else {
+            return;
         };
 
         // Find the plugin and check if it's part of a span group.
@@ -484,42 +485,28 @@ impl super::LauncherHost {
             };
             let group_size = span_rows * span_cols;
 
-            let combined_width = key_width * span_cols;
-            let combined_height = key_height * span_rows;
+            let combined_width = info.key_width * span_cols;
+            let combined_height = info.key_height * span_rows;
 
             // Find the physical starting button index for this group from the button_map.
             let first_member_id = &group_members[0].id;
-            let button_index = {
-                let Ok(instances) = self.instances.lock() else {
-                    return;
-                };
-                let Some(instance) = instances.get(instance_id) else {
-                    return;
-                };
-                let Ok(map) = instance.button_map.lock() else {
-                    return;
-                };
-                let Some(ref button_map) = *map else {
-                    return;
-                };
-                match button_map.iter().position(|id| id.as_deref() == Some(first_member_id)) {
-                    Some(idx) => idx,
-                    None => return,
-                }
+            let button_index = match self.button_index_for_plugin(instance_id, first_member_id) {
+                Some(idx) => idx,
+                None => return,
             };
 
-            if button_index as u8 >= key_count {
+            if button_index as u8 >= info.key_count {
                 return;
             }
 
             // Alignment validation: check row and column overflow.
             let base_button = button_index as u32;
-            let base_col = base_button % key_columns as u32;
-            let base_row = base_button / key_columns as u32;
+            let base_col = base_button % info.key_columns as u32;
+            let base_row = base_button / info.key_columns as u32;
 
             let mut effective_base = base_button;
-            if base_col + span_cols > key_columns as u32 {
-                let next_row_start = (base_row + 1) * key_columns as u32;
+            if base_col + span_cols > info.key_columns as u32 {
+                let next_row_start = (base_row + 1) * info.key_columns as u32;
                 debug!(
                     "render_single_button: span group '{}' would overflow row boundary, advancing to button {}",
                     span_group, next_row_start
@@ -527,8 +514,8 @@ impl super::LauncherHost {
                 effective_base = next_row_start;
             }
 
-            let device_rows = if key_columns > 0 { key_count / key_columns } else { 0 };
-            let effective_row = effective_base / key_columns as u32;
+            let device_rows = if info.key_columns > 0 { info.key_count / info.key_columns } else { 0 };
+            let effective_row = effective_base / info.key_columns as u32;
             if device_rows > 0 && effective_row + span_rows > device_rows as u32 {
                 debug!("render_single_button: span group '{}' would overflow device bottom, skipping", span_group);
                 return;
@@ -557,17 +544,26 @@ impl super::LauncherHost {
                 for (i, member) in group_members.iter().enumerate() {
                     let row = i as u32 / span_cols;
                     let col = i as u32 % span_cols;
-                    let physical_button = effective_base + row * key_columns as u32 + col;
-                    if physical_button as u8 >= key_count {
+                    let physical_button = effective_base + row * info.key_columns as u32 + col;
+                    if physical_button as u8 >= info.key_count {
                         break;
                     }
-                    let x_offset = col * key_width;
-                    let y_offset = row * key_height;
-                    let slice_pixels = extract_grid_slice(pixels, graphic_width, graphic_height, x_offset, y_offset, key_width, key_height);
-                    self.send_button_image(&device_id, &driver, instance_id, physical_button as u8, key_width, key_height, slice_pixels);
+                    let x_offset = col * info.key_width;
+                    let y_offset = row * info.key_height;
+                    let slice_pixels =
+                        RgbaPixels::extract_grid_slice(pixels, graphic_width, graphic_height, x_offset, y_offset, info.key_width, info.key_height);
+                    self.send_button_image(
+                        &info.device_id,
+                        &info.driver,
+                        instance_id,
+                        physical_button as u8,
+                        info.key_width,
+                        info.key_height,
+                        slice_pixels,
+                    );
                     trace!(
                         "Re-rendered span group slice {} (plugin '{}') for button {} on device '{}'",
-                        i, member.id, physical_button, device_id
+                        i, member.id, physical_button, info.device_id
                     );
                 }
             } else {
@@ -578,30 +574,16 @@ impl super::LauncherHost {
 
         // Individual plugin — render at standard dimensions.
         // Look up physical button index from the button_map.
-        let button_index = {
-            let Ok(instances) = self.instances.lock() else {
-                return;
-            };
-            let Some(instance) = instances.get(instance_id) else {
-                return;
-            };
-            let Ok(map) = instance.button_map.lock() else {
-                return;
-            };
-            let Some(ref button_map) = *map else {
-                return;
-            };
-            match button_map.iter().position(|id| id.as_deref() == Some(plugin_id)) {
-                Some(idx) => idx,
-                None => {
-                    trace!("render_single_button: plugin '{}' not in button_map for instance '{}'", plugin_id, instance_id);
-                    return;
-                }
-            }
+        let Some(button_index) = self.button_index_for_plugin(instance_id, plugin_id) else {
+            trace!("render_single_button: plugin '{}' not in button_map for instance '{}'", plugin_id, instance_id);
+            return;
         };
 
-        if button_index as u8 >= key_count {
-            trace!("render_single_button: button index {} >= key_count {} for plugin '{}'", button_index, key_count, plugin_id);
+        if button_index as u8 >= info.key_count {
+            trace!(
+                "render_single_button: button index {} >= key_count {} for plugin '{}'",
+                button_index, info.key_count, plugin_id
+            );
             return;
         }
 
@@ -617,13 +599,13 @@ impl super::LauncherHost {
                 trace!("render_single_button: plugin '{}' not found, skipping", namespaced_id);
                 return;
             };
-            unsafe { plugin.render_graphic(key_width, key_height) }
+            unsafe { plugin.render_graphic(info.key_width, info.key_height) }
         };
 
         if let Some(graphic) = graphic {
-            let pixels = graphic.as_pixels().to_vec();
-            self.send_button_image(&device_id, &driver, instance_id, button_index as u8, graphic.width, graphic.height, pixels);
-            trace!("Re-rendered single button {} (plugin '{}') for device '{}'", button_index, plugin_id, device_id);
+            let pixels = RgbaPixels::from(graphic.as_pixels().to_vec());
+            self.send_button_image(&info.device_id, &info.driver, instance_id, button_index as u8, graphic.width, graphic.height, pixels);
+            trace!("Re-rendered single button {} (plugin '{}') for device '{}'", button_index, plugin_id, info.device_id);
         } else {
             trace!("render_single_button: plugin '{}' has no render_graphic, skipping", plugin_id);
         }

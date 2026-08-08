@@ -36,21 +36,17 @@ use tracing::error;
 use tracing::trace;
 
 mod broker;
+mod button_indexes;
+mod device_render_info;
 mod instance_lifecycle;
 mod macropad;
+mod rgba_pixels;
+mod topic_action;
 
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 
-/// Duration threshold for MacroPad longpress detection (500ms).
-const MACROPAD_LONGPRESS_THRESHOLD: Duration = Duration::from_millis(500);
-
-/// Time window for MacroPad double-press detection (300ms).
-const MACROPAD_DOUBLE_PRESS_WINDOW: Duration = Duration::from_millis(300);
-
-/// Time window for compound longpress detection — buttons must be pressed
-/// within this duration of each other to qualify as a compound press.
-const MACROPAD_COMPOUND_PRESS_WINDOW: Duration = Duration::from_millis(100);
+pub use topic_action::TopicAction;
 
 /// Host that manages all launcher instances in a single process.
 ///
@@ -93,15 +89,6 @@ pub struct LauncherHost {
     /// Registry mapping `auto_start_topic` / `auto_stop_topic` strings to instance IDs and actions.
     /// Used for event-driven lifecycle control via the message broker.
     pub(crate) topic_instance_registry: Arc<Mutex<HashMap<String, (String, TopicAction)>>>,
-}
-
-/// Action to perform when a message is received on an `auto_start_topic` or `auto_stop_topic`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TopicAction {
-    /// Start the associated instance.
-    Start,
-    /// Stop the associated instance.
-    Stop,
 }
 
 impl LauncherHost {

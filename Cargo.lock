@@ -7199,6 +7199,7 @@ dependencies = [
     "tracing",
     "tracing-log",
     "tracing-subscriber",
+    "typed-builder",
 ]
 
 [[package]]
