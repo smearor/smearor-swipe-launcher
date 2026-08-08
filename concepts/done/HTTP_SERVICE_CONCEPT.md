@@ -698,7 +698,7 @@ This roadmap defines the recommended order, dependencies, and deliverables for i
 1. Create the crate `services/http` with a `Cargo.toml` that depends on the `model/http` crate, the project plugin API, `reqwest`, `regex`, and `tokio`.
 2. Create `src/config.rs` with `HttpServiceConfig` and its default values.
 3. Create `src/whitelist.rs` and implement `is_url_allowed` and `url_matches_pattern` with full wildcard support.
-4. Create `src/service.rs` with `HttpService` and all required trait implementations.
+4. Create `src/service/loaded_service.rs` with `HttpService` and all required trait implementations.
 5. Implement `run_request_handler` to process requests asynchronously and broadcast responses to the caller's `response_topic`.
 6. Implement `execute_http_request` using `reqwest` with timeout and body size limits.
 7. Wire `service_plugin!` in `src/lib.rs`.

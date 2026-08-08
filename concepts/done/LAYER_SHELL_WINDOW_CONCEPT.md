@@ -19,13 +19,13 @@ window.init_layer_shell();
 
 ### 2.2 Hard-Coded Monitor Index
 
-Both `calculate_area_size` in `display.rs` and `calculate_coordinated_sizes` in `application.rs` fetch `monitors.item(0)` — always the first monitor:
+Both `calculate_area_size` in `display.rs` and `calculate_coordinated_sizes` in `host/mod.rs` fetch `monitors.item(0)` — always the first monitor:
 
 ```rust
 // display.rs:38
 let Some(monitor) = monitors.item(0).and_then( | m| m.downcast::<Monitor>().ok()) else { ... };
 
-// application.rs:155
+// host/mod.rs:155
 let Some(monitor) = monitors.item(0).and_then( | m| m.downcast::<Monitor>().ok()) else { ... };
 ```
 
@@ -258,7 +258,7 @@ pub fn calculate_area_size(rotation: SmearorRotation, default_size: i32) -> Area
 
 ### 4.7 Monitor-Aware Coordinated Sizes
 
-Update `calculate_coordinated_sizes` in `application.rs` to group instances by their configured monitor and calculate sizes per-monitor:
+Update `calculate_coordinated_sizes` in `host/mod.rs` to group instances by their configured monitor and calculate sizes per-monitor:
 
 ```rust
 pub fn calculate_coordinated_sizes(&self) {
@@ -332,7 +332,7 @@ launcher on monitor 1.
 | `smearor-swipe-launcher/src/args/layer.rs`   | Add `--monitor` CLI argument to `LayerArguments`                                                                  |
 | `smearor-swipe-launcher/src/display.rs`      | Add `resolve_monitor()` helper; add `calculate_area_size_for_monitor()`; update `calculate_area_size` to delegate |
 | `smearor-swipe-launcher/src/window.rs`       | Call `window.set_monitor()` after `init_layer_shell()`; use monitor-aware size calculation                        |
-| `smearor-swipe-launcher/src/application.rs`  | Update `calculate_coordinated_sizes` to group instances by monitor and calculate per-monitor                      |
+| `smearor-swipe-launcher/src/host/mod.rs`     | Update `calculate_coordinated_sizes` to group instances by monitor and calculate per-monitor                      |
 
 ## 6. Example Configurations
 
@@ -491,7 +491,7 @@ display.connect_monitor_removed( | _display, monitor| {
 Register hotplug signal handlers in `LauncherHost::build_ui`, after all instances are created:
 
 ```rust
-// application.rs — in build_ui, after instances are built
+// host/mod.rs — in build_ui, after instances are built
 
 let self_clone = self .clone();
 if let Some(display) = Display::default () {
@@ -656,9 +656,9 @@ pub fn rebuild_windows(&self) {
 
 ### Phase 4: Coordinated Sizes
 
-| #   | Task                                                              | Files            | Effort |
-|-----|-------------------------------------------------------------------|------------------|--------|
-| 4.1 | Group instances by monitor index in `calculate_coordinated_sizes` | `application.rs` | Medium |
+| #   | Task                                                              | Files         | Effort |
+|-----|-------------------------------------------------------------------|---------------|--------|
+| 4.1 | Group instances by monitor index in `calculate_coordinated_sizes` | `host/mod.rs` | Medium |
 
 ### Phase 5: Monitor-Index-Validierung
 
@@ -669,12 +669,12 @@ pub fn rebuild_windows(&self) {
 
 ### Phase 6: Monitor-Hotplug-Erkennung
 
-| #   | Task                                                       | Files            | Effort |
-|-----|------------------------------------------------------------|------------------|--------|
-| 6.1 | Register `connect_monitor_added`/`connect_monitor_removed` | `application.rs` | Small  |
-| 6.2 | Implement `rebuild_windows()` method                       | `application.rs` | Medium |
-| 6.3 | Add debounce mechanism for hotplug events                  | `application.rs` | Small  |
-| 6.4 | Re-validate monitor indices after hotplug                  | `application.rs` | Small  |
+| #   | Task                                                       | Files         | Effort |
+|-----|------------------------------------------------------------|---------------|--------|
+| 6.1 | Register `connect_monitor_added`/`connect_monitor_removed` | `host/mod.rs` | Small  |
+| 6.2 | Implement `rebuild_windows()` method                       | `host/mod.rs` | Medium |
+| 6.3 | Add debounce mechanism for hotplug events                  | `host/mod.rs` | Small  |
+| 6.4 | Re-validate monitor indices after hotplug                  | `host/mod.rs` | Small  |
 
 ### Phase 7: Testing & Validation
 

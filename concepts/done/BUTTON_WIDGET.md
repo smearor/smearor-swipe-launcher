@@ -507,7 +507,7 @@ The button widget supports custom CSS classes for styling:
 - Extend message payload structure to include area_id
 - Ensure message serialization/deserialization works
 
-**2. Implement area message handling in application.rs**
+**2. Implement area message handling in host/mod.rs**
 
 - Add message handler for `area.open` topic
 - Add message handler for `area.close` topic

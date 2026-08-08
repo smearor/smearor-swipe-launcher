@@ -1,6 +1,6 @@
-use crate::application::LauncherHost;
 use crate::area::instance_area_manager::InstanceAreaManager;
 use crate::config::area::config_entry::ConfigEntry;
+use crate::host::LauncherHost;
 
 pub fn read_mcp_resource(host: &LauncherHost, uri: String) -> Result<String, String> {
     if uri == "area://list" {

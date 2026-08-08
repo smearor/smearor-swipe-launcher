@@ -576,7 +576,7 @@ impl WakeWordDetector {
 
 ### 7.1 State Additions
 
-In `services/voice_assistant/src/service.rs`, add:
+In `services/voice_assistant/src/service/loaded_service.rs`, add:
 
 ```rust
 pub struct VoiceAssistantService {
@@ -908,15 +908,15 @@ The existing `ort-rocm` / `ort-cuda` features remain unaffected since oww-rs doe
 
 ## 11. File Additions
 
-| File                                            | Purpose                                                                                                                                                          |
-|-------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `services/voice_assistant/src/wake_word.rs`     | `WakeWordDetector`, `WakeWordEvent`, `WakeWordConfig`, `WakeWordModelType`, `WakeWordError`                                                                      |
-| `services/voice_assistant/src/lib.rs`           | Add `pub(crate) mod wake_word;`                                                                                                                                  |
-| `services/voice_assistant/src/service.rs`       | Add `wake_word_enabled`, `wake_word_detector`, `wake_word_config` fields; handle `EnableWakeWord` / `DisableWakeWord` actions; add `start_wake_word_detection()` |
-| `services/voice_assistant/src/config.rs`        | Add `WakeWordServiceConfig` struct and field in `VoiceAssistantServiceConfig`                                                                                    |
-| `model/voice_assistant/src/messages/state.rs`   | Add `Standby` variant to `AssistantState`                                                                                                                        |
-| `model/voice_assistant/src/messages/command.rs` | Add `EnableWakeWord` and `DisableWakeWord` variants to `VoiceCommandAction`                                                                                      |
-| `services/voice_assistant/Cargo.toml`           | Add `oww-rs` and `ringbuf` dependencies                                                                                                                          |
+| File                                                     | Purpose                                                                                                                                                          |
+|----------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `services/voice_assistant/src/wake_word.rs`              | `WakeWordDetector`, `WakeWordEvent`, `WakeWordConfig`, `WakeWordModelType`, `WakeWordError`                                                                      |
+| `services/voice_assistant/src/lib.rs`                    | Add `pub(crate) mod wake_word;`                                                                                                                                  |
+| `services/voice_assistant/src/service/loaded_service.rs` | Add `wake_word_enabled`, `wake_word_detector`, `wake_word_config` fields; handle `EnableWakeWord` / `DisableWakeWord` actions; add `start_wake_word_detection()` |
+| `services/voice_assistant/src/config.rs`                 | Add `WakeWordServiceConfig` struct and field in `VoiceAssistantServiceConfig`                                                                                    |
+| `model/voice_assistant/src/messages/state.rs`            | Add `Standby` variant to `AssistantState`                                                                                                                        |
+| `model/voice_assistant/src/messages/command.rs`          | Add `EnableWakeWord` and `DisableWakeWord` variants to `VoiceCommandAction`                                                                                      |
+| `services/voice_assistant/Cargo.toml`                    | Add `oww-rs` and `ringbuf` dependencies                                                                                                                          |
 
 ---
 

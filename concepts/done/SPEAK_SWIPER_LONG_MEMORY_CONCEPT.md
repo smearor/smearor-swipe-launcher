@@ -875,16 +875,16 @@ User says: "Mach den Ventilator aus, aber merk dir dass ich ihn abends immer aus
 
 ## 14. Affected Files
 
-| File                                           | Change                                                                                                          |
-|------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
-| `services/voice_assistant/src/tool_router.rs`  | **New file**: `ToolRouter` with nucleo matching.                                                                |
-| `services/voice_assistant/src/memory.rs`       | **New file**: `SemanticMemory` with fastembed + SQLite.                                                         |
-| `services/voice_assistant/src/tool_catalog.rs` | Modify `build_system_prompt` to accept `user_text`, use `ToolRouter`, inject `{long_term}`.                     |
-| `services/voice_assistant/src/mcp.rs`          | Register `memory_store`, `memory_recall`, `memory_list`, `memory_forget` tools. Add tool handlers.              |
-| `services/voice_assistant/src/react.rs`        | Pass `user_text` to `build_system_prompt`. Write entity history after tool calls.                               |
-| `services/voice_assistant/src/service.rs`      | Add `tool_router`, `semantic_memory`, `entity_db` fields. Initialize in `new()`.                                |
-| `services/voice_assistant/src/config.rs`       | Add `memory_db_path`, `max_tools_in_prompt`, `inject_long_term_facts`, `max_recalled_facts`, `embedding_model`. |
-| `services/voice_assistant/Cargo.toml`          | Add `nucleo-matcher`, `fastembed`, `rusqlite`, `chrono` dependencies.                                           |
+| File                                                     | Change                                                                                                          |
+|----------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
+| `services/voice_assistant/src/tool_router.rs`            | **New file**: `ToolRouter` with nucleo matching.                                                                |
+| `services/voice_assistant/src/memory.rs`                 | **New file**: `SemanticMemory` with fastembed + SQLite.                                                         |
+| `services/voice_assistant/src/tool_catalog.rs`           | Modify `build_system_prompt` to accept `user_text`, use `ToolRouter`, inject `{long_term}`.                     |
+| `services/voice_assistant/src/mcp.rs`                    | Register `memory_store`, `memory_recall`, `memory_list`, `memory_forget` tools. Add tool handlers.              |
+| `services/voice_assistant/src/react.rs`                  | Pass `user_text` to `build_system_prompt`. Write entity history after tool calls.                               |
+| `services/voice_assistant/src/service/loaded_service.rs` | Add `tool_router`, `semantic_memory`, `entity_db` fields. Initialize in `new()`.                                |
+| `services/voice_assistant/src/config.rs`                 | Add `memory_db_path`, `max_tools_in_prompt`, `inject_long_term_facts`, `max_recalled_facts`, `embedding_model`. |
+| `services/voice_assistant/Cargo.toml`                    | Add `nucleo-matcher`, `fastembed`, `rusqlite`, `chrono` dependencies.                                           |
 
 ---
 

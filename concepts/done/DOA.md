@@ -1846,7 +1846,7 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="20b1", TAG+="uaccess", MODE="0666"
 
 - Create `services/doa/Cargo.toml` with `rusb`, `tokio`, `tracing`, `plugin-api`, `model/doa`, `model/mcp` dependencies
 - Create `services/doa/src/config.rs` with `DoaServiceConfig` struct using `#[serde(default)]` for all fields
-- Create `services/doa/src/service.rs` with `DoaService` struct
+- Create `services/doa/src/service/loaded_service.rs` with `DoaService` struct
 - Implement `ServicePlugin` trait (`on_message`, `start`)
 - Implement `MessageHandler<FfiEnvelopePayload<DoaCommandMessage>>` trait
 - Implement `MessageHandler<FfiEnvelopePayload<InvokeToolMessage>>` trait for MCP tools
@@ -1960,8 +1960,8 @@ excludes system sounds and TTS. TTS-aware ducking suppression works when configu
 **Tasks:**
 
 - Add `model/doa`, `services/doa`, `plugins/doa` to workspace `Cargo.toml`
-- Add service loading to `smearor-swipe-launcher/src/service.rs` or service discovery
-- Add plugin loading to `smearor-swipe-launcher/src/plugin.rs` or plugin discovery
+- Add service loading to `smearor-swipe-launcher/src/service/loaded_service.rs` or service discovery
+- Add plugin loading to `smearor-swipe-launcher/src/plugin/loaded_plugin.rs` or plugin discovery
 - Add default config entries to `config.toml`
 - Add udev rules to `resources/udev/52-respeaker.rules`
 - Add debian packaging assets for the service crate

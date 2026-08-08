@@ -601,7 +601,7 @@ A fifth output structure is added to the system prompt:
 
 **Order:**
 
-1. Extend `McpResponseTracker` in `application.rs` to handle `TOPIC_MCP_PROMPT_RESPONSE`.
+1. Extend `McpResponseTracker` in `host/mod.rs` to handle `TOPIC_MCP_PROMPT_RESPONSE`.
 2. Intercept `TOPIC_MCP_REGISTER_PROMPT` in `route_message` and insert into `McpRegistry`.
 3. Intercept `TOPIC_MCP_INVOKE_PROMPT` and route to the target plugin instance.
 4. Serialize `InvokePromptResponse` to JSON and return via `oneshot` channel.

@@ -544,7 +544,7 @@ core:
     - `name: stabby::string::String` (display name)
     - `description: stabby::string::String` (human-readable description)
     - `mime_type: stabby::string::String` (e.g., `application/json`)
-2. The host's `route_message` function in `application.rs` intercepts `TOPIC_MCP_REGISTER_RESOURCE` messages and inserts them into the shared `McpRegistry`.
+2. The host's `route_message` function in `host/mod.rs` intercepts `TOPIC_MCP_REGISTER_RESOURCE` messages and inserts them into the shared `McpRegistry`.
 3. The MCP server queries the `McpRegistry` at list-time and dynamically exposes all registered URIs to the MCP client.
 4. For `read_resource(<uri>)`, the host sends an `InvokeResourceMessage` to the owning plugin via `TOPIC_MCP_INVOKE_RESOURCE` with a correlation ID.
 5. The plugin handles `InvokeResourceMessage`, reads its internal state, and responds with an `InvokeResourceResponse` (containing JSON as a string) broadcast

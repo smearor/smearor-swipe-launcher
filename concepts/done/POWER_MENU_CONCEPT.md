@@ -1105,7 +1105,7 @@ built on top of already-tested foundations.
 4. Implement `refresh_capabilities` and `refresh_inhibitors` functions.
 5. Implement `execute_power_action` that maps each `PowerAction` to the corresponding D-Bus call.
 6. Create `src/scheduler.rs` and implement `run_countdown` and `run_scheduled_action`.
-7. Create `src/service.rs` with `PowerService` and all required trait implementations.
+7. Create `src/service/loaded_service.rs` with `PowerService` and all required trait implementations.
 8. Implement `run_update_loop` to refresh capabilities/inhibitors at the configured interval and process incoming commands.
 9. Register MCP resources (`power://capabilities`, `power://inhibitors`, `power://scheduled_actions`) and MCP tools (`system_power_action`,
    `system_schedule_power_action`, `system_cancel_power_action`, `system_reboot_to_uefi`).

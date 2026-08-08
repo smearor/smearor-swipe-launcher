@@ -81,7 +81,7 @@ sequenceDiagram
 
 ## Service Manager
 
-The `ServiceManager` (`smearor-swipe-launcher/src/service_manager.rs`) is a singleton that:
+The `ServiceManager` (`smearor-swipe-launcher/src/service/manager.rs`) is a singleton that:
 
 - Loads service plugins from `configs/services/services.toml`
 - Stores them in a `DashMap<String, LoadedService>`

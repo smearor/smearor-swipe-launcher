@@ -161,7 +161,7 @@ Home Folder (Start: ~/)
          | Topic: "widget.update"
          v
 +--------------------------+
-| Host (application.rs)    |
+| Host (host/mod.rs)    |
 |                          |
 |  Receives widget.update  |
 |  → render_buttons_to_    |

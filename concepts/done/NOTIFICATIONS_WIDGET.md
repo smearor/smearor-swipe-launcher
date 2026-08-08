@@ -84,7 +84,7 @@ and broadcasts updates to all listening widgets.
 
 - `Cargo.toml` — Dependencies: `zbus`, `tokio`, `serde_json`, `tracing`, `model/notifications`
 - `src/lib.rs` — Declares modules, implements `service_plugin!(NotificationService)`
-- `src/service.rs` — Core service logic
+- `src/service/loaded_service.rs` — Core service logic
 - `src/config.rs` — `NotificationServiceConfig` struct with `parse` method
 
 ### Service Responsibilities

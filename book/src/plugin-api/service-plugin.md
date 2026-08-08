@@ -39,7 +39,7 @@ Add the crate to the workspace `Cargo.toml`.
 
 ## 2. Implement the Service
 
-Create `src/service.rs`:
+Create `src/service/loaded_service.rs`:
 
 ```rust
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;

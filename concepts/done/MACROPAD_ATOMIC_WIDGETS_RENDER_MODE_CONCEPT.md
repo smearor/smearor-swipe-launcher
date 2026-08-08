@@ -751,7 +751,7 @@ Clock, then App Launcher, etc.).
   pool would require changing `FfiGraphic` from `Vec`-ownership to references, which is an FFI-breaking change. If frame-based animations (20 fps, see
   `MACRO_PAD_ANIMATIONS_AND_BACKGROUND.md`) are added in the future, a `FfiGraphicPool` or `ReusableBuffer` can be introduced as part of the Animation Engine
   concept — not this Render Mode concept.
-- **Image scaling and threading**: `render_graphic()` is called synchronously on the GLib Main Context loop (`main_context.spawn_local` in `application.rs`).
+- **Image scaling and threading**: `render_graphic()` is called synchronously on the GLib Main Context loop (`main_context.spawn_local` in `host/mod.rs`).
   Synchronous image scaling (e.g. downscaling high-res album art from 500×500 to 72×72) would block the Main Loop and cause visible lag. Therefore, image
   scaling must **not** happen inside `render_background()` or any other `AtomicGraphicRenderer` hook. Instead, images are pre-scaled when received: the service
   (e.g. MPRIS service) scales the image to the target button dimensions asynchronously (in a `tokio::spawn` task) when the status update is received, and stores

@@ -1019,7 +1019,7 @@ This roadmap defines the recommended order, dependencies, and deliverables for i
     - `parse_edid_descriptors` to extract manufacturer, model name, and serial number from raw EDID bytes.
     - `switch_input_source` to find a monitor by serial number and call `set_vcp_feature(0x60, value)`.
     - `get_input_source` to read the current VCP 0x60 value.
-4. Create `src/service.rs` with `DdcService` and all required trait implementations.
+4. Create `src/service/loaded_service.rs` with `DdcService` and all required trait implementations.
 5. Implement `run_command_loop` to handle incoming commands and broadcast status.
 6. Register MCP tools (`ddc_switch_input`, `ddc_list_monitors`, `ddc_get_input_source`, `ddc_refresh_monitors`).
 7. Wire `service_plugin!` in `src/lib.rs`.

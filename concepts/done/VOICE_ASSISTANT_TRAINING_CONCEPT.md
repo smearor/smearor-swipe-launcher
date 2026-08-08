@@ -320,7 +320,7 @@ training_history.lock().unwrap().push(trace.clone());
 
 ## 6. State Additions in `VoiceAssistantService`
 
-In `services/voice_assistant/src/service.rs` add:
+In `services/voice_assistant/src/service/loaded_service.rs` add:
 
 ```rust
 /// Whether training mode is active.
@@ -339,7 +339,7 @@ These fields are cloned into the ReAct loop and the tool handlers just like the 
 
 - `services/voice_assistant/src/training.rs` - new module for `ReActStep` and `TrainingTrace`
 - `services/voice_assistant/src/lib.rs` - register `pub mod training;`
-- `services/voice_assistant/src/service.rs` - add state fields and clone them into the pipeline
+- `services/voice_assistant/src/service/loaded_service.rs` - add state fields and clone them into the pipeline
 - `services/voice_assistant/src/react.rs` - instrument the loop
 - `services/voice_assistant/src/mcp.rs` - register and handle the three MCP tools
 

@@ -1393,7 +1393,7 @@ built on top of already-tested foundations.
     - `resolve_outputs` for monitor name resolution (GNOME Mutter D-Bus, wlr-randr, hyprctl).
     - Per-monitor PID tracking via `MonitorProcess` entries in `WallpaperStatusMessage`.
     - `spawn_process` generic helper.
-4. Create `src/service.rs` with `WallpaperService` and all required trait implementations.
+4. Create `src/service/loaded_service.rs` with `WallpaperService` and all required trait implementations.
 5. Implement `select_theme`, `start_selected_wallpaper_theme`, and `stop_current_wallpaper_theme`.
 6. Implement `run_update_loop` to process incoming commands and broadcast status.
 7. Implement theme persistence (`add_theme_to_config`, `remove_theme_from_config`).

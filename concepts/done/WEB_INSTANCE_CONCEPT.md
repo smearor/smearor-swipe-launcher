@@ -80,8 +80,8 @@ The host changes are **additive**, building on the Dynamic Load concept:
 |----------------------------------------------------------------------|-----------------------------------------------------|------------------------------------------------------------------------------------------------|
 | `InstanceType::Web` variant                                          | `model/instance-control`                            | Third instance type alongside `Gtk` and `Headless`.                                            |
 | `WebServer` struct                                                   | new file `smearor-swipe-launcher/src/web/server.rs` | Embedded `axum` server, manages routes for all web instances.                                  |
-| `LauncherHost::web_server` field                                     | `application.rs`                                    | Optional `Arc<WebServer>`, initialized if web server is enabled.                               |
-| `route_message()` — web click handling                               | `application.rs`                                    | Converts HTTP click POSTs into broker messages.                                                |
+| `LauncherHost::web_server` field                                     | `host/mod.rs`                                       | Optional `Arc<WebServer>`, initialized if web server is enabled.                               |
+| `route_message()` — web click handling                               | `host/mod.rs`                                       | Converts HTTP click POSTs into broker messages.                                                |
 | `LauncherInstance` gains `web_metadata: Option<WebInstanceMetadata>` | `instance.rs`                                       | Optional metadata for web instances (template path, auth token). `None` for non-web instances. |
 
 No existing `LauncherInstance` code, broker logic, `ServiceManager`, or MCP infrastructure is modified. The host knows nothing about specific widgets — it only
@@ -629,7 +629,7 @@ The `instance_type` field in the response now includes `"web"`:
 
 - Add `FfiString` struct to `plugin-api/src/widget.rs`.
 - Add `WebRenderer` trait to `plugin-api/src/widget.rs`.
-- Add `render_html: Option<...>` function pointer to `PluginVTable` in `plugin-api/src/plugin.rs`.
+- Add `render_html: Option<...>` function pointer to `PluginVTable` in `plugin-api/src/plugin/loaded_plugin.rs`.
 - Increment `PLUGIN_VTABLE_VERSION` to `3`.
 - Export `WebRenderer`, `FfiString` from `plugin-api/src/lib.rs`.
 
@@ -718,26 +718,26 @@ action.
 
 ## 14. File Changes Summary
 
-| File                                        | Change                                                                                        |
-|---------------------------------------------|-----------------------------------------------------------------------------------------------|
-| `plugin-api/src/widget.rs`                  | Add `FfiString` struct, `WebRenderer` trait                                                   |
-| `plugin-api/src/plugin.rs`                  | Add `render_html` to `PluginVTable`, increment `PLUGIN_VTABLE_VERSION` to `3`                 |
-| `plugin-api/src/lib.rs`                     | Export `WebRenderer`, `FfiString`                                                             |
-| `plugins/button/src/widget.rs`              | Implement `WebRenderer` for `ButtonWidget`, export `render_html` in VTable                    |
-| `smearor-swipe-launcher/src/web/mod.rs`     | **New** — web module                                                                          |
-| `smearor-swipe-launcher/src/web/server.rs`  | **New** — `WebServer` struct, axum router, route handlers                                     |
-| `smearor-swipe-launcher/src/instance.rs`    | Add `web_metadata: Option<WebInstanceMetadata>` field                                         |
-| `smearor-swipe-launcher/src/application.rs` | Add `web_server: Option<Arc<WebServer>>` field, `route_web_click()` method                    |
-| `smearor-swipe-launcher/src/main.rs`        | Initialize web server if enabled, parse `[web_server]` config                                 |
-| `smearor-swipe-launcher/Cargo.toml`         | Add `axum`, `tower` dependencies                                                              |
-| `model/instance-control/src/lib.rs`         | Add `InstanceType::Web` variant                                                               |
-| `mcp-server/src/tools.rs`                   | Add `"web"` to `instance_type` enum in `launcher_load_instance`, add `web_server_status` tool |
-| `resources/web/template-default.html`       | **New** — default HTML template                                                               |
-| `resources/web/style.css`                   | **New** — base CSS styles                                                                     |
-| `resources/web/app.js`                      | **New** — client-side JavaScript                                                              |
-| `resources/web/nerdfont.css`                | **New** — NerdFont CSS mapping                                                                |
-| `resources/web/nerdfont.woff2`              | **New** — NerdFont web font                                                                   |
-| `Cargo.toml` (workspace)                    | Add `axum`, `tower` to workspace dependencies                                                 |
+| File                                       | Change                                                                                        |
+|--------------------------------------------|-----------------------------------------------------------------------------------------------|
+| `plugin-api/src/widget.rs`                 | Add `FfiString` struct, `WebRenderer` trait                                                   |
+| `plugin-api/src/plugin/loaded_plugin.rs`   | Add `render_html` to `PluginVTable`, increment `PLUGIN_VTABLE_VERSION` to `3`                 |
+| `plugin-api/src/lib.rs`                    | Export `WebRenderer`, `FfiString`                                                             |
+| `plugins/button/src/widget.rs`             | Implement `WebRenderer` for `ButtonWidget`, export `render_html` in VTable                    |
+| `smearor-swipe-launcher/src/web/mod.rs`    | **New** — web module                                                                          |
+| `smearor-swipe-launcher/src/web/server.rs` | **New** — `WebServer` struct, axum router, route handlers                                     |
+| `smearor-swipe-launcher/src/instance.rs`   | Add `web_metadata: Option<WebInstanceMetadata>` field                                         |
+| `smearor-swipe-launcher/src/host/mod.rs`   | Add `web_server: Option<Arc<WebServer>>` field, `route_web_click()` method                    |
+| `smearor-swipe-launcher/src/main.rs`       | Initialize web server if enabled, parse `[web_server]` config                                 |
+| `smearor-swipe-launcher/Cargo.toml`        | Add `axum`, `tower` dependencies                                                              |
+| `model/instance-control/src/lib.rs`        | Add `InstanceType::Web` variant                                                               |
+| `mcp-server/src/tools.rs`                  | Add `"web"` to `instance_type` enum in `launcher_load_instance`, add `web_server_status` tool |
+| `resources/web/template-default.html`      | **New** — default HTML template                                                               |
+| `resources/web/style.css`                  | **New** — base CSS styles                                                                     |
+| `resources/web/app.js`                     | **New** — client-side JavaScript                                                              |
+| `resources/web/nerdfont.css`               | **New** — NerdFont CSS mapping                                                                |
+| `resources/web/nerdfont.woff2`             | **New** — NerdFont web font                                                                   |
+| `Cargo.toml` (workspace)                   | Add `axum`, `tower` to workspace dependencies                                                 |
 
 ---
 

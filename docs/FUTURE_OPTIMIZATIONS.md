@@ -106,7 +106,7 @@ instance.handle_message(borrowed);
 ### Related Files
 
 - `plugin-api/src/messages.rs` — `FfiEnvelope`, `clone_payload`
-- `services/audio/src/service.rs` — `clone_audio_status`
-- `services/mpris/src/service.rs` — `clone_mpris_status`
-- `services/notifications/src/service.rs` — `clone_notification_status`
-- `smearor-swipe-launcher/src/application.rs` — `route_message` broadcast loop
+- `services/audio/src/service/loaded_service.rs` — `clone_audio_status`
+- `services/mpris/src/service/loaded_service.rs` — `clone_mpris_status`
+- `services/notifications/src/service/loaded_service.rs` — `clone_notification_status`
+- `smearor-swipe-launcher/src/host/mod.rs` — `route_message` broadcast loop

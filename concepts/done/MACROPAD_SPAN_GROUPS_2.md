@@ -17,7 +17,7 @@ dimensions, and splits the pixel buffer across buttons. Each plugin instance is 
 
 The atomic widget action pipeline works as follows:
 
-1. Host detects button press → `dispatch_macropad_action(instance_id, button_index, action)` (`application.rs:513`).
+1. Host detects button press → `dispatch_macropad_action(instance_id, button_index, action)` (`host/mod.rs:513`).
 2. Host sends `InvokeToolMessage` with `{"action":"click"}` to the plugin at that button index.
 3. The `atomic_widget_impl!` macro's `MessageHandler<InvokeToolMessage>` receives it, parses the action string, and calls `self.dispatch_action(action)`
    (`plugin-api/src/atomic/macro.rs:614-633`).
@@ -97,7 +97,7 @@ The solution uses a **crate-level static registry** keyed by `span_group` name, 
 │                    }                                                 │
 └──────────────────────────────────────────────────────────────────────┘
 
-Host (application.rs):
+Host (host/mod.rs):
   Button 0 pressed → InvokeToolMessage{action:"click"} → Instance 0
     → Instance 0 looks up span_action mapping for span_index=0
     → Calls shared_state.start()

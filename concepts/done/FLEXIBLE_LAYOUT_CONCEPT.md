@@ -383,7 +383,7 @@ timezone = "UTC"
 
 ### Phase 3: UI Building
 
-1. Modify `application.rs` to iterate over `areas` vector instead of hardcoded areas
+1. Modify `host/mod.rs` to iterate over `areas` vector instead of hardcoded areas
 2. Apply layout orientation from config (horizontal/vertical)
 3. Dynamically create UI widgets based on `area_type`:
     - `Fixed`: Create `GtkBox` with calculated width

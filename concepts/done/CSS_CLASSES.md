@@ -254,7 +254,7 @@ When a launcher instance is loaded from a TOML config file, a CSS file with the 
 **Affected files**:
 
 - `smearor-swipe-launcher/src/main.rs` — after loading each config file, check for corresponding CSS
-- `smearor-swipe-launcher/src/application.rs` — `load_instance()` method for dynamically loaded instances
+- `smearor-swipe-launcher/src/host/mod.rs` — `load_instance()` method for dynamically loaded instances
 - `smearor-swipe-launcher/src/css_provider.rs` — new function `create_instance_css_provider(instance_id: &str, css_path: &Path)`
 
 **Implementation**:
@@ -262,7 +262,7 @@ When a launcher instance is loaded from a TOML config file, a CSS file with the 
 - In `main.rs`, after loading each config file (line ~97-117), compute the CSS path by replacing the extension
 - Pass the CSS path (if it exists) to a new function that creates a per-instance `CssProvider`
 - The per-instance provider is registered with `STYLE_PROVIDER_PRIORITY_USER + 1` to override both built-in and global user CSS
-- For dynamically loaded instances (`load_instance()` in `application.rs`), perform the same CSS path resolution
+- For dynamically loaded instances (`load_instance()` in `host/mod.rs`), perform the same CSS path resolution
 
 **Priority order** (per display):
 
@@ -447,7 +447,7 @@ The CSS watcher shutdown must be integrated into the post-`host.run()` cleanup b
 
 ### Per-Instance Teardown
 
-Triggered by MCP `StopInstance` command, MCP `ReloadInstance` (stop + reload), or MacroPad disconnect. Calls `host.stop_instance()` (`application.rs:1985`),
+Triggered by MCP `StopInstance` command, MCP `ReloadInstance` (stop + reload), or MacroPad disconnect. Calls `host.stop_instance()` (`host/mod.rs:1985`),
 which removes the instance from the map and closes its window.
 
 The per-instance CSS provider and its file watch must be cleaned up in `stop_instance()`:
@@ -460,7 +460,7 @@ The per-instance CSS provider and its file watch must be cleaned up in `stop_ins
 
 **Affected files**:
 
-- `smearor-swipe-launcher/src/application.rs` — extend `stop_instance()` to call CSS watcher cleanup for the instance
+- `smearor-swipe-launcher/src/host/mod.rs` — extend `stop_instance()` to call CSS watcher cleanup for the instance
 - `smearor-swipe-launcher/src/css_provider.rs` or `css_watcher.rs` — implement `remove_instance_css(instance_id: &str)` method
 
 ### Considerations

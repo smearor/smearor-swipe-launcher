@@ -539,16 +539,16 @@ tokio::time::sleep(Duration::from_secs(5)).await;
 
 ### 10.1 New Files
 
-| File                              | Description                                                          |
-|-----------------------------------|----------------------------------------------------------------------|
-| `services/wayland/Cargo.toml`     | Crate manifest for Wayland workspace service                         |
-| `services/wayland/src/lib.rs`     | `service_plugin!(WaylandWorkspaceService);`                          |
-| `services/wayland/src/config.rs`  | `WaylandWorkspaceServiceConfig` struct                               |
-| `services/wayland/src/service.rs` | `WaylandWorkspaceService` struct, event listener, monitor resolution |
-| `services/gnome/Cargo.toml`       | Crate manifest for GNOME workspace service                           |
-| `services/gnome/src/lib.rs`       | `service_plugin!(GnomeWorkspaceService);`                            |
-| `services/gnome/src/config.rs`    | `GnomeWorkspaceServiceConfig` struct                                 |
-| `services/gnome/src/service.rs`   | `GnomeWorkspaceService` struct, D-Bus listener, monitor resolution   |
+| File                                             | Description                                                          |
+|--------------------------------------------------|----------------------------------------------------------------------|
+| `services/wayland/Cargo.toml`                    | Crate manifest for Wayland workspace service                         |
+| `services/wayland/src/lib.rs`                    | `service_plugin!(WaylandWorkspaceService);`                          |
+| `services/wayland/src/config.rs`                 | `WaylandWorkspaceServiceConfig` struct                               |
+| `services/wayland/src/service/loaded_service.rs` | `WaylandWorkspaceService` struct, event listener, monitor resolution |
+| `services/gnome/Cargo.toml`                      | Crate manifest for GNOME workspace service                           |
+| `services/gnome/src/lib.rs`                      | `service_plugin!(GnomeWorkspaceService);`                            |
+| `services/gnome/src/config.rs`                   | `GnomeWorkspaceServiceConfig` struct                                 |
+| `services/gnome/src/service/loaded_service.rs`   | `GnomeWorkspaceService` struct, D-Bus listener, monitor resolution   |
 
 ### 10.2 Modified Files
 
@@ -562,32 +562,32 @@ tokio::time::sleep(Duration::from_secs(5)).await;
 
 ### Phase 1: Wayland Service (`services/wayland`)
 
-| #    | Task                                                                    | Files                                       | Effort |
-|------|-------------------------------------------------------------------------|---------------------------------------------|--------|
-| 1.1  | Create crate structure and `Cargo.toml`                                 | `services/wayland/`                         | Small  |
-| 1.2  | Implement `WaylandWorkspaceServiceConfig`                               | `services/wayland/src/config.rs`            | Small  |
-| 1.3  | Implement `WaylandWorkspaceService` struct with `service_plugin!` macro | `services/wayland/src/lib.rs`, `service.rs` | Small  |
-| 1.4  | Generate `ext-workspace-unstable-v1` protocol bindings                  | `services/wayland/src/`                     | Medium |
-| 1.5  | Implement Wayland event listener thread with reconnection               | `services/wayland/src/service.rs`           | Medium |
-| 1.6  | Implement workspace state handler → `WorkspaceChangedEvent`             | `services/wayland/src/service.rs`           | Medium |
-| 1.7  | Implement monitor index resolution (output name matching)               | `services/wayland/src/service.rs`           | Medium |
-| 1.8  | Add `wayland-client`, `wayland-protocols` to workspace deps             | `Cargo.toml`                                | Small  |
-| 1.9  | Add `services/wayland` to workspace members                             | `Cargo.toml`                                | Small  |
-| 1.10 | Build and verify                                                        | —                                           | Small  |
+| #    | Task                                                                    | Files                                            | Effort |
+|------|-------------------------------------------------------------------------|--------------------------------------------------|--------|
+| 1.1  | Create crate structure and `Cargo.toml`                                 | `services/wayland/`                              | Small  |
+| 1.2  | Implement `WaylandWorkspaceServiceConfig`                               | `services/wayland/src/config.rs`                 | Small  |
+| 1.3  | Implement `WaylandWorkspaceService` struct with `service_plugin!` macro | `services/wayland/src/lib.rs`, `service.rs`      | Small  |
+| 1.4  | Generate `ext-workspace-unstable-v1` protocol bindings                  | `services/wayland/src/`                          | Medium |
+| 1.5  | Implement Wayland event listener thread with reconnection               | `services/wayland/src/service/loaded_service.rs` | Medium |
+| 1.6  | Implement workspace state handler → `WorkspaceChangedEvent`             | `services/wayland/src/service/loaded_service.rs` | Medium |
+| 1.7  | Implement monitor index resolution (output name matching)               | `services/wayland/src/service/loaded_service.rs` | Medium |
+| 1.8  | Add `wayland-client`, `wayland-protocols` to workspace deps             | `Cargo.toml`                                     | Small  |
+| 1.9  | Add `services/wayland` to workspace members                             | `Cargo.toml`                                     | Small  |
+| 1.10 | Build and verify                                                        | —                                                | Small  |
 
 ### Phase 2: GNOME Service (`services/gnome`)
 
-| #   | Task                                                                    | Files                                     | Effort |
-|-----|-------------------------------------------------------------------------|-------------------------------------------|--------|
-| 2.1 | Create crate structure and `Cargo.toml`                                 | `services/gnome/`                         | Small  |
-| 2.2 | Implement `GnomeWorkspaceServiceConfig`                                 | `services/gnome/src/config.rs`            | Small  |
-| 2.3 | Implement `GnomeWorkspaceService` struct with `service_plugin!` macro   | `services/gnome/src/lib.rs`, `service.rs` | Small  |
-| 2.4 | Implement D-Bus listener thread with `zbus`                             | `services/gnome/src/service.rs`           | Medium |
-| 2.5 | Implement workspace polling via `org.gnome.Shell.Eval`                  | `services/gnome/src/service.rs`           | Medium |
-| 2.6 | Implement monitor index resolution via `org.gnome.Mutter.DisplayConfig` | `services/gnome/src/service.rs`           | Medium |
-| 2.7 | Add `zbus` to workspace deps                                            | `Cargo.toml`                              | Small  |
-| 2.8 | Add `services/gnome` to workspace members                               | `Cargo.toml`                              | Small  |
-| 2.9 | Build and verify                                                        | —                                         | Small  |
+| #   | Task                                                                    | Files                                          | Effort |
+|-----|-------------------------------------------------------------------------|------------------------------------------------|--------|
+| 2.1 | Create crate structure and `Cargo.toml`                                 | `services/gnome/`                              | Small  |
+| 2.2 | Implement `GnomeWorkspaceServiceConfig`                                 | `services/gnome/src/config.rs`                 | Small  |
+| 2.3 | Implement `GnomeWorkspaceService` struct with `service_plugin!` macro   | `services/gnome/src/lib.rs`, `service.rs`      | Small  |
+| 2.4 | Implement D-Bus listener thread with `zbus`                             | `services/gnome/src/service/loaded_service.rs` | Medium |
+| 2.5 | Implement workspace polling via `org.gnome.Shell.Eval`                  | `services/gnome/src/service/loaded_service.rs` | Medium |
+| 2.6 | Implement monitor index resolution via `org.gnome.Mutter.DisplayConfig` | `services/gnome/src/service/loaded_service.rs` | Medium |
+| 2.7 | Add `zbus` to workspace deps                                            | `Cargo.toml`                                   | Small  |
+| 2.8 | Add `services/gnome` to workspace members                               | `Cargo.toml`                                   | Small  |
+| 2.9 | Build and verify                                                        | —                                              | Small  |
 
 ### Phase 3: Testing & Validation
 

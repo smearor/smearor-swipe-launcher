@@ -66,7 +66,7 @@ Wir trennen die Widgets (UI-Darstellung) strikt von den Services (System-Logik, 
 
 Wir führen ein neues FFI-stables VTable-Layout für Services im `smearor-plugin-api` Crate ein.
 
-### A. Die Service-VTable (`smearor-plugin-api/src/service.rs`)
+### A. Die Service-VTable (`smearor-plugin-api/src/service/loaded_service.rs`)
 
 ```rust
 use crate::FfiCoreContext;
@@ -181,12 +181,12 @@ Um diesen Service-Layer einzubauen, müssen folgende Schritte im Hauptprogramm d
 
 ### Schritt 1: API erweitern (`smearor-plugin-api`)
 
-* Hinzufügen des Moduls `smearor-plugin-api/src/service.rs` (wie in Sektion 3 gezeigt).
+* Hinzufügen des Moduls `smearor-plugin-api/src/service/loaded_service.rs` (wie in Sektion 3 gezeigt).
 * Exportieren der Typen im `lib.rs` des API-Crates.
 
 ### Schritt 2: Service-Manager im Core implementieren
 
-* Erstellen einer neuen Komponente `smearor-swipe-launcher/src/service_manager.rs`.
+* Erstellen einer neuen Komponente `smearor-swipe-launcher/src/service/manager.rs`.
 * Analog zum `PluginManager` lädt der `ServiceManager` alle in der Konfigurationsdatei definierten System-Services dynamisch über FFI.
 * Die geladenen Services werden in einer `DashMap<String, LoadedService>` verwaltet.
 

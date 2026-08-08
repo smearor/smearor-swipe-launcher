@@ -85,7 +85,7 @@ would have misaligned function pointers, causing segfaults.
 **The Solution:** Each VTable has a version constant:
 
 ```rust
-// plugin-api/src/plugin.rs
+// plugin-api/src/plugin/loaded_plugin.rs
 pub const PLUGIN_VTABLE_VERSION: u32 = 1;
 
 #[repr(C)]

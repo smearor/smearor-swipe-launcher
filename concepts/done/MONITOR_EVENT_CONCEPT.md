@@ -927,24 +927,24 @@ names) is reset and rebuilt from scratch. This ensures consistency after composi
 
 ### 12.2 Modified Files
 
-| File                                         | Change                                                                                                                                                               |
-|----------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `model/workspace/src/messages.rs`            | Add `MonitorChangedEvent`, `MonitorChangeType`, `WorkspaceLifecycleEvent`, `WorkspaceLifecycleType`, topics                                                          |
-| `model/workspace/src/lib.rs`                 | Re-export new types                                                                                                                                                  |
-| `services/wayland/src/workspace/state.rs`    | Add `xdg_output_manager`, `connector_names`, `broadcasted_workspaces` fields; add `WorkspaceEvent::MonitorChanged` and `WorkspaceEvent::WorkspaceLifecycle` variants |
-| `services/wayland/src/workspace/tracker.rs`  | Bind `xdg_output_manager_v1`, dispatch `ZxdgOutputV1`, broadcast monitor and workspace lifecycle events                                                              |
-| `services/wayland/src/workspace/mod.rs`      | Re-export new event types                                                                                                                                            |
-| `services/wayland/src/service.rs`            | Handle new `WorkspaceEvent` variants in event worker                                                                                                                 |
-| `services/gnome/src/workspace/tracker.rs`    | Subscribe to `MonitorsChanged`, query monitors, detect workspace count changes, broadcast events                                                                     |
-| `services/gnome/src/workspace/dbus.rs`       | (already has `MutterDisplayConfigProxy` — no change needed)                                                                                                          |
-| `services/gnome/src/workspace/mod.rs`        | Re-export new event types                                                                                                                                            |
-| `services/gnome/src/service.rs`              | Handle new `WorkspaceEvent` variants in event worker                                                                                                                 |
-| `services/gnome/src/config.rs`               | Add `enable_monitor_events`, `enable_workspace_lifecycle` fields                                                                                                     |
-| `services/hyprland/src/service.rs`           | Broadcast `MonitorChangedEvent` on monitor added/removed; track workspace IDs and broadcast `WorkspaceLifecycleEvent`                                                |
-| `services/hyprland/src/config.rs`            | Add `enable_monitor_events`, `enable_workspace_lifecycle` fields                                                                                                     |
-| `services.toml`                              | Add new config keys for `[wayland]`, `[gnome]`, `[hyprland]` sections                                                                                                |
-| `smearor-swipe-launcher/src/messages/mod.rs` | Route `MonitorChangedEvent` and `WorkspaceLifecycleEvent` to instance                                                                                                |
-| `smearor-swipe-launcher/src/instance.rs`     | Add `on_monitor_changed`, `on_workspace_lifecycle` methods                                                                                                           |
+| File                                              | Change                                                                                                                                                               |
+|---------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `model/workspace/src/messages.rs`                 | Add `MonitorChangedEvent`, `MonitorChangeType`, `WorkspaceLifecycleEvent`, `WorkspaceLifecycleType`, topics                                                          |
+| `model/workspace/src/lib.rs`                      | Re-export new types                                                                                                                                                  |
+| `services/wayland/src/workspace/state.rs`         | Add `xdg_output_manager`, `connector_names`, `broadcasted_workspaces` fields; add `WorkspaceEvent::MonitorChanged` and `WorkspaceEvent::WorkspaceLifecycle` variants |
+| `services/wayland/src/workspace/tracker.rs`       | Bind `xdg_output_manager_v1`, dispatch `ZxdgOutputV1`, broadcast monitor and workspace lifecycle events                                                              |
+| `services/wayland/src/workspace/mod.rs`           | Re-export new event types                                                                                                                                            |
+| `services/wayland/src/service/loaded_service.rs`  | Handle new `WorkspaceEvent` variants in event worker                                                                                                                 |
+| `services/gnome/src/workspace/tracker.rs`         | Subscribe to `MonitorsChanged`, query monitors, detect workspace count changes, broadcast events                                                                     |
+| `services/gnome/src/workspace/dbus.rs`            | (already has `MutterDisplayConfigProxy` — no change needed)                                                                                                          |
+| `services/gnome/src/workspace/mod.rs`             | Re-export new event types                                                                                                                                            |
+| `services/gnome/src/service/loaded_service.rs`    | Handle new `WorkspaceEvent` variants in event worker                                                                                                                 |
+| `services/gnome/src/config.rs`                    | Add `enable_monitor_events`, `enable_workspace_lifecycle` fields                                                                                                     |
+| `services/hyprland/src/service/loaded_service.rs` | Broadcast `MonitorChangedEvent` on monitor added/removed; track workspace IDs and broadcast `WorkspaceLifecycleEvent`                                                |
+| `services/hyprland/src/config.rs`                 | Add `enable_monitor_events`, `enable_workspace_lifecycle` fields                                                                                                     |
+| `services.toml`                                   | Add new config keys for `[wayland]`, `[gnome]`, `[hyprland]` sections                                                                                                |
+| `smearor-swipe-launcher/src/messages/mod.rs`      | Route `MonitorChangedEvent` and `WorkspaceLifecycleEvent` to instance                                                                                                |
+| `smearor-swipe-launcher/src/instance.rs`          | Add `on_monitor_changed`, `on_workspace_lifecycle` methods                                                                                                           |
 
 ## 13. Implementation Roadmap
 
@@ -960,38 +960,38 @@ names) is reset and rebuilt from scratch. This ensures consistency after composi
 
 ### Phase 2: Wayland Service (`services/wayland`)
 
-| #   | Task                                                                   | Files                                       | Effort |
-|-----|------------------------------------------------------------------------|---------------------------------------------|--------|
-| 2.1 | Add `xdg_output_manager` and `connector_names` to `WaylandState`       | `services/wayland/src/workspace/state.rs`   | Small  |
-| 2.2 | Add `WorkspaceEvent::MonitorChanged` and `WorkspaceLifecycle` variants | `services/wayland/src/workspace/state.rs`   | Small  |
-| 2.3 | Bind `xdg_output_manager_v1` in registry handler                       | `services/wayland/src/workspace/tracker.rs` | Small  |
-| 2.4 | Implement `ZxdgOutputV1` dispatch for connector names                  | `services/wayland/src/workspace/tracker.rs` | Medium |
-| 2.5 | Broadcast `MonitorChangedEvent` on `wl_output` global add/remove       | `services/wayland/src/workspace/tracker.rs` | Medium |
-| 2.6 | Broadcast `WorkspaceLifecycleEvent` on workspace created/removed       | `services/wayland/src/workspace/tracker.rs` | Medium |
-| 2.7 | Handle new event variants in service event worker                      | `services/wayland/src/service.rs`           | Small  |
-| 2.8 | Build and verify                                                       | —                                           | Small  |
+| #   | Task                                                                   | Files                                            | Effort |
+|-----|------------------------------------------------------------------------|--------------------------------------------------|--------|
+| 2.1 | Add `xdg_output_manager` and `connector_names` to `WaylandState`       | `services/wayland/src/workspace/state.rs`        | Small  |
+| 2.2 | Add `WorkspaceEvent::MonitorChanged` and `WorkspaceLifecycle` variants | `services/wayland/src/workspace/state.rs`        | Small  |
+| 2.3 | Bind `xdg_output_manager_v1` in registry handler                       | `services/wayland/src/workspace/tracker.rs`      | Small  |
+| 2.4 | Implement `ZxdgOutputV1` dispatch for connector names                  | `services/wayland/src/workspace/tracker.rs`      | Medium |
+| 2.5 | Broadcast `MonitorChangedEvent` on `wl_output` global add/remove       | `services/wayland/src/workspace/tracker.rs`      | Medium |
+| 2.6 | Broadcast `WorkspaceLifecycleEvent` on workspace created/removed       | `services/wayland/src/workspace/tracker.rs`      | Medium |
+| 2.7 | Handle new event variants in service event worker                      | `services/wayland/src/service/loaded_service.rs` | Small  |
+| 2.8 | Build and verify                                                       | —                                                | Small  |
 
 ### Phase 3: GNOME Service (`services/gnome`)
 
-| #   | Task                                                                    | Files                                     | Effort |
-|-----|-------------------------------------------------------------------------|-------------------------------------------|--------|
-| 3.1 | Add `WorkspaceEvent::MonitorChanged` and `WorkspaceLifecycle` variants  | `services/gnome/src/workspace/tracker.rs` | Small  |
-| 3.2 | Implement `MonitorsChanged` signal subscription                         | `services/gnome/src/workspace/tracker.rs` | Medium |
-| 3.3 | Implement monitor query and change detection                            | `services/gnome/src/workspace/tracker.rs` | Medium |
-| 3.4 | Implement workspace count polling for lifecycle events                  | `services/gnome/src/workspace/tracker.rs` | Medium |
-| 3.5 | Implement `resolve_monitor_index` via `GetResources`                    | `services/gnome/src/workspace/tracker.rs` | Medium |
-| 3.6 | Add config fields `enable_monitor_events`, `enable_workspace_lifecycle` | `services/gnome/src/config.rs`            | Small  |
-| 3.7 | Handle new event variants in service event worker                       | `services/gnome/src/service.rs`           | Small  |
-| 3.8 | Build and verify                                                        | —                                         | Small  |
+| #   | Task                                                                    | Files                                          | Effort |
+|-----|-------------------------------------------------------------------------|------------------------------------------------|--------|
+| 3.1 | Add `WorkspaceEvent::MonitorChanged` and `WorkspaceLifecycle` variants  | `services/gnome/src/workspace/tracker.rs`      | Small  |
+| 3.2 | Implement `MonitorsChanged` signal subscription                         | `services/gnome/src/workspace/tracker.rs`      | Medium |
+| 3.3 | Implement monitor query and change detection                            | `services/gnome/src/workspace/tracker.rs`      | Medium |
+| 3.4 | Implement workspace count polling for lifecycle events                  | `services/gnome/src/workspace/tracker.rs`      | Medium |
+| 3.5 | Implement `resolve_monitor_index` via `GetResources`                    | `services/gnome/src/workspace/tracker.rs`      | Medium |
+| 3.6 | Add config fields `enable_monitor_events`, `enable_workspace_lifecycle` | `services/gnome/src/config.rs`                 | Small  |
+| 3.7 | Handle new event variants in service event worker                       | `services/gnome/src/service/loaded_service.rs` | Small  |
+| 3.8 | Build and verify                                                        | —                                              | Small  |
 
 ### Phase 4: Hyprland Service (`services/hyprland`)
 
-| #   | Task                                                                    | Files                              | Effort |
-|-----|-------------------------------------------------------------------------|------------------------------------|--------|
-| 4.1 | Broadcast `MonitorChangedEvent` on monitor added/removed                | `services/hyprland/src/service.rs` | Small  |
-| 4.2 | Track known workspace IDs and broadcast `WorkspaceLifecycleEvent`       | `services/hyprland/src/service.rs` | Medium |
-| 4.3 | Add config fields `enable_monitor_events`, `enable_workspace_lifecycle` | `services/hyprland/src/config.rs`  | Small  |
-| 4.4 | Build and verify                                                        | —                                  | Small  |
+| #   | Task                                                                    | Files                                             | Effort |
+|-----|-------------------------------------------------------------------------|---------------------------------------------------|--------|
+| 4.1 | Broadcast `MonitorChangedEvent` on monitor added/removed                | `services/hyprland/src/service/loaded_service.rs` | Small  |
+| 4.2 | Track known workspace IDs and broadcast `WorkspaceLifecycleEvent`       | `services/hyprland/src/service/loaded_service.rs` | Medium |
+| 4.3 | Add config fields `enable_monitor_events`, `enable_workspace_lifecycle` | `services/hyprland/src/config.rs`                 | Small  |
+| 4.4 | Build and verify                                                        | —                                                 | Small  |
 
 ### Phase 5: Launcher Core Integration
 

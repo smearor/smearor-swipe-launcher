@@ -1,4 +1,3 @@
-mod application;
 mod area;
 mod args;
 mod config;
@@ -6,6 +5,7 @@ mod context;
 mod css;
 mod display;
 mod error;
+mod host;
 mod init_tracing;
 mod instance;
 mod library_path;
@@ -16,9 +16,9 @@ mod service;
 mod web;
 mod window;
 
-pub use application::LauncherHost;
 pub use args::launcher::SwipeLauncherArguments;
 pub use config::launcher::SwipeLauncherConfig;
+pub use host::LauncherHost;
 pub use plugin::LoadedPlugin;
 pub use plugin::PluginManager;
 pub use service::LoadedService;

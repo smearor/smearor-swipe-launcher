@@ -849,7 +849,7 @@ on top of already-tested foundations.
     - Map `openmeteo_rs` forecast response to `WeatherStatusMessage`.
     - Map `openmeteo_rs` air quality response to `AirQualityData`.
     - Handle API errors gracefully and produce an error status message.
-4. Create `src/service.rs` with `WeatherService` and all required trait implementations.
+4. Create `src/service/loaded_service.rs` with `WeatherService` and all required trait implementations.
 5. Implement `run_update_loop` to fetch at the configured interval and broadcast on `TOPIC_STATUS`.
 6. Handle `WeatherCommandMessage::Refresh` to trigger an immediate fetch.
 7. Register MCP resources (`plugin://weather/status`, `plugin://weather/current`, `plugin://weather/forecast`, `plugin://weather/air_quality`) and MCP tools (

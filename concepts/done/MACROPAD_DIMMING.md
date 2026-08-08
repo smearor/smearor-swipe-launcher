@@ -430,32 +430,32 @@ auto_dim_fade_step_percent = 3
 
 ### Phase 1: Unified Brightness Scale
 
-| Task                                         | File                                         | Description                                                |
-|----------------------------------------------|----------------------------------------------|------------------------------------------------------------|
-| Change `LoupedeckConfig.brightness` to 0-100 | `services/loupedeck/src/config.rs`           | Default 50, add `scale_to_loupedeck()` helper              |
-| Apply scaling in `run_device_loop`           | `services/loupedeck/src/service.rs`          | Scale `config.brightness` before `device.set_brightness()` |
-| Apply scaling in `device_event_loop`         | `services/loupedeck/src/service.rs`          | Scale `percent` in `SetBrightness` command handler         |
-| Update MCP tool description                  | `services/loupedeck/src/mcp/capabilities.rs` | Remove "0-10 scale" mention from tool description          |
+| Task                                         | File                                               | Description                                                |
+|----------------------------------------------|----------------------------------------------------|------------------------------------------------------------|
+| Change `LoupedeckConfig.brightness` to 0-100 | `services/loupedeck/src/config.rs`                 | Default 50, add `scale_to_loupedeck()` helper              |
+| Apply scaling in `run_device_loop`           | `services/loupedeck/src/service/loaded_service.rs` | Scale `config.brightness` before `device.set_brightness()` |
+| Apply scaling in `device_event_loop`         | `services/loupedeck/src/service/loaded_service.rs` | Scale `percent` in `SetBrightness` command handler         |
+| Update MCP tool description                  | `services/loupedeck/src/mcp/capabilities.rs`       | Remove "0-10 scale" mention from tool description          |
 
 ### Phase 2: Dimming Infrastructure
 
-| Task                        | File                                                                      | Description                                                                                                                                     |
-|-----------------------------|---------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| Add `DeviceOverride` struct | `services/streamdeck/src/config.rs`, `services/loupedeck/src/config.rs`   | Per-device override struct                                                                                                                      |
-| Add dimming config fields   | `services/streamdeck/src/config.rs`, `services/loupedeck/src/config.rs`   | `auto_dimming_enabled`, `auto_dim_timeout_ms`, `auto_dim_brightness`, `auto_dim_fade_step_ms`, `auto_dim_fade_step_percent`, `device_overrides` |
-| Add `DimmingState` struct   | `services/streamdeck/src/service.rs`, `services/loupedeck/src/service.rs` | Per-device dimming state machine                                                                                                                |
-| Add `DimmingPhase` enum     | `services/streamdeck/src/service.rs`, `services/loupedeck/src/service.rs` | Active, FadingDown, Dimmed, FadingUp                                                                                                            |
+| Task                        | File                                                                                                    | Description                                                                                                                                     |
+|-----------------------------|---------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| Add `DeviceOverride` struct | `services/streamdeck/src/config.rs`, `services/loupedeck/src/config.rs`                                 | Per-device override struct                                                                                                                      |
+| Add dimming config fields   | `services/streamdeck/src/config.rs`, `services/loupedeck/src/config.rs`                                 | `auto_dimming_enabled`, `auto_dim_timeout_ms`, `auto_dim_brightness`, `auto_dim_fade_step_ms`, `auto_dim_fade_step_percent`, `device_overrides` |
+| Add `DimmingState` struct   | `services/streamdeck/src/service/loaded_service.rs`, `services/loupedeck/src/service/loaded_service.rs` | Per-device dimming state machine                                                                                                                |
+| Add `DimmingPhase` enum     | `services/streamdeck/src/service/loaded_service.rs`, `services/loupedeck/src/service/loaded_service.rs` | Active, FadingDown, Dimmed, FadingUp                                                                                                            |
 
 ### Phase 3: Event Loop Integration
 
-| Task                                       | File                                                                      | Description                                                 |
-|--------------------------------------------|---------------------------------------------------------------------------|-------------------------------------------------------------|
-| Resolve per-device config                  | `services/streamdeck/src/service.rs`, `services/loupedeck/src/service.rs` | Merge `device_overrides` with defaults in `run_device_loop` |
-| Pass `DimmingState` to `device_event_loop` | `services/streamdeck/src/service.rs`, `services/loupedeck/src/service.rs` | Initialise state per device                                 |
-| Add dimming timer branch to `select!`      | `services/streamdeck/src/service.rs`, `services/loupedeck/src/service.rs` | Third `tokio::select!` branch                               |
-| Reset idle timer on button press           | `services/streamdeck/src/service.rs`, `services/loupedeck/src/service.rs` | Update `last_activity` and transition to `FadingUp`         |
-| Handle `SetBrightness` with dimming        | `services/streamdeck/src/service.rs`, `services/loupedeck/src/service.rs` | Update `target_brightness`, transition to `FadingUp`        |
-| Apply Loupedeck scaling in dimming         | `services/loupedeck/src/service.rs`                                       | Scale `current_brightness` before `device.set_brightness()` |
+| Task                                       | File                                                                                                    | Description                                                 |
+|--------------------------------------------|---------------------------------------------------------------------------------------------------------|-------------------------------------------------------------|
+| Resolve per-device config                  | `services/streamdeck/src/service/loaded_service.rs`, `services/loupedeck/src/service/loaded_service.rs` | Merge `device_overrides` with defaults in `run_device_loop` |
+| Pass `DimmingState` to `device_event_loop` | `services/streamdeck/src/service/loaded_service.rs`, `services/loupedeck/src/service/loaded_service.rs` | Initialise state per device                                 |
+| Add dimming timer branch to `select!`      | `services/streamdeck/src/service/loaded_service.rs`, `services/loupedeck/src/service/loaded_service.rs` | Third `tokio::select!` branch                               |
+| Reset idle timer on button press           | `services/streamdeck/src/service/loaded_service.rs`, `services/loupedeck/src/service/loaded_service.rs` | Update `last_activity` and transition to `FadingUp`         |
+| Handle `SetBrightness` with dimming        | `services/streamdeck/src/service/loaded_service.rs`, `services/loupedeck/src/service/loaded_service.rs` | Update `target_brightness`, transition to `FadingUp`        |
+| Apply Loupedeck scaling in dimming         | `services/loupedeck/src/service/loaded_service.rs`                                                      | Scale `current_brightness` before `device.set_brightness()` |
 
 ### Phase 4: Testing & Verification
 
@@ -472,13 +472,13 @@ auto_dim_fade_step_percent = 3
 
 ## 7. File Changes Summary
 
-| File                                         | Change                                                                                                                  |
-|----------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
-| `services/streamdeck/src/config.rs`          | Add dimming config fields, `DeviceOverride` struct, default functions                                                   |
-| `services/streamdeck/src/service.rs`         | Add `DimmingState`, `DimmingPhase`, dimming timer branch, idle reset on button press, `SetBrightness` override handling |
-| `services/loupedeck/src/config.rs`           | Same as streamdeck + change `brightness` default to 50 (0-100 scale)                                                    |
-| `services/loupedeck/src/service.rs`          | Same as streamdeck + `scale_to_loupedeck()` helper, apply scaling at hardware call sites                                |
-| `services/loupedeck/src/mcp/capabilities.rs` | Update tool description (remove 0-10 mention)                                                                           |
+| File                                                | Change                                                                                                                  |
+|-----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| `services/streamdeck/src/config.rs`                 | Add dimming config fields, `DeviceOverride` struct, default functions                                                   |
+| `services/streamdeck/src/service/loaded_service.rs` | Add `DimmingState`, `DimmingPhase`, dimming timer branch, idle reset on button press, `SetBrightness` override handling |
+| `services/loupedeck/src/config.rs`                  | Same as streamdeck + change `brightness` default to 50 (0-100 scale)                                                    |
+| `services/loupedeck/src/service/loaded_service.rs`  | Same as streamdeck + `scale_to_loupedeck()` helper, apply scaling at hardware call sites                                |
+| `services/loupedeck/src/mcp/capabilities.rs`        | Update tool description (remove 0-10 mention)                                                                           |
 
 ---
 
@@ -535,8 +535,8 @@ No new external dependencies. All required types (`tokio::time::Instant`, `tokio
 
 ## 11. References
 
-- `services/streamdeck/src/service.rs` — `device_event_loop`, `DeviceCommand`, `run_device_loop`
-- `services/loupedeck/src/service.rs` — `device_event_loop`, `DeviceCommand`, `run_device_loop`
+- `services/streamdeck/src/service/loaded_service.rs` — `device_event_loop`, `DeviceCommand`, `run_device_loop`
+- `services/loupedeck/src/service/loaded_service.rs` — `device_event_loop`, `DeviceCommand`, `run_device_loop`
 - `services/streamdeck/src/config.rs` — `StreamDeckConfig`
 - `services/loupedeck/src/config.rs` — `LoupedeckConfig`
 - `model/macropad/src/command_message.rs` — `MacroPadCommand::set_brightness()`

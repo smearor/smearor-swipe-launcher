@@ -1864,8 +1864,8 @@ as the main widget for consistent icon rendering.
 **Tasks:**
 
 - Add `model/bluetooth`, `services/bluetooth`, `plugins/bluetooth` to workspace `Cargo.toml`
-- Add service loading to `smearor-swipe-launcher/src/service.rs` or service discovery
-- Add plugin loading to `smearor-swipe-launcher/src/plugin.rs` or plugin discovery
+- Add service loading to `smearor-swipe-launcher/src/service/loaded_service.rs` or service discovery
+- Add plugin loading to `smearor-swipe-launcher/src/plugin/loaded_plugin.rs` or plugin discovery
 - Add default config entries to `config.toml`
 - Add `bluetooth_area` to area configuration
 

@@ -224,7 +224,7 @@ The wallpaper config (`wallpaper.toml`) is loaded by the wallpaper service plugi
 - `services/wallpaper/src/config.rs` — `config_path` defaults to empty string,
   `load_or_discover_themes()` handles empty path, own `discover_wallpaper_config()`
   with system-wide fallback
-- `application.rs` — `load_services()` injects resolved wallpaper config path into `[wallpaper]` config JSON when `config_path` is not explicitly set
+- `host/mod.rs` — `load_services()` injects resolved wallpaper config path into `[wallpaper]` config JSON when `config_path` is not explicitly set
 - `configs/services/services.toml` — `config_path` commented out with explanation
 
 ## Systemd User Service

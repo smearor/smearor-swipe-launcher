@@ -87,11 +87,13 @@ show_used_bytes = true
 
 ### Host Code Changes
 
-In `smearor-swipe-launcher/src/plugin.rs`, the plugin configuration is extended by the `widget` field. The field must reach the JSON config passed to
-`smearor_plugin_create`. The current code already injects the `id` (`@$HOME/git/smearor-swipe-launcher/smearor-swipe-launcher/src/plugin.rs:42-44`). The
+In `smearor-swipe-launcher/src/plugin/loaded_plugin.rs`, the plugin configuration is extended by the `widget` field. The field must reach the JSON config passed
+to
+`smearor_plugin_create`. The current code already injects the `id`
+(`@$HOME/git/smearor-swipe-launcher/smearor-swipe-launcher/src/plugin/loaded_plugin.rs:42-44`). The
 `widget` field is part of the original `config.config` and is therefore serialized automatically as long as it is present in `PluginEntry`.
 
-The `PluginEntry` struct in `model/plugin/src/plugin.rs` is extended by an optional `widget` field:
+The `PluginEntry` struct in `model/plugin/src/plugin/loaded_plugin.rs` is extended by an optional `widget` field:
 
 ```rust
 pub struct PluginEntry {
@@ -224,8 +226,8 @@ is an **extension**, not a replacement API.
     - Add documentation and an example in the macro comment.
 
 2. **Phase 2: Host Configuration**
-    - Add `widget: Option<String>` to `PluginEntry` and `PluginEntryStabby` in `model/plugin/src/plugin.rs`.
-    - Verify in `smearor-swipe-launcher/src/plugin.rs` that the field is automatically included in the JSON config.
+    - Add `widget: Option<String>` to `PluginEntry` and `PluginEntryStabby` in `model/plugin/src/plugin/loaded_plugin.rs`.
+    - Verify in `smearor-swipe-launcher/src/plugin/loaded_plugin.rs` that the field is automatically included in the JSON config.
 
 3. **Phase 3: Migrate `plugins/sysinfo`**
     - Replace `widget_plugin!` with `widget_factory_plugin!` in `plugins/sysinfo/src/lib.rs`.

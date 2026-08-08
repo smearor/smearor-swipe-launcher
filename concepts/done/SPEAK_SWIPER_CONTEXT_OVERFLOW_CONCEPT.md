@@ -522,11 +522,11 @@ pub context_overflow_threshold: f32,  // default: 0.8
 
 ## 11. Affected Files
 
-| File                                      | Change                                                                                                                                         |
-|-------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
-| `services/voice_assistant/src/llm.rs`     | Add `LlmWorker`, `LlmWorkerCommand`, `run_worker`, `handle_generate`. Add `ChannelClosed` to `LlmError`.                                       |
-| `services/voice_assistant/src/react.rs`   | Replace `spawn_blocking` + `create_session` with `worker.generate()`. Remove `execute_react_loop_with_conversation` (merged into single loop). |
-| `services/voice_assistant/src/service.rs` | Replace `llm_engine: Option<Arc<LlmInferenceEngine>>` with `llm_worker: Option<Arc<LlmWorker>>`. Update initialization.                        |
+| File                                                     | Change                                                                                                                                         |
+|----------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| `services/voice_assistant/src/llm.rs`                    | Add `LlmWorker`, `LlmWorkerCommand`, `run_worker`, `handle_generate`. Add `ChannelClosed` to `LlmError`.                                       |
+| `services/voice_assistant/src/react.rs`                  | Replace `spawn_blocking` + `create_session` with `worker.generate()`. Remove `execute_react_loop_with_conversation` (merged into single loop). |
+| `services/voice_assistant/src/service/loaded_service.rs` | Replace `llm_engine: Option<Arc<LlmInferenceEngine>>` with `llm_worker: Option<Arc<LlmWorker>>`. Update initialization.                        |
 
 ---
 

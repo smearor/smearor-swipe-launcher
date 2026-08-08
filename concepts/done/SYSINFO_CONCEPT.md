@@ -841,8 +841,8 @@ on top of already-tested foundations.
     - Battery (`/sys/class/power_supply`)
     - Disks (`statvfs`, `/proc/diskstats`)
     - Network (`/proc/net/dev`)
-4. Create `src/service.rs` with `SysinfoService` and all required trait implementations.
-5. Implement `run_update_loop` in `src/service.rs` to broadcast each metric on its dedicated topic.
+4. Create `src/service/loaded_service.rs` with `SysinfoService` and all required trait implementations.
+5. Implement `run_update_loop` in `src/service/loaded_service.rs` to broadcast each metric on its dedicated topic.
 6. Wire `service_plugin!` in `src/lib.rs`.
 7. Add unit tests for each collector.
 

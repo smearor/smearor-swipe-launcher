@@ -17,8 +17,8 @@ socket protocol.
 
 ### 3.1 Hyprland Service
 
-The existing `HyprlandService` (`services/hyprland/src/service.rs`) uses the `hyprland` crate for **outbound** dispatch commands (exec, workspace switch, move
-focus, etc.). It does not currently listen for **inbound** events from Hyprland.
+The existing `HyprlandService` (`services/hyprland/src/service/loaded_service.rs`) uses the `hyprland` crate for **outbound** dispatch commands (exec, workspace
+switch, move focus, etc.). It does not currently listen for **inbound** events from Hyprland.
 
 The service already has:
 
@@ -136,7 +136,7 @@ Register the JSON converter for this type in `model/hyprland/src/json_converters
 Extend `HyprlandService` with an event listener thread. Add a new `HyprlandEvent` enum for the event channel:
 
 ```rust
-// services/hyprland/src/service.rs
+// services/hyprland/src/service/loaded_service.rs
 
 /// Internal union of all event types the service listens for.
 pub enum HyprlandEvent {
@@ -352,7 +352,7 @@ impl LauncherInstance {
 The `LauncherHost` must register a handler for `WorkspaceChangedEvent` in its broker loop:
 
 ```rust
-// application.rs — in the broker loop
+// host/mod.rs — in the broker loop
 
 id if id == FfiEnvelopePayload::<WorkspaceChangedEvent>::TYPE_ID => {
 debug ! ("WorkspaceChangedEvent received");
@@ -498,16 +498,16 @@ tokio::time::sleep(Duration::from_secs(5)).await;
 
 ## 10. Affected Files
 
-| File                                        | Change                                                            |
-|---------------------------------------------|-------------------------------------------------------------------|
-| `model/hyprland/src/messages/event.rs`      | New file: `WorkspaceChangedEvent` struct with `#[stabby::stabby]` |
-| `model/hyprland/src/messages/mod.rs`        | Add `pub mod event;` and re-export `WorkspaceChangedEvent`        |
-| `model/hyprland/src/json_converters.rs`     | Register JSON converter for `WorkspaceChangedEvent`               |
-| `services/hyprland/src/config.rs`           | Add `enable_workspace_tracking: bool` field                       |
-| `services/hyprland/src/service.rs`          | Add event listener thread, event worker, `HyprlandEvent` enum     |
-| `smearor-swipe-launcher/src/application.rs` | Add `MessageHandler` for `WorkspaceChangedEvent` in broker loop   |
-| `smearor-swipe-launcher/src/instance.rs`    | Add `on_workspace_changed()` method                               |
-| `services.toml`                             | Add `enable_workspace_tracking = true` under `[hyprland]`         |
+| File                                              | Change                                                            |
+|---------------------------------------------------|-------------------------------------------------------------------|
+| `model/hyprland/src/messages/event.rs`            | New file: `WorkspaceChangedEvent` struct with `#[stabby::stabby]` |
+| `model/hyprland/src/messages/mod.rs`              | Add `pub mod event;` and re-export `WorkspaceChangedEvent`        |
+| `model/hyprland/src/json_converters.rs`           | Register JSON converter for `WorkspaceChangedEvent`               |
+| `services/hyprland/src/config.rs`                 | Add `enable_workspace_tracking: bool` field                       |
+| `services/hyprland/src/service/loaded_service.rs` | Add event listener thread, event worker, `HyprlandEvent` enum     |
+| `smearor-swipe-launcher/src/host/mod.rs`          | Add `MessageHandler` for `WorkspaceChangedEvent` in broker loop   |
+| `smearor-swipe-launcher/src/instance.rs`          | Add `on_workspace_changed()` method                               |
+| `services.toml`                                   | Add `enable_workspace_tracking = true` under `[hyprland]`         |
 
 ## 11. Implementation Roadmap
 
@@ -527,23 +527,23 @@ tokio::time::sleep(Duration::from_secs(5)).await;
 
 ### Phase 3: Event Listener
 
-| #   | Task                                             | Files                              | Effort |
-|-----|--------------------------------------------------|------------------------------------|--------|
-| 3.1 | Add `HyprlandEvent` enum                         | `services/hyprland/src/service.rs` | Small  |
-| 3.2 | Spawn event listener thread with `EventListener` | `services/hyprland/src/service.rs` | Medium |
-| 3.3 | Add workspace change handler                     | `services/hyprland/src/service.rs` | Small  |
-| 3.4 | Add monitor added/removed handlers               | `services/hyprland/src/service.rs` | Small  |
-| 3.5 | Spawn event worker thread for broadcasting       | `services/hyprland/src/service.rs` | Medium |
-| 3.6 | Implement `resolve_monitor_for_workspace()`      | `services/hyprland/src/service.rs` | Small  |
-| 3.7 | Add reconnection loop                            | `services/hyprland/src/service.rs` | Small  |
+| #   | Task                                             | Files                                             | Effort |
+|-----|--------------------------------------------------|---------------------------------------------------|--------|
+| 3.1 | Add `HyprlandEvent` enum                         | `services/hyprland/src/service/loaded_service.rs` | Small  |
+| 3.2 | Spawn event listener thread with `EventListener` | `services/hyprland/src/service/loaded_service.rs` | Medium |
+| 3.3 | Add workspace change handler                     | `services/hyprland/src/service/loaded_service.rs` | Small  |
+| 3.4 | Add monitor added/removed handlers               | `services/hyprland/src/service/loaded_service.rs` | Small  |
+| 3.5 | Spawn event worker thread for broadcasting       | `services/hyprland/src/service/loaded_service.rs` | Medium |
+| 3.6 | Implement `resolve_monitor_for_workspace()`      | `services/hyprland/src/service/loaded_service.rs` | Small  |
+| 3.7 | Add reconnection loop                            | `services/hyprland/src/service/loaded_service.rs` | Small  |
 
 ### Phase 4: Launcher Integration
 
-| #   | Task                                                          | Files            | Effort |
-|-----|---------------------------------------------------------------|------------------|--------|
-| 4.1 | Add `MessageHandler<WorkspaceChangedEvent>` to `LauncherHost` | `application.rs` | Small  |
-| 4.2 | Add `on_workspace_changed()` to `LauncherInstance`            | `instance.rs`    | Small  |
-| 4.3 | Wire broker to route `WorkspaceChangedEvent`                  | `application.rs` | Small  |
+| #   | Task                                                          | Files         | Effort |
+|-----|---------------------------------------------------------------|---------------|--------|
+| 4.1 | Add `MessageHandler<WorkspaceChangedEvent>` to `LauncherHost` | `host/mod.rs` | Small  |
+| 4.2 | Add `on_workspace_changed()` to `LauncherInstance`            | `instance.rs` | Small  |
+| 4.3 | Wire broker to route `WorkspaceChangedEvent`                  | `host/mod.rs` | Small  |
 
 ### Phase 5: Layout Profile Integration
 

@@ -567,14 +567,14 @@ This is well within budget, even with the 8000-character tool catalog (~2000 tok
 
 ## 11. Affected Files
 
-| File                                           | Change                                                                                                |
-|------------------------------------------------|-------------------------------------------------------------------------------------------------------|
-| `services/voice_assistant/src/config.rs`       | Add `max_history_messages` and `inject_entity_states` fields.                                         |
-| `services/voice_assistant/src/service.rs`      | Add `conversation_history` and `entity_store` fields. Initialize in `new()`. Clone in pipeline spawn. |
-| `services/voice_assistant/src/react.rs`        | Load/save conversation history in `execute_react_loop`. Extract entity state after tool calls.        |
-| `services/voice_assistant/src/mcp.rs`          | Register `memory://entities` resource and `memory_query` tool. Add resource and tool handlers.        |
-| `services/voice_assistant/src/tool_catalog.rs` | Add `{entities}` placeholder replacement in `build_system_prompt`. Add `build_entity_summary` method. |
-| `services/voice_assistant/Cargo.toml`          | Add `chrono` dependency for timestamps (if not already present).                                      |
+| File                                                     | Change                                                                                                |
+|----------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
+| `services/voice_assistant/src/config.rs`                 | Add `max_history_messages` and `inject_entity_states` fields.                                         |
+| `services/voice_assistant/src/service/loaded_service.rs` | Add `conversation_history` and `entity_store` fields. Initialize in `new()`. Clone in pipeline spawn. |
+| `services/voice_assistant/src/react.rs`                  | Load/save conversation history in `execute_react_loop`. Extract entity state after tool calls.        |
+| `services/voice_assistant/src/mcp.rs`                    | Register `memory://entities` resource and `memory_query` tool. Add resource and tool handlers.        |
+| `services/voice_assistant/src/tool_catalog.rs`           | Add `{entities}` placeholder replacement in `build_system_prompt`. Add `build_entity_summary` method. |
+| `services/voice_assistant/Cargo.toml`                    | Add `chrono` dependency for timestamps (if not already present).                                      |
 
 ---
 

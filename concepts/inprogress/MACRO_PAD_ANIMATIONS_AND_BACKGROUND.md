@@ -2,7 +2,7 @@
 
 This document describes the concept for **frame-based animations** on MacroPad devices (area-change transitions, button-state-change transitions) and **area
 backgrounds** that show through transparent button regions. Both features build on the existing headless rendering pipeline (`GraphicRenderer` trait,
-`render_buttons_to_device()` in `application.rs`) and the `MacroPadCommand::SetButtonImage` protocol.
+`render_buttons_to_device()` in `host/mod.rs`) and the `MacroPadCommand::SetButtonImage` protocol.
 
 The target frame rate is **20 fps** (50 ms per frame), which is achievable on current hardware given the small pixel dimensions (72×72 px or 90×90 px per key).
 
@@ -14,7 +14,7 @@ The target frame rate is **20 fps** (50 ms per frame), which is achievable on cu
 
 The current MacroPad rendering pipeline is **static**:
 
-- `render_buttons_to_device()` in `application.rs` renders each plugin once via `render_graphic(width, height)` and sends a single `SetButtonImage` command per
+- `render_buttons_to_device()` in `host/mod.rs` renders each plugin once via `render_graphic(width, height)` and sends a single `SetButtonImage` command per
   button.
 - When an area changes, all buttons are re-rendered once — no transition animation.
 - When a button's state changes (e.g. toggle on/off), the button is re-rendered once — no transition animation.
@@ -64,7 +64,7 @@ from the GTK `LayoutTransition` (which uses `glib::timeout_add_local`) because h
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                        Host (application.rs)                          │
+│                        Host (host/mod.rs)                          │
 │                                                                      │
 │  ┌──────────────────────┐    ┌───────────────────────────────────┐   │
 │  │  AreaManager          │    │  MacroPadAnimationEngine          │   │
@@ -492,7 +492,7 @@ corner_radius = 8  # rounded corners, 0 = square
 
 ### 7.6 Background Compositing in the Host
 
-The background compositing happens in `render_buttons_to_device()` (or a new `render_buttons_with_background()` method) in `application.rs`:
+The background compositing happens in `render_buttons_to_device()` (or a new `render_buttons_with_background()` method) in `host/mod.rs`:
 
 ```rust
 /// Render all visible area plugins to button images, composited over the area background,
@@ -802,7 +802,7 @@ impl AreaBackgroundRenderer {
 
 ### 10.1 Area-Change Animation Integration
 
-In `application.rs`, when the visible area changes for a headless instance:
+In `host/mod.rs`, when the visible area changes for a headless instance:
 
 ```rust
 /// Handle area change for a headless instance with animation.
@@ -1044,7 +1044,7 @@ gap_y = 4
 
 - Implement `composite_flip_card()`, `composite_slide()`, `composite_zoom()` functions.
 - Implement staggered flip card with per-button delay.
-- Integrate with `handle_area_change` in `application.rs` for headless instances.
+- Integrate with `handle_area_change` in `host/mod.rs` for headless instances.
 - Add `enter_animation`, `exit_animation`, `animation_duration_ms`, `flip_axis`, `stagger_delay_ms` to `AreaConfig`.
 - Pre-render source and target frames at animation start.
 - Send `SetButtonImage` per frame via broker.
@@ -1060,7 +1060,7 @@ gap_y = 4
 - Implement button-state-change trigger via `WidgetUpdateMessage`.
 - Add `state_change_animation`, `state_change_animation_duration_ms` to `ButtonConfig`.
 - Cache last rendered button image for use as source frame.
-- Integrate with `handle_widget_update` in `application.rs` for headless instances.
+- Integrate with `handle_widget_update` in `host/mod.rs` for headless instances.
 - Only `flip_card` animation type for state changes.
 
 **Exit Criteria**: Button state changes animate with flip card on MacroPad devices. Non-animated buttons still work with instant swap.
@@ -1129,7 +1129,7 @@ background.
 | `smearor-swipe-launcher/src/macropad/animation_engine.rs`    | **New** — `MacroPadAnimationEngine`, frame compositing, easing functions                                                               |
 | `smearor-swipe-launcher/src/macropad/background_renderer.rs` | **New** — `AreaBackgroundRenderer`, background compositing                                                                             |
 | `smearor-swipe-launcher/src/macropad/mod.rs`                 | **New** — module declarations                                                                                                          |
-| `smearor-swipe-launcher/src/application.rs`                  | Integrate animation engine and background renderer into `render_buttons_to_device()`, `handle_area_change()`, `handle_widget_update()` |
+| `smearor-swipe-launcher/src/host/mod.rs`                     | Integrate animation engine and background renderer into `render_buttons_to_device()`, `handle_area_change()`, `handle_widget_update()` |
 | `smearor-swipe-launcher/src/instance/launcher_instance.rs`   | Add `ButtonGridLayout` to instance metadata                                                                                            |
 | `Cargo.toml` (workspace)                                     | No new external crates required                                                                                                        |
 

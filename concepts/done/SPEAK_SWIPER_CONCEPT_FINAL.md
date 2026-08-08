@@ -2210,7 +2210,7 @@ is built on top of already-tested foundations.
 8. Create `src/mcp.rs` and register MCP resources and tools:
     - `voice_assistant://status`, `voice_assistant://tool_catalog`.
     - `voice_assistant_activate`, `voice_assistant_deactivate`, `voice_assistant_submit_text`.
-9. Create `src/service.rs` with `VoiceAssistantService` and all required trait implementations.
+9. Create `src/service/loaded_service.rs` with `VoiceAssistantService` and all required trait implementations.
 10. Implement `run_pipeline` to orchestrate: capture -> STT -> ReAct -> status.
 11. Wire `service_plugin!` in `src/lib.rs`.
 12. Add unit tests for LLM response parsing, tool catalog management, and silence detection.

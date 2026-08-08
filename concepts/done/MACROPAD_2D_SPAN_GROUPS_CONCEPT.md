@@ -10,7 +10,7 @@ extends the host rendering pipeline, device metadata, and plugin configuration m
 
 ### 1.1 Current State
 
-Multi-Span Widgets were introduced in `MACROPAD_ATOMIC_WIDGETS.md` Phase 8. The host rendering pipeline in `application.rs` groups plugins by `span_group`,
+Multi-Span Widgets were introduced in `MACROPAD_ATOMIC_WIDGETS.md` Phase 8. The host rendering pipeline in `host/mod.rs` groups plugins by `span_group`,
 sorts them by `span_index`, renders the first member at combined dimensions (`key_width * group_size`, `key_height`), and splits the pixel buffer into
 horizontal slices using `extract_horizontal_slice()`.
 
@@ -128,7 +128,7 @@ pub key_columns: u8,
 
 ### 5.3 Model: `PluginEntry`
 
-**File**: `model/plugin/src/plugin.rs`
+**File**: `model/plugin/src/plugin/loaded_plugin.rs`
 
 Add two new optional fields to `PluginEntry`:
 
@@ -156,7 +156,7 @@ through FFI to plugins.
 
 Each MacroPad driver service must report `key_columns` when broadcasting `MacroPadConnectionStatus`.
 
-**Stream Deck** (`services/streamdeck/src/service.rs`):
+**Stream Deck** (`services/streamdeck/src/service/loaded_service.rs`):
 
 The `streamdeck` crate's `DeviceKind` does not expose columns/rows directly, but the key count and device type imply the layout. A lookup table or heuristic can
 derive columns from the known device types:
@@ -173,13 +173,13 @@ derive columns from the known device types:
 Alternatively, the `streamdeck` crate may be patched to expose `columns()` on `DeviceKind`. The lookup table approach is preferred initially to avoid upstream
 dependency changes.
 
-**Loupedeck** (`services/loupedeck/src/service.rs`):
+**Loupedeck** (`services/loupedeck/src/service/loaded_service.rs`):
 
 The loupedeck driver already has `layout.columns` and `layout.rows` from `device.layout()`. Simply pass `layout.columns as u8` as `key_columns`.
 
 ### 5.5 Host: `render_buttons_to_device`
 
-**File**: `smearor-swipe-launcher/src/application.rs`, function `render_buttons_to_device` (line ~1457)
+**File**: `smearor-swipe-launcher/src/host/mod.rs`, function `render_buttons_to_device` (line ~1457)
 
 #### Current Logic (1×N only)
 
@@ -221,14 +221,14 @@ button_index += group_size
 
 ### 5.6 Host: `render_single_button_to_device`
 
-**File**: `smearor-swipe-launcher/src/application.rs`, function `render_single_button_to_device` (line ~1639)
+**File**: `smearor-swipe-launcher/src/host/mod.rs`, function `render_single_button_to_device` (line ~1639)
 
 Same generalisation as `render_buttons_to_device` — read `span_rows`/`span_cols` from the first group member, compute combined dimensions, use
 `extract_grid_slice()`, and map each member to its physical button via `base + row * key_columns + col`.
 
 ### 5.7 Host: `extract_grid_slice`
 
-**File**: `smearor-swipe-launcher/src/application.rs`
+**File**: `smearor-swipe-launcher/src/host/mod.rs`
 
 New helper function replacing `extract_horizontal_slice` for 2D spans:
 
@@ -288,7 +288,7 @@ expectations: if a 2×2 span is placed after 4 single buttons on a 5-column devi
 
 ### 5.9 Host: Compound Longpress
 
-**File**: `smearor-swipe-launcher/src/application.rs`, function `get_span_group_for_button` (line ~483)
+**File**: `smearor-swipe-launcher/src/host/mod.rs`, function `get_span_group_for_button` (line ~483)
 
 No changes needed. This function already collects all button indices in a span group by filtering on `span_group` name. It works for 2D layouts because it does
 not assume linear ordering — it returns all buttons in the group regardless of their physical position.
@@ -442,7 +442,7 @@ Example (2×2 grid):
 
 **Changes**:
 
-- Add `span_rows: Option<u32>` and `span_cols: Option<u32>` to `PluginEntry` in `model/plugin/src/plugin.rs`.
+- Add `span_rows: Option<u32>` and `span_cols: Option<u32>` to `PluginEntry` in `model/plugin/src/plugin/loaded_plugin.rs`.
 - Do not add to `PluginEntryStabby` (host-side only fields).
 
 **Exit Criteria**: `PluginEntry` parses `span_rows` and `span_cols` from TOML. Existing configs without these fields continue to work.
@@ -453,7 +453,7 @@ Example (2×2 grid):
 
 **Changes**:
 
-- Add `extract_grid_slice()` function in `application.rs`.
+- Add `extract_grid_slice()` function in `host/mod.rs`.
 - Optionally refactor `extract_horizontal_slice()` to delegate to `extract_grid_slice()`.
 
 **Exit Criteria**: `extract_grid_slice()` correctly extracts rectangular regions from pixel buffers.

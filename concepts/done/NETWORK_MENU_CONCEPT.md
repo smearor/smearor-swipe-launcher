@@ -1443,7 +1443,7 @@ built on top of already-tested foundations.
 6. Create `src/vpn.rs` and implement `refresh_vpn_profiles` and `toggle_vpn`.
 7. Create `src/throughput.rs` and implement `collect_throughput` using `/proc/net/dev`.
 8. Implement `connect_to_wifi`, `disconnect_device`, and `toggle_radio` helper functions.
-9. Create `src/service.rs` with `NetworkService` and all required trait implementations.
+9. Create `src/service/loaded_service.rs` with `NetworkService` and all required trait implementations.
 10. Implement `run_update_loop` to refresh status at the configured interval, sample throughput, and process incoming commands.
 11. Register MCP resources (`network://status`, `network://scan-results`, `network://vpn-profiles`) and MCP tools (`network_toggle_radio`,
     `network_connect_wifi`, `network_toggle_vpn`, `network_get_public_ip`).

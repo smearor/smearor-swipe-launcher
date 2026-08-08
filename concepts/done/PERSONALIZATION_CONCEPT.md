@@ -466,7 +466,7 @@ smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 
 - `services/personalization/Cargo.toml` with dependencies.
 - `services/personalization/src/config.rs` — `PersonalizationServiceConfig` with override fields and defaults.
-- `services/personalization/src/service.rs`:
+- `services/personalization/src/service/loaded_service.rs`:
     - `PersonalizationService` struct with `meta`, `core_context`, `config`, `command_sender`, `latest_state`.
         - `new()` constructor: parse config, spawn update loop thread.
     - `register_mcp_capabilities()`: registers 1 resource + 7 tools.
@@ -539,7 +539,7 @@ smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 **Implemented:**
 
 - `smearor-model-personalization` dependency added to `services/weather/Cargo.toml`.
-- `services/weather/src/service.rs` — `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl.
+- `services/weather/src/service/loaded_service.rs` — `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl.
 - `services/weather/src/personalization_coordinates.rs` — `PersonalizationCoordinates` struct for storing coords.
 - On personalization update: if coordinates changed, triggers immediate weather refresh via `WeatherCommandAction::Refresh`.
 - Weather widget (`plugins/weather`) also handles `PersonalizationStatusMessage` for locale-aware display.
@@ -560,7 +560,8 @@ smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 **Implemented:**
 
 - `smearor-model-personalization` dependency added to `services/voice_assistant/Cargo.toml`.
-- `services/voice_assistant/src/service.rs` — `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl, stores personalization status.
+- `services/voice_assistant/src/service/loaded_service.rs` — `MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>>` impl, stores personalization
+  status.
 - `services/voice_assistant/src/tool_catalog.rs` — Personalization data used in tool catalog.
 - Voice Assistant widget (`plugins/voice_assistant`) also handles `PersonalizationStatusMessage`.
 

@@ -982,7 +982,7 @@ The existing `HyprlandCommand` enum (Phase 1) is extended with a `StateRequest` 
 `MprisCommand`, `WallpaperCommand`, etc.): `MessageHandler` sends a command via `command_sender`, the async worker loop receives and processes it.
 
 ```rust
-// services/hyprland/src/service.rs (existing enum, extended)
+// services/hyprland/src/service/loaded_service.rs (existing enum, extended)
 
 /// Internal union of all command types the service handles.
 pub enum HyprlandCommand {
@@ -1035,7 +1035,7 @@ pub enum MonitorEvent {
 **`broadcast_event`** — generic broadcast helper, already used in Phase 1 for compositor-unified events. Lives in `service.rs`:
 
 ```rust
-// services/hyprland/src/service.rs (already implemented in Phase 1)
+// services/hyprland/src/service/loaded_service.rs (already implemented in Phase 1)
 
 fn broadcast_event<T: MessageTopic + Serialize>(
     core_context: &Option<FfiCoreContext>,
@@ -1248,28 +1248,28 @@ messages, and broadcast loop to the same service crate. The service can be imple
 
 The following is **already working** in the codebase:
 
-| Component                                     | File                                         | Status |
-|-----------------------------------------------|----------------------------------------------|--------|
-| `WorkspaceChangedEvent`                       | `model/workspace/src/workspace.rs`           | Done   |
-| `WorkspaceLifecycleEvent`                     | `model/workspace/src/workspace.rs`           | Done   |
-| `MonitorChangedEvent`                         | `model/workspace/src/monitor.rs`             | Done   |
-| `SwitchWorkspaceMessage`                      | `model/workspace/src/switcher.rs`            | Done   |
-| `CreateWorkspaceMessage`                      | `model/workspace/src/switcher.rs`            | Done   |
-| `WorkspaceSnapshotMessage`                    | `model/workspace/src/switcher.rs`            | Done   |
-| `WorkspaceSnapshotRequestMessage`             | `model/workspace/src/switcher.rs`            | Done   |
-| `register_json_converters()`                  | `model/workspace/src/lib.rs`                 | Done   |
-| Workspace listener (Hyprland)                 | `services/hyprland/src/workspace/mod.rs`     | Done   |
-| Workspace worker (Hyprland)                   | `services/hyprland/src/workspace/mod.rs`     | Done   |
-| Monitor listener (Hyprland)                   | `services/hyprland/src/monitor/listener.rs`  | Done   |
-| Monitor worker (Hyprland)                     | `services/hyprland/src/monitor/worker.rs`    | Done   |
-| `HyprlandServiceConfig`                       | `services/hyprland/src/config.rs`            | Done   |
-| Service construction (workspace + monitor)    | `services/hyprland/src/service.rs`           | Done   |
-| `SwitchWorkspaceMessage` handler              | `services/hyprland/src/service.rs`           | Done   |
-| `CreateWorkspaceMessage` handler              | `services/hyprland/src/service.rs`           | Done   |
-| `WorkspaceSnapshotRequestMessage` handler     | `services/hyprland/src/service.rs`           | Done   |
-| Launcher core routing (`compositor.*`)        | `smearor-swipe-launcher/src/messages/mod.rs` | Done   |
-| Launcher core routing (`service.*.status`)    | `smearor-swipe-launcher/src/messages/mod.rs` | Done   |
-| GNOME service (same compositor-unified model) | `services/gnome/src/service.rs`              | Done   |
+| Component                                     | File                                              | Status |
+|-----------------------------------------------|---------------------------------------------------|--------|
+| `WorkspaceChangedEvent`                       | `model/workspace/src/workspace.rs`                | Done   |
+| `WorkspaceLifecycleEvent`                     | `model/workspace/src/workspace.rs`                | Done   |
+| `MonitorChangedEvent`                         | `model/workspace/src/monitor.rs`                  | Done   |
+| `SwitchWorkspaceMessage`                      | `model/workspace/src/switcher.rs`                 | Done   |
+| `CreateWorkspaceMessage`                      | `model/workspace/src/switcher.rs`                 | Done   |
+| `WorkspaceSnapshotMessage`                    | `model/workspace/src/switcher.rs`                 | Done   |
+| `WorkspaceSnapshotRequestMessage`             | `model/workspace/src/switcher.rs`                 | Done   |
+| `register_json_converters()`                  | `model/workspace/src/lib.rs`                      | Done   |
+| Workspace listener (Hyprland)                 | `services/hyprland/src/workspace/mod.rs`          | Done   |
+| Workspace worker (Hyprland)                   | `services/hyprland/src/workspace/mod.rs`          | Done   |
+| Monitor listener (Hyprland)                   | `services/hyprland/src/monitor/listener.rs`       | Done   |
+| Monitor worker (Hyprland)                     | `services/hyprland/src/monitor/worker.rs`         | Done   |
+| `HyprlandServiceConfig`                       | `services/hyprland/src/config.rs`                 | Done   |
+| Service construction (workspace + monitor)    | `services/hyprland/src/service/loaded_service.rs` | Done   |
+| `SwitchWorkspaceMessage` handler              | `services/hyprland/src/service/loaded_service.rs` | Done   |
+| `CreateWorkspaceMessage` handler              | `services/hyprland/src/service/loaded_service.rs` | Done   |
+| `WorkspaceSnapshotRequestMessage` handler     | `services/hyprland/src/service/loaded_service.rs` | Done   |
+| Launcher core routing (`compositor.*`)        | `smearor-swipe-launcher/src/messages/mod.rs`      | Done   |
+| Launcher core routing (`service.*.status`)    | `smearor-swipe-launcher/src/messages/mod.rs`      | Done   |
+| GNOME service (same compositor-unified model) | `services/gnome/src/service/loaded_service.rs`    | Done   |
 
 ### 11.2 Not Yet Implemented (Hyprland-Specific Tier)
 
@@ -1324,14 +1324,14 @@ The following is **already working** in the codebase:
 | Refactor: remove `monitor/listener.rs`                                                  | `services/hyprland/src/monitor/listener.rs`                       | Pending |
 | `HyprlandStateRequestMessage`                                                           | `model/hyprland/src/messages/state_request.rs`                    | Pending |
 | `HyprlandStateMessage`                                                                  | `model/hyprland/src/messages/state_request.rs`                    | Pending |
-| `HyprlandStateRequestMessage` handler                                                   | `services/hyprland/src/service.rs`                                | Pending |
-| `HyprlandCommand::StateRequest` variant                                                 | `services/hyprland/src/service.rs`                                | Pending |
+| `HyprlandStateRequestMessage` handler                                                   | `services/hyprland/src/service/loaded_service.rs`                 | Pending |
+| `HyprlandCommand::StateRequest` variant                                                 | `services/hyprland/src/service/loaded_service.rs`                 | Pending |
 | `WorkspaceEvent` / `MonitorEvent` dispatch enums                                        | `services/hyprland/src/event_listener/mod.rs`                     | Pending |
 | `convert_*` functions (workspace, monitor, status)                                      | `services/hyprland/src/{workspace,monitor,status}/mod.rs`         | Pending |
-| `broadcast_event` helper (already exists from Phase 1)                                  | `services/hyprland/src/service.rs`                                | Done    |
+| `broadcast_event` helper (already exists from Phase 1)                                  | `services/hyprland/src/service/loaded_service.rs`                 | Done    |
 | Unknown event handler (`add_unknown_handler`)                                           | `services/hyprland/src/status/mod.rs`                             | Pending |
 | `enable_status_events` config flag                                                      | `services/hyprland/src/config.rs`                                 | Pending |
-| Service construction (status listener)                                                  | `services/hyprland/src/service.rs`                                | Pending |
+| Service construction (status listener)                                                  | `services/hyprland/src/service/loaded_service.rs`                 | Pending |
 | JSON converters: 3 top-level (`impl_json_convertible!`)                                 | `model/hyprland/src/lib.rs` (Section 5.4)                         | Pending |
 | `stabby` `serde` feature in `model/hyprland/Cargo.toml`                                 | `model/hyprland/Cargo.toml`                                       | Pending |
 | `HyprlandStatusEvent::None` `#[default]` variant                                        | `model/hyprland/src/messages/status_event.rs`                     | Pending |

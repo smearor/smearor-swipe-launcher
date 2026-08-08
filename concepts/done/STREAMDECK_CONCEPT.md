@@ -41,7 +41,7 @@ existing inter-instance communication infrastructure:
 - **Area System**: Each MacroPad instance has its own `AreaManager` with logical areas. Areas are independent of instances.
 - **Button Widget**: The existing `ButtonWidget` handles actions via `click_topic`, `click_payload`, and `click_instance`. A GTK button press can target a
   MacroPad instance by setting `click_instance = "macropad_1"`.
-- **Cross-Instance Addressing**: The broker router in `application.rs` already supports `target_instance_id` routing and colon-separated area IDs (e.g.
+- **Cross-Instance Addressing**: The broker router in `host/mod.rs` already supports `target_instance_id` routing and colon-separated area IDs (e.g.
   `"macropad_1:app_launcher"`).
 
 ### 2.2 Instance Comparison
@@ -93,11 +93,11 @@ existing inter-instance communication infrastructure:
 The host changes are **additive and generic**, building on the **Dynamic Load** concept (`DYNAMIC_LOAD_LAUNCHER_INSTANCE.md`), which already supports headless
 instances via `InstanceType::Headless`:
 
-| Change                                                                     | Location         | Description                                                                                                                                     |
-|----------------------------------------------------------------------------|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| `route_message()` — `service.macropad.connection` handler                  | `application.rs` | On `Connected`: calls `load_instance(instance_id, config_path, InstanceType::Headless)`. On `Disconnected`: calls `stop_instance(instance_id)`. |
-| `route_message()` — `service.macropad.input` handler                       | `application.rs` | Routes `MacroPadInputMessage` to the `LauncherInstance` with matching `instance_id` in the existing `instances` HashMap.                        |
-| `LauncherInstance` gains `device_metadata: Option<MacroPadDeviceMetadata>` | `instance.rs`    | Optional metadata for headless MacroPad instances (key_count, key_width, key_height, driver). `None` for GTK instances.                         |
+| Change                                                                     | Location      | Description                                                                                                                                     |
+|----------------------------------------------------------------------------|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| `route_message()` — `service.macropad.connection` handler                  | `host/mod.rs` | On `Connected`: calls `load_instance(instance_id, config_path, InstanceType::Headless)`. On `Disconnected`: calls `stop_instance(instance_id)`. |
+| `route_message()` — `service.macropad.input` handler                       | `host/mod.rs` | Routes `MacroPadInputMessage` to the `LauncherInstance` with matching `instance_id` in the existing `instances` HashMap.                        |
+| `LauncherInstance` gains `device_metadata: Option<MacroPadDeviceMetadata>` | `instance.rs` | Optional metadata for headless MacroPad instances (key_count, key_width, key_height, driver). `None` for GTK instances.                         |
 
 No separate `MacroPadInstance` struct, no separate HashMap. MacroPad instances are standard `LauncherInstance` entries with `instance_type = Headless`. The host
 reuses the existing `load_instance()` / `stop_instance()` lifecycle from DYNAMIC_LOAD. The host knows nothing about Stream Deck or Loupedeck — it only knows

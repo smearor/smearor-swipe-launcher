@@ -558,7 +558,7 @@ On MacroPad devices, the host maps button actions to view switches:
 | Short press | `click`       | Widget-specific action in current view context |
 | Long press  | `toggle_view` | Switches between Compact and Expanded views    |
 
-This is already implemented in `application.rs` for the Button Widget. The same `InvokeToolMessage` mechanism routes `longpress` actions to any widget's
+This is already implemented in `host/mod.rs` for the Button Widget. The same `InvokeToolMessage` mechanism routes `longpress` actions to any widget's
 `handle_message()`.
 
 ---
@@ -568,7 +568,7 @@ This is already implemented in `application.rs` for the Button Widget. The same 
 ### 10.1 Headless Re-render
 
 When a widget changes its view or receives a state update, the headless instance must re-render the button image. The current `render_buttons_to_device()`
-function in `application.rs` handles this for all visible plugins. The flow:
+function in `host/mod.rs` handles this for all visible plugins. The flow:
 
 1. Widget receives `InvokeToolMessage` with `action: "expand"`.
 2. Widget updates `current_view`.
@@ -707,30 +707,30 @@ click (Web).
 
 ## 12. File Changes Summary
 
-| File                                        | Change                                                         |
-|---------------------------------------------|----------------------------------------------------------------|
-| `plugins/render-utils/Cargo.toml`           | **New** — shared rendering crate                               |
-| `plugins/render-utils/src/lib.rs`           | **New** — font loading, drawing utilities, color constants     |
-| `plugins/render-utils/src/html.rs`          | **New** — HTML helper functions                                |
-| `model/widget/Cargo.toml`                   | **New** — widget update message model                          |
-| `model/widget/src/lib.rs`                   | **New** — `WidgetUpdateMessage`, topic constant                |
-| `plugins/button/src/graphic.rs`             | Refactor to use `render-utils`                                 |
-| `plugins/app-launcher/src/widget.rs`        | Add `GraphicRenderer` + `WebRenderer` impl                     |
-| `plugins/audio/src/widget.rs`               | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
-| `plugins/clock/src/widget.rs`               | Add `GraphicRenderer` + `WebRenderer` impl                     |
-| `plugins/mpris/src/widget.rs`               | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
-| `plugins/network/src/widget.rs`             | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
-| `plugins/notifications/src/widget.rs`       | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
-| `plugins/power/src/widget.rs`               | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
-| `plugins/sysinfo/src/widget_*.rs`           | Add `GraphicRenderer` + `WebRenderer` impl for each sub-widget |
-| `plugins/voice_assistant/src/widget.rs`     | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
-| `plugins/wallpaper/src/widget.rs`           | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
-| `plugins/weather/src/widget.rs`             | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
-| `plugins/workspace-switcher/src/widget.rs`  | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
-| `smearor-swipe-launcher/src/application.rs` | Add `widget.update` topic handler for re-rendering             |
-| `resources/web/style.css`                   | Add widget-specific CSS classes                                |
-| `resources/web/app.js`                      | Add view-switch click handling, WebSocket update handling      |
-| `Cargo.toml` (workspace)                    | Add `smearor-render-utils`, `smearor-model-widget`             |
+| File                                       | Change                                                         |
+|--------------------------------------------|----------------------------------------------------------------|
+| `plugins/render-utils/Cargo.toml`          | **New** — shared rendering crate                               |
+| `plugins/render-utils/src/lib.rs`          | **New** — font loading, drawing utilities, color constants     |
+| `plugins/render-utils/src/html.rs`         | **New** — HTML helper functions                                |
+| `model/widget/Cargo.toml`                  | **New** — widget update message model                          |
+| `model/widget/src/lib.rs`                  | **New** — `WidgetUpdateMessage`, topic constant                |
+| `plugins/button/src/graphic.rs`            | Refactor to use `render-utils`                                 |
+| `plugins/app-launcher/src/widget.rs`       | Add `GraphicRenderer` + `WebRenderer` impl                     |
+| `plugins/audio/src/widget.rs`              | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
+| `plugins/clock/src/widget.rs`              | Add `GraphicRenderer` + `WebRenderer` impl                     |
+| `plugins/mpris/src/widget.rs`              | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
+| `plugins/network/src/widget.rs`            | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
+| `plugins/notifications/src/widget.rs`      | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
+| `plugins/power/src/widget.rs`              | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
+| `plugins/sysinfo/src/widget_*.rs`          | Add `GraphicRenderer` + `WebRenderer` impl for each sub-widget |
+| `plugins/voice_assistant/src/widget.rs`    | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
+| `plugins/wallpaper/src/widget.rs`          | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
+| `plugins/weather/src/widget.rs`            | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
+| `plugins/workspace-switcher/src/widget.rs` | Add view enum, `GraphicRenderer` + `WebRenderer` impl          |
+| `smearor-swipe-launcher/src/host/mod.rs`   | Add `widget.update` topic handler for re-rendering             |
+| `resources/web/style.css`                  | Add widget-specific CSS classes                                |
+| `resources/web/app.js`                     | Add view-switch click handling, WebSocket update handling      |
+| `Cargo.toml` (workspace)                   | Add `smearor-render-utils`, `smearor-model-widget`             |
 
 ---
 

@@ -18,7 +18,7 @@ Defined in `smearor-swipe-launcher/src/args/launcher.rs`:
 | Instance | `-i`  | `--instance-id`     | *(none)*        | `Vec<String>`     | Optional instance IDs for each `--config`       |
 
 There is **no CLI argument** for `wallpaper.toml`. The wallpaper service receives its `config_path` from the `[wallpaper]` section inside `services.toml`, then
-loads themes from that path at service construction time (`services/wallpaper/src/service.rs`).
+loads themes from that path at service construction time (`services/wallpaper/src/service/loaded_service.rs`).
 
 ### 1.2 Config Files in the Repository Root
 
@@ -205,7 +205,7 @@ ServicesConfig::default()
 
 ### 3.4 Phase 4: Wallpaper Service Fallback
 
-Modify `services/wallpaper/src/service.rs` and/or `services/wallpaper/src/config.rs`:
+Modify `services/wallpaper/src/service/loaded_service.rs` and/or `services/wallpaper/src/config.rs`:
 
 - When `service_config.config_path` is empty or the file does not exist, call `discover_wallpaper_config()` to find `wallpaper.toml` in the fallback locations.
 - If no file is found, proceed with an empty themes list (current behavior).
@@ -325,5 +325,5 @@ Update the following references after the file moves:
 - **CLI arguments**: `smearor-swipe-launcher/src/args/launcher.rs` — current argument definitions.
 - **Main loading flow**: `smearor-swipe-launcher/src/main.rs` — current config loading in `main()`.
 - **Services config**: `smearor-swipe-launcher/src/config/services.rs` — `ServicesConfig` struct.
-- **Wallpaper service**: `services/wallpaper/src/service.rs` — wallpaper config loading via `config_path`.
+- **Wallpaper service**: `services/wallpaper/src/service/loaded_service.rs` — wallpaper config loading via `config_path`.
 - **Wallpaper config**: `services/wallpaper/src/config.rs` — `load_themes()` function.

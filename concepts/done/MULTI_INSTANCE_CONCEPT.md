@@ -635,12 +635,12 @@ exclusive_zone = 50
 | File                                            | Change                                                                                                   |
 |-------------------------------------------------|----------------------------------------------------------------------------------------------------------|
 | `smearor-swipe-launcher/src/instance.rs`        | **New** — per-window state container (`LauncherInstance`)                                                |
-| `smearor-swipe-launcher/src/application.rs`     | Refactor `LauncherApplication` → `LauncherHost` with central broker and shared `ServiceManager`          |
+| `smearor-swipe-launcher/src/host/mod.rs`        | Refactor `LauncherApplication` → `LauncherHost` with central broker and shared `ServiceManager`          |
 | `smearor-swipe-launcher/src/config/services.rs` | **New** — `ServicesConfig` struct for the dedicated services config file                                 |
 | `smearor-swipe-launcher/src/args/launcher.rs`   | Add `services_config: Option<PathBuf>`, change `config` → `Vec<PathBuf>`, add `instance_id: Vec<String>` |
 | `smearor-swipe-launcher/src/main.rs`            | Load `services.toml` once into `LauncherHost`, then iterate instance configs                             |
 | `smearor-swipe-launcher/src/window.rs`          | No changes (already parameterized by `SwipeLauncherSettings`)                                            |
-| `smearor-swipe-launcher/src/plugin_manager.rs`  | Add `instance_id` parameter; store plugins with `instance_id:plugin_id` keys                             |
+| `smearor-swipe-launcher/src/plugin/manager.rs`  | Add `instance_id` parameter; store plugins with `instance_id:plugin_id` keys                             |
 | `smearor-swipe-launcher/src/context.rs`         | Pass `instance_id` to `SimpleCoreContext` for namespaced `sender_id`                                     |
 | `smearor-swipe-launcher/src/messages/mod.rs`    | Move `handle_message` impl to `LauncherInstance`; remove global `core.close` quit logic                  |
 | `plugin-api/src/messages.rs`                    | Add `target_instance_id` field to `FfiEnvelope`                                                          |
@@ -718,20 +718,20 @@ input into the correct `ApplicationWindow`.
 
 ### Phase 1: Foundation (API & Config) ✅
 
-| #   | Task                                                                    | Files                                                                | Effort   |
-|-----|-------------------------------------------------------------------------|----------------------------------------------------------------------|----------|
-| 1.1 | Add `target_instance_id` to `FfiEnvelope` in plugin-api                 | `plugin-api/src/messages.rs`                                         | Small ✅ |
-| 1.2 | Add `instance_id` to `MessageBrokerHandle` / `FfiCoreContext`           | `plugin-api/src/context.rs`                                          | Small ✅ |
-| 1.3 | Create `ServicesConfig` struct + parser for dedicated services config   | `smearor-swipe-launcher/src/config/services.rs`                      | Small ✅ |
-| 1.4 | Update CLI args: `--services-config`, multi `--config`, `--instance-id` | `smearor-swipe-launcher/src/args/launcher.rs`                        | Small ✅ |
-| 1.5 | Adapt Host `broker_send_wrapper` + service `FfiEnvelope` constructors   | `smearor-swipe-launcher/src/context.rs`, `services/*/src/service.rs` | Small ✅ |
+| #   | Task                                                                    | Files                                                                               | Effort   |
+|-----|-------------------------------------------------------------------------|-------------------------------------------------------------------------------------|----------|
+| 1.1 | Add `target_instance_id` to `FfiEnvelope` in plugin-api                 | `plugin-api/src/messages.rs`                                                        | Small ✅ |
+| 1.2 | Add `instance_id` to `MessageBrokerHandle` / `FfiCoreContext`           | `plugin-api/src/context.rs`                                                         | Small ✅ |
+| 1.3 | Create `ServicesConfig` struct + parser for dedicated services config   | `smearor-swipe-launcher/src/config/services.rs`                                     | Small ✅ |
+| 1.4 | Update CLI args: `--services-config`, multi `--config`, `--instance-id` | `smearor-swipe-launcher/src/args/launcher.rs`                                       | Small ✅ |
+| 1.5 | Adapt Host `broker_send_wrapper` + service `FfiEnvelope` constructors   | `smearor-swipe-launcher/src/context.rs`, `services/*/src/service/loaded_service.rs` | Small ✅ |
 
 ### Phase 2: LauncherHost & LauncherInstance ✅
 
 | #   | Task                                                                                          | Files                                          | Effort    |
 |-----|-----------------------------------------------------------------------------------------------|------------------------------------------------|-----------|
 | 2.1 | Create `LauncherInstance` struct with isolated plugin manager + area manager                  | `smearor-swipe-launcher/src/instance.rs` (new) | Medium ✅ |
-| 2.2 | Refactor `LauncherApplication` → `LauncherHost` with central broker + shared `ServiceManager` | `smearor-swipe-launcher/src/application.rs`    | Large ✅  |
+| 2.2 | Refactor `LauncherApplication` → `LauncherHost` with central broker + shared `ServiceManager` | `smearor-swipe-launcher/src/host/mod.rs`       | Large ✅  |
 | 2.3 | Move `handle_message` from `LauncherApplication` to `LauncherInstance`                        | `smearor-swipe-launcher/src/messages/mod.rs`   | Medium ✅ |
 | 2.4 | Remove global `core.close` → `gtk_app.quit()`; replace with per-instance `window.close()`     | `smearor-swipe-launcher/src/messages/mod.rs`   | Small ✅  |
 
@@ -739,9 +739,9 @@ input into the correct `ApplicationWindow`.
 
 | #   | Task                                                                  | Files                                             | Effort                       |
 |-----|-----------------------------------------------------------------------|---------------------------------------------------|------------------------------|
-| 3.1 | Prefix plugin IDs with `instance_id:plugin_id` in `PluginManager`     | `smearor-swipe-launcher/src/plugin_manager.rs`    | Small ✅                     |
+| 3.1 | Prefix plugin IDs with `instance_id:plugin_id` in `PluginManager`     | `smearor-swipe-launcher/src/plugin/manager.rs`    | Small ✅                     |
 | 3.2 | Pass `instance_id` to `SimpleCoreContext` for namespaced `sender_id`  | `smearor-swipe-launcher/src/context.rs`           | Small ✅                     |
-| 3.3 | Implement central broker routing loop in `LauncherHost`               | `smearor-swipe-launcher/src/application.rs`       | Small ✅ *(done in Phase 2)* |
+| 3.3 | Implement central broker routing loop in `LauncherHost`               | `smearor-swipe-launcher/src/host/mod.rs`          | Small ✅ *(done in Phase 2)* |
 | 3.4 | Parse `instance_id:area_id` in area messages; re-route cross-instance | `smearor-swipe-launcher/src/area/area_manager.rs` | Medium ✅                    |
 
 ### Phase 4: Service Integration ✅
@@ -749,7 +749,7 @@ input into the correct `ApplicationWindow`.
 | #   | Task                                                                          | Files                                            | Effort                       |
 |-----|-------------------------------------------------------------------------------|--------------------------------------------------|------------------------------|
 | 4.1 | Load services once from `services.toml` in `LauncherHost`                     | `smearor-swipe-launcher/src/main.rs`             | Small ✅ *(done in Phase 2)* |
-| 4.2 | Broadcast service messages (`service.*`) to all instances from central broker | `smearor-swipe-launcher/src/application.rs`      | Small ✅ *(done in Phase 2)* |
+| 4.2 | Broadcast service messages (`service.*`) to all instances from central broker | `smearor-swipe-launcher/src/host/mod.rs`         | Small ✅ *(done in Phase 2)* |
 | 4.3 | Remove `services` section from instance configs; validate no duplication      | `config.toml`, `config-90.toml`, `services.toml` | Small ✅                     |
 
 ### Phase 5: Main Entry Point & Testing ✅

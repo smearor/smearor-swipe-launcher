@@ -503,7 +503,7 @@ pub fn autonomous_trigger(text: &str) -> Self {
 
 ### 7.1 State Additions
 
-In `services/voice_assistant/src/service.rs`, add:
+In `services/voice_assistant/src/service/loaded_service.rs`, add:
 
 ```rust
 pub struct VoiceAssistantService {
@@ -920,15 +920,15 @@ present).
 
 ## 13. File Additions
 
-| File                                            | Purpose                                                                                                                                          |
-|-------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| `services/voice_assistant/src/autonomous.rs`    | `AutonomousScheduler`, `AutonomousTask`, `TriggerType`, `AutonomousConfig`, `AutonomousError`                                                    |
-| `services/voice_assistant/src/lib.rs`           | Add `pub(crate) mod autonomous;`                                                                                                                 |
-| `services/voice_assistant/src/service.rs`       | Add `autonomous_enabled`, `autonomous_scheduler`, `autonomous_config` fields; handle `AutonomousTrigger` action; initialize scheduler in `new()` |
-| `services/voice_assistant/src/config.rs`        | Add `AutonomousConfig` struct and field in `VoiceAssistantServiceConfig`                                                                         |
-| `services/voice_assistant/src/mcp.rs`           | Register and handle the five autonomous MCP tools                                                                                                |
-| `model/voice_assistant/src/messages/state.rs`   | Add `Autonomous` variant to `AssistantState`                                                                                                     |
-| `model/voice_assistant/src/messages/command.rs` | Add `AutonomousTrigger` variant to `VoiceCommandAction`                                                                                          |
+| File                                                     | Purpose                                                                                                                                          |
+|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `services/voice_assistant/src/autonomous.rs`             | `AutonomousScheduler`, `AutonomousTask`, `TriggerType`, `AutonomousConfig`, `AutonomousError`                                                    |
+| `services/voice_assistant/src/lib.rs`                    | Add `pub(crate) mod autonomous;`                                                                                                                 |
+| `services/voice_assistant/src/service/loaded_service.rs` | Add `autonomous_enabled`, `autonomous_scheduler`, `autonomous_config` fields; handle `AutonomousTrigger` action; initialize scheduler in `new()` |
+| `services/voice_assistant/src/config.rs`                 | Add `AutonomousConfig` struct and field in `VoiceAssistantServiceConfig`                                                                         |
+| `services/voice_assistant/src/mcp.rs`                    | Register and handle the five autonomous MCP tools                                                                                                |
+| `model/voice_assistant/src/messages/state.rs`            | Add `Autonomous` variant to `AssistantState`                                                                                                     |
+| `model/voice_assistant/src/messages/command.rs`          | Add `AutonomousTrigger` variant to `VoiceCommandAction`                                                                                          |
 
 ---
 

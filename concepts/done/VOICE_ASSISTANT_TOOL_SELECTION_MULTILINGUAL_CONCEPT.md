@@ -278,7 +278,7 @@ struct CatalogEmbeddingEntry {
 
 ### Phase 5: Service Integration
 
-**File**: `services/voice_assistant/src/service.rs`
+**File**: `services/voice_assistant/src/service/loaded_service.rs`
 
 - `VoiceAssistantService` gains `embedding_engine: Option<Arc<EmbeddingEngine>>`
 - During `new()`, after `SemanticMemory` initialization:

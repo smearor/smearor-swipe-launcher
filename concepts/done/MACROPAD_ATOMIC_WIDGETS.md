@@ -69,7 +69,7 @@ additional patterns.
 
 ### 4.2 Detection Logic
 
-The host's MacroPad input handler (`application.rs`) extends the existing press-duration measurement:
+The host's MacroPad input handler (`host/mod.rs`) extends the existing press-duration measurement:
 
 ```
 1. Button pressed (pressed: true)
@@ -705,7 +705,7 @@ No new model crates are needed for Atomic Widgets — they use the same state to
 
 ### 9.3 Span Group Handling in the Host
 
-The host (`application.rs`) extends the area plugin loading to recognise `span_group` and `span_index` fields:
+The host (`host/mod.rs`) extends the area plugin loading to recognise `span_group` and `span_index` fields:
 
 ```rust
 /// Plugin entry in area config, extended with span information.
@@ -838,7 +838,7 @@ defaults = "menu_button"
 
 **Changes**:
 
-- Extend `MacroPadInputMessage` handling in `application.rs` to detect Click, Longpress, Hold, and Double Press.
+- Extend `MacroPadInputMessage` handling in `host/mod.rs` to detect Click, Longpress, Hold, and Double Press.
 - Add `hold_topic`, `hold_payload`, `double_press_topic`, `double_press_payload` to button/widget config.
 - Add `hold_start` and `hold_stop` action dispatching.
 - Add double-press detection with 300 ms window.
@@ -854,7 +854,7 @@ defaults = "menu_button"
 **Changes**:
 
 - Add `span_group` and `span_index` fields to `AreaPluginEntry` in `model/area`.
-- Extend `render_buttons_to_device()` in `application.rs` to group plugins by `span_group`, render at combined dimensions, and split the result.
+- Extend `render_buttons_to_device()` in `host/mod.rs` to group plugins by `span_group`, render at combined dimensions, and split the result.
 - Add compound longpress detection (two+ buttons in same group pressed within 100 ms, held >= 500 ms).
 - Add `compound_longpress_topic` / `compound_longpress_payload` to config.
 
@@ -887,7 +887,7 @@ defaults = "menu_button"
 
 - Added `Refresh` variant to `AudioCommandAction` in `model/audio` + `refresh()` helper.
 - Re-exported `TOPIC_STATUS` and `TOPIC_COMMAND` from `model/audio/src/lib.rs`.
-- Handle `Refresh` action in `services/audio/src/service.rs`.
+- Handle `Refresh` action in `services/audio/src/service/loaded_service.rs`.
 - Extend `plugins/audio/` crate with atomic widget variants: `audio_volume`, `audio_volume_up`, `audio_volume_down`, `audio_mute`, `audio_rotate_device`.
 - Add `AudioAtomicWidget` struct in `atomic.rs`, `GraphicRenderer` impl in `atomic_graphic.rs`.
 - Add `GraphicRenderer` impl for main `AudioWidget` in `graphic.rs`.
@@ -908,7 +908,7 @@ defaults = "menu_button"
 
 - Added `Refresh` variant to `MprisCommandAction` in `model/mpris` + `refresh()` helper.
 - Re-exported `TOPIC_STATUS` and `TOPIC_COMMAND` from `model/mpris/src/lib.rs`.
-- Handle `Refresh` action in `services/mpris/src/service.rs` (maps to internal `MprisCommand::RefreshStatus`).
+- Handle `Refresh` action in `services/mpris/src/service/loaded_service.rs` (maps to internal `MprisCommand::RefreshStatus`).
 - Extend `plugins/mpris/` crate with atomic widget variants: `mpris_song`, `mpris_artist`, `mpris_album`, `mpris_next`, `mpris_previous`, `mpris_play_pause`,
   `mpris_stop`, `mpris_switch_player`, `mpris_seek_forward`, `mpris_seek_backward`, `mpris_shuffle`, `mpris_repeat`.
 - Add `MprisAtomicWidget` struct in `atomic.rs`, `GraphicRenderer` impl in `atomic_graphic.rs`.
@@ -998,48 +998,48 @@ correctly.
 
 ## 12. File Changes Summary
 
-| File                                        | Change                                                                                                   |
-|---------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| `model/area/src/lib.rs`                     | Add `span_group`, `span_index` to `AreaPluginEntry`                                                      |
-| `smearor-swipe-launcher/src/application.rs` | Extend input handling for Hold, Double Press; add span group rendering; add compound longpress detection |
-| `model/audio/src/messages/command.rs`       | Add `Refresh` variant to `AudioCommandAction` + `refresh()` helper                                       |
-| `model/audio/src/lib.rs`                    | Re-export `TOPIC_STATUS` and `TOPIC_COMMAND`                                                             |
-| `services/audio/src/service.rs`             | Handle `Refresh` action                                                                                  |
-| `plugins/audio/src/lib.rs`                  | Register Audio Atomic Widget variants in `widget_factory_plugin_graphic!` macro                          |
-| `plugins/audio/src/atomic.rs`               | **New** — `AudioAtomicWidget` struct + trait impls                                                       |
-| `plugins/audio/src/atomic_graphic.rs`       | **New** — `GraphicRenderer` impl for `AudioAtomicWidget`                                                 |
-| `plugins/audio/src/graphic.rs`              | **New** — `GraphicRenderer` impl for `AudioWidget`                                                       |
-| `plugins/audio/Cargo.toml`                  | Add `smearor-model-mcp`, `smearor-model-widget`, `smearor-render-utils` dependencies                     |
-| `model/mpris/src/messages/command.rs`       | Add `Refresh` variant to `MprisCommandAction` + `refresh()` helper                                       |
-| `model/mpris/src/lib.rs`                    | Re-export `TOPIC_STATUS` and `TOPIC_COMMAND`                                                             |
-| `services/mpris/src/service.rs`             | Handle `Refresh` action (maps to `MprisCommand::RefreshStatus`)                                          |
-| `plugins/mpris/src/lib.rs`                  | Register MPRIS Atomic Widget variants in `widget_factory_plugin_graphic!` macro                          |
-| `plugins/mpris/src/atomic.rs`               | **New** — `MprisAtomicWidget` struct + trait impls                                                       |
-| `plugins/mpris/src/atomic_graphic.rs`       | **New** — `GraphicRenderer` impl for `MprisAtomicWidget`                                                 |
-| `plugins/mpris/src/graphic.rs`              | **New** — `GraphicRenderer` impl for `MprisWidget`                                                       |
-| `plugins/mpris/src/widget.rs`               | Add `last_status` field for `GraphicRenderer` support                                                    |
-| `plugins/mpris/Cargo.toml`                  | Add `smearor-model-mcp`, `smearor-model-widget`, `smearor-render-utils` dependencies                     |
-| `plugins/weather/src/lib.rs`                | Register Weather Atomic Widget variants in `widget_factory_plugin_graphic!` macro                        |
-| `plugins/weather/src/atomic.rs`             | **New** — `WeatherAtomicWidget` struct + trait impls                                                     |
-| `plugins/weather/src/atomic_graphic.rs`     | **New** — `GraphicRenderer` impl for `WeatherAtomicWidget`                                               |
-| `plugins/weather/src/config.rs`             | Add `WeatherAtomicConfig` struct                                                                         |
-| `plugins/clock/src/lib.rs`                  | Register Clock Atomic Widget variants in `widget_factory_plugin_graphic!` macro                          |
-| `plugins/clock/src/atomic.rs`               | **New** — Clock atomic widget structs + trait impls                                                      |
-| `plugins/clock/src/atomic_graphic.rs`       | **New** — `GraphicRenderer` impls for clock atomic widgets                                               |
-| `plugins/sysinfo/src/lib.rs`                | Register SysInfo Atomic Widget variants in `widget_factory_plugin_graphic!` macro                        |
-| `plugins/sysinfo/src/atomic.rs`             | **New** — SysInfo atomic widget structs + trait impls                                                    |
-| `plugins/sysinfo/src/atomic_graphic.rs`     | **New** — `GraphicRenderer` impls for SysInfo atomic widgets                                             |
-| `plugins/power/src/lib.rs`                  | Register Power Atomic Widget variants in `widget_factory_plugin_graphic!` macro                          |
-| `plugins/power/src/atomic.rs`               | **New** — Power atomic widget structs + trait impls                                                      |
-| `plugins/power/src/atomic_graphic.rs`       | **New** — `GraphicRenderer` impls for power atomic widgets                                               |
-| `plugins/wallpaper/src/lib.rs`              | Register Wallpaper Atomic Widget variants in `widget_factory_plugin_graphic!` macro                      |
-| `plugins/wallpaper/src/atomic.rs`           | **New** — Wallpaper atomic widget structs + trait impls                                                  |
-| `plugins/wallpaper/src/atomic_graphic.rs`   | **New** — `GraphicRenderer` impls for wallpaper atomic widgets                                           |
-| `plugins/workspace-switcher/src/lib.rs`     | Register Workspace Atomic Widget variants in `widget_factory_plugin_graphic!` macro                      |
-| `plugins/workspace-switcher/src/atomic.rs`  | **New** — `WorkspaceAtomicWidget` struct + trait impls                                                   |
-| `plugins/workspace-switcher/src/config.rs`  | Add `WorkspaceAtomicConfig` struct                                                                       |
-| `plugins/workspace-switcher/Cargo.toml`     | Add `smearor-model-widget` dependency                                                                    |
-| `plugin-api/src/graphic/factory.rs`         | Add `@first_name` helper: fallback to first registered widget when `widget` field is empty or missing    |
+| File                                           | Change                                                                                                   |
+|------------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `model/area/src/lib.rs`                        | Add `span_group`, `span_index` to `AreaPluginEntry`                                                      |
+| `smearor-swipe-launcher/src/host/mod.rs`       | Extend input handling for Hold, Double Press; add span group rendering; add compound longpress detection |
+| `model/audio/src/messages/command.rs`          | Add `Refresh` variant to `AudioCommandAction` + `refresh()` helper                                       |
+| `model/audio/src/lib.rs`                       | Re-export `TOPIC_STATUS` and `TOPIC_COMMAND`                                                             |
+| `services/audio/src/service/loaded_service.rs` | Handle `Refresh` action                                                                                  |
+| `plugins/audio/src/lib.rs`                     | Register Audio Atomic Widget variants in `widget_factory_plugin_graphic!` macro                          |
+| `plugins/audio/src/atomic.rs`                  | **New** — `AudioAtomicWidget` struct + trait impls                                                       |
+| `plugins/audio/src/atomic_graphic.rs`          | **New** — `GraphicRenderer` impl for `AudioAtomicWidget`                                                 |
+| `plugins/audio/src/graphic.rs`                 | **New** — `GraphicRenderer` impl for `AudioWidget`                                                       |
+| `plugins/audio/Cargo.toml`                     | Add `smearor-model-mcp`, `smearor-model-widget`, `smearor-render-utils` dependencies                     |
+| `model/mpris/src/messages/command.rs`          | Add `Refresh` variant to `MprisCommandAction` + `refresh()` helper                                       |
+| `model/mpris/src/lib.rs`                       | Re-export `TOPIC_STATUS` and `TOPIC_COMMAND`                                                             |
+| `services/mpris/src/service/loaded_service.rs` | Handle `Refresh` action (maps to `MprisCommand::RefreshStatus`)                                          |
+| `plugins/mpris/src/lib.rs`                     | Register MPRIS Atomic Widget variants in `widget_factory_plugin_graphic!` macro                          |
+| `plugins/mpris/src/atomic.rs`                  | **New** — `MprisAtomicWidget` struct + trait impls                                                       |
+| `plugins/mpris/src/atomic_graphic.rs`          | **New** — `GraphicRenderer` impl for `MprisAtomicWidget`                                                 |
+| `plugins/mpris/src/graphic.rs`                 | **New** — `GraphicRenderer` impl for `MprisWidget`                                                       |
+| `plugins/mpris/src/widget.rs`                  | Add `last_status` field for `GraphicRenderer` support                                                    |
+| `plugins/mpris/Cargo.toml`                     | Add `smearor-model-mcp`, `smearor-model-widget`, `smearor-render-utils` dependencies                     |
+| `plugins/weather/src/lib.rs`                   | Register Weather Atomic Widget variants in `widget_factory_plugin_graphic!` macro                        |
+| `plugins/weather/src/atomic.rs`                | **New** — `WeatherAtomicWidget` struct + trait impls                                                     |
+| `plugins/weather/src/atomic_graphic.rs`        | **New** — `GraphicRenderer` impl for `WeatherAtomicWidget`                                               |
+| `plugins/weather/src/config.rs`                | Add `WeatherAtomicConfig` struct                                                                         |
+| `plugins/clock/src/lib.rs`                     | Register Clock Atomic Widget variants in `widget_factory_plugin_graphic!` macro                          |
+| `plugins/clock/src/atomic.rs`                  | **New** — Clock atomic widget structs + trait impls                                                      |
+| `plugins/clock/src/atomic_graphic.rs`          | **New** — `GraphicRenderer` impls for clock atomic widgets                                               |
+| `plugins/sysinfo/src/lib.rs`                   | Register SysInfo Atomic Widget variants in `widget_factory_plugin_graphic!` macro                        |
+| `plugins/sysinfo/src/atomic.rs`                | **New** — SysInfo atomic widget structs + trait impls                                                    |
+| `plugins/sysinfo/src/atomic_graphic.rs`        | **New** — `GraphicRenderer` impls for SysInfo atomic widgets                                             |
+| `plugins/power/src/lib.rs`                     | Register Power Atomic Widget variants in `widget_factory_plugin_graphic!` macro                          |
+| `plugins/power/src/atomic.rs`                  | **New** — Power atomic widget structs + trait impls                                                      |
+| `plugins/power/src/atomic_graphic.rs`          | **New** — `GraphicRenderer` impls for power atomic widgets                                               |
+| `plugins/wallpaper/src/lib.rs`                 | Register Wallpaper Atomic Widget variants in `widget_factory_plugin_graphic!` macro                      |
+| `plugins/wallpaper/src/atomic.rs`              | **New** — Wallpaper atomic widget structs + trait impls                                                  |
+| `plugins/wallpaper/src/atomic_graphic.rs`      | **New** — `GraphicRenderer` impls for wallpaper atomic widgets                                           |
+| `plugins/workspace-switcher/src/lib.rs`        | Register Workspace Atomic Widget variants in `widget_factory_plugin_graphic!` macro                      |
+| `plugins/workspace-switcher/src/atomic.rs`     | **New** — `WorkspaceAtomicWidget` struct + trait impls                                                   |
+| `plugins/workspace-switcher/src/config.rs`     | Add `WorkspaceAtomicConfig` struct                                                                       |
+| `plugins/workspace-switcher/Cargo.toml`        | Add `smearor-model-widget` dependency                                                                    |
+| `plugin-api/src/graphic/factory.rs`            | Add `@first_name` helper: fallback to first registered widget when `widget` field is empty or missing    |
 
 ---
 

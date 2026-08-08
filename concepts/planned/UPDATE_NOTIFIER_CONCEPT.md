@@ -584,7 +584,7 @@ updating_label = "Updating..."
 3. Create `src/provider.rs` and define the `UpdateProvider` trait and `UpdateProviderError` error type.
 4. Create `src/provider_arch.rs` and implement `ArchUpdateProvider` using `checkupdates`.
 5. Create `src/provider_debian.rs` and implement `DebianUpdateProvider` using `apt-get -s upgrade`.
-6. Create `src/service.rs` with `UpdateNotifierService` and all required trait implementations.
+6. Create `src/service/loaded_service.rs` with `UpdateNotifierService` and all required trait implementations.
 7. Implement the event loop with periodic check timer and command handling.
 8. Implement `check_and_broadcast` helper that queries the provider and broadcasts `UpdateStatusMessage`.
 9. Wire `service_plugin!` in `src/lib.rs`.

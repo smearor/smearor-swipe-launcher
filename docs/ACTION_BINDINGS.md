@@ -128,5 +128,5 @@ How each widget handles `InvokeToolMessage` — whether it parses `ActionKind`, 
   drag disabled).
 - **`button_` prefix convention**: All `InvokeToolMessage` handlers use `format!("button_{}", self.meta.id)` as tool name, copied from the `button` widget. Only
   the `button` widget actually registers this tool via `RegisterToolMessage`. Other widgets register their own tools (e.g. `get_current_time`,
-  `weather_widget_refresh`). The `button_` prefix is practically relevant only for MacroPad input dispatch (`application.rs`). Consider renaming to
+  `weather_widget_refresh`). The `button_` prefix is practically relevant only for MacroPad input dispatch (`host/mod.rs`). Consider renaming to
   `widget_{plugin_id}` for clarity.

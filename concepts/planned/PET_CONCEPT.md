@@ -239,13 +239,13 @@ pub struct PetCommandMessage {
 
 ### 5.1 File Structure
 
-| File               | Responsibility                                |
-|--------------------|-----------------------------------------------|
-| `src/lib.rs`       | `service_plugin!` macro invocation            |
-| `src/config.rs`    | `PetServiceConfig` struct and parsing         |
-| `src/mood.rs`      | Mood evaluation logic                         |
-| `src/complaint.rs` | Complaint and protest sign text generation    |
-| `src/service.rs`   | `PetService` struct and trait implementations |
+| File                            | Responsibility                                |
+|---------------------------------|-----------------------------------------------|
+| `src/lib.rs`                    | `service_plugin!` macro invocation            |
+| `src/config.rs`                 | `PetServiceConfig` struct and parsing         |
+| `src/mood.rs`                   | Mood evaluation logic                         |
+| `src/complaint.rs`              | Complaint and protest sign text generation    |
+| `src/service/loaded_service.rs` | `PetService` struct and trait implementations |
 
 ### 5.2 Configuration
 
@@ -885,7 +885,7 @@ top of already-tested foundations.
     - Run the appropriate command and parse the pending count.
     - Produce `PackageUpdateMessage`.
 3. Extend `SysinfoServiceConfig` with `enable_gpu` and `enable_packages` flags.
-4. Extend the update loop in `services/sysinfo/src/service.rs` to collect and broadcast GPU and package metrics.
+4. Extend the update loop in `services/sysinfo/src/service/loaded_service.rs` to collect and broadcast GPU and package metrics.
 5. Add unit tests for both new collectors with mock command outputs.
 
 **Exit criteria:**
@@ -938,7 +938,7 @@ top of already-tested foundations.
 2. Create `src/config.rs` with `PetServiceConfig` and its default values.
 3. Create `src/mood.rs` and implement the mood evaluation logic.
 4. Create `src/complaint.rs` and implement complaint and protest sign text generation.
-5. Create `src/service.rs` with `PetService` and all required trait implementations.
+5. Create `src/service/loaded_service.rs` with `PetService` and all required trait implementations.
 6. Implement message handlers for all subscribed topics (CPU, GPU, memory, disks, network, packages).
 7. Implement command handling for `PetCommandMessage`.
 8. Implement `run_update_loop` to periodically re-evaluate and broadcast `PetStatusMessage`.

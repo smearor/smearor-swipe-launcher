@@ -241,6 +241,23 @@ impl Default for ConfigDiscoveryService {
     }
 }
 
+/// Validate that a config path is within allowed directories (cwd or ~/.config/smearor/).
+pub fn validate_config_path(config_path: &str) -> Result<(), String> {
+    let path = std::path::Path::new(config_path);
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("Config path '{}' cannot be resolved: {}", config_path, e))?;
+
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let config_dir = dirs::config_dir().unwrap_or_default().join("smearor");
+
+    if canonical.starts_with(&cwd) || canonical.starts_with(&config_dir) {
+        Ok(())
+    } else {
+        Err(format!("Config path '{}' is outside allowed directories (current dir and ~/.config/smearor/)", config_path))
+    }
+}
+
 /// Bootstrap user configs from system defaults and discover launcher configuration files.
 ///
 /// This is the top-level entry point for config discovery: it bootstraps user

@@ -46,12 +46,12 @@ main.rs
 
 ### 2.2 Key Structures
 
-- **`LauncherHost`** (`application.rs`): Owns `instances: Arc<Mutex<HashMap<String, LauncherInstance>>>`, `gtk_app`, `broker_sender`, `service_manager`.
+- **`LauncherHost`** (`host/mod.rs`): Owns `instances: Arc<Mutex<HashMap<String, LauncherInstance>>>`, `gtk_app`, `broker_sender`, `service_manager`.
 - **`LauncherInstance`** (`instance.rs`): Owns `config`, `plugin_manager`, `area_manager`, `window: Mutex<Option<ApplicationWindow>>`, `instance_id`,
   `instance_type: InstanceType`.
-- **`create_instance()`** (`application.rs:104`): Creates instance, loads plugins, inserts into HashMap.
-- **`build_ui()`** (`application.rs:159`): `connect_activate` callback builds windows for all instances.
-- **`route_message()`** (`application.rs:363`): Central broker routes by `target_instance_id`.
+- **`create_instance()`** (`host/mod.rs:104`): Creates instance, loads plugins, inserts into HashMap.
+- **`build_ui()`** (`host/mod.rs:159`): `connect_activate` callback builds windows for all instances.
+- **`route_message()`** (`host/mod.rs:363`): Central broker routes by `target_instance_id`.
 
 ### 2.3 Limitation
 
@@ -777,8 +777,8 @@ plugins = [
 
 **Changes**:
 
-- Add `LauncherHost::load_instance()` method to `application.rs`.
-- Add `LauncherHost::stop_instance()` method to `application.rs`.
+- Add `LauncherHost::load_instance()` method to `host/mod.rs`.
+- Add `LauncherHost::stop_instance()` method to `host/mod.rs`.
 - Add `LauncherHost::reload_instance()` method (low priority, convenience wrapper).
 - Add `LauncherHost::list_instances()` helper method.
 - Add `validate_config_path()` and `validate_instance_id()` functions.
@@ -884,17 +884,17 @@ file, then rename).
 
 ## 11. File Changes Summary
 
-| File                                        | Change                                                                                                                                                                                                                                          |
-|---------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `model/instance-control/Cargo.toml`         | **New** — model crate manifest                                                                                                                                                                                                                  |
-| `model/instance-control/src/lib.rs`         | **New** — message types, topics, JSON converters                                                                                                                                                                                                |
-| `smearor-swipe-launcher/src/instance.rs`    | Add `instance_type: InstanceType` field to `LauncherInstance` struct                                                                                                                                                                            |
-| `smearor-swipe-launcher/src/application.rs` | Add `load_instance()`, `stop_instance()`, `reload_instance()`, `list_instances()`, `persist_instance()`, `unpersist_instance()` methods; add `validate_config_path()`, `validate_instance_id()`; add broker topic handlers in `route_message()` |
-| `smearor-swipe-launcher/src/main.rs`        | Register `model/instance-control` JSON converters; add `process_mcp_command` handlers for new `McpCommand` variants; load persisted instances from `~/.config/smearor/instances.toml` on startup                                                |
-| `mcp-server/src/lib.rs`                     | Add `McpCommand::LoadInstance`, `McpCommand::StopInstance`, `McpCommand::ListInstances` variants                                                                                                                                                |
-| `mcp-server/src/tools.rs`                   | Add `launcher_load_instance`, `launcher_stop_instance`, `launcher_list_instances` tool definitions; extend `send_command_and_wait` match arms                                                                                                   |
-| `model/mcp/src/registry.rs`                 | Add `remove_tools_by_instance()` method to `McpRegistry`                                                                                                                                                                                        |
-| `Cargo.toml` (workspace)                    | Add `model/instance-control` to workspace members                                                                                                                                                                                               |
+| File                                     | Change                                                                                                                                                                                                                                          |
+|------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `model/instance-control/Cargo.toml`      | **New** — model crate manifest                                                                                                                                                                                                                  |
+| `model/instance-control/src/lib.rs`      | **New** — message types, topics, JSON converters                                                                                                                                                                                                |
+| `smearor-swipe-launcher/src/instance.rs` | Add `instance_type: InstanceType` field to `LauncherInstance` struct                                                                                                                                                                            |
+| `smearor-swipe-launcher/src/host/mod.rs` | Add `load_instance()`, `stop_instance()`, `reload_instance()`, `list_instances()`, `persist_instance()`, `unpersist_instance()` methods; add `validate_config_path()`, `validate_instance_id()`; add broker topic handlers in `route_message()` |
+| `smearor-swipe-launcher/src/main.rs`     | Register `model/instance-control` JSON converters; add `process_mcp_command` handlers for new `McpCommand` variants; load persisted instances from `~/.config/smearor/instances.toml` on startup                                                |
+| `mcp-server/src/lib.rs`                  | Add `McpCommand::LoadInstance`, `McpCommand::StopInstance`, `McpCommand::ListInstances` variants                                                                                                                                                |
+| `mcp-server/src/tools.rs`                | Add `launcher_load_instance`, `launcher_stop_instance`, `launcher_list_instances` tool definitions; extend `send_command_and_wait` match arms                                                                                                   |
+| `model/mcp/src/registry.rs`              | Add `remove_tools_by_instance()` method to `McpRegistry`                                                                                                                                                                                        |
+| `Cargo.toml` (workspace)                 | Add `model/instance-control` to workspace members                                                                                                                                                                                               |
 
 ---
 

@@ -1,5 +1,5 @@
-use crate::application::LauncherHost;
 use crate::area::instance_area_manager::InstanceAreaManager;
+use crate::host::LauncherHost;
 use crate::mcp::McpResponseTracker;
 use crate::mcp::plugin_invoker::invoke_plugin_prompt_sender;
 use crate::mcp::plugin_invoker::invoke_plugin_resource_sender;
