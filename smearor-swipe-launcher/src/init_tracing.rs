@@ -23,7 +23,9 @@ pub fn init(enabled: bool, capacity: usize) -> Result<Option<Arc<LogBuffer>>> {
     };
 
     let fmt_layer = fmt::layer();
-    let filter = EnvFilter::from_default_env().add_directive(tracing::Level::DEBUG.into());
+    let filter = EnvFilter::from_default_env()
+        .add_directive(tracing::Level::DEBUG.into())
+        .add_directive("hyper_util=warn".parse().unwrap_or_else(|_| tracing::Level::DEBUG.into()));
 
     match log_buffer {
         Some(ref buffer) => {
