@@ -5,20 +5,10 @@ use smearor_swipe_launcher_plugin_api::SharedMessage;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::generate_type_id;
 
+use crate::monitor::change_type::MonitorChangeType;
+
 /// Topic for monitor change events broadcast by compositor services.
 pub const TOPIC_MONITOR_CHANGED: &str = "compositor.monitor.changed";
-
-/// Type of monitor change.
-#[repr(u8)]
-#[stabby::stabby]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MonitorChangeType {
-    /// Monitor was connected.
-    #[default]
-    Connected,
-    /// Monitor was disconnected.
-    Disconnected,
-}
 
 /// Event broadcast when a monitor is connected or disconnected.
 ///
