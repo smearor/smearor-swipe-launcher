@@ -68,28 +68,6 @@ impl JsonRpcResponse {
     }
 }
 
-/// Parse the `params` field into a concrete JSON object.
-///
-/// Returns `None` if params is missing, `null` or an empty object.
-pub fn params_as_object(params: Option<&Value>) -> Option<&serde_json::Map<String, Value>> {
-    params?.as_object().filter(|obj| !obj.is_empty())
-}
-
-/// Extract a string parameter by key.
-pub fn get_string_param(params: Option<&Value>, key: &str) -> Option<String> {
-    params_as_object(params)?.get(key).and_then(|v| v.as_str()).map(String::from)
-}
-
-/// Extract a JSON object parameter by key.
-pub fn get_object_param(params: Option<&Value>, key: &str) -> Option<Value> {
-    params_as_object(params)?.get(key).cloned()
-}
-
-/// Extract an optional string parameter by key.
-pub fn get_optional_string_param(params: Option<&Value>, key: &str) -> Option<String> {
-    params_as_object(params)?.get(key).and_then(|v| v.as_str()).map(String::from)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,19 +114,5 @@ mod tests {
         assert!(json.contains("\"error\""));
         assert!(json.contains("Method not found"));
         assert!(!json.contains("\"result\""));
-    }
-
-    #[test]
-    fn extract_string_param() {
-        let params = serde_json::json!({"area_id": "sidebar"});
-        assert_eq!(get_string_param(Some(&params), "area_id"), Some("sidebar".to_string()));
-        assert_eq!(get_string_param(Some(&params), "missing"), None);
-    }
-
-    #[test]
-    fn extract_object_param() {
-        let params = serde_json::json!({"payload": {"foo": "bar"}});
-        assert_eq!(get_object_param(Some(&params), "payload"), Some(serde_json::json!({"foo": "bar"})));
-        assert_eq!(get_object_param(Some(&params), "missing"), None);
     }
 }
