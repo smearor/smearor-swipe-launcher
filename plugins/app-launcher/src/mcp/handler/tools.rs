@@ -25,14 +25,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for AppLauncherWidget
 
         if let Some(kind) = action_kind {
             let binding = self.config.binding_for_kind(kind);
-            if binding.is_configured() {
-                binding.dispatch(&broadcaster);
-                if binding.is_supplement() {
-                    self.default_fallback(&kind, &broadcaster);
-                }
-            } else {
-                self.default_fallback(&kind, &broadcaster);
-            }
+            binding.dispatch_with_fallback(&broadcaster, Box::new(|| self.default_fallback(&kind, &broadcaster)));
         }
 
         let response = InvokeToolResponse::success(&message.0.correlation_id.to_string(), &format!("{} handled", action_str));

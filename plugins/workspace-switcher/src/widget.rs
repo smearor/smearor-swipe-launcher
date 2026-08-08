@@ -437,14 +437,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for WorkspaceSwitcher
             let broadcaster = self.get_broadcaster();
 
             let binding = self.config.binding_for_kind(action_kind);
-            if binding.is_configured() {
-                binding.dispatch(&broadcaster);
-                if binding.is_supplement() {
-                    self.default_fallback(&action_kind, &broadcaster);
-                }
-            } else {
-                self.default_fallback(&action_kind, &broadcaster);
-            }
+            binding.dispatch_with_fallback(&broadcaster, Box::new(|| self.default_fallback(&action_kind, &broadcaster)));
 
             let response = smearor_model_mcp::InvokeToolResponse::success(&message.0.correlation_id, &format!("{} handled", action_str));
             broadcaster.broadcast_message_to_topic(response);

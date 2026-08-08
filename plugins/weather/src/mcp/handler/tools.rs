@@ -2,7 +2,6 @@ use crate::widget::WeatherWidget;
 use smearor_model_mcp::ButtonActionArgs;
 use smearor_model_mcp::InvokeToolMessage;
 use smearor_model_mcp::InvokeToolResponse;
-use smearor_swipe_launcher_plugin_api::ActionKind;
 use smearor_swipe_launcher_plugin_api::DefaultFallback;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
@@ -34,14 +33,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for WeatherWidget {
             let broadcaster = self.get_broadcaster();
 
             let binding = self.config.binding_for_kind(action_kind);
-            if binding.is_configured() {
-                binding.dispatch(&broadcaster);
-                if binding.is_supplement() {
-                    self.default_fallback(&action_kind, &broadcaster);
-                }
-            } else {
-                self.default_fallback(&action_kind, &broadcaster);
-            }
+            binding.dispatch_with_fallback(&broadcaster, Box::new(|| self.default_fallback(&action_kind, &broadcaster)));
 
             let response = InvokeToolResponse::success(&message.0.correlation_id, &format!("{} handled", action_str));
             broadcaster.broadcast_message_to_topic(response);

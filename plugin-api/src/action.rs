@@ -157,6 +157,23 @@ pub trait DispatchableBinding {
     /// If `instance` is set, broadcasts to that specific instance.
     /// Otherwise, broadcasts to all instances.
     fn dispatch(&self, broadcaster: &MessageBroadcasterInner);
+
+    /// Dispatches this binding, executing the fallback if the binding is not configured
+    /// or if the binding is in supplement mode.
+    ///
+    /// - If configured and `replace` mode: dispatches the binding only.
+    /// - If configured and `supplement` mode: dispatches the binding, then executes the fallback.
+    /// - If not configured: executes the fallback only.
+    fn dispatch_with_fallback<'a>(&'a self, broadcaster: &'a MessageBroadcasterInner, fallback: Box<dyn FnOnce() + 'a>) {
+        if self.is_configured() {
+            self.dispatch(broadcaster);
+            if self.is_supplement() {
+                fallback();
+            }
+        } else {
+            fallback();
+        }
+    }
 }
 
 /// Trait for widgets that have default fallback behavior for action kinds.
