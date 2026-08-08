@@ -1,5 +1,4 @@
 use crate::area::overlay::area::AreaOverlay;
-use crate::area::widget::area::AreaWidget;
 use gtk4::Overlay;
 use gtk4::Widget;
 use gtk4::prelude::*;

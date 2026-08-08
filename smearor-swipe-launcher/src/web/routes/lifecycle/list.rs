@@ -11,7 +11,11 @@ use std::sync::Arc;
 /// GET `/api/instances` — list all instances with lifecycle state.
 pub async fn api_list_instances(State(state): State<Arc<WebAppState>>) -> impl IntoResponse {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let command = smearor_mcp_server::McpCommand::ListInstances { response: tx };
+    let command: smearor_mcp_server::McpCommand = smearor_mcp_server::CommandResponseWrapper::builder()
+        .params(smearor_mcp_server::ListInstancesParams::builder().build())
+        .response(tx)
+        .build()
+        .into();
     if state.mcp_command_sender.send(command).await.is_err() {
         return send_error_response();
     }

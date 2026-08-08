@@ -10,7 +10,11 @@ use std::sync::Arc;
 /// DELETE `/api/instances/{id}` — unload an instance entirely.
 pub async fn api_unload_instance(Path(instance_id): Path<String>, State(state): State<Arc<WebAppState>>) -> impl IntoResponse {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let command = smearor_mcp_server::McpCommand::UnloadInstance { instance_id, response: tx };
+    let command: smearor_mcp_server::McpCommand = smearor_mcp_server::CommandResponseWrapper::builder()
+        .params(smearor_mcp_server::UnloadInstanceParams::builder().instance_id(instance_id).build())
+        .response(tx)
+        .build()
+        .into();
     if state.mcp_command_sender.send(command).await.is_err() {
         return send_error_response();
     }

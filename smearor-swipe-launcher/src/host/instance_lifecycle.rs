@@ -1,4 +1,5 @@
 use crate::config::launcher::SwipeLauncherConfig;
+use crate::instance::InstanceType;
 use crate::instance::PersistedInstance;
 use crate::instance::get_instances_state_path;
 use crate::instance::read_instances_state;
@@ -30,7 +31,7 @@ impl super::LauncherHost {
         &self,
         instance_id: String,
         config_path: &str,
-        instance_type: crate::instance::InstanceType,
+        instance_type: InstanceType,
         persist: bool,
         auto_start: bool,
     ) -> Result<String, String> {

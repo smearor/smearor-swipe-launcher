@@ -153,7 +153,7 @@ fn spawn_main_loop_tasks(
         while let Ok(command) = mcp_receiver.recv().await {
             if matches!(
                 command,
-                McpCommand::InvokePluginTool { .. } | McpCommand::InvokePluginResource { .. } | McpCommand::InvokePluginPrompt { .. }
+                McpCommand::InvokePluginTool(..) | McpCommand::InvokePluginResource(..) | McpCommand::InvokePluginPrompt(..)
             ) {
                 let broker_sender = host_clone.broker_sender.clone();
                 let response_tracker = host_clone.mcp_response_tracker.clone();

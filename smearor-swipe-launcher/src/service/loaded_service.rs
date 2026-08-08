@@ -12,7 +12,6 @@ use smearor_swipe_launcher_plugin_api::ServicePluginVTable;
 use stabby::libloading::StabbyLibrary;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::debug;
 use tracing::trace;
 
 /// Represents a loaded background service with its library handle.

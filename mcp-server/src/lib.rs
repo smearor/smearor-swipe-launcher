@@ -44,10 +44,37 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+pub mod command;
 mod jsonrpc;
 pub mod prompts;
 pub mod resources;
 pub mod tools;
+
+pub use command::CloseAreaParams;
+pub use command::CommandResponseWrapper;
+pub use command::FocusAreaParams;
+pub use command::GetAreaConfigParams;
+pub use command::InstanceTypeParam;
+pub use command::InvokePluginPromptParams;
+pub use command::InvokePluginResourceParams;
+pub use command::InvokePluginToolParams;
+pub use command::ListAllAreasParams;
+pub use command::ListAreasParams;
+pub use command::ListInstancesParams;
+pub use command::LoadInstanceParams;
+pub use command::McpCommand;
+pub use command::McpCommandVariant;
+pub use command::OpenAreaParams;
+pub use command::OpenTransientAreaParams;
+pub use command::ReadResourceParams;
+pub use command::ReloadInstanceParams;
+pub use command::SendMessageParams;
+pub use command::SendMultipleMessagesParams;
+pub use command::StartInstanceParams;
+pub use command::StopInstanceParams;
+pub use command::ToggleAreaParams;
+pub use command::UnloadInstanceParams;
+pub use command::WebServerStatusParams;
 
 /// Configuration for the MCP server.
 #[derive(Debug, Clone)]
@@ -87,120 +114,6 @@ pub struct McpServerState {
     pub plugin_registry: McpRegistry,
     /// Monotonic counter for MCP invocation correlation IDs.
     pub correlation_counter: AtomicU64,
-}
-
-/// Commands sent from the MCP server to the launcher core.
-pub enum McpCommand {
-    /// Open an area by ID.
-    OpenArea {
-        area_id: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Close an area by ID.
-    CloseArea {
-        area_id: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// List all currently managed (opened) areas.
-    ListAreas { response: oneshot::Sender<Result<String, String>> },
-    /// List all configured areas (including not-yet-opened ones).
-    ListAllAreas { response: oneshot::Sender<Result<String, String>> },
-    /// Open an area as a transient overlay (like a button click).
-    OpenTransientArea {
-        area_id: String,
-        source_area_id: Option<String>,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Focus an area by ID.
-    FocusArea {
-        area_id: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Send a message to a broker topic.
-    SendMessage {
-        topic: String,
-        payload: serde_json::Value,
-        target_instance_id: Option<String>,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Send multiple messages to broker topics, with duplicate filtering.
-    SendMultipleMessages {
-        messages: Vec<(String, serde_json::Value, Option<String>)>,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Read a resource by URI.
-    ReadResource {
-        uri: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Toggle the visibility of an area.
-    ToggleArea {
-        area_id: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Get the configuration of an area as JSON.
-    GetAreaConfig {
-        area_id: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Invoke a tool registered by a plugin.
-    InvokePluginTool {
-        name: String,
-        plugin_id: String,
-        correlation_id: String,
-        arguments: serde_json::Value,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Read a resource registered by a plugin.
-    InvokePluginResource {
-        uri: String,
-        plugin_id: String,
-        correlation_id: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Invoke a prompt registered by a plugin.
-    InvokePluginPrompt {
-        name: String,
-        plugin_id: String,
-        correlation_id: String,
-        arguments: serde_json::Value,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Dynamically load a new launcher instance.
-    LoadInstance {
-        instance_id: String,
-        config_path: String,
-        instance_type: String,
-        /// Whether to persist this instance to the state file (survive restarts).
-        persist: bool,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Start a loaded (Ready) launcher instance.
-    StartInstance {
-        instance_id: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Stop a running launcher instance (transitions to Ready).
-    StopInstance {
-        instance_id: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Unload a stopped (Ready) launcher instance entirely.
-    UnloadInstance {
-        instance_id: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// Hot-reload an instance (stop, unload, re-load, restore previous state).
-    ReloadInstance {
-        instance_id: String,
-        /// Config path to reload from. If empty, the existing config path is reused.
-        config_path: String,
-        response: oneshot::Sender<Result<String, String>>,
-    },
-    /// List all running launcher instances.
-    ListInstances { response: oneshot::Sender<Result<String, String>> },
-    /// Get the status of the embedded web server.
-    WebServerStatus { response: oneshot::Sender<Result<String, String>> },
 }
 
 /// Builder for the MCP server.
@@ -385,13 +298,20 @@ impl ServerHandler for SwipeLauncherHandler {
             let correlation_id = state.correlation_counter.fetch_add(1, Ordering::Relaxed).to_string();
             let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
             let arguments_value = arguments.map(|m| serde_json::Value::Object(m)).unwrap_or(serde_json::Value::Null);
-            let _ = state.command_sender.try_send(McpCommand::InvokePluginTool {
-                name: plugin_tool.name.clone(),
-                plugin_id: plugin_tool.plugin_id.clone(),
-                correlation_id,
-                arguments: arguments_value,
-                response: response_tx,
-            });
+            let _ = state.command_sender.try_send(
+                CommandResponseWrapper::builder()
+                    .params(
+                        InvokePluginToolParams::builder()
+                            .name(plugin_tool.name.clone())
+                            .plugin_id(plugin_tool.plugin_id.clone())
+                            .correlation_id(correlation_id)
+                            .arguments(arguments_value)
+                            .build(),
+                    )
+                    .response(response_tx)
+                    .build()
+                    .into(),
+            );
             match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
                 Ok(Ok(Ok(result))) => {
                     return Ok(CallToolResult::text_content(vec![TextContent::new(result, None, None)]));
@@ -482,12 +402,19 @@ impl ServerHandler for SwipeLauncherHandler {
         if let Some(plugin_resource) = state.plugin_registry.list_resources().iter().find(|r| r.uri == uri).cloned() {
             let correlation_id = state.correlation_counter.fetch_add(1, Ordering::Relaxed).to_string();
             let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
-            let _ = state.command_sender.try_send(McpCommand::InvokePluginResource {
-                uri: plugin_resource.uri.clone(),
-                plugin_id: plugin_resource.plugin_id.clone(),
-                correlation_id,
-                response: response_tx,
-            });
+            let _ = state.command_sender.try_send(
+                CommandResponseWrapper::builder()
+                    .params(
+                        InvokePluginResourceParams::builder()
+                            .uri(plugin_resource.uri.clone())
+                            .plugin_id(plugin_resource.plugin_id.clone())
+                            .correlation_id(correlation_id)
+                            .build(),
+                    )
+                    .response(response_tx)
+                    .build()
+                    .into(),
+            );
             match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
                 Ok(Ok(Ok(contents))) => {
                     return Ok(ReadResourceResult {
@@ -569,13 +496,20 @@ impl ServerHandler for SwipeLauncherHandler {
                     serde_json::Value::Object(map)
                 })
                 .unwrap_or(serde_json::Value::Null);
-            let _ = state.command_sender.try_send(McpCommand::InvokePluginPrompt {
-                name: plugin_prompt.name.clone(),
-                plugin_id: plugin_prompt.plugin_id.clone(),
-                correlation_id,
-                arguments: arguments_value,
-                response: response_tx,
-            });
+            let _ = state.command_sender.try_send(
+                CommandResponseWrapper::builder()
+                    .params(
+                        InvokePluginPromptParams::builder()
+                            .name(plugin_prompt.name.clone())
+                            .plugin_id(plugin_prompt.plugin_id.clone())
+                            .correlation_id(correlation_id)
+                            .arguments(arguments_value)
+                            .build(),
+                    )
+                    .response(response_tx)
+                    .build()
+                    .into(),
+            );
             match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
                 Ok(Ok(Ok(json))) => {
                     let result: GetPromptResult = serde_json::from_str(&json).unwrap_or(GetPromptResult {

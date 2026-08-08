@@ -5,12 +5,19 @@ use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use smearor_mcp_server::CommandResponseWrapper;
+use smearor_mcp_server::McpCommand;
+use smearor_mcp_server::StopInstanceParams;
 use std::sync::Arc;
 
 /// POST `/api/instances/{id}/stop` — stop a running instance.
 pub async fn api_stop_instance(Path(instance_id): Path<String>, State(state): State<Arc<WebAppState>>) -> impl IntoResponse {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let command = smearor_mcp_server::McpCommand::StopInstance { instance_id, response: tx };
+    let command: McpCommand = CommandResponseWrapper::builder()
+        .params(StopInstanceParams::builder().instance_id(instance_id).build())
+        .response(tx)
+        .build()
+        .into();
     if state.mcp_command_sender.send(command).await.is_err() {
         return send_error_response();
     }

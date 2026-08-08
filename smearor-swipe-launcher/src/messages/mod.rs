@@ -11,7 +11,6 @@ use smearor_swipe_launcher_plugin_api::MessageRouter;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::time::Duration;
 use std::time::Instant;
-use tracing::debug;
 use tracing::trace;
 use tracing::warn;
 

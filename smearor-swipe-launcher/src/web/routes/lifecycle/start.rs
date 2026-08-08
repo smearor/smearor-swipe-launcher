@@ -10,7 +10,11 @@ use std::sync::Arc;
 /// POST `/api/instances/{id}/start` — start a loaded instance.
 pub async fn api_start_instance(Path(instance_id): Path<String>, State(state): State<Arc<WebAppState>>) -> impl IntoResponse {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let command = smearor_mcp_server::McpCommand::StartInstance { instance_id, response: tx };
+    let command: smearor_mcp_server::McpCommand = smearor_mcp_server::CommandResponseWrapper::builder()
+        .params(smearor_mcp_server::StartInstanceParams::builder().instance_id(instance_id).build())
+        .response(tx)
+        .build()
+        .into();
     if state.mcp_command_sender.send(command).await.is_err() {
         return send_error_response();
     }

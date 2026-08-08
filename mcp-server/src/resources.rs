@@ -1,6 +1,8 @@
 //! MCP resource definitions and invocation helpers.
 
+use crate::CommandResponseWrapper;
 use crate::McpCommand;
+use crate::ReadResourceParams;
 use crate::jsonrpc::JSONRPC_INTERNAL_ERROR;
 use crate::jsonrpc::JSONRPC_INVALID_PARAMS;
 use crate::jsonrpc::JsonRpcResponse;
@@ -63,7 +65,13 @@ pub fn core_resources() -> Vec<ResourceDefinition> {
 async fn read_resource(sender: Sender<McpCommand>, uri: String) -> Result<String, String> {
     let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
     sender
-        .try_send(McpCommand::ReadResource { uri, response: response_tx })
+        .try_send(
+            CommandResponseWrapper::builder()
+                .params(ReadResourceParams::builder().uri(uri).build())
+                .response(response_tx)
+                .build()
+                .into(),
+        )
         .map_err(|e| format!("Failed to send resource read command: {}", e))?;
     match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
         Ok(Ok(result)) => result,
