@@ -6968,6 +6968,7 @@ dependencies = [
 name = "smearor-mpris-service"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "glib",
  "gtk4",
  "miette",

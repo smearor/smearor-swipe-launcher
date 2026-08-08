@@ -22,6 +22,7 @@ serde_json = { workspace = true }
 smearor-mpris-model = { path = "../../model/mpris" }
 smearor-model-mcp = { path = "../../model/mcp" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+futures-util = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
