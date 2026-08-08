@@ -5,8 +5,27 @@ use crate::tools::ToolDefinition;
 use crate::tools::ToolInvocation;
 use crate::tools::ToolResultPayload;
 use rust_mcp_sdk::schema::ToolInputSchema;
+use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
+
+/// Intermediate struct for deserializing a schemars-generated JSON schema
+/// into the fields needed by `ToolInputSchema`.
+#[derive(Deserialize, Default)]
+struct ToolSchemaInput {
+    #[serde(default)]
+    properties: Option<BTreeMap<String, serde_json::Map<String, Value>>>,
+    #[serde(default)]
+    required: Vec<String>,
+    #[serde(rename = "$schema", default)]
+    schema: Option<String>,
+}
+
+impl From<ToolSchemaInput> for ToolInputSchema {
+    fn from(input: ToolSchemaInput) -> Self {
+        ToolInputSchema::new(input.required, input.properties, input.schema)
+    }
+}
 
 /// Resolver that bridges tool definitions with the rust-mcp-sdk schema types.
 /// Provides SDK-facing operations for invoking tools and converting schemas.
@@ -21,31 +40,11 @@ impl<'a> ToolResolver<'a> {
     }
 
     /// Convert a serde_json::Value JSON schema to the SDK's ToolInputSchema.
-    /// The input schema must be a JSON object with "properties" and "required" fields.
-    /// Properties are converted from serde_json::Map to BTreeMap<String, serde_json::Map>.
+    /// The input schema is deserialized via `ToolSchemaInput` and mapped
+    /// to the SDK's constructor.
     pub(crate) fn json_schema_to_tool_input_schema(schema: &Value) -> ToolInputSchema {
-        let properties = schema.get("properties").and_then(|p| p.as_object()).map(|map| {
-            map.iter()
-                .map(|(k, v)| {
-                    let inner = match v {
-                        serde_json::Value::Object(obj) => obj.clone(),
-                        _ => {
-                            let mut m = serde_json::Map::new();
-                            m.insert("value".to_string(), v.clone());
-                            m
-                        }
-                    };
-                    (k.clone(), inner)
-                })
-                .collect::<BTreeMap<String, serde_json::Map<String, Value>>>()
-        });
-        let required = schema
-            .get("required")
-            .and_then(|r| r.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>())
-            .unwrap_or_default();
-        let schema_uri = schema.get("$schema").and_then(|t| t.as_str()).map(String::from);
-        ToolInputSchema::new(required, properties, schema_uri)
+        let input: ToolSchemaInput = serde_json::from_value(schema.clone()).unwrap_or_default();
+        input.into()
     }
 
     /// Invoke a core tool by name and return the result as a string for the SDK
