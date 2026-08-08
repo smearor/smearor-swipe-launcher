@@ -9,18 +9,14 @@ use rust_mcp_sdk::schema::ServerCapabilitiesResources;
 use rust_mcp_sdk::schema::ServerCapabilitiesTools;
 use smearor_model_mcp::McpRegistry;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
 
 use crate::McpCommand;
-use crate::prompts::PromptDefinition;
-use crate::resources::ResourceDefinition;
 use crate::server::McpServerConfig;
 use crate::server::McpServerState;
 use crate::server::SwipeLauncherHandler;
-use crate::tools::ToolDefinition;
 
 /// Builder for the MCP server.
 pub struct McpServer {
@@ -53,14 +49,12 @@ impl McpServer {
             return;
         }
 
-        let state = Arc::new(McpServerState {
-            command_sender: self.command_sender.clone(),
-            tools: ToolDefinition::core_tools(),
-            resources: ResourceDefinition::core_resources(),
-            prompts: PromptDefinition::core_prompts(),
-            plugin_registry: self.plugin_registry.clone(),
-            correlation_counter: AtomicU64::new(1),
-        });
+        let state = Arc::new(
+            McpServerState::builder()
+                .command_sender(self.command_sender.clone())
+                .plugin_registry(self.plugin_registry.clone())
+                .build(),
+        );
 
         let handler = SwipeLauncherHandler {
             state,
