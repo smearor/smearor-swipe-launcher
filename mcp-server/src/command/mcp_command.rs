@@ -1,6 +1,7 @@
 use crate::command::close_area::CloseAreaParams;
 use crate::command::focus_area::FocusAreaParams;
 use crate::command::get_area_config::GetAreaConfigParams;
+use crate::command::get_logs::GetLogsParams;
 use crate::command::invoke_plugin_prompt::InvokePluginPromptParams;
 use crate::command::invoke_plugin_resource::InvokePluginResourceParams;
 use crate::command::invoke_plugin_tool::InvokePluginToolParams;
@@ -45,6 +46,8 @@ pub enum McpCommand {
     ToggleArea(CommandResponseWrapper<ToggleAreaParams>),
     /// Get the configuration of an area as JSON.
     GetAreaConfig(CommandResponseWrapper<GetAreaConfigParams>),
+    /// Retrieve launcher tracing logs. Handled directly by the MCP server.
+    GetLogs(CommandResponseWrapper<GetLogsParams>),
     /// Invoke a tool registered by a plugin.
     InvokePluginTool(CommandResponseWrapper<InvokePluginToolParams>),
     /// Read a resource registered by a plugin.

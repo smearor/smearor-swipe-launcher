@@ -25,6 +25,7 @@ use std::sync::atomic::Ordering;
 use tokio::sync::oneshot;
 
 use crate::CommandResponseWrapper;
+use crate::GetLogsParams;
 use crate::InvokePluginPromptParams;
 use crate::InvokePluginResourceParams;
 use crate::InvokePluginToolParams;
@@ -34,6 +35,7 @@ use crate::resources::IntoSdkResource;
 use crate::resources::ResourceResolver;
 use crate::server::McpServerState;
 use crate::tools::IntoSdkTool;
+use crate::tools::ToolDefinitionCreator;
 use crate::tools::ToolInvocation;
 use crate::tools::ToolResolver;
 
@@ -294,6 +296,17 @@ impl ServerHandler for SwipeLauncherHandler {
 
         // Core tool
         let arguments_value = arguments.map(serde_json::Value::Object).unwrap_or(serde_json::Value::Null);
+
+        // Direct handler for launcher_get_logs — queries the LogBuffer in McpServerState
+        // without going through the command channel.
+        if name == GetLogsParams::tool_name() {
+            let result = crate::tools::handle_get_logs(&state.log_buffer, Some(&arguments_value));
+            return match result {
+                Ok(value) => Ok(CallToolResult::text_content(vec![TextContent::new(value.to_string(), None, None)])),
+                Err(e) => Ok(CallToolResult::with_error(CallToolError::from_message(e.to_string()))),
+            };
+        }
+
         let invocation = ToolInvocation::new(state.command_sender.clone(), Some(&arguments_value));
         let resolver = ToolResolver::new(&state.tools);
         let result = resolver.invoke_sdk(invocation, &name).await;

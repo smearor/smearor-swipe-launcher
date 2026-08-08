@@ -1,8 +1,10 @@
 use async_channel::Sender;
 use smearor_model_mcp::McpRegistry;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use typed_builder::TypedBuilder;
 
+use crate::LogBuffer;
 use crate::McpCommand;
 use crate::prompts::PromptDefinition;
 use crate::resources::ResourceDefinition;
@@ -27,6 +29,8 @@ pub struct McpServerState {
     pub prompts: Vec<PromptDefinition>,
     /// Dynamic registry populated by plugins.
     pub plugin_registry: McpRegistry,
+    /// Shared log buffer for tracing log capture, or `None` when disabled.
+    pub log_buffer: Option<Arc<LogBuffer>>,
     /// Monotonic counter for MCP invocation correlation IDs.
     #[builder(default = AtomicU64::new(1))]
     pub correlation_counter: AtomicU64,

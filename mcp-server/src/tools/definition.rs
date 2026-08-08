@@ -1,6 +1,7 @@
 use crate::CloseAreaParams;
 use crate::FocusAreaParams;
 use crate::GetAreaConfigParams;
+use crate::GetLogsParams;
 use crate::ListAllAreasParams;
 use crate::ListAreasParams;
 use crate::ListInstancesParams;
@@ -49,6 +50,7 @@ impl ToolDefinition {
             ReloadInstanceParams::create_tool_definition(),
             ListInstancesParams::create_tool_definition(),
             WebServerStatusParams::create_tool_definition(),
+            GetLogsParams::create_tool_definition(),
         ]
     }
 }

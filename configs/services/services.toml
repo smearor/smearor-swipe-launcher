@@ -10,6 +10,14 @@ bind_address = "0.0.0.0"
 port = 8765
 # Optional bearer token for authentication.
 # auth_token = "my-secret-token"
+# Whether the tracing log buffer and launcher_get_logs tool are enabled.
+# When false, no LogBufferLayer is installed — zero overhead on the tracing hot path.
+# Default: true.
+#log_buffer_enabled = true
+# Maximum number of log entries in the tracing ring buffer for the launcher_get_logs tool.
+# Set to 0 to disable log capture (same as log_buffer_enabled = false).
+# Default: 10000. At ~200 bytes per entry, this uses ~2MB of memory.
+#log_buffer_capacity = 10000
 
 # Embedded web server for browser-based launcher instances.
 # Access via http://127.0.0.1:8080/instances/{id}

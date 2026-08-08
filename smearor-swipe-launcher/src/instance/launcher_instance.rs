@@ -15,6 +15,7 @@ use gtk4::Box as GtkBox;
 use gtk4::Orientation;
 use gtk4::glib::SignalHandlerId;
 use gtk4::prelude::*;
+use smearor_mcp_server::LogBuffer;
 use smearor_model_compositor::MonitorChangeType;
 use smearor_model_compositor::WorkspaceLifecycleType;
 use smearor_model_instance_control::LauncherInstanceLifecycle;
@@ -66,8 +67,14 @@ pub struct LauncherInstance {
 }
 
 impl LauncherInstance {
-    pub fn new(config: SwipeLauncherConfig, instance_id: String, instance_type: InstanceType, broker_sender: UnboundedSender<FfiEnvelope>) -> Self {
-        let plugin_manager = Arc::new(PluginManager::new(broker_sender, instance_id.clone()));
+    pub fn new(
+        config: SwipeLauncherConfig,
+        instance_id: String,
+        instance_type: InstanceType,
+        broker_sender: UnboundedSender<FfiEnvelope>,
+        log_buffer: Option<Arc<LogBuffer>>,
+    ) -> Self {
+        let plugin_manager = Arc::new(PluginManager::new(broker_sender, instance_id.clone(), log_buffer));
         let config_arc = Arc::new(config.clone());
         let json_converter_registry = GLOBAL_JSON_CONVERTER_REGISTRY
             .get()

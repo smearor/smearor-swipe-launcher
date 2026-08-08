@@ -3,6 +3,7 @@ use crate::error::LauncherError;
 use crate::library_path::resolve_library_path;
 use libloading::Library;
 use serde_json::Value;
+use smearor_mcp_server::LogBuffer;
 use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
@@ -23,7 +24,12 @@ pub struct LoadedService {
 }
 
 impl LoadedService {
-    pub fn load(service_entry: &PluginEntry, config: &PluginConfig, sender: UnboundedSender<FfiEnvelope>) -> Result<(String, Self), LauncherError> {
+    pub fn load(
+        service_entry: &PluginEntry,
+        config: &PluginConfig,
+        sender: UnboundedSender<FfiEnvelope>,
+        log_buffer: Option<Arc<LogBuffer>>,
+    ) -> Result<(String, Self), LauncherError> {
         unsafe {
             let path = resolve_library_path(&service_entry.path, &service_entry.name)?;
             let library = Arc::new(Library::new(&path)?);
@@ -42,7 +48,7 @@ impl LoadedService {
 
             let service_id = service_entry.id.clone();
             // Services are shared across all instances, so instance_id is always empty.
-            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current(), service_id.clone(), "");
+            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current(), service_id.clone(), "", log_buffer);
             let ffi_context = core_context.into_ffi_context();
 
             let ffi_context_ptr = Box::into_raw(Box::new(ffi_context)) as *mut core::ffi::c_void;

@@ -1,6 +1,7 @@
 mod close_area;
 mod focus_area;
 mod get_area_config;
+mod get_logs;
 mod invoke_plugin_prompt;
 mod invoke_plugin_resource;
 mod invoke_plugin_tool;
@@ -25,6 +26,7 @@ mod wrapper;
 pub use close_area::CloseAreaParams;
 pub use focus_area::FocusAreaParams;
 pub use get_area_config::GetAreaConfigParams;
+pub use get_logs::GetLogsParams;
 pub use invoke_plugin_prompt::InvokePluginPromptParams;
 pub use invoke_plugin_resource::InvokePluginResourceParams;
 pub use invoke_plugin_tool::InvokePluginToolParams;

@@ -2,9 +2,11 @@ use crate::error::LauncherError;
 use crate::plugin::LoadedPlugin;
 use dashmap::DashMap;
 use dashmap::DashSet;
+use smearor_mcp_server::LogBuffer;
 use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
+use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 use tracing::trace;
@@ -13,14 +15,16 @@ pub struct PluginManager {
     pub(crate) plugins: DashMap<String, LoadedPlugin>,
     pub(crate) message_sender: UnboundedSender<FfiEnvelope>,
     pub(crate) instance_id: String,
+    pub(crate) log_buffer: Option<Arc<LogBuffer>>,
 }
 
 impl PluginManager {
-    pub fn new(message_sender: UnboundedSender<FfiEnvelope>, instance_id: String) -> Self {
+    pub fn new(message_sender: UnboundedSender<FfiEnvelope>, instance_id: String, log_buffer: Option<Arc<LogBuffer>>) -> Self {
         PluginManager {
             plugins: DashMap::new(),
             message_sender,
             instance_id,
+            log_buffer,
         }
     }
 
@@ -40,7 +44,7 @@ impl PluginManager {
     pub fn load_plugin(&self, plugin_entry: &PluginEntry, config: PluginConfig) -> Result<(), LauncherError> {
         trace!("Loading plugin {} from: {:?} (name: {:?})", plugin_entry.id, plugin_entry.path, plugin_entry.name);
 
-        let (plugin_id, plugin) = LoadedPlugin::load(plugin_entry, &config, self.message_sender.clone(), &self.instance_id)?;
+        let (plugin_id, plugin) = LoadedPlugin::load(plugin_entry, &config, self.message_sender.clone(), &self.instance_id, self.log_buffer.clone())?;
 
         let namespaced_id = if self.instance_id.is_empty() {
             plugin_id

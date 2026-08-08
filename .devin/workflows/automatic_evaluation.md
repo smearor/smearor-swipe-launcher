@@ -12,6 +12,7 @@ generate structured evaluation reports.
 - Smearor Swipe Launcher is running with Voice Assistant Service loaded
 - MCP Server is connected and voice assistant tools are available
 - At least one GGUF model is available in the models directory
+- The `launcher_get_logs` MCP tool is available for diagnostic log retrieval
 
 ### Parameters
 
@@ -28,6 +29,11 @@ The user may provide any of the following parameters. Use defaults when not spec
 - **report_path**: File path to save the report (if not provided, output to chat)
 - **baseline_path**: Path to a previous report file for regression comparison
 - **clear_between**: `true` (default) — clear conversation between test cases
+- **capture_logs**: `true` (default) — retrieve launcher logs after each test case for diagnostics
+- **log_level**: `debug` (default) — minimum log level to capture: `trace`, `debug`, `info`, `warn`, `error`
+- **log_target_prefix**: `smearor_voice_assistant` (default) — filter logs by tracing target prefix. Set to empty string for all logs.
+- **log_since_seconds**: `120` (default) — only retrieve logs from the last N seconds
+- **log_limit**: `200` (default) — maximum number of log entries to retrieve per test case
 
 ### Test Case Catalog
 
@@ -141,9 +147,16 @@ If `clear_between` is `true`:
 
 1. Read `voice_assistant://status` resource.
 2. Check the `state` field in the JSON response.
-3. If `state` is `ThinkingLlm`: Wait 3 seconds and poll again. Repeat up to 40 times (maximum 120 seconds total).
-4. If `state` is `Idle`, `Error`, or `Speaking`: Proceed to the next step.
-5. If the 120-second timeout is reached: Record a timeout failure and proceed to 4g.
+3. If `state` is `ThinkingLlm`, `ThinkingStt`, or `Listening`: The pipeline is still active. Wait 3 seconds and poll again. Repeat up to 40 times (maximum 120
+   seconds total).
+4. If `state` is `Speaking`: The LLM has produced a final answer and TTS is playing. Wait 2 seconds and poll again until `state` is `Idle`. This ensures the
+   trace captures the complete ReAct loop including the final answer step. If the state remains `Speaking` for more than 30 seconds (15 polls), proceed to 4g —
+   TTS playback may be stuck or the audio device may be unavailable.
+5. If `state` is `Idle` or `Error`: Proceed to the next step.
+6. If the 120-second timeout is reached: Record a timeout failure and proceed to 4g.
+
+**Critical**: Do NOT call `voice_assistant_training_end` while the state is `ThinkingLlm`. The trace will be finalized before the LLM finishes, causing the
+final answer step to be missing from the trace. Always wait until the state transitions to `Idle`.
 
 #### 4g: End Training
 
@@ -156,7 +169,24 @@ If `clear_between` is `true`:
 2. Parse the JSON response to extract the trace object.
 3. If no trace is returned, record a retrieval failure.
 
-#### 4i: Analyze Trace
+#### 4i: Retrieve Launcher Logs
+
+If `capture_logs` is `true`:
+
+1. Call `launcher_get_logs` with the following parameters:
+    - `min_level`: the `log_level` parameter value
+    - `target_prefix`: the `log_target_prefix` parameter value (if provided)
+    - `since_seconds`: the `log_since_seconds` parameter value
+    - `limit`: the `log_limit` parameter value
+2. Parse the JSON response. Extract `entries` (array of log entries), `total_returned`, `total_in_buffer`, `buffer_capacity`.
+3. Filter log entries to those with `timestamp_ms` >= the test case start time (recorded at step 4d).
+4. Store the filtered log entries alongside the trace for use in failure analysis (step 4j) and the report (step 5c).
+5. Look for log entries with `level` >= `warn` that may indicate errors during the test run (e.g. LLM inference errors, tool invocation failures, parse errors).
+6. Check for premature termination: compare the trace's `end_time` (in seconds, multiply by 1000 for ms) against the latest
+   `smearor_voice_assistant_service::react` log entry timestamp. If there are `react.rs` log entries with `timestamp_ms` > trace `end_time * 1000`, the trace
+   was likely finalized before the ReAct loop completed (premature `training_end`). Record this as a diagnostic finding.
+
+#### 4j: Analyze Trace
 
 Evaluate the trace against the following criteria. Record pass/fail for each:
 
@@ -173,6 +203,25 @@ Evaluate the trace against the following criteria. Record pass/fail for each:
    brief reason.
 
 **Overall result**: `Pass` if all criteria pass. `Fail` if any criterion fails. Record which criteria failed.
+
+**Log-assisted diagnostics**: If `capture_logs` is `true` and the test failed, review the captured log entries for the test case to identify potential root
+causes:
+
+- `error` level entries during the test window may indicate crashes or infrastructure failures.
+- `warn` level entries from `smearor_voice_assistant` may indicate LLM output sanitization, parse repairs, or discarded JSON.
+- `debug` level entries from `smearor_voice_assistant::react` may show the raw LLM output, sanitized output, and plan injection activity.
+- `debug` level entries from `smearor_voice_assistant::llm` show session creation, prompt formatting, tokenization, KV-cache shifts, and streaming output —
+  useful for diagnosing timeouts and context overflow.
+- `debug` level entries from `smearor_voice_assistant::catalog_router` show tool selection scores and threshold filtering — useful for diagnosing
+  wrong-tool-selection failures.
+- `debug` level entries from `smearor_voice_assistant::tts` show text normalization, phoneme generation, and audio playback — useful for diagnosing TTS-related
+  delays.
+- Correlate log timestamps with trace step iterations to pinpoint where the failure occurred.
+- **Premature termination**: If `react.rs` log entries exist with `timestamp_ms` > trace `end_time * 1000`, the trace was finalized before the ReAct loop
+  completed. This indicates `training_end` was called too early (see §4f). The trace may be missing the final answer step even though the LLM produced one.
+- **Unknown correlation_id**: Log entries containing `"received tool response for unknown correlation_id"` in `react.rs` indicate that MCP tool responses (e.g.
+  `training_end`, `training_get`) arrived after the ReAct loop already moved on. This is a side effect of calling training tools during an active ReAct loop and
+  is expected — it does not indicate a failure.
 
 ### Step 5: Generate Report
 
@@ -215,18 +264,29 @@ For each failed test, generate a detailed section:
 1. Iteration {n}: action={action}, params={parameters}, observation={first 200 chars of observation}
 2. ...
 
-**Recommendation**: {suggested fix based on failure pattern}
+**Relevant Logs** (if `capture_logs` is `true`):
+
+```
+
+[timestamp] LEVEL target: message fields...
+
+```
+
+Include only log entries from the test case time window with level >= `warn`, plus any `debug` entries from `smearor_voice_assistant::react` that show LLM output sanitization or parse repair activity. Limit to 20 most relevant entries.
+
+**Recommendation**: {suggested fix based on failure pattern and log evidence}
 ```
 
 Failure pattern recommendations:
 
 - **Generation loop**: "The model enters a generation loop after a tool call. Consider increasing max_tokens, adjusting the system prompt's final-answer hint,
-  or trying a different model."
+  or trying a different model. Check logs for repeated LLM outputs or plan injection activity."
 - **Parse error**: "The model output does not match the expected JSON format. Check the system prompt format instructions. Consider enabling grammar mode if
-  available."
+  available. Review `smearor_voice_assistant::react` debug logs for raw LLM output and sanitization attempts."
 - **Timeout**: "The model did not produce a final answer within 120 seconds. Check if the model is too large for the available VRAM, or if the context window is
-  too small."
-- **Wrong tools**: "The model did not call the expected tools. Check the tool selection threshold, the tool descriptions in the catalog, or the system prompt."
+  too small. Review launcher logs for error-level entries during the test window."
+- **Wrong tools**: "The model did not call the expected tools. Check the tool selection threshold, the tool descriptions in the catalog, or the system prompt.
+  Review logs for threshold-related warnings or tool selection debug output."
 - **Language mismatch**: "The model responded in the wrong language. Check the system prompt language instructions."
 
 #### 5d: Model Comparison (if multiple models tested)
@@ -277,8 +337,19 @@ After the report is generated, provide a brief summary to the user:
 - **Conversation contamination**: Always call `voice_assistant_clear_conversation` between test cases when `clear_between` is `true`. Previous conversation
   context can affect tool selection and response quality.
 - **Polling patience**: LLM inference can take 10-60 seconds depending on model size and query complexity. The 120-second timeout is generous but not infinite.
+  Always wait until the state is `Idle` before calling `training_end` — calling it during `ThinkingLlm` will truncate the trace.
 - **Trace retrieval**: If `voice_assistant_training_get` returns an empty array, the trace may not have been finalized. Check that
   `voice_assistant_training_end` was called successfully.
 - **Model loading time**: Large models (e.g. 7B+ parameters) may take 30+ seconds to load. Be patient when polling `voice_assistant://llm` after a model switch.
 - **Tool name format**: In traces, tool calls appear as `tool:{tool_name}` in the `action` field. Resource reads appear as `resource:{uri}`. Final answers
   appear as `final_answer`. Clarifications appear as `clarify`.
+- **Log retrieval**: The `launcher_get_logs` tool returns entries from a bounded ring buffer (default capacity 10000). Old entries are evicted. If logs are
+  missing for a test case, increase `log_since_seconds` or reduce `log_limit` for other test cases. Use `log_target_prefix` to narrow to a specific module.
+  Plugin logs (from `smearor_voice_assistant_service::*` and other service/widget plugins) are forwarded to the host's `LogBuffer` via FFI log forwarding. This
+  includes `react.rs` (ReAct loop, JSON parsing, plan injection), `llm.rs` (session management, tokenization, streaming), `catalog_router.rs` (tool selection
+  scoring), `tts.rs` (text-to-speech), `audio.rs` (audio capture), and `wake_word.rs` (wake word detection).
+- **Log entry format**: Each log entry contains `timestamp_ms` (Unix epoch milliseconds), `level` (string: trace/debug/info/warn/error), `target` (module path),
+  `message` (formatted message), `fields` (array of `key=value` strings from structured tracing fields), `file` (optional source file), `line` (optional line
+  number).
+- **Log correlation**: To correlate logs with a specific test case, record the test case start time (in milliseconds) at step 4d and filter log entries by
+  `timestamp_ms >= start_time`. This isolates log entries generated during that test run.

@@ -20,6 +20,17 @@ pub struct McpConfig {
 
     /// Optional bearer token required for all HTTP requests.
     pub auth_token: Option<String>,
+
+    /// Whether the tracing log buffer and `launcher_get_logs` tool are enabled.
+    /// When `false`, no `LogBufferLayer` is installed and the tool returns an error.
+    /// Default: `true`.
+    #[serde(default = "default_log_buffer_enabled")]
+    pub log_buffer_enabled: bool,
+
+    /// Maximum number of log entries in the tracing ring buffer. Default: `10000`.
+    /// Set to `0` to disable log capture (same as `log_buffer_enabled = false`).
+    #[serde(default = "default_log_buffer_capacity")]
+    pub log_buffer_capacity: usize,
 }
 
 fn default_bind_address() -> String {
@@ -30,12 +41,22 @@ fn default_port() -> u16 {
     8765
 }
 
+fn default_log_buffer_enabled() -> bool {
+    true
+}
+
+fn default_log_buffer_capacity() -> usize {
+    10000
+}
+
 impl Default for McpConfig {
     fn default() -> Self {
         Self {
             bind_address: default_bind_address(),
             port: default_port(),
             auth_token: None,
+            log_buffer_enabled: default_log_buffer_enabled(),
+            log_buffer_capacity: default_log_buffer_capacity(),
         }
     }
 }

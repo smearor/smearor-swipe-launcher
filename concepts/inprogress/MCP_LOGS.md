@@ -57,13 +57,33 @@ tracing events → registry()
 ### 3.1 LogEntry
 
 ```rust
+/// Custom serde module for `tracing::Level` — serializes as string and
+/// deserializes via `FromStr`, since `tracing` 0.1 has no `serde` feature.
+pub mod level_serde {
+    use serde::Deserialize;
+    use serde::Deserializer;
+    use serde::Serializer;
+    use std::str::FromStr;
+    use tracing::Level;
+
+    pub fn serialize<S: Serializer>(level: &Level, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&level.to_string())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Level, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Level::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
 /// A single tracing log event captured in the ring buffer.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LogEntry {
     /// Timestamp of the event (Unix epoch milliseconds).
     pub timestamp_ms: u64,
-    /// Log level, stored as `tracing::Level` for correct ordinal comparison.
-    /// Serialized as string ("trace", "debug", "info", "warn", "error").
+    /// Log level, serialized as string ("trace", "debug", "info", "warn", "error").
+    /// Uses custom serde module since `tracing` 0.1 has no `serde` feature.
+    #[serde(with = "level_serde")]
     pub level: tracing::Level,
     /// Tracing target (module path, e.g. "smearor_voice_assistant::service").
     pub target: String,
@@ -79,6 +99,10 @@ pub struct LogEntry {
 }
 ```
 
+**Note on `tracing::Level` serialization**: The concept originally proposed enabling the `serde` feature on the `tracing` crate. However, `tracing` 0.1.x does
+**not** have a `serde` feature. Instead, a custom `level_serde` module is used, which serializes `tracing::Level` as a string via `Display` and deserializes via
+`FromStr`. This is functionally equivalent and avoids adding a non-existent feature flag.
+
 ### 3.2 LogBuffer
 
 Thread-safe ring buffer. `push()` evicts oldest entry at capacity. `query()` filters by level, target prefix, timestamp, and limit. `len()` returns current
@@ -86,7 +110,9 @@ count.
 
 ```rust
 pub struct LogBuffer {
-    inner: parking_lot::Mutex<VecDeque<LogEntry>>,
+    /// Inner ring buffer protected by `parking_lot::Mutex` for concurrent access.
+    inner: Mutex<VecDeque<LogEntry>>,
+    /// Maximum number of entries the buffer can hold before evicting the oldest.
     capacity: usize,
 }
 ```
@@ -106,7 +132,27 @@ Key methods:
 - `len() -> usize` — current entry count
 - `capacity() -> usize` — maximum entry count
 
-### 3.3 LogBufferLayer
+### 3.3 LogQueryResponse
+
+Response payload for the `launcher_get_logs` MCP tool, returned as a structured JSON value:
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LogQueryResponse {
+    /// Matching log entries (most recent N, in chronological order).
+    pub entries: Vec<LogEntry>,
+    /// Number of entries returned in this response.
+    pub total_returned: usize,
+    /// Total number of entries currently in the buffer.
+    pub total_in_buffer: usize,
+    /// Maximum number of entries the buffer can hold.
+    pub buffer_capacity: usize,
+}
+```
+
+Using a dedicated `LogQueryResponse` struct (instead of `serde_json::json!()` macro) ensures type-safe serialization and deserialization.
+
+### 3.4 LogBufferLayer
 
 Implements `tracing_subscriber::Layer`. `on_event` constructs the `LogEntry` fully on the stack (metadata extraction, visitor, timestamp), then acquires the
 `parking_lot::Mutex` lock only for the brief `push_back`/`pop_front` operation. This minimizes lock duration in the tracing hot path.
@@ -117,9 +163,11 @@ The visitor distinguishes between the `message` field (tracing's standard messag
 
 ```rust
 #[derive(Default)]
-struct LogEntryVisitor {
-    message: String,
-    fields: Vec<String>,
+pub struct LogEntryVisitor {
+    /// The formatted message extracted from the `message` field of a tracing event.
+    pub message: String,
+    /// Additional structured fields from the tracing event, formatted as `key=value` strings.
+    pub fields: Vec<String>,
 }
 
 impl tracing::field::Visit for LogEntryVisitor {
@@ -222,13 +270,29 @@ If parsing fails, a `CallToolResult` with `is_error: true` is returned.
 
 ## 5. Implementation
 
-### 5.1 New Module: `mcp-server/src/log_buffer.rs`
+### 5.1 New Module: `mcp-server/src/logs/`
 
-Contains `LogEntry`, `LogBuffer`, `LogBufferLayer`, `LogEntryVisitor`. Exported from `mcp-server/src/lib.rs`.
+Split into individual files for clear separation of concerns:
+
+| File                     | Contents                                       |
+|--------------------------|------------------------------------------------|
+| `logs/entry.rs`          | `LogEntry` struct + `level_serde` module       |
+| `logs/query_response.rs` | `LogQueryResponse` struct                      |
+| `logs/buffer.rs`         | `LogBuffer` ring buffer                        |
+| `logs/entry_visitor.rs`  | `LogEntryVisitor` (`tracing::field::Visit`)    |
+| `logs/buffer_layer.rs`   | `LogBufferLayer` (`tracing_subscriber::Layer`) |
+| `logs/mod.rs`            | Module declarations + `pub use` re-exports     |
+
+Exported from `mcp-server/src/lib.rs` via `pub use crate::logs::*`.
 
 ### 5.2 New Command: `mcp-server/src/command/get_logs.rs`
 
 `GetLogsParams` struct with `McpCommandVariant` impl mapping to `McpCommand::GetLogs`. `ToolDefinitionCreator` impl with `tool_name() = "launcher_get_logs"`.
+
+### 5.2a New Handler: `mcp-server/src/tools/get_logs.rs`
+
+Extracted handler function `handle_get_logs(log_buffer: &Arc<LogBuffer>, params: Option<&Value>) -> ToolResult`. Parses `GetLogsParams`, queries the
+`LogBuffer`, and returns a `LogQueryResponse` serialized as `serde_json::Value`. Errors are returned as `McpError::InvalidParams`.
 
 ### 5.3 McpCommand Extension
 
@@ -244,59 +308,25 @@ Add `GetLogsParams::create_tool_definition()` to `ToolDefinition::core_tools()`.
 
 ### 5.6 Direct Handler in `handle_call_tool_request`
 
-In `mcp-server/src/server/handler.rs`, before the generic command dispatch, check for `launcher_get_logs` and query the buffer directly:
+In `mcp-server/src/server/handler.rs`, before the generic command dispatch, check for `GetLogsParams::tool_name()` and delegate to the extracted handler
+function:
 
 ```rust
-if params.name == "launcher_get_logs" {
-let args = params.arguments.unwrap_or_default();
-let log_params: GetLogsParams = match serde_json::from_value(args) {
-Ok(params) => params,
-Err(parse_error) => {
-return Ok(CallToolResult {
-content: vec ! [TextContent::new(format! (
-"Invalid arguments for launcher_get_logs: {parse_error}"
-))],
-is_error: true,
-..Default::default()
-});
-}
-};
-let since_ms = log_params.since_seconds.map(| s | {
-let now = SystemTime::now().duration_since(UNIX_EPOCH)
-.map( | d | d.as_millis() as u64).unwrap_or(0);
-now.saturating_sub(s * 1000)
-});
-let min_level = match log_params.min_level.parse::< tracing::Level > () {
-Ok(level) => level,
-Err(_) => {
-return Ok(CallToolResult {
-content: vec ! [TextContent::new(format! (
-"Invalid min_level '{}': valid values are trace, debug, info, warn, error",
-log_params.min_level
-))],
-is_error: true,
-..Default::default()
-});
-}
-};
-let entries = self.state.log_buffer.query(
-Some(min_level),
-log_params.target_prefix.as_deref(),
-since_ms,
-Some(log_params.limit),
-);
-let response = serde_json::json ! ({
-"entries": entries,
-"total_returned": entries.len(),
-"total_in_buffer": self.state.log_buffer.len(),
-"buffer_capacity": self.state.log_buffer.capacity(),
-});
-return Ok(CallToolResult {
-content: vec ! [TextContent::new(response.to_string())],
-..Default::default()
-});
+let arguments_value = arguments.map(serde_json::Value::Object).unwrap_or(serde_json::Value::Null);
+
+if name == GetLogsParams::tool_name() {
+    let result = crate::tools::handle_get_logs(&state.log_buffer, Some(&arguments_value));
+    return match result {
+        Ok(value) => Ok(CallToolResult::text_content(vec![TextContent::new(
+            value.to_string(), None, None,
+        )])),
+        Err(e) => Ok(CallToolResult::with_error(CallToolError::from_message(e.to_string()))),
+    };
 }
 ```
+
+The handler logic is extracted into `mcp-server/src/tools/get_logs.rs::handle_get_logs()`, which parses `GetLogsParams`, queries the `LogBuffer`, and returns a
+`LogQueryResponse` serialized as `serde_json::Value`. Errors use `McpError::InvalidParams` and are converted to `CallToolResult::with_error()` in the handler.
 
 ### 5.7 Tracing Init
 
@@ -311,14 +341,32 @@ content: vec ! [TextContent::new(response.to_string())],
 
 ## 6. Config Integration
 
-### 6.1 Log Buffer Capacity (Optional)
+### 6.1 Log Buffer Configuration
 
 ```toml
 [services.mcp]
+# Whether the tracing log buffer and launcher_get_logs tool are enabled.
+# When false, no LogBufferLayer is installed — zero overhead on the tracing hot path.
+# Default: true.
+log_buffer_enabled = true
+
+# Maximum number of log entries in the tracing ring buffer.
+# Set to 0 to disable log capture (same as log_buffer_enabled = false).
+# Default: 10000.
 log_buffer_capacity = 10000
 ```
 
-Optional — default 10,000 is sufficient for evaluation.
+Two mechanisms to disable log capture:
+
+1. **`log_buffer_enabled = false`**: No `LogBufferLayer` is installed. `init_tracing::init()` returns `None`.
+2. **`log_buffer_capacity = 0`**: Same effect — log capture disabled, `init_tracing::init()` returns `None`.
+
+When disabled, `McpServerState.log_buffer` is `None`, and `handle_get_logs` returns an error:
+> "Log buffer is disabled. Set log_buffer_enabled = true and log_buffer_capacity > 0 in services.toml."
+
+Implemented in `McpConfig` (`smearor-swipe-launcher/src/config/services.rs`). `main.rs` loads `services_config`
+before `init_tracing::init()` and passes both `log_buffer_enabled` and `log_buffer_capacity`. The `LogBuffer`
+is propagated as `Option<Arc<LogBuffer>>` through `start_mcp_server` → `McpServer` → `McpServerState`.
 
 ### 6.2 RUST_LOG
 
@@ -331,19 +379,26 @@ capture, set `RUST_LOG=trace`. For production, `RUST_LOG=debug` or `info`.
 
 ### Phase 1: LogBuffer and Layer
 
-- Implement `LogEntry`, `LogBuffer`, `LogBufferLayer`, `LogEntryVisitor` in `mcp-server/src/log_buffer.rs`
-- Add `tracing = { workspace = true, features = ["serde"] }` to `mcp-server/Cargo.toml`
+- Implement `LogEntry` + `level_serde` in `mcp-server/src/logs/entry.rs`
+- Implement `LogQueryResponse` in `mcp-server/src/logs/query_response.rs`
+- Implement `LogBuffer` in `mcp-server/src/logs/buffer.rs`
+- Implement `LogEntryVisitor` in `mcp-server/src/logs/entry_visitor.rs`
+- Implement `LogBufferLayer` in `mcp-server/src/logs/buffer_layer.rs`
+- Add `logs/mod.rs` with module declarations and `pub use` re-exports
+- Add `tracing-subscriber` to `mcp-server/Cargo.toml`
 - Add `parking_lot` to workspace `Cargo.toml` and `mcp-server/Cargo.toml`
 - Export from `lib.rs`
+- **Note**: `tracing` 0.1 has no `serde` feature. A custom `level_serde` module is used instead.
 - **Exit Criteria**: `cargo build -p smearor-mcp-server` succeeds
 
 ### Phase 2: MCP Tool Integration
 
 - Add `GetLogsParams` in `mcp-server/src/command/get_logs.rs`
+- Add `handle_get_logs` in `mcp-server/src/tools/get_logs.rs`
 - Add `McpCommand::GetLogs` variant
 - Add `log_buffer` field to `McpServerState`
 - Add `GetLogsParams::create_tool_definition()` to `core_tools()`
-- Add direct handler in `handle_call_tool_request`
+- Add direct handler in `handle_call_tool_request` delegating to `handle_get_logs`
 - **Exit Criteria**: `cargo build -p smearor-mcp-server` succeeds, tool appears in `tools/list`
 
 ### Phase 3: Launcher Integration
@@ -364,41 +419,62 @@ capture, set `RUST_LOG=trace`. For production, `RUST_LOG=debug` or `info`.
 
 ## 8. Dependencies
 
-| Crate                    | New Dependencies                                                                                                                         |
-|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| `mcp-server`             | `tracing` (workspace, **with `serde` feature**), `tracing-subscriber` (workspace), `serde`, `serde_json` (existing), `parking_lot` (new) |
-| `smearor-swipe-launcher` | none new (uses `mcp-server` re-exports)                                                                                                  |
+| Crate                    | New Dependencies                                                                                                             |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| `mcp-server`             | `tracing` (workspace, no `serde` feature — uses custom `level_serde`), `tracing-subscriber` (workspace), `parking_lot` (new) |
+| `smearor-swipe-launcher` | none new (uses `mcp-server` re-exports)                                                                                      |
 
 `tracing-subscriber` is already a workspace dependency with `env-filter` feature. The `Layer` trait is in the default feature set.
 `parking_lot` must be added to the workspace `Cargo.toml` and the `mcp-server` crate's `Cargo.toml`.
 
-**Critical**: `tracing::Level` only implements `Serialize` and `Deserialize` when the `serde` feature is enabled on the `tracing` crate. The workspace
-`Cargo.toml` currently defines `tracing = "0.1"` without features. The `mcp-server` crate must override this:
-
-```toml
-# mcp-server/Cargo.toml
-tracing = { workspace = true, features = ["serde"] }
-```
-
-This enables `tracing::Level` to derive `Serialize`/`Deserialize`, which `LogEntry` requires. Without this feature, the build will fail with
-`the trait bound `tracing::Level: Serialize` is not satisfied`.
+**Note on `tracing::Level` serialization**: The concept originally proposed enabling the `serde` feature on the `tracing` crate. However, `tracing` 0.1.x does
+**not** have a `serde` feature. Instead, a custom `level_serde` module in `logs/entry.rs` serializes `tracing::Level` as a string via `Display` and deserializes
+via `FromStr`. This is functionally equivalent and avoids adding a non-existent feature flag.
 
 ---
 
 ## 9. Testing Checklist
 
-- [ ] `launcher_get_logs` returns entries after launcher start
-- [ ] `min_level` filter correctly excludes lower levels
-- [ ] `target_prefix` filter matches module paths
-- [ ] `since_seconds` filter returns only recent entries
-- [ ] `limit` parameter returns most recent N entries
-- [ ] Ring buffer evicts oldest entries at capacity
-- [ ] `total_in_buffer` and `buffer_capacity` are accurate
-- [ ] stdout output is unchanged with `LogBufferLayer` installed
+### Unit Tests (implemented in `mcp-server` crate)
+
+- [x] `launcher_get_logs` returns entries after launcher start → `test_handle_get_logs_returns_entries`
+- [x] `min_level` filter correctly excludes lower levels → `test_min_level_filter_excludes_lower_levels`, `test_handle_get_logs_min_level_filter`
+- [x] `target_prefix` filter matches module paths → `test_target_prefix_filter`, `test_handle_get_logs_target_prefix_filter`
+- [x] `since_seconds` filter returns only recent entries → `test_since_ms_filter`, `test_handle_get_logs_since_seconds`
+- [x] `limit` parameter returns most recent N entries → `test_limit_returns_most_recent_n`, `test_handle_get_logs_limit`
+- [x] Ring buffer evicts oldest entries at capacity → `test_ring_buffer_eviction_at_capacity`
+- [x] `total_in_buffer` and `buffer_capacity` are accurate → `test_capacity`, `test_handle_get_logs_returns_entries`
+- [ ] stdout output is unchanged with `LogBufferLayer` installed → integration test (requires running launcher)
+- [ ] `RUST_LOG=trace` captures trace-level events in buffer → integration test (requires running launcher with `RUST_LOG=trace`)
+- [ ] Tool appears in MCP `tools/list` response → integration test (requires running MCP server)
+- [x] No `unwrap()` or `expect()` in production code paths → verified by code review (tests use `unwrap()` which is acceptable)
+- [x] Lock duration in `on_event` is minimal → verified by code inspection (`LogEntry` built on stack, lock only for `push`)
+
+### Additional Unit Tests
+
+- [x] `LogEntry` serde round-trip → `test_log_entry_serde_round_trip`
+- [x] `level_serde` serializes as string → `test_log_entry_json_level_serialized_as_string`
+- [x] `level_serde` deserializes from string → `test_log_entry_level_deserialize_from_string`
+- [x] `level_serde` deserializes lowercase → `test_log_entry_level_deserialize_lowercase`
+- [x] `level_serde` rejects invalid level → `test_log_entry_level_deserialize_invalid`
+- [x] `LogBufferLayer` captures events with structured fields → `test_log_buffer_layer_captures_events`
+- [x] `LogBufferLayer` filters by level → `test_log_buffer_layer_filters_by_level`
+- [x] `LogBuffer::clear()` empties the buffer → `test_clear`
+- [x] `LogBuffer::query()` preserves chronological order → `test_query_preserves_chronological_order`
+- [x] `LogBuffer::query()` on empty buffer → `test_empty_buffer_query`
+- [x] Combined filters (level + prefix + time + limit) → `test_combined_filters`, `test_handle_get_logs_combined_filters`
+- [x] `handle_get_logs` with invalid `min_level` returns error → `test_handle_get_logs_invalid_min_level`
+- [x] `handle_get_logs` with default params (min_level="debug") → `test_handle_get_logs_default_params`
+- [x] `handle_get_logs` on empty buffer → `test_handle_get_logs_empty_buffer`
+- [x] `LogEntryVisitor::default()` is empty → `test_default_is_empty`
+
+### Integration Tests (not yet implemented)
+
+- [ ] stdout output unchanged with `LogBufferLayer` installed
 - [ ] `RUST_LOG=trace` captures trace-level events in buffer
 - [ ] Tool appears in MCP `tools/list` response
-- [ ] No `unwrap()` or `expect()` in production code paths
-- [ ] Lock duration in `on_event` is minimal (LogEntry built on stack, lock only for push)
+
+Run unit tests with: `cargo test -p smearor-mcp-server`
 
 ---
 

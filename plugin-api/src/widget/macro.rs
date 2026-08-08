@@ -81,14 +81,6 @@ macro_rules! widget_plugin {
                 *mut core::ffi::c_void,
                 $crate::PluginConstructionErrorWrapper,
             > {
-                let subscriber = tracing_subscriber::FmtSubscriber::builder()
-                    .with_env_filter(
-                        tracing_subscriber::EnvFilter::from_default_env()
-                            .add_directive(tracing::Level::DEBUG.into()),
-                    )
-                    .finish();
-                let _ = tracing::subscriber::set_global_default(subscriber);
-
                 let config = match $crate::PluginConfig::new(config_json, config_len) {
                     Ok(config) => config,
                     Err(e) => return stabby::result::Result::Err(e),
@@ -99,6 +91,10 @@ macro_rules! widget_plugin {
                 } else {
                     Some(unsafe { *(core_context as *mut $crate::FfiCoreContext) })
                 };
+
+                $crate::log_forward::init_plugin_tracing(
+                    ffi_context.and_then(|ctx| ctx.log_forward),
+                );
 
                 match <$widget_type>::new(config, ffi_context) {
                     Ok(widget) => {

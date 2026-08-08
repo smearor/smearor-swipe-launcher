@@ -6,13 +6,18 @@
 
 pub mod command;
 mod error;
-mod jsonrpc;
+pub mod jsonrpc;
+pub mod logs;
 pub mod prompts;
 pub mod resources;
 pub mod server;
 pub mod tools;
 
 pub use crate::error::McpError;
+pub use crate::logs::LogBuffer;
+pub use crate::logs::LogBufferLayer;
+pub use crate::logs::LogEntry;
+pub use crate::logs::LogQueryResponse;
 pub use crate::server::McpServer;
 pub use crate::server::McpServerConfig;
 pub use crate::server::McpServerState;
@@ -22,6 +27,7 @@ pub use command::CloseAreaParams;
 pub use command::CommandResponseWrapper;
 pub use command::FocusAreaParams;
 pub use command::GetAreaConfigParams;
+pub use command::GetLogsParams;
 pub use command::InstanceTypeParam;
 pub use command::InvokePluginPromptParams;
 pub use command::InvokePluginResourceParams;

@@ -52,17 +52,18 @@ use tracing::error;
 async fn main() -> Result<()> {
     let args = SwipeLauncherArguments::parse();
 
-    crate::init_tracing::init()?;
+    let services_config = args.load_services_config()?;
+
+    let log_buffer = crate::init_tracing::init(services_config.mcp.log_buffer_enabled, services_config.mcp.log_buffer_capacity)?;
 
     let config_paths = bootstrap_configs(&args)?;
 
     let gtk_app = Application::builder().application_id("com.smearor.swipe-launcher").build();
-    let host = LauncherHost::new(gtk_app.clone());
+    let host = LauncherHost::new(gtk_app.clone(), log_buffer.clone());
 
-    let services_config = args.load_services_config()?;
     setup_host(&host, &args, &config_paths, &services_config)?;
 
-    let mcp_handles = start_mcp_server(&host, &services_config);
+    let mcp_handles = start_mcp_server(&host, &services_config, log_buffer);
     let reload_rx = start_infrastructure(&host, &services_config)?;
 
     spawn_main_loop_tasks(&MainContext::default(), &host, mcp_handles.command_receiver, reload_rx, &gtk_app);

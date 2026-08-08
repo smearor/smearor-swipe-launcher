@@ -2,9 +2,11 @@ use crate::LoadedService;
 use crate::error::LauncherError;
 use dashmap::DashMap;
 use dashmap::DashSet;
+use smearor_mcp_server::LogBuffer;
 use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
+use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 use tracing::trace;
@@ -12,13 +14,15 @@ use tracing::trace;
 pub struct ServiceManager {
     pub(crate) services: DashMap<String, LoadedService>,
     pub(crate) message_sender: UnboundedSender<FfiEnvelope>,
+    pub(crate) log_buffer: Option<Arc<LogBuffer>>,
 }
 
 impl ServiceManager {
-    pub fn new(message_sender: UnboundedSender<FfiEnvelope>) -> Self {
+    pub fn new(message_sender: UnboundedSender<FfiEnvelope>, log_buffer: Option<Arc<LogBuffer>>) -> Self {
         ServiceManager {
             services: DashMap::new(),
             message_sender,
+            log_buffer,
         }
     }
 
@@ -29,7 +33,7 @@ impl ServiceManager {
     pub fn load_service(&self, service_entry: &PluginEntry, config: PluginConfig) -> Result<(), LauncherError> {
         trace!("Loading service {} from: {:?} (name: {:?})", service_entry.id, service_entry.path, service_entry.name);
 
-        let (actual_service_id, service) = LoadedService::load(service_entry, &config, self.message_sender.clone())?;
+        let (actual_service_id, service) = LoadedService::load(service_entry, &config, self.message_sender.clone(), self.log_buffer.clone())?;
 
         self.services.insert(actual_service_id.clone(), service);
         trace!("Successfully loaded service: {}", actual_service_id);

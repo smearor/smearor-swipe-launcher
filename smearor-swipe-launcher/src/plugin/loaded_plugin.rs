@@ -3,6 +3,7 @@ use crate::error::LauncherError;
 use crate::library_path::resolve_library_path;
 use libloading::Library;
 use serde_json::Value;
+use smearor_mcp_server::LogBuffer;
 use smearor_model_plugin::PluginEntry;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
@@ -30,6 +31,7 @@ impl LoadedPlugin {
         config: &PluginConfig,
         sender: UnboundedSender<FfiEnvelope>,
         instance_id: &str,
+        log_buffer: Option<Arc<LogBuffer>>,
     ) -> Result<(String, Self), LauncherError> {
         unsafe {
             let path = resolve_library_path(&plugin_entry.path, &plugin_entry.name)?;
@@ -63,7 +65,7 @@ impl LoadedPlugin {
             let config_len = config_bytes.len();
 
             let plugin_id = plugin_entry.id.clone();
-            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current(), plugin_id.clone(), instance_id);
+            let core_context = SimpleCoreContext::new(sender, tokio::runtime::Handle::current(), plugin_id.clone(), instance_id, log_buffer);
             let ffi_context = core_context.into_ffi_context();
 
             let ffi_context_ptr = Box::into_raw(Box::new(ffi_context)) as *mut core::ffi::c_void;

@@ -195,6 +195,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1.23", features = ["v4"] }
 typed-builder = "0.23.2"
 nucleo-matcher = "0.3"
+parking_lot = "0.12"
 moka = { version = "0.12", features = ["sync", "future"] }
 notify = "8"
 fastembed = "5.17"

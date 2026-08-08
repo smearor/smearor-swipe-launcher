@@ -61,6 +61,60 @@ ceiling_mode = false
 
 See individual [service pages](../services/audio.md) for service-specific configuration fields.
 
+## MCP Server Configuration
+
+The `[mcp]` section configures the built-in MCP (Model Context Protocol) server:
+
+```toml
+[mcp]
+bind_address = "127.0.0.1"
+port = 8765
+# auth_token = "my-secret-token"
+# log_buffer_enabled = true
+# log_buffer_capacity = 10000
+```
+
+| Field                 | Type             | Default     | Description                                                                                        |
+|-----------------------|------------------|-------------|----------------------------------------------------------------------------------------------------|
+| `bind_address`        | `String`         | `127.0.0.1` | Address to bind the HTTP server to. Use `0.0.0.0` for network access.                              |
+| `port`                | `u16`            | `8765`      | TCP port to listen on.                                                                             |
+| `auth_token`          | `Option<String>` | `None`      | Optional bearer token for authentication.                                                          |
+| `log_buffer_enabled`  | `bool`           | `true`      | Whether the tracing log buffer and `launcher_get_logs` tool are enabled.                           |
+| `log_buffer_capacity` | `usize`          | `10000`     | Maximum number of log entries in the ring buffer. Set to `0` to disable. ~2MB at default capacity. |
+
+### Log Buffer Disable
+
+Log capture can be disabled in two ways (both have the same effect — no `LogBufferLayer` is installed, zero overhead):
+
+1. `log_buffer_enabled = false`
+2. `log_buffer_capacity = 0`
+
+When disabled, the `launcher_get_logs` MCP tool returns an error.
+
+See [MCP Server and AI Integration](../features/mcp-server.md) for the feature overview.
+
+## Web Server Configuration
+
+The `[web]` section configures the embedded web server for browser-based launcher instances:
+
+```toml
+[web]
+enabled = true
+# bind_address = "127.0.0.1"
+# port = 8080
+# allowed_origins = []
+```
+
+| Field             | Type             | Default     | Description                                                       |
+|-------------------|------------------|-------------|-------------------------------------------------------------------|
+| `enabled`         | `bool`           | `false`     | Whether the web server is enabled.                                |
+| `bind_address`    | `String`         | `127.0.0.1` | Address to bind to. Use `0.0.0.0` for network access.             |
+| `port`            | `u16`            | `8080`      | TCP port to listen on.                                            |
+| `auth_token`      | `Option<String>` | `None`      | Optional bearer token for authentication.                         |
+| `allowed_origins` | `Vec<String>`    | `[]`        | Allowed CORS origins. Use `["*"]` to allow all (not recommended). |
+
+See [Web Interface](../features/web-interface.md) for the feature overview.
+
 ## Separate Service Config Files
 
 Some services have their own config files:

@@ -17,6 +17,7 @@ smearor-wrot-rotation = { workspace = true }
 stabby = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 typed-builder = { workspace = true }
 
 [dev-dependencies]

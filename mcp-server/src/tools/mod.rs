@@ -2,6 +2,7 @@
 
 mod creator;
 mod definition;
+mod get_logs;
 mod handler;
 mod into_sdk_tool;
 mod invocation;
@@ -12,6 +13,7 @@ mod result;
 
 pub use creator::ToolDefinitionCreator;
 pub use definition::ToolDefinition;
+pub use get_logs::handle_get_logs;
 pub use handler::ToolFuture;
 pub use handler::ToolHandler;
 pub use into_sdk_tool::IntoSdkTool;

@@ -114,3 +114,24 @@ The host routes MCP invocations based on the `McpRegistry`:
 If no plugin owns the invocation, the host falls back to core MCP capabilities.
 
 See [MCP Server and AI Integration](../features/mcp-server.md) for the feature overview.
+
+## Core MCP Tools
+
+The launcher core provides built-in MCP tools that are always available (no plugin registration required). These include area management tools (`open_area`,
+`close_area`, `toggle_area`, etc.) and the `launcher_get_logs` tool.
+
+### `launcher_get_logs`
+
+The `launcher_get_logs` tool is a **direct handler** tool — it does not route through the message broker. Instead, it queries an in-process tracing ring buffer
+(`LogBuffer`) directly from the MCP server state.
+
+This tool is useful for:
+
+- **Debugging** — Retrieve recent log entries from the running launcher
+- **Evaluation** — Correlate voice assistant behavior with log output
+- **Diagnostics** — Filter by level, target prefix, and time window
+
+See [MCP Server and AI Integration](../features/mcp-server.md#launcher_get_logs) for parameters and response format.
+
+**Configuration:** The log buffer can be disabled via `log_buffer_enabled = false` or `log_buffer_capacity = 0` in `[mcp]` config. When disabled, the tool
+returns an error. See [Services Configuration](../configuration/services-config.md#mcp-server-configuration).

@@ -1,4 +1,5 @@
 use crate::FfiEnvelope;
+use crate::log_forward::LogForwardHandle;
 use stabby::future::DynFuture;
 
 /// Opaque handle to the Host's message broker, passed to plugins during construction.
@@ -41,9 +42,9 @@ impl std::fmt::Debug for MessageBrokerHandle {
 
 /// Core context passed to plugins during construction.
 ///
-/// Contains the `MessageBrokerHandle`, `PluginExecutor`, and
-/// `register_json_converter` callback needed by plugins to communicate
-/// with the Host.
+/// Contains the `MessageBrokerHandle`, `PluginExecutor`,
+/// `register_json_converter` callback, and optional `log_forward` handle
+/// needed by plugins to communicate with the Host.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct FfiCoreContext {
@@ -55,6 +56,11 @@ pub struct FfiCoreContext {
     /// their message types. May be `None` if the Host does not support
     /// JSON converter registration.
     pub register_json_converter: Option<crate::json_converter::RegisterJsonConverterFn>,
+    /// Optional handle for forwarding `tracing` log events to the Host's
+    /// `LogBuffer`.  When `Some`, plugins install a `LogForwardLayer` that
+    /// forwards all events via the FFI callback.  When `None`, plugins fall
+    /// back to a `FmtSubscriber` (stdout).
+    pub log_forward: Option<LogForwardHandle>,
 }
 
 /// Delegate for spawning futures on the Host's Tokio runtime.
@@ -133,6 +139,7 @@ impl std::fmt::Debug for FfiCoreContext {
             .field("broker", &self.broker)
             .field("executor", &self.executor)
             .field("register_json_converter", &"<fn>")
+            .field("log_forward", &self.log_forward)
             .finish()
     }
 }

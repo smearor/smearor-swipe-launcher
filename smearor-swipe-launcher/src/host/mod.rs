@@ -16,6 +16,7 @@ use gtk4::gio;
 use gtk4::gio::prelude::*;
 use gtk4::glib::MainContext;
 use gtk4::prelude::*;
+use smearor_mcp_server::LogBuffer;
 use smearor_model_mcp::McpRegistry;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
@@ -65,6 +66,7 @@ pub struct LauncherHost {
     pub(crate) hotplug_last_event: Arc<Mutex<Option<Instant>>>,
     pub(crate) services_config: Arc<Mutex<Option<ServicesConfig>>>,
     pub(crate) web_server: Arc<Mutex<Option<crate::web::WebServer>>>,
+    pub(crate) log_buffer: Option<Arc<LogBuffer>>,
     /// Tracks MacroPad button press start times for longpress detection.
     /// Key: (instance_id, button_index), Value: press start Instant.
     pub(crate) macropad_press_times: Arc<Mutex<HashMap<(String, u8), Instant>>>,
@@ -92,9 +94,9 @@ pub struct LauncherHost {
 }
 
 impl LauncherHost {
-    pub fn new(gtk_app: Application) -> Self {
+    pub fn new(gtk_app: Application, log_buffer: Option<Arc<LogBuffer>>) -> Self {
         let (broker_sender, broker_receiver) = unbounded_channel::<FfiEnvelope>();
-        let service_manager = Arc::new(ServiceManager::new(broker_sender.clone()));
+        let service_manager = Arc::new(ServiceManager::new(broker_sender.clone(), log_buffer.clone()));
         let global_json_converter_registry = Arc::new(JsonConverterRegistry::new());
         let _ = initialize_global_json_converter_registry(global_json_converter_registry);
 
@@ -110,6 +112,7 @@ impl LauncherHost {
             hotplug_last_event: Arc::new(Mutex::new(None)),
             services_config: Arc::new(Mutex::new(None)),
             web_server: Arc::new(Mutex::new(None)),
+            log_buffer,
             macropad_press_times: Arc::new(Mutex::new(HashMap::new())),
             macropad_pending_clicks: Arc::new(Mutex::new(HashMap::new())),
             macropad_compound_presses: Arc::new(Mutex::new(HashMap::new())),
@@ -129,7 +132,7 @@ impl LauncherHost {
     }
 
     pub fn create_instance(&self, instance_id: String, config: SwipeLauncherConfig, instance_type: crate::instance::InstanceType) {
-        let instance = LauncherInstance::new(config, instance_id.clone(), instance_type, self.broker_sender.clone());
+        let instance = LauncherInstance::new(config, instance_id.clone(), instance_type, self.broker_sender.clone(), self.log_buffer.clone());
         instance.load_plugins();
         if let Ok(mut instances) = self.instances.lock() {
             instances.insert(instance_id.clone(), instance);

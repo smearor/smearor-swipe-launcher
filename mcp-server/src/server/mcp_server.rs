@@ -13,6 +13,7 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+use crate::LogBuffer;
 use crate::McpCommand;
 use crate::server::McpServerConfig;
 use crate::server::McpServerState;
@@ -26,17 +27,20 @@ pub struct McpServer {
     command_sender: Sender<McpCommand>,
     /// Dynamic plugin registry shared with the server state.
     plugin_registry: McpRegistry,
+    /// Shared log buffer for tracing log capture, or `None` when disabled.
+    log_buffer: Option<Arc<LogBuffer>>,
     /// Handle to the spawned tokio task running the HTTP server.
     task_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl McpServer {
     /// Create a new MCP server using an externally created command sender.
-    pub fn new(config: McpServerConfig, plugin_registry: McpRegistry, command_sender: Sender<McpCommand>) -> Self {
+    pub fn new(config: McpServerConfig, plugin_registry: McpRegistry, command_sender: Sender<McpCommand>, log_buffer: Option<Arc<LogBuffer>>) -> Self {
         Self {
             config,
             command_sender,
             plugin_registry,
+            log_buffer,
             task_handle: None,
         }
     }
@@ -53,6 +57,7 @@ impl McpServer {
             McpServerState::builder()
                 .command_sender(self.command_sender.clone())
                 .plugin_registry(self.plugin_registry.clone())
+                .log_buffer(self.log_buffer.clone())
                 .build(),
         );
 
