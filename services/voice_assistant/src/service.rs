@@ -384,7 +384,7 @@ impl VoiceAssistantService {
                         VoiceCommandAction::Activate => {
                             let mut active = service_active.lock().unwrap_or_else(|e| e.into_inner());
                             if *active {
-                                debug!("Voice Assistant: already active, ignoring activate");
+                                trace!("Voice Assistant: already active, ignoring activate");
                                 continue;
                             }
                             *active = true;
@@ -395,7 +395,7 @@ impl VoiceAssistantService {
                             // input streams on the same device can hang on Linux.
                             let was_wake_word_active = *service_wake_word_enabled.lock().unwrap_or_else(|e| e.into_inner());
                             if was_wake_word_active {
-                                debug!("Voice Assistant: stopping shared audio before pipeline");
+                                trace!("Voice Assistant: stopping shared audio before pipeline");
                                 if let Ok(mut guard) = service_wake_word_detector.lock() {
                                     if let Some(mut handle) = guard.take() {
                                         handle.stop();
@@ -454,7 +454,7 @@ impl VoiceAssistantService {
                             // If wake word was active before pipeline, restart shared audio
                             // and detector, then return to Standby.
                             if was_wake_word_active {
-                                debug!("Voice Assistant: restarting shared audio after pipeline");
+                                trace!("Voice Assistant: restarting shared audio after pipeline");
                                 let audio_rate = service_config.audio_sample_rate;
                                 let audio_channels = service_config.audio_channels;
                                 match start_shared_audio(audio_rate, audio_channels, 32000, 2) {
@@ -482,10 +482,10 @@ impl VoiceAssistantService {
                                                     let ww_enabled = service_wake_word_enabled.clone();
                                                     tokio::spawn(async move {
                                                         while let Some(event) = event_rx.recv().await {
-                                                            debug!("Wake word detected (p={:.3}), activating pipeline", event.probability);
+                                                            trace!("Wake word detected (p={:.3}), activating pipeline", event.probability);
                                                             let active = ww_active.lock().unwrap_or_else(|e| e.into_inner());
                                                             if *active {
-                                                                debug!("Wake word: already active, ignoring");
+                                                                trace!("Wake word: already active, ignoring");
                                                                 continue;
                                                             }
                                                             let enabled = ww_enabled.lock().unwrap_or_else(|e| e.into_inner());
@@ -514,13 +514,13 @@ impl VoiceAssistantService {
                         VoiceCommandAction::Deactivate => {
                             let mut active = service_active.lock().unwrap_or_else(|e| e.into_inner());
                             *active = false;
-                            debug!("Voice Assistant: deactivated");
+                            trace!("Voice Assistant: deactivated");
                         }
                         VoiceCommandAction::SubmitText => {
                             // Submit text bypasses STT, goes directly to ReAct loop.
                             let mut active = service_active.lock().unwrap_or_else(|e| e.into_inner());
                             if *active {
-                                debug!("Voice Assistant: already active, ignoring submit_text");
+                                trace!("Voice Assistant: already active, ignoring submit_text");
                                 continue;
                             }
                             *active = true;
@@ -574,7 +574,7 @@ impl VoiceAssistantService {
                             }
                         }
                         VoiceCommandAction::ClearConversation => {
-                            debug!("Voice Assistant: clearing conversation history");
+                            trace!("Voice Assistant: clearing conversation history");
                             if let Ok(mut history) = service_conversation_history.write() {
                                 history.clear();
                             }
@@ -1422,7 +1422,7 @@ impl MessageHandler<FfiEnvelopePayload<smearor_doa_model::DoaStatusMessage>> for
 
         if speech_detected && !previous_speech {
             // Rising edge: speech started.
-            debug!("Voice Assistant: DoA VAD rising edge detected");
+            trace!("Voice Assistant: DoA VAD rising edge detected");
             if let Ok(mut onset) = self.vad_onset_timestamp.lock() {
                 *onset = Some(std::time::Instant::now());
             }
@@ -1453,7 +1453,7 @@ impl MessageHandler<FfiEnvelopePayload<smearor_doa_model::DoaStatusMessage>> for
                 // Check if already active.
                 let is_active = self.active.lock().map(|a| *a).unwrap_or(false);
                 if !is_active {
-                    debug!(
+                    trace!(
                         "Voice Assistant: DoA VAD activating listening mode (angle={}, direction={})",
                         doa_status.calibrated_angle, doa_status.direction
                     );
@@ -1462,7 +1462,7 @@ impl MessageHandler<FfiEnvelopePayload<smearor_doa_model::DoaStatusMessage>> for
             }
         } else if !speech_detected && previous_speech {
             // Falling edge: speech stopped.
-            debug!("Voice Assistant: DoA VAD falling edge detected, scheduling grace period exit");
+            trace!("Voice Assistant: DoA VAD falling edge detected, scheduling grace period exit");
             if let Ok(mut onset) = self.vad_onset_timestamp.lock() {
                 *onset = None;
             }
@@ -1489,7 +1489,7 @@ impl MessageHandler<FfiEnvelopePayload<smearor_doa_model::DoaStatusMessage>> for
                 }
                 let is_active = active_clone.lock().map(|a| *a).unwrap_or(false);
                 if is_active {
-                    debug!("Voice Assistant: DoA VAD grace period expired, deactivating listening mode");
+                    trace!("Voice Assistant: DoA VAD grace period expired, deactivating listening mode");
                     if let Some(sender) = &command_sender_clone {
                         let _ = sender.send(smearor_voice_assistant_model::VoiceCommandMessage::deactivate());
                     }

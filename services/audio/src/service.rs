@@ -214,7 +214,7 @@ impl MessageHandler<FfiEnvelopePayload<DoaStatusMessage>> for AudioService {
 
         if speech_detected && !previous_speech {
             // Rising edge: speech started — record onset timestamp.
-            debug!("Audio Service: DoA VAD rising edge detected");
+            trace!("Audio Service: DoA VAD rising edge detected");
             if let Ok(mut onset) = self.vad_onset_timestamp.lock() {
                 *onset = Some(Instant::now());
             }
@@ -254,7 +254,7 @@ impl MessageHandler<FfiEnvelopePayload<DoaStatusMessage>> for AudioService {
             }
         } else if !speech_detected && previous_speech {
             // Falling edge: speech stopped — schedule grace period restore.
-            debug!("Audio Service: DoA VAD falling edge, scheduling volume restore in {} ms", self.config.ducking_grace_period_ms);
+            trace!("Audio Service: DoA VAD falling edge, scheduling volume restore in {} ms", self.config.ducking_grace_period_ms);
             if let Ok(mut onset) = self.vad_onset_timestamp.lock() {
                 *onset = None;
             }
