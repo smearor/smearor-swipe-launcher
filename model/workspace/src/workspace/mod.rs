@@ -1,8 +1,24 @@
 mod changed;
+mod create;
+mod create_position;
 mod lifecycle;
+mod snapshot;
+mod snapshot_request;
+mod switch;
+mod workspace_info;
 
 pub use changed::TOPIC_WORKSPACE_CHANGED;
 pub use changed::WorkspaceChangedEvent;
+pub use create::CreateWorkspaceMessage;
+pub use create::TOPIC_CREATE_WORKSPACE;
+pub use create_position::WorkspaceCreatePosition;
 pub use lifecycle::TOPIC_WORKSPACE_LIFECYCLE;
 pub use lifecycle::WorkspaceLifecycleEvent;
 pub use lifecycle::WorkspaceLifecycleType;
+pub use snapshot::TOPIC_WORKSPACE_SNAPSHOT;
+pub use snapshot::WorkspaceSnapshotMessage;
+pub use snapshot_request::TOPIC_WORKSPACE_SNAPSHOT_REQUEST;
+pub use snapshot_request::WorkspaceSnapshotRequestMessage;
+pub use switch::SwitchWorkspaceMessage;
+pub use switch::TOPIC_SWITCH_WORKSPACE;
+pub use workspace_info::WorkspaceInfo;
