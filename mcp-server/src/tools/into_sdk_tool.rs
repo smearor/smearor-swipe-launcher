@@ -1,5 +1,4 @@
 use rust_mcp_sdk::schema::Tool;
-use rust_mcp_sdk::schema::ToolInputSchema;
 
 use crate::tools::json_schema_to_tool_input_schema;
 

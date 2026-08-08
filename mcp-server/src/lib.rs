@@ -237,7 +237,7 @@ impl ServerHandler for SwipeLauncherHandler {
         &self,
         _params: InitializeRequestParams,
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
-    ) -> std::result::Result<InitializeResult, RpcError> {
+    ) -> Result<InitializeResult, RpcError> {
         Ok(self.server_details.clone())
     }
 
@@ -245,86 +245,15 @@ impl ServerHandler for SwipeLauncherHandler {
         &self,
         _params: Option<rust_mcp_sdk::schema::RequestParams>,
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
-    ) -> std::result::Result<McpResult, RpcError> {
+    ) -> Result<McpResult, RpcError> {
         Ok(McpResult::default())
-    }
-
-    async fn handle_list_tools_request(
-        &self,
-        _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
-        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
-    ) -> std::result::Result<ListToolsResult, RpcError> {
-        let state = self.state.clone();
-        let mut sdk_tools: Vec<Tool> = state.tools.iter().map(|t| t.into_sdk_tool()).collect();
-        for plugin_tool in state.plugin_registry.list_tools() {
-            sdk_tools.push(plugin_tool.into_sdk_tool());
-        }
-        Ok(ListToolsResult {
-            tools: sdk_tools,
-            next_cursor: None,
-            meta: None,
-        })
-    }
-
-    async fn handle_call_tool_request(
-        &self,
-        params: CallToolRequestParams,
-        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
-    ) -> std::result::Result<CallToolResult, CallToolError> {
-        let state = self.state.clone();
-        let name = params.name.clone();
-        let arguments = params.arguments.clone();
-
-        // Check if it's a plugin tool
-        if let Some(plugin_tool) = state.plugin_registry.list_tools().iter().find(|t| t.name == name).cloned() {
-            let correlation_id = state.correlation_counter.fetch_add(1, Ordering::Relaxed).to_string();
-            let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
-            let arguments_value = arguments.map(|m| serde_json::Value::Object(m)).unwrap_or(serde_json::Value::Null);
-            let _ = state.command_sender.try_send(
-                CommandResponseWrapper::builder()
-                    .params(
-                        InvokePluginToolParams::builder()
-                            .name(plugin_tool.name.clone())
-                            .plugin_id(plugin_tool.plugin_id.clone())
-                            .correlation_id(correlation_id)
-                            .arguments(arguments_value)
-                            .build(),
-                    )
-                    .response(response_tx)
-                    .build()
-                    .into(),
-            );
-            match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
-                Ok(Ok(Ok(result))) => {
-                    return Ok(CallToolResult::text_content(vec![TextContent::new(result, None, None)]));
-                }
-                Ok(Ok(Err(message))) => {
-                    return Ok(CallToolResult::with_error(CallToolError::from_message(message)));
-                }
-                Ok(Err(_)) => {
-                    return Ok(CallToolResult::with_error(CallToolError::from_message("Plugin tool invocation dropped")));
-                }
-                Err(_) => {
-                    return Ok(CallToolResult::with_error(CallToolError::from_message("Plugin tool invocation timed out")));
-                }
-            }
-        }
-
-        // Core tool
-        let arguments_value = arguments.map(serde_json::Value::Object).unwrap_or(serde_json::Value::Null);
-        let invocation = tools::ToolInvocation::new(state.command_sender.clone(), Some(&arguments_value));
-        let result = tools::invoke_tool_sdk(&state.tools, invocation, &name).await;
-        match result {
-            Ok(text) => Ok(CallToolResult::text_content(vec![TextContent::new(text, None, None)])),
-            Err(message) => Ok(CallToolResult::with_error(CallToolError::from_message(message))),
-        }
     }
 
     async fn handle_list_resources_request(
         &self,
         _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
-    ) -> std::result::Result<ListResourcesResult, RpcError> {
+    ) -> Result<ListResourcesResult, RpcError> {
         let state = self.state.clone();
         let mut sdk_resources: Vec<Resource> = state.resources.iter().map(|r| r.into_sdk_resource()).collect();
         for plugin_resource in state.plugin_registry.list_resources() {
@@ -341,7 +270,7 @@ impl ServerHandler for SwipeLauncherHandler {
         &self,
         _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
-    ) -> std::result::Result<ListResourceTemplatesResult, RpcError> {
+    ) -> Result<ListResourceTemplatesResult, RpcError> {
         Ok(ListResourceTemplatesResult {
             resource_templates: vec![],
             next_cursor: None,
@@ -353,7 +282,7 @@ impl ServerHandler for SwipeLauncherHandler {
         &self,
         params: ReadResourceRequestParams,
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
-    ) -> std::result::Result<ReadResourceResult, RpcError> {
+    ) -> Result<ReadResourceResult, RpcError> {
         let state = self.state.clone();
         let uri = params.uri.clone();
 
@@ -417,7 +346,7 @@ impl ServerHandler for SwipeLauncherHandler {
         &self,
         _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
-    ) -> std::result::Result<ListPromptsResult, RpcError> {
+    ) -> Result<ListPromptsResult, RpcError> {
         let state = self.state.clone();
         let mut sdk_prompts: Vec<rust_mcp_sdk::schema::Prompt> = state.prompts.iter().map(|p| p.into_sdk_prompt()).collect();
         for plugin_prompt in state.plugin_registry.list_prompts() {
@@ -430,11 +359,7 @@ impl ServerHandler for SwipeLauncherHandler {
         })
     }
 
-    async fn handle_get_prompt_request(
-        &self,
-        params: GetPromptRequestParams,
-        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
-    ) -> std::result::Result<GetPromptResult, RpcError> {
+    async fn handle_get_prompt_request(&self, params: GetPromptRequestParams, _runtime: Arc<dyn rust_mcp_sdk::McpServer>) -> Result<GetPromptResult, RpcError> {
         let state = self.state.clone();
         let name = params.name.clone();
         let arguments = params.arguments.clone();
@@ -486,6 +411,77 @@ impl ServerHandler for SwipeLauncherHandler {
         match prompts::get_prompt_sdk(&state.prompts, &name, &arguments) {
             Ok(result) => Ok(result),
             Err(message) => Err(RpcError::internal_error().with_message(message)),
+        }
+    }
+
+    async fn handle_list_tools_request(
+        &self,
+        _params: Option<rust_mcp_sdk::schema::PaginatedRequestParams>,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> Result<ListToolsResult, RpcError> {
+        let state = self.state.clone();
+        let mut sdk_tools: Vec<Tool> = state.tools.iter().map(|t| t.into_sdk_tool()).collect();
+        for plugin_tool in state.plugin_registry.list_tools() {
+            sdk_tools.push(plugin_tool.into_sdk_tool());
+        }
+        Ok(ListToolsResult {
+            tools: sdk_tools,
+            next_cursor: None,
+            meta: None,
+        })
+    }
+
+    async fn handle_call_tool_request(
+        &self,
+        params: CallToolRequestParams,
+        _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
+    ) -> Result<CallToolResult, CallToolError> {
+        let state = self.state.clone();
+        let name = params.name.clone();
+        let arguments = params.arguments.clone();
+
+        // Check if it's a plugin tool
+        if let Some(plugin_tool) = state.plugin_registry.list_tools().iter().find(|t| t.name == name).cloned() {
+            let correlation_id = state.correlation_counter.fetch_add(1, Ordering::Relaxed).to_string();
+            let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
+            let arguments_value = arguments.map(|m| serde_json::Value::Object(m)).unwrap_or(serde_json::Value::Null);
+            let _ = state.command_sender.try_send(
+                CommandResponseWrapper::builder()
+                    .params(
+                        InvokePluginToolParams::builder()
+                            .name(plugin_tool.name.clone())
+                            .plugin_id(plugin_tool.plugin_id.clone())
+                            .correlation_id(correlation_id)
+                            .arguments(arguments_value)
+                            .build(),
+                    )
+                    .response(response_tx)
+                    .build()
+                    .into(),
+            );
+            match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
+                Ok(Ok(Ok(result))) => {
+                    return Ok(CallToolResult::text_content(vec![TextContent::new(result, None, None)]));
+                }
+                Ok(Ok(Err(message))) => {
+                    return Ok(CallToolResult::with_error(CallToolError::from_message(message)));
+                }
+                Ok(Err(_)) => {
+                    return Ok(CallToolResult::with_error(CallToolError::from_message("Plugin tool invocation dropped")));
+                }
+                Err(_) => {
+                    return Ok(CallToolResult::with_error(CallToolError::from_message("Plugin tool invocation timed out")));
+                }
+            }
+        }
+
+        // Core tool
+        let arguments_value = arguments.map(serde_json::Value::Object).unwrap_or(serde_json::Value::Null);
+        let invocation = tools::ToolInvocation::new(state.command_sender.clone(), Some(&arguments_value));
+        let result = tools::invoke_tool_sdk(&state.tools, invocation, &name).await;
+        match result {
+            Ok(text) => Ok(CallToolResult::text_content(vec![TextContent::new(text, None, None)])),
+            Err(message) => Ok(CallToolResult::with_error(CallToolError::from_message(message))),
         }
     }
 }

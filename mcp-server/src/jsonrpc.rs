@@ -1,18 +1,7 @@
 //! Minimal JSON-RPC 2.0 types used by the MCP server transport layer.
 
-use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-
-/// A JSON-RPC request object.
-#[derive(Debug, Deserialize)]
-pub struct JsonRpcRequest {
-    #[allow(dead_code)]
-    pub jsonrpc: String,
-    pub id: Option<Value>,
-    pub method: String,
-    pub params: Option<Value>,
-}
 
 /// A JSON-RPC response object.
 #[derive(Debug, Serialize)]
@@ -35,6 +24,7 @@ pub struct JsonRpcError {
 }
 
 /// JSON-RPC 2.0 parse error.
+#[allow(dead_code)]
 pub const JSONRPC_PARSE_ERROR: i32 = -32700;
 /// JSON-RPC 2.0 invalid request.
 #[allow(dead_code)]
@@ -71,32 +61,6 @@ impl JsonRpcResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parse_valid_request() {
-        let json = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#;
-        let request: JsonRpcRequest = serde_json::from_str(json).expect("valid request");
-        assert_eq!(request.jsonrpc, "2.0");
-        assert_eq!(request.id, Some(serde_json::json!(1)));
-        assert_eq!(request.method, "tools/list");
-        assert!(request.params.is_some());
-    }
-
-    #[test]
-    fn parse_notification_without_id() {
-        let json = r#"{"jsonrpc":"2.0","method":"initialized"}"#;
-        let request: JsonRpcRequest = serde_json::from_str(json).expect("valid notification");
-        assert!(request.id.is_none());
-        assert_eq!(request.method, "initialized");
-    }
-
-    #[test]
-    fn parse_mcp_initialized_notification() {
-        let json = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
-        let request: JsonRpcRequest = serde_json::from_str(json).expect("valid notification");
-        assert!(request.id.is_none());
-        assert_eq!(request.method, "notifications/initialized");
-    }
 
     #[test]
     fn success_response_serializes_result() {

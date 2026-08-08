@@ -1,4 +1,3 @@
-use crate::McpCommand;
 use crate::tools::invocation::ToolInvocation;
 use crate::tools::result::ToolResult;
 use std::future::Future;

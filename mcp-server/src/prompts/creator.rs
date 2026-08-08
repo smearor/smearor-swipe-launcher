@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use crate::prompts::definition::PromptDefinition;
 use crate::prompts::definition::PromptHandler;
 
@@ -33,10 +31,16 @@ pub fn static_prompt_handler(content: &'static str) -> PromptHandler {
     Box::new(move |_name, _args| Ok(content.to_string()))
 }
 
-/// Helper to create a prompt handler that formats the content with the provided arguments.
-pub fn formatted_prompt_handler<F>(f: F) -> PromptHandler
-where
-    F: Fn(Option<&BTreeMap<String, String>>) -> String + Send + Sync + 'static,
-{
-    Box::new(move |_name, args| Ok(f(args)))
+/// Helper to create a prompt handler from a static template loaded via `include_str!`.
+/// `{key}` placeholders in the template are replaced with the corresponding argument values.
+pub fn template_prompt_handler(template: &'static str) -> PromptHandler {
+    Box::new(move |_name, args| {
+        let mut result = template.to_string();
+        if let Some(args) = args {
+            for (key, value) in args {
+                result = result.replace(&format!("{{{key}}}"), value);
+            }
+        }
+        Ok(result)
+    })
 }

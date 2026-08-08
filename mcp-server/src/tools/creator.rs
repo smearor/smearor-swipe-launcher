@@ -8,7 +8,6 @@ use crate::McpCommand;
 use crate::McpCommandVariant;
 use crate::tools::definition::ToolDefinition;
 use crate::tools::handler::ToolFuture;
-use crate::tools::handler::ToolHandler;
 use crate::tools::invocation::ToolInvocation;
 use crate::tools::result::ToolResult;
 use async_channel::Sender;

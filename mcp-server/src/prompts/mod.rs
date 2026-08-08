@@ -5,6 +5,7 @@ mod creator;
 mod definition;
 mod into_sdk_prompt;
 mod registered;
+mod schema;
 
 use rust_mcp_sdk::schema::ContentBlock;
 use rust_mcp_sdk::schema::GetPromptResult;
