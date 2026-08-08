@@ -71,6 +71,14 @@ impl McpCapabilitiesRegistrator for VoiceAssistantService {
         );
         broadcaster.broadcast_message_to_topic(models_resource);
 
+        let prompt_catalog_resource = RegisterResourceMessage::new(
+            "voice_assistant://prompt_catalog",
+            "Voice Assistant Prompt Catalog",
+            "List of all discovered prompts in the catalog with memory integration metadata.",
+            "application/json",
+        );
+        broadcaster.broadcast_message_to_topic(prompt_catalog_resource);
+
         let activate_tool = RegisterToolMessage::new(
             "voice_assistant_activate",
             "Starts audio capture and begins the voice pipeline.",

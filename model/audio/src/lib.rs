@@ -5,6 +5,7 @@ mod messages;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 
 pub use device::AudioDevice;
+pub use mcp::prompts::AudioMcpPrompts;
 pub use mcp::resources::AudioMcpResources;
 pub use mcp::tools::AudioMcpTools;
 pub use mcp::widget_action::AudioWidgetAction;

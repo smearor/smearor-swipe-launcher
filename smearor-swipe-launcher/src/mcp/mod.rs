@@ -1,5 +1,6 @@
 pub mod command_handler;
 pub mod plugin_invoke;
+pub mod prompt_response;
 pub mod resource_reader;
 pub mod response_tracker;
 pub mod server;

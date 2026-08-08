@@ -50,6 +50,9 @@ use super::macropad::MACROPAD_COMPOUND_PRESS_WINDOW;
 use super::macropad::MACROPAD_DOUBLE_PRESS_WINDOW;
 use super::macropad::MACROPAD_LONGPRESS_THRESHOLD;
 use crate::instance::InstanceType;
+use crate::mcp::prompt_response::SdkPromptMessage;
+use crate::mcp::prompt_response::SdkPromptResult;
+use crate::web::WebUpdate;
 use smearor_swipe_launcher_plugin_api::default_clone_payload;
 use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 
@@ -105,6 +108,9 @@ impl super::LauncherHost {
         // tool results via its own oneshot channels.
         if topic == smearor_model_mcp::TOPIC_MCP_TOOL_RESPONSE {
             trace!("Application: received mcp.tool.response, forwarding to tracker and voice_assistant");
+            if envelope.payload.is_null() || envelope.type_id != InvokeToolResponse::TYPE_ID {
+                return;
+            }
             let response = unsafe { &*(envelope.payload as *const InvokeToolResponse) };
             let result = if response.error.is_empty() {
                 Ok(response.result.to_string())
@@ -122,6 +128,9 @@ impl super::LauncherHost {
             return;
         }
         if topic == smearor_model_mcp::TOPIC_MCP_RESOURCE_RESPONSE {
+            if envelope.payload.is_null() || envelope.type_id != InvokeResourceResponse::TYPE_ID {
+                return;
+            }
             let response = unsafe { &*(envelope.payload as *const InvokeResourceResponse) };
             let result = if response.error.is_empty() {
                 Ok(response.contents.to_string())
@@ -137,31 +146,31 @@ impl super::LauncherHost {
             return;
         }
         if topic == smearor_model_mcp::TOPIC_MCP_PROMPT_RESPONSE {
-            let response = unsafe { &*(envelope.payload as *const InvokePromptResponse) };
-            let messages_json = if response.error.is_empty() {
-                let messages: Vec<serde_json::Value> = response
-                    .messages
-                    .iter()
-                    .map(|m| serde_json::json!({"role": m.role.to_string(), "content": m.content.to_string()}))
-                    .collect();
-                serde_json::to_string(&serde_json::json!({
-                    "description": "",
-                    "messages": messages
-                }))
-                .unwrap_or_else(|_| "{}".to_string())
-            } else {
-                String::new()
-            };
-            let result = if response.error.is_empty() {
-                Ok(messages_json)
-            } else {
-                Err(response.error.to_string())
-            };
-            self.mcp_response_tracker.resolve(&response.correlation_id.to_string(), result);
-            if let Some(service) = self.service_manager.services.get("voice_assistant") {
-                unsafe {
-                    service.on_message(envelope);
+            if !envelope.payload.is_null() && envelope.type_id == InvokePromptResponse::TYPE_ID {
+                let response = unsafe { &*(envelope.payload as *const InvokePromptResponse) };
+                let messages_json = if response.error.is_empty() {
+                    let messages: Vec<SdkPromptMessage> = response
+                        .messages
+                        .iter()
+                        .map(|m| SdkPromptMessage::from_prompt_message(&m.role.to_string(), &m.content.to_string()))
+                        .collect();
+                    let result = SdkPromptResult { messages };
+                    serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string())
+                } else {
+                    String::new()
+                };
+                let result = if response.error.is_empty() {
+                    Ok(messages_json)
+                } else {
+                    Err(response.error.to_string())
+                };
+                self.mcp_response_tracker.resolve(&response.correlation_id.to_string(), result);
+                if let Some(service) = self.service_manager.services.get("voice_assistant") {
+                    unsafe {
+                        service.on_message(envelope);
+                    }
                 }
+                return;
             }
             return;
         }
@@ -559,7 +568,7 @@ impl super::LauncherHost {
             || topic == smearor_model_mcp::TOPIC_MCP_INVOKE_PROMPT
         {
             let plugin_id = if topic == smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE {
-                if !envelope.payload.is_null() {
+                if !envelope.payload.is_null() && envelope.type_id == InvokeResourceMessage::TYPE_ID {
                     let msg = unsafe { &*(envelope.payload as *const InvokeResourceMessage) };
                     let uri = msg.uri.to_string();
                     self.mcp_registry.list_resources().iter().find(|r| r.uri == uri).map(|r| r.plugin_id.clone())
@@ -567,14 +576,14 @@ impl super::LauncherHost {
                     None
                 }
             } else if topic == smearor_model_mcp::TOPIC_MCP_INVOKE_PROMPT {
-                if !envelope.payload.is_null() {
+                if !envelope.payload.is_null() && envelope.type_id == InvokePromptMessage::TYPE_ID {
                     let msg = unsafe { &*(envelope.payload as *const InvokePromptMessage) };
                     let name = msg.name.to_string();
                     self.mcp_registry.list_prompts().iter().find(|p| p.name == name).map(|p| p.plugin_id.clone())
                 } else {
                     None
                 }
-            } else if !envelope.payload.is_null() {
+            } else if !envelope.payload.is_null() && envelope.type_id == InvokeToolMessage::TYPE_ID {
                 let msg = unsafe { &*(envelope.payload as *const InvokeToolMessage) };
                 let name = msg.name.to_string();
                 self.mcp_registry.list_tools().iter().find(|t| t.name == name).map(|t| t.plugin_id.clone())
@@ -609,7 +618,7 @@ impl super::LauncherHost {
             if let Ok(sender_guard) = self.mcp_command_sender.lock() {
                 if let Some(sender) = sender_guard.as_ref().cloned() {
                     let broker_sender = self.broker_sender.clone();
-                    if topic == smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL && !envelope.payload.is_null() {
+                    if topic == smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL && !envelope.payload.is_null() && envelope.type_id == InvokeToolMessage::TYPE_ID {
                         let msg = unsafe { &*(envelope.payload as *const InvokeToolMessage) };
                         let name = msg.name.to_string();
                         let correlation_id = msg.correlation_id.to_string();
@@ -638,7 +647,10 @@ impl super::LauncherHost {
                         });
                         return;
                     }
-                    if topic == smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE && !envelope.payload.is_null() {
+                    if topic == smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE
+                        && !envelope.payload.is_null()
+                        && envelope.type_id == InvokeResourceMessage::TYPE_ID
+                    {
                         let msg = unsafe { &*(envelope.payload as *const InvokeResourceMessage) };
                         let uri = msg.uri.to_string();
                         let correlation_id = msg.correlation_id.to_string();
@@ -843,7 +855,7 @@ impl super::LauncherHost {
             // push them via WebSocket so the frontend can re-render.
             if let Ok(instances) = self.instances.lock() {
                 if let Some(instance) = instances.get(&target_instance) {
-                    if instance.instance_type == crate::instance::InstanceType::Web {
+                    if instance.instance_type == InstanceType::Web {
                         let widgets_html = crate::web::routes::render_all_widgets_html(instance);
                         self.send_web_widgets_update(&target_instance, &widgets_html);
                     }
@@ -864,7 +876,7 @@ impl super::LauncherHost {
             // For web instances, re-render the single widget and push via WebSocket.
             if let Ok(instances) = self.instances.lock() {
                 if let Some(instance) = instances.get(render_instance) {
-                    if instance.instance_type == crate::instance::InstanceType::Web {
+                    if instance.instance_type == InstanceType::Web {
                         let namespaced_id = format!("{}:{}", render_instance, plugin_id);
                         let html = crate::web::routes::render_single_widget_html(instance, &namespaced_id);
                         self.send_widget_update(render_instance, &namespaced_id, &html);
@@ -894,7 +906,7 @@ impl super::LauncherHost {
         }
 
         let payload = crate::web::routes::extract_payload_as_json(envelope);
-        let update = crate::web::web_update::WebUpdate {
+        let update = WebUpdate {
             instance_id: instance_id.to_string(),
             topic: envelope.topic.to_string(),
             sender_id: envelope.sender_id.to_string(),
@@ -917,7 +929,7 @@ impl super::LauncherHost {
             return;
         }
 
-        let update = crate::web::web_update::WebUpdate {
+        let update = WebUpdate {
             instance_id: instance_id.to_string(),
             topic: "area.changed".to_string(),
             sender_id: "system".to_string(),
@@ -940,7 +952,7 @@ impl super::LauncherHost {
             return;
         }
 
-        let update = crate::web::web_update::WebUpdate {
+        let update = WebUpdate {
             instance_id: instance_id.to_string(),
             topic: "widget.update".to_string(),
             sender_id: "system".to_string(),

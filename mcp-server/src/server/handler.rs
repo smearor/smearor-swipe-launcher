@@ -29,6 +29,7 @@ use crate::GetLogsParams;
 use crate::InvokePluginPromptParams;
 use crate::InvokePluginResourceParams;
 use crate::InvokePluginToolParams;
+use crate::InvokePromptParams;
 use crate::prompts::IntoSdkPrompt;
 use crate::prompts::PromptResolver;
 use crate::resources::IntoSdkResource;
@@ -305,6 +306,28 @@ impl ServerHandler for SwipeLauncherHandler {
                 Ok(value) => Ok(CallToolResult::text_content(vec![TextContent::new(value.to_string(), None, None)])),
                 Err(e) => Ok(CallToolResult::with_error(CallToolError::from_message(e.to_string()))),
             };
+        }
+
+        // Direct handler for invoke_prompt — bridges prompts/get for MCP clients
+        // that only support tools/call. Delegates to handle_get_prompt_request.
+        if name == InvokePromptParams::tool_name() {
+            let prompt_name = arguments_value.get("prompt_name").and_then(|v| v.as_str()).unwrap_or("");
+            let prompt_args: Option<std::collections::BTreeMap<String, String>> = arguments_value
+                .get("arguments")
+                .and_then(|v| v.as_object())
+                .map(|map| map.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())).collect());
+            let prompt_params = GetPromptRequestParams {
+                name: prompt_name.to_string(),
+                arguments: prompt_args,
+                meta: None,
+            };
+            match self.handle_get_prompt_request(prompt_params, _runtime).await {
+                Ok(result) => {
+                    let json = serde_json::to_string(&result).unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize prompt result: {e}\"}}"));
+                    return Ok(CallToolResult::text_content(vec![TextContent::new(json, None, None)]));
+                }
+                Err(e) => return Ok(CallToolResult::with_error(CallToolError::from_message(e.message))),
+            }
         }
 
         let invocation = ToolInvocation::new(state.command_sender.clone(), Some(&arguments_value));

@@ -5,6 +5,7 @@ use smearor_model_mcp::resources::handler::McpResourceHandler;
 use smearor_model_mcp::resources::handler::ResourceRequest;
 use smearor_personalization_model::PersonalizationMcpResources;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use tracing::trace;
 

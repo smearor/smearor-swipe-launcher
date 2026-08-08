@@ -24,6 +24,8 @@ pub enum VoiceAssistantMcpResources {
     MemoryEntities,
     /// Available GGUF models in the models/ directory.
     Models,
+    /// Registered prompt catalog with memory integration metadata.
+    PromptCatalog,
 }
 
 impl AsRef<str> for VoiceAssistantMcpResources {
@@ -37,6 +39,7 @@ impl AsRef<str> for VoiceAssistantMcpResources {
             Self::Embeddings => "voice_assistant://embeddings",
             Self::MemoryEntities => "memory://entities",
             Self::Models => "voice_assistant://models",
+            Self::PromptCatalog => "voice_assistant://prompt_catalog",
         }
     }
 }
@@ -54,6 +57,7 @@ impl FromStr for VoiceAssistantMcpResources {
             "voice_assistant://embeddings" => Ok(Self::Embeddings),
             "memory://entities" => Ok(Self::MemoryEntities),
             "voice_assistant://models" => Ok(Self::Models),
+            "voice_assistant://prompt_catalog" => Ok(Self::PromptCatalog),
             _ => Err(UnknownResourceError::new(uri)),
         }
     }

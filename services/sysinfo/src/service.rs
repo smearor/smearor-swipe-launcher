@@ -112,28 +112,6 @@ impl SysinfoService {
         service.register_mcp_capabilities();
         Ok(service)
     }
-
-    pub(crate) fn send_response<T: TypedMessage + SharedMessage + Clone>(&self, message: T, sender_id: &str) {
-        let payload_ptr = box_payload(message.clone());
-        let sender_id_string = sender_id.to_string();
-        let topic = message.topic();
-        debug!("sysinfo: send_response topic={} to sender_id={}", topic, sender_id);
-        let envelope = FfiEnvelope::builder()
-            .sender_id(self.meta.id.clone())
-            .target_instance_id(sender_id_string.as_str())
-            .topic(topic)
-            .type_id(T::TYPE_ID)
-            .payload(payload_ptr)
-            .destroy_payload(Some(default_destroy_payload))
-            .clone_payload(Some(default_clone_payload::<T>))
-            .build();
-        if let Some(context) = &self.core_context {
-            debug!("sysinfo: calling context.send_message");
-            context.send_message(envelope);
-        } else {
-            debug!("sysinfo: no core_context, cannot send response");
-        }
-    }
 }
 
 impl MessageHandler<FfiEnvelopePayload<SysinfoCommandMessage>> for SysinfoService {

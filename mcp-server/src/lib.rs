@@ -32,6 +32,7 @@ pub use command::InstanceTypeParam;
 pub use command::InvokePluginPromptParams;
 pub use command::InvokePluginResourceParams;
 pub use command::InvokePluginToolParams;
+pub use command::InvokePromptParams;
 pub use command::ListAllAreasParams;
 pub use command::ListAreasParams;
 pub use command::ListInstancesParams;

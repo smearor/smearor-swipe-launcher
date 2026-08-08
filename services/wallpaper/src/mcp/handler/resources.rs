@@ -4,6 +4,7 @@ use smearor_model_mcp::InvokeResourceResponse;
 use smearor_model_mcp::resources::handler::McpResourceHandler;
 use smearor_model_mcp::resources::handler::ResourceRequest;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_wallpaper_model::WallpaperMcpResources;
 use tracing::debug;

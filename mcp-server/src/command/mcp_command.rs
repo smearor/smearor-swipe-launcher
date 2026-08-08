@@ -5,6 +5,7 @@ use crate::command::get_logs::GetLogsParams;
 use crate::command::invoke_plugin_prompt::InvokePluginPromptParams;
 use crate::command::invoke_plugin_resource::InvokePluginResourceParams;
 use crate::command::invoke_plugin_tool::InvokePluginToolParams;
+use crate::command::invoke_prompt::InvokePromptParams;
 use crate::command::list_all_areas::ListAllAreasParams;
 use crate::command::list_areas::ListAreasParams;
 use crate::command::list_instances::ListInstancesParams;
@@ -52,6 +53,9 @@ pub enum McpCommand {
     InvokePluginTool(CommandResponseWrapper<InvokePluginToolParams>),
     /// Read a resource registered by a plugin.
     InvokePluginResource(CommandResponseWrapper<InvokePluginResourceParams>),
+    /// Invoke a prompt by name (bridges prompts/get for tools/call-only clients).
+    /// Intercepted directly in handle_call_tool_request; no-op in the launcher core.
+    InvokePrompt(CommandResponseWrapper<InvokePromptParams>),
     /// Invoke a prompt registered by a plugin.
     InvokePluginPrompt(CommandResponseWrapper<InvokePluginPromptParams>),
     /// Dynamically load a new launcher instance.

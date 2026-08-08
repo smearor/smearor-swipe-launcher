@@ -298,4 +298,22 @@ pub trait MessageBroadcaster: PluginMetaGetter + AsRef<Option<FfiCoreContext>> {
             ctx.send_message(envelope);
         }
     }
+
+    fn send_response<T: TypedMessage + SharedMessage + Clone>(&self, message: T, sender_id: &str) {
+        let payload_ptr = box_payload(message.clone());
+        let sender_id_string = sender_id.to_string();
+        let topic = <T as SharedMessage>::topic(&message);
+        let envelope = FfiEnvelope::builder()
+            .sender_id(self.meta().id)
+            .target_instance_id(sender_id_string.as_str())
+            .topic(topic)
+            .type_id(T::TYPE_ID)
+            .payload(payload_ptr)
+            .destroy_payload(Some(default_destroy_payload))
+            .clone_payload(Some(default_clone_payload::<T>))
+            .build();
+        if let Some(ctx) = self.as_ref() {
+            ctx.send_message(envelope);
+        }
+    }
 }

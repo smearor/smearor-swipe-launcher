@@ -34,19 +34,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for VoiceAssistantS
                 InvokePromptResponse::success(&message.0.correlation_id, prompt_messages)
             }
             VoiceAssistantMcpPrompts::MemoryGuide => {
-                let content = "You are a voice assistant with memory capabilities.\n\n\
-                    Memory management instructions:\n\
-                    - Use the 'voice_assistant_save_memory' tool to persist important facts about the user\n\
-                    - Use the 'voice_assistant_recall_memory' tool to retrieve stored memories\n\
-                    - Use the 'voice_assistant_delete_memory' tool to remove outdated information\n\
-                    - Always recall relevant memories before responding to provide personalized answers\n\
-                    - Save new facts the user shares (preferences, schedule, contacts, habits)\n\
-                    - Do not store sensitive data like passwords or API keys\n\n\
-                    Tips:\n\
-                    - Keep memory entries concise and factual\n\
-                    - Tag memories with categories when possible (preference, schedule, contact, habit)\n\
-                    - When uncertain, ask the user for clarification rather than guessing";
-                let messages = vec![PromptMessage::new("system", content)];
+                let messages = vec![PromptMessage::new("system", include_str!("../../../data/prompts/memory_guide.md"))];
                 InvokePromptResponse::success(&message.0.correlation_id, messages)
             }
             VoiceAssistantMcpPrompts::ResourceDiscoveryGuide => {

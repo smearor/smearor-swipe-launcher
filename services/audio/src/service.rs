@@ -7,8 +7,10 @@ use smearor_audio_model::AudioCommandMessage;
 use smearor_audio_model::AudioStatusMessage;
 use smearor_doa_model::DoaStatusMessage;
 use smearor_doa_model::TOPIC_STATUS as TOPIC_DOA_STATUS;
+use smearor_model_mcp::InvokePromptMessage;
 use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_PROMPT;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_RESOURCE;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
@@ -96,7 +98,7 @@ impl AudioService {
                 let envelope = FfiEnvelope::builder()
                     .sender_id(meta_clone.id.clone())
                     .target_instance_id("*")
-                    .topic(AudioStatusMessage::topic())
+                    .topic(<AudioStatusMessage as MessageTopic>::topic())
                     .type_id(AudioStatusMessage::TYPE_ID)
                     .payload(payload_ptr)
                     .destroy_payload(Some(default_destroy_payload))
@@ -344,6 +346,8 @@ impl ServicePlugin for AudioService {
                     MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_MCP_INVOKE_RESOURCE && envelope.type_id == FfiEnvelopePayload::<InvokeResourceMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<InvokeResourceMessage>>::handle_envelope_message(self, envelope);
+                } else if topic == TOPIC_MCP_INVOKE_PROMPT && envelope.type_id == FfiEnvelopePayload::<InvokePromptMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokePromptMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_DOA_STATUS && envelope.type_id == FfiEnvelopePayload::<DoaStatusMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<DoaStatusMessage>>::handle_envelope_message(self, envelope);
                 } else if topic == TOPIC_VA_STATUS && envelope.type_id == FfiEnvelopePayload::<AssistantStatusMessage>::TYPE_ID {

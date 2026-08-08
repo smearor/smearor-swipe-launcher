@@ -37,20 +37,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for AppLauncherServ
                     format!("Running applications:\n{}", items.join("\n"))
                 };
 
-                let content = format!(
-                    "{running_list}\n\n\
-                     To launch an application:\n\
-                     1. Use 'app_launcher_search_apps' with a query to find the desktop file path\n\
-                     2. Use 'app_launcher_exec' with the desktop_file path to launch it\n\
-                     3. Use 'app_launcher_terminate' to stop a running application\n\n\
-                     Tools:\n\
-                     - app_launcher_search_apps: Search available apps by name\n\
-                     - app_launcher_exec: Launch an app by desktop file path\n\
-                     - app_launcher_terminate: Terminate a running app\n\n\
-                     Resources:\n\
-                     - app_launcher://running_apps: List running tracked apps\n\
-                     - app_launcher://available_apps: List all available .desktop files (supports pagination)"
-                );
+                let content = format!("{running_list}\n\n{}", include_str!("../../../data/prompts/app_launch_guide.md"));
 
                 let messages = vec![PromptMessage::new("system", &content)];
                 InvokePromptResponse::success(&correlation_id, messages)

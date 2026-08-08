@@ -48,6 +48,10 @@ pub async fn process_mcp_command(host: LauncherHost, command: McpCommand) {
             debug!("GetLogs command received in command handler — should be handled directly by MCP server");
         }
 
+        McpCommand::InvokePrompt(..) => {
+            debug!("InvokePrompt command received in command handler — should be handled directly by MCP server");
+        }
+
         _ => {
             debug!("process_mcp_command received plugin command, ignoring (handled by process_plugin_command)");
         }

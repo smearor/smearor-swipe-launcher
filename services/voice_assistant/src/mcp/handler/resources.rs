@@ -1,3 +1,4 @@
+use crate::mcp::handler::prompt_catalog_resource::PromptCatalogResourceResponse;
 use crate::service::VoiceAssistantService;
 use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeResourceResponse;
@@ -209,6 +210,12 @@ impl McpResourceHandler<VoiceAssistantMcpResources> for VoiceAssistantService {
                     "available_models": models,
                 });
                 InvokeResourceResponse::success(correlation_id, &json.to_string())
+            }
+            VoiceAssistantMcpResources::PromptCatalog => {
+                let catalog = self.prompt_catalog.read().unwrap_or_else(|e| e.into_inner());
+                let response = PromptCatalogResourceResponse::new(catalog.iter().cloned().collect());
+                let json = serde_json::to_string(&response).unwrap_or_else(|_| "{\"prompts\":[]}".to_string());
+                InvokeResourceResponse::success(correlation_id, &json)
             }
         }
     }

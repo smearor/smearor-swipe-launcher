@@ -1,4 +1,5 @@
 use crate::service::AudioService;
+use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
@@ -93,5 +94,14 @@ impl McpCapabilitiesRegistrator for AudioService {
             r#"{ "type": "object", "properties": {} }"#,
         );
         broadcaster.broadcast_message_to_topic(refresh_tool);
+
+        let prompt = RegisterPromptMessage::with_memory(
+            "audio_control_guide",
+            "Returns a system prompt with audio control instructions, available tools, resources, and current status snapshot.",
+            r#"{ "type": "object", "properties": {} }"#,
+            "audio volume preference and preferred output device",
+            "audio,volume,mute",
+        );
+        broadcaster.broadcast_message_to_topic(prompt);
     }
 }

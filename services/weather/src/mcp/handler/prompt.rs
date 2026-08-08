@@ -3,7 +3,9 @@ use smearor_model_mcp::InvokePromptError;
 use smearor_model_mcp::InvokePromptMessage;
 use smearor_model_mcp::InvokePromptResponse;
 use smearor_model_mcp::PromptMessage;
+use smearor_model_mcp::render_template;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_weather_model::WeatherMcpPrompts;
 use std::str::FromStr;
@@ -30,10 +32,12 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for WeatherService 
                     .and_then(|v| v.get("include_forecast").and_then(|a| a.as_bool()))
                     .unwrap_or(true);
 
-                let mut content = format!(
-                    "You can query weather using the 'weather_get_forecast' tool \
-                     (configured location: {}, {}). Pass latitude and longitude for custom coordinates.",
-                    self.config.latitude, self.config.longitude
+                let mut content = render_template(
+                    include_str!("../../../data/prompts/weather_query_guide.md"),
+                    &[
+                        ("latitude", &self.config.latitude.to_string()),
+                        ("longitude", &self.config.longitude.to_string()),
+                    ],
                 );
 
                 if include_forecast {
@@ -44,17 +48,12 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for WeatherService 
                 InvokePromptResponse::success(&correlation_id, messages)
             }
             WeatherMcpPrompts::WeatherContextGuide => {
-                let content = format!(
-                    "Weather location resolution guide:\n\
-                     \n\
-                     1. If the user provides coordinates (lat/lon), use them directly with weather_get_forecast.\n\
-                     2. If the user provides a place name, use weather_lookup_coordinates to resolve it to lat/lon first.\n\
-                     3. If no location is given, use the configured default location: lat={}, lon={}.\n\
-                     4. To get current weather or forecast for any location, use the tool 'weather_get_forecast' with latitude and longitude.\n\
-                     5. To reverse-lookup a location name from coordinates, use weather_lookup_location_name.\n\
-                     \n\
-                     Always confirm the location with the user before making API calls if ambiguous.",
-                    self.config.latitude, self.config.longitude
+                let content = render_template(
+                    include_str!("../../../data/prompts/weather_context_guide.md"),
+                    &[
+                        ("latitude", &self.config.latitude.to_string()),
+                        ("longitude", &self.config.longitude.to_string()),
+                    ],
                 );
 
                 let messages = vec![PromptMessage::new("system", &content)];

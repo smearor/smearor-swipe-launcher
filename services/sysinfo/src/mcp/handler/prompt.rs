@@ -4,6 +4,7 @@ use smearor_model_mcp::InvokePromptMessage;
 use smearor_model_mcp::InvokePromptResponse;
 use smearor_model_mcp::PromptMessage;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
+use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use smearor_sysinfo_model::SysinfoMcpPrompts;
 use std::str::FromStr;
@@ -57,29 +58,23 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for SysinfoService 
                 };
 
                 let content = format!(
-                    "System health check guide:\n\n\
-                     Steps:\n\
-                     1. Read sysinfo://cpu for current CPU usage and temperature.\n\
-                     2. Read sysinfo://memory for RAM usage.\n\
-                     3. Read sysinfo://temperature-components for detailed thermal sensor data.\n\
-                     4. Read sysinfo://battery for battery level and charging state.\n\
-                     5. Read sysinfo://uptime for system uptime and load average.\n\n\
-                     Format the response as:\n\
-                     - Status: OK / Warning / Critical\n\
-                     - CPU: usage%, temperature°C\n\
-                     - Memory: used/total (percent%)\n\
-                     - Temperature warnings: any components above threshold\n\
-                     - Battery: level% (state)\n\
-                     - Uptime: formatted duration\n\n\
+                    "{}\n\n\
                      Current snapshot:\n\
                      - CPU usage: {:.1}%\n\
                      - CPU temperature: {:.1}°C\n\
                      - Memory: {} / {} ({:.1}%)\n\
                      - {}\n\
                      - {}\n\
-                     - Uptime: {} seconds\n\n\
-                     Report warnings for CPU > 80°C, memory > 90%, or battery < 15%.",
-                    cpu_usage, cpu_temp, mem_used, mem_total, mem_percent, temp_warning, battery_info, uptime_seconds
+                     - Uptime: {} seconds\n",
+                    include_str!("../../../data/prompts/system_health_check.md"),
+                    cpu_usage,
+                    cpu_temp,
+                    mem_used,
+                    mem_total,
+                    mem_percent,
+                    temp_warning,
+                    battery_info,
+                    uptime_seconds
                 );
 
                 let messages = vec![PromptMessage::new("system", &content)];

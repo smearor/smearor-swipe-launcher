@@ -43,26 +43,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for MprisService {
                     None => "MPRIS status not yet available.".to_string(),
                 };
 
-                let content = format!(
-                    "{players_info}\n\n\
-                     You can control media playback using the following tools:\n\
-                     - mpris_play: Start/resume playback (German: starten, abspielen, wiedergeben, Musik starten, Lied starten, Song starten, Wiedergabe starten)\n\
-                     - mpris_pause: Pause playback (German: pausieren, Pause)\n\
-                     - mpris_toggle_play_pause: Toggle play/pause (German: Play-Pause umschalten)\n\
-                     - mpris_stop: Stop playback (German: stoppen, anhalten, Wiedergabe stoppen)\n\
-                     - mpris_next_track: Skip to next track (German: nächstes Lied, nächster Track, weiter)\n\
-                     - mpris_previous_track: Go to previous track (German: vorheriges Lied, vorheriger Track, zurück)\n\
-                     - mpris_seek: Seek by offset in microseconds (German: vorspulen, zurückspulen)\n\
-                     - mpris_set_position: Set absolute position in microseconds (German: Position setzen)\n\
-                     - mpris_cycle_loop: Cycle loop mode (None -> Track -> Playlist) (German: Wiederholung, Loop)\n\
-                     - mpris_toggle_shuffle: Toggle shuffle (German: Zufallswiedergabe, mischen)\n\
-                     - mpris_next_player: Switch to next player (German: nächster Player)\n\
-                     - mpris_previous_player: Switch to previous player (German: vorheriger Player)\n\
-                     - mpris_raise: Bring player window to foreground (German: Player in den Vordergrund)\n\
-                     - mpris_quit: Quit the player application (German: Player beenden, schließen)\n\
-                     - mpris_refresh_status: Force status refresh (German: Status aktualisieren)\n\n\
-                     Resources: mpris://status, mpris://players, mpris://playback, mpris://metadata"
-                );
+                let content = format!("{players_info}\n\n{}", include_str!("../../../data/prompts/mpris_control_guide.md"));
 
                 let messages = vec![PromptMessage::new("system", &content)];
                 InvokePromptResponse::success(&correlation_id, messages)

@@ -18,6 +18,7 @@ pub use prompts::invoke::response::TOPIC_MCP_PROMPT_RESPONSE;
 pub use prompts::register::RegisterPromptMessage;
 pub use prompts::register::RegisteredPrompt;
 pub use prompts::register::TOPIC_MCP_REGISTER_PROMPT;
+pub use prompts::template::render_template;
 pub use registry::McpRegistry;
 pub use resources::invoke::error::InvokeResourceError;
 pub use resources::invoke::error::UnknownResourceError;

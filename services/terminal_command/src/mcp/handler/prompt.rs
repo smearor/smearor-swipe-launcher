@@ -52,16 +52,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for TerminalCommand
                     format!("Running commands:\n{}", items.join("\n"))
                 };
 
-                let content = format!(
-                    "{configured_list}\n\n{running_list}\n\n\
-                     Tools:\n\
-                     - terminal_command_launch: Launch a configured command by command_id\n\
-                     - terminal_command_terminate: Terminate a running command by command_id\n\
-                     - terminal_command_restart: Restart a command (terminate then launch)\n\n\
-                     Resources:\n\
-                     - terminal_command://running: List running tracked commands\n\
-                     - terminal_command://configured: List all configured commands"
-                );
+                let content = format!("{configured_list}\n\n{running_list}\n\n{}", include_str!("../../../data/prompts/terminal_command_guide.md"));
 
                 let messages = vec![PromptMessage::new("system", &content)];
                 InvokePromptResponse::success(&correlation_id, messages)
@@ -74,19 +65,10 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for TerminalCommand
                 let running_ids: Vec<String> = running.iter().map(|(id, _, _)| id.clone()).collect();
 
                 let content = format!(
-                    "Terminal command lifecycle guide:\n\
-                     \n\
-                     1. BEFORE LAUNCH: Always read terminal_command://configured to verify the command_id exists.\n\
-                     2. LAUNCH: Use terminal_command_launch with the correct command_id. Check forked and terminate_on_exit parameters.\n\
-                     3. MONITOR: Read terminal_command://running to check if the process is still active.\n\
-                     4. TERMINATE: Use terminal_command_terminate to stop a running command by command_id.\n\
-                     5. RESTART: Use terminal_command_restart to terminate and relaunch a command.\n\
-                     \n\
+                    "{}\n\n\
                      Configured command IDs: {}\n\
-                     Currently running: {}\n\
-                     \n\
-                     Important: Never launch a command without verifying it exists in the configuration first.\
-                     If a command has restart_on_exit=true, it will automatically restart after termination.",
+                     Currently running: {}",
+                    include_str!("../../../data/prompts/terminal_lifecycle_guide.md"),
                     if configured_ids.is_empty() {
                         "none".to_string()
                     } else {

@@ -50,17 +50,8 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for PowerService {
                 };
 
                 let content = format!(
-                    "{capabilities}\n{inhibitors_info}\n{scheduled_info}\n\n\
-                     Tools:\n\
-                     - system_power_action: Execute a power action immediately (shutdown, reboot, suspend, hibernate, lock, logout)\n\
-                     - system_schedule_power_action: Schedule a shutdown or reboot in N minutes\n\
-                     - system_cancel_power_action: Cancel a running countdown or scheduled action\n\
-                     - system_reboot_to_uefi: Reboot directly into BIOS/UEFI\n\n\
-                     Resources:\n\
-                     - power://capabilities: System power capabilities\n\
-                     - power://inhibitors: Active inhibitor locks\n\
-                     - power://scheduled_actions: Currently scheduled power action\n\n\
-                     Safety: Always check inhibitors before executing power actions. Warn the user about unsaved work."
+                    "{capabilities}\n{inhibitors_info}\n{scheduled_info}\n\n{}",
+                    include_str!("../../../data/prompts/power_action_guide.md")
                 );
 
                 let messages = vec![PromptMessage::new("system", &content)];
@@ -83,24 +74,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokePromptMessage>> for PowerService {
                     )
                 };
 
-                let content = format!(
-                    "Power safety guide:\n\n\
-                     CRITICAL RULES:\n\
-                     1. ALWAYS ask for user confirmation before executing any of these actions:\n\
-                        - shutdown: Power off the system completely\n\
-                        - reboot: Restart the system\n\
-                        - reboot_to_uefi: Restart into BIOS/UEFI firmware\n\
-                        - hibernate: Save state to disk and power off\n\
-                     2. For suspend and lock, confirmation is recommended but not strictly required.\n\
-                     3. Before executing, warn the user about unsaved work in other applications.\n\
-                     4. Check power://inhibitors for active inhibitor locks. If inhibitors exist, inform the user.\n\
-                     5. For scheduled actions (system_schedule_power_action), state the delay clearly and offer cancellation via system_cancel_power_action.\n\
-                     6. After executing a destructive action, there is NO undo. Be certain before proceeding.\n\n\
-                     Confirmation format:\n\
-                     \"I will <action> the system in <delay> seconds. Unsaved work will be lost. Proceed?\"\n\n\
-                     {}",
-                    inhibitor_warning
-                );
+                let content = format!("{}\n\n{}", include_str!("../../../data/prompts/power_safety_guide.md"), inhibitor_warning);
 
                 let messages = vec![PromptMessage::new("system", &content)];
                 InvokePromptResponse::success(&correlation_id, messages)
