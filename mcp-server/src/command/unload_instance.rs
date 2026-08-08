@@ -5,6 +5,7 @@ use typed_builder::TypedBuilder;
 use crate::command::McpCommand;
 use crate::command::McpCommandVariant;
 use crate::command::wrapper::CommandResponseWrapper;
+use crate::tools::ToolDefinitionCreator;
 
 /// Parameters for unloading a launcher instance via the command channel.
 #[derive(JsonSchema, Deserialize, TypedBuilder)]
@@ -16,5 +17,14 @@ pub struct UnloadInstanceParams {
 impl McpCommandVariant for UnloadInstanceParams {
     fn into_command(wrapper: CommandResponseWrapper<Self>) -> McpCommand {
         McpCommand::UnloadInstance(wrapper)
+    }
+}
+
+impl ToolDefinitionCreator for UnloadInstanceParams {
+    fn tool_name() -> &'static str {
+        "launcher_unload_instance"
+    }
+    fn tool_description() -> &'static str {
+        "Unloads a launcher instance entirely by its instance_id. If the instance is running, it is stopped first. Then removes plugins, watchers, persistence, and frees the instance ID."
     }
 }

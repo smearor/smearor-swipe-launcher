@@ -38,3 +38,13 @@ impl std::str::FromStr for InstanceType {
         }
     }
 }
+
+impl From<&smearor_model_instance_control::InstanceType> for InstanceType {
+    fn from(value: &smearor_model_instance_control::InstanceType) -> Self {
+        match value {
+            smearor_model_instance_control::InstanceType::Gtk => InstanceType::Gtk,
+            smearor_model_instance_control::InstanceType::Headless => InstanceType::Headless,
+            smearor_model_instance_control::InstanceType::Web => InstanceType::Web,
+        }
+    }
+}

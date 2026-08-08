@@ -5,6 +5,7 @@ use typed_builder::TypedBuilder;
 use crate::command::McpCommand;
 use crate::command::McpCommandVariant;
 use crate::command::wrapper::CommandResponseWrapper;
+use crate::tools::ToolDefinitionCreator;
 
 /// Instance type for loading a launcher instance.
 #[derive(JsonSchema, Deserialize, Default)]
@@ -49,5 +50,14 @@ pub struct LoadInstanceParams {
 impl McpCommandVariant for LoadInstanceParams {
     fn into_command(wrapper: CommandResponseWrapper<Self>) -> McpCommand {
         McpCommand::LoadInstance(wrapper)
+    }
+}
+
+impl ToolDefinitionCreator for LoadInstanceParams {
+    fn tool_name() -> &'static str {
+        "launcher_load_instance"
+    }
+    fn tool_description() -> &'static str {
+        "Dynamically loads a new launcher instance from a TOML config file path. The instance gets its own window, plugins, and areas. Use this to add a new launcher window at runtime."
     }
 }

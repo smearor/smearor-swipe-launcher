@@ -5,6 +5,7 @@ use typed_builder::TypedBuilder;
 use crate::command::McpCommand;
 use crate::command::McpCommandVariant;
 use crate::command::wrapper::CommandResponseWrapper;
+use crate::tools::ToolDefinitionCreator;
 
 /// Parameters for opening a transient area overlay via the command channel.
 #[derive(JsonSchema, Deserialize, TypedBuilder)]
@@ -20,5 +21,14 @@ pub struct OpenTransientAreaParams {
 impl McpCommandVariant for OpenTransientAreaParams {
     fn into_command(wrapper: CommandResponseWrapper<Self>) -> McpCommand {
         McpCommand::OpenTransientArea(wrapper)
+    }
+}
+
+impl ToolDefinitionCreator for OpenTransientAreaParams {
+    fn tool_name() -> &'static str {
+        "open_transient_area"
+    }
+    fn tool_description() -> &'static str {
+        "Opens a Smearor area as a transient overlay on top of a source area (simulates a button click)."
     }
 }

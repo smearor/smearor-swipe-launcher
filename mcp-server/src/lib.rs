@@ -330,7 +330,8 @@ impl ServerHandler for SwipeLauncherHandler {
 
         // Core tool
         let arguments_value = arguments.map(serde_json::Value::Object).unwrap_or(serde_json::Value::Null);
-        let result = tools::invoke_tool_sdk(&state.tools, state.command_sender.clone(), &name, Some(&arguments_value)).await;
+        let invocation = tools::ToolInvocation::new(state.command_sender.clone(), Some(&arguments_value));
+        let result = tools::invoke_tool_sdk(&state.tools, invocation, &name).await;
         match result {
             Ok(text) => Ok(CallToolResult::text_content(vec![TextContent::new(text, None, None)])),
             Err(message) => Ok(CallToolResult::with_error(CallToolError::from_message(message))),

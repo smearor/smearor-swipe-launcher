@@ -11,7 +11,6 @@ use smearor_model_instance_control::InstanceLoadMessage;
 use smearor_model_instance_control::InstanceReloadMessage;
 use smearor_model_instance_control::InstanceStartMessage;
 use smearor_model_instance_control::InstanceStopMessage;
-use smearor_model_instance_control::InstanceType as ModelInstanceType;
 use smearor_model_instance_control::InstanceUnloadMessage;
 use smearor_model_instance_control::TOPIC_CORE_INSTANCE_LOAD;
 use smearor_model_instance_control::TOPIC_CORE_INSTANCE_RELOAD;
@@ -46,13 +45,13 @@ use tracing::debug;
 use tracing::error;
 use tracing::trace;
 
-use smearor_swipe_launcher_plugin_api::default_clone_payload;
-use smearor_swipe_launcher_plugin_api::default_destroy_payload;
-
 use super::TopicAction;
 use super::macropad::MACROPAD_COMPOUND_PRESS_WINDOW;
 use super::macropad::MACROPAD_DOUBLE_PRESS_WINDOW;
 use super::macropad::MACROPAD_LONGPRESS_THRESHOLD;
+use crate::instance::InstanceType;
+use smearor_swipe_launcher_plugin_api::default_clone_payload;
+use smearor_swipe_launcher_plugin_api::default_destroy_payload;
 
 impl super::LauncherHost {
     pub(crate) fn route_message(&self, envelope: FfiEnvelope) {
@@ -189,11 +188,7 @@ impl super::LauncherHost {
                 let msg = unsafe { &*(envelope.payload as *const InstanceLoadMessage) };
                 let instance_id = msg.instance_id.to_string();
                 let config_path = msg.config_path.to_string();
-                let instance_type = match &msg.instance_type {
-                    ModelInstanceType::Gtk => crate::instance::InstanceType::Gtk,
-                    ModelInstanceType::Headless => crate::instance::InstanceType::Headless,
-                    ModelInstanceType::Web => crate::instance::InstanceType::Web,
-                };
+                let instance_type = InstanceType::from(&msg.instance_type);
                 let persist = msg.persist;
                 let response_topic = msg.response_topic.to_string();
                 let result = self.load_instance(instance_id, &config_path, instance_type, persist, true);
@@ -621,7 +616,8 @@ impl super::LauncherHost {
                         let arguments = serde_json::from_str(&msg.arguments.to_string()).unwrap_or(serde_json::Value::Null);
                         tokio::spawn(async move {
                             let tools = smearor_mcp_server::tools::core_tools();
-                            let result = smearor_mcp_server::tools::invoke_tool_sdk(&tools, sender, &name, Some(&arguments)).await;
+                            let invocation = smearor_mcp_server::tools::ToolInvocation::new(sender, Some(&arguments));
+                            let result = smearor_mcp_server::tools::invoke_tool_sdk(&tools, invocation, &name).await;
                             let response = match result {
                                 Ok(text) => InvokeToolResponse::success(&correlation_id, &text),
                                 Err(error) => InvokeToolResponse::error(&correlation_id, &error),

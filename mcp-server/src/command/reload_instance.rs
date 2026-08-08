@@ -5,6 +5,7 @@ use typed_builder::TypedBuilder;
 use crate::command::McpCommand;
 use crate::command::McpCommandVariant;
 use crate::command::wrapper::CommandResponseWrapper;
+use crate::tools::ToolDefinitionCreator;
 
 /// Parameters for hot-reloading a launcher instance via the command channel.
 #[derive(JsonSchema, Deserialize, TypedBuilder)]
@@ -20,5 +21,14 @@ pub struct ReloadInstanceParams {
 impl McpCommandVariant for ReloadInstanceParams {
     fn into_command(wrapper: CommandResponseWrapper<Self>) -> McpCommand {
         McpCommand::ReloadInstance(wrapper)
+    }
+}
+
+impl ToolDefinitionCreator for ReloadInstanceParams {
+    fn tool_name() -> &'static str {
+        "launcher_reload_instance"
+    }
+    fn tool_description() -> &'static str {
+        "Hot-reloads a launcher instance by its instance_id. Stops the instance if running, unloads it, re-loads from its config file, and restores the previous lifecycle state (Running or Ready)."
     }
 }

@@ -5,6 +5,7 @@ use typed_builder::TypedBuilder;
 use crate::command::McpCommand;
 use crate::command::McpCommandVariant;
 use crate::command::wrapper::CommandResponseWrapper;
+use crate::tools::ToolDefinitionCreator;
 
 /// A single message in a send_multiple_messages call.
 #[derive(JsonSchema, Deserialize, TypedBuilder)]
@@ -29,5 +30,14 @@ pub struct SendMultipleMessagesParams {
 impl McpCommandVariant for SendMultipleMessagesParams {
     fn into_command(wrapper: CommandResponseWrapper<Self>) -> McpCommand {
         McpCommand::SendMultipleMessages(wrapper)
+    }
+}
+
+impl ToolDefinitionCreator for SendMultipleMessagesParams {
+    fn tool_name() -> &'static str {
+        "send_multiple_messages"
+    }
+    fn tool_description() -> &'static str {
+        "Publishes multiple messages to the central message broker in a single call. Automatically filters out duplicate messages (same topic + payload). Use this when you need to trigger multiple button actions at once, e.g. turning off all lights in a room."
     }
 }
