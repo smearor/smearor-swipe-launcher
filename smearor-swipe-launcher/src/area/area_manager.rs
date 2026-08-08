@@ -542,6 +542,16 @@ impl<B: AreaBackend> AreaManager<B> {
         Ok(())
     }
 
+    /// Clear the main container reference.
+    ///
+    /// Called during `stop_instance` to prevent `rebuild_areas` from adding
+    /// areas using a stale container before the next `build_window`/`build_headless` runs.
+    pub fn clear_main_container(&self) {
+        if let Ok(mut guard) = self.main_container.write() {
+            *guard = None;
+        }
+    }
+
     /// Get the main container.
     fn get_main_container(&self) -> Result<B::Container, MainContainerNotInitialized> {
         let Ok(guard) = self.main_container.read() else {

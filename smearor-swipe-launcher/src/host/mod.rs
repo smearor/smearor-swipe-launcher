@@ -399,6 +399,10 @@ impl LauncherHost {
                     window.close();
                 }
             }
+            if let Ok(area_manager) = instance.area_manager.lock() {
+                area_manager.remove_all_areas_keep_plugins();
+                area_manager.clear_main_container();
+            }
         }
 
         for instance in instances.values() {

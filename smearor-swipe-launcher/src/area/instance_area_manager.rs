@@ -111,6 +111,15 @@ impl InstanceAreaManager {
         }
     }
 
+    /// Clear the main container reference.
+    /// Prevents rebuild_areas from adding areas after stop_instance but before build_window/build_headless.
+    pub fn clear_main_container(&self) {
+        match self {
+            Self::Gtk(manager) => manager.clear_main_container(),
+            Self::Headless(manager) => manager.clear_main_container(),
+        }
+    }
+
     /// Remove all areas immediately without animation.
     pub fn remove_all_areas_immediate(&self) {
         match self {

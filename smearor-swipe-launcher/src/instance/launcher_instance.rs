@@ -105,6 +105,11 @@ impl LauncherInstance {
         }
     }
 
+    /// Returns `true` if the instance is in the `Running` lifecycle state.
+    pub fn is_running(&self) -> bool {
+        self.lifecycle.lock().map(|g| *g == LauncherInstanceLifecycle::Running).unwrap_or(false)
+    }
+
     pub fn load_plugins(&self) {
         let monitor_index = self.config.launcher.layer.monitor;
         let (areas, entries) = self.config.get_layout_for_context(None, monitor_index, None);
@@ -288,6 +293,14 @@ impl LauncherInstance {
     /// index, then rebuilds areas only if the resolved layout differs from
     /// the current one.
     pub fn on_workspace_changed(&self, workspace_id: i32, monitor_index: u32) {
+        if !self.is_running() {
+            debug!(
+                "Instance {} skipping workspace change to {} on monitor {} — not running",
+                self.instance_id, workspace_id, monitor_index
+            );
+            return;
+        }
+
         let (areas, entries) = self.config.get_layout_for_context(None, Some(monitor_index), Some(workspace_id));
 
         let mut current_area_ids: Vec<String> = if let Ok(area_manager) = self.area_manager.lock() {
@@ -321,6 +334,10 @@ impl LauncherInstance {
     /// configuration affects this instance.
     pub fn on_monitor_changed(&self, monitor_index: u32, connector_name: &str, change_type: MonitorChangeType) {
         debug!("Instance {} monitor {} ({}): {:?}", self.instance_id, monitor_index, connector_name, change_type);
+        if !self.is_running() {
+            debug!("Instance {} skipping monitor change — not running", self.instance_id);
+            return;
+        }
         let (areas, entries) = self.config.get_layout_for_context(Some(connector_name), Some(monitor_index), None);
         self.rebuild_areas(areas, entries);
     }

@@ -366,6 +366,7 @@ impl super::LauncherHost {
                         }
                         if let Ok(area_manager) = instance.area_manager.lock() {
                             area_manager.remove_all_areas_keep_plugins();
+                            area_manager.clear_main_container();
                         }
                         debug!("Stopped GTK instance '{}'", instance_id_for_closure);
                     }
@@ -383,6 +384,7 @@ impl super::LauncherHost {
                 if let Some(instance) = instances.get(&instance_id_owned) {
                     if let Ok(area_manager) = instance.area_manager.lock() {
                         area_manager.remove_all_areas_keep_plugins();
+                        area_manager.clear_main_container();
                     }
                 }
             }
