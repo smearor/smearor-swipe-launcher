@@ -19,15 +19,15 @@ pub static GLOBAL_HANDLE: OnceLock<LogForwardHandle> = OnceLock::new();
 ///
 /// Called automatically by `service_plugin!` and `widget_plugin!` macros.
 pub fn init_plugin_tracing(handle: Option<LogForwardHandle>) {
+    let filter = tracing_subscriber::EnvFilter::from_default_env().add_directive(tracing::Level::DEBUG.into());
     if let Some(handle) = handle {
         let _ = GLOBAL_HANDLE.set(handle);
-        let layer = LogForwardLayer;
-        let subscriber = tracing_subscriber::registry().with(layer);
+        let fmt_layer = tracing_subscriber::fmt::layer().with_filter(filter);
+        let forward_layer = LogForwardLayer;
+        let subscriber = tracing_subscriber::registry().with(fmt_layer).with(forward_layer);
         let _ = tracing::subscriber::set_global_default(subscriber);
     } else {
-        let subscriber = tracing_subscriber::FmtSubscriber::builder()
-            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive(tracing::Level::DEBUG.into()))
-            .finish();
+        let subscriber = tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish();
         let _ = tracing::subscriber::set_global_default(subscriber);
     }
 }
