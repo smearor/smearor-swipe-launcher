@@ -1,3 +1,4 @@
+use crate::McpError;
 use crate::prompts::definition::PromptDefinition;
 use crate::prompts::definition::PromptHandler;
 
@@ -22,7 +23,7 @@ pub trait PromptDefinitionCreator {
 
     /// Build the prompt handler. Default implementation returns an error.
     fn prompt_handler() -> PromptHandler {
-        Box::new(|_name, _args| Err(format!("Prompt {} has no handler", Self::prompt_name())))
+        Box::new(|_name, _args| Err(McpError::LauncherError(format!("Prompt {} has no handler", Self::prompt_name()))))
     }
 }
 

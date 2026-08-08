@@ -5,12 +5,14 @@
 //! with Streamable HTTP and SSE transport support.
 
 pub mod command;
+mod error;
 mod jsonrpc;
 pub mod prompts;
 pub mod resources;
 pub mod server;
 pub mod tools;
 
+pub use crate::error::McpError;
 pub use crate::server::McpServer;
 pub use crate::server::McpServerConfig;
 pub use crate::server::McpServerState;

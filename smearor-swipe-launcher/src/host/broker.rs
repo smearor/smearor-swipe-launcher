@@ -620,7 +620,7 @@ impl super::LauncherHost {
                             let result = smearor_mcp_server::tools::invoke_tool_sdk(&tools, invocation, &name).await;
                             let response = match result {
                                 Ok(text) => InvokeToolResponse::success(&correlation_id, &text),
-                                Err(error) => InvokeToolResponse::error(&correlation_id, &error),
+                                Err(error) => InvokeToolResponse::error(&correlation_id, &error.to_string()),
                             };
                             let payload_ptr = box_payload(response);
                             let _ = broker_sender.send(
@@ -646,7 +646,7 @@ impl super::LauncherHost {
                             let result = smearor_mcp_server::resources::read_resource_sdk(&resources, sender, &uri).await;
                             let response = match result {
                                 Ok(output) => InvokeResourceResponse::success(&correlation_id, &output.contents),
-                                Err(error) => InvokeResourceResponse::error(&correlation_id, &error),
+                                Err(error) => InvokeResourceResponse::error(&correlation_id, &error.to_string()),
                             };
                             let payload_ptr = box_payload(response);
                             let _ = broker_sender.send(

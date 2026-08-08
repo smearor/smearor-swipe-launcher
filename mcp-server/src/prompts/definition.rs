@@ -9,8 +9,10 @@ use crate::prompts::core::ToolShortcutGuidePrompt;
 use crate::prompts::creator::PromptDefinitionCreator;
 use crate::prompts::into_sdk_prompt::SdkPromptFields;
 
+use crate::prompts::result::PromptResult;
+
 /// Prompt handler signature.
-pub type PromptHandler = Box<dyn Fn(&str, Option<&BTreeMap<String, String>>) -> Result<String, String> + Send + Sync>;
+pub type PromptHandler = Box<dyn Fn(&str, Option<&BTreeMap<String, String>>) -> PromptResult + Send + Sync>;
 
 /// Built-in prompt definition exposed by the MCP server.
 #[derive(TypedBuilder)]

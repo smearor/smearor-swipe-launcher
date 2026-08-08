@@ -5,8 +5,10 @@ mod creator;
 mod definition;
 mod into_sdk_prompt;
 mod registered;
+mod result;
 mod schema;
 
+use crate::McpError;
 use rust_mcp_sdk::schema::ContentBlock;
 use rust_mcp_sdk::schema::GetPromptResult;
 use rust_mcp_sdk::schema::PromptArgument;
@@ -19,6 +21,7 @@ pub use definition::PromptDefinition;
 pub use definition::PromptHandler;
 pub use into_sdk_prompt::IntoSdkPrompt;
 pub use into_sdk_prompt::SdkPromptFields;
+pub use result::PromptResult;
 
 /// Convert a serde_json::Value arguments schema to SDK PromptArgument list.
 pub fn schema_to_prompt_arguments(schema: &serde_json::Value) -> Vec<PromptArgument> {
@@ -47,9 +50,9 @@ pub fn schema_to_prompt_arguments(schema: &serde_json::Value) -> Vec<PromptArgum
 }
 
 /// Resolve a core prompt by name and return a GetPromptResult for the SDK.
-pub fn get_prompt_sdk(prompts: &[PromptDefinition], name: &str, arguments: &Option<BTreeMap<String, String>>) -> Result<GetPromptResult, String> {
+pub fn get_prompt_sdk(prompts: &[PromptDefinition], name: &str, arguments: &Option<BTreeMap<String, String>>) -> Result<GetPromptResult, McpError> {
     let Some(prompt) = prompts.iter().find(|p| p.name == name) else {
-        return Err(format!("Prompt {name} not found"));
+        return Err(McpError::PromptNotFound(name.to_string()));
     };
     let content = (prompt.handler)(name, arguments.as_ref())?;
     Ok(GetPromptResult {

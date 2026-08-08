@@ -153,7 +153,7 @@ impl ServerHandler for SwipeLauncherHandler {
                 })],
                 meta: None,
             }),
-            Err(message) => Err(RpcError::internal_error().with_message(message)),
+            Err(e) => Err(RpcError::internal_error().with_message(e.to_string())),
         }
     }
 
@@ -225,7 +225,7 @@ impl ServerHandler for SwipeLauncherHandler {
 
         match get_prompt_sdk(&state.prompts, &name, &arguments) {
             Ok(result) => Ok(result),
-            Err(message) => Err(RpcError::internal_error().with_message(message)),
+            Err(e) => Err(RpcError::internal_error().with_message(e.to_string())),
         }
     }
 
@@ -296,7 +296,7 @@ impl ServerHandler for SwipeLauncherHandler {
         let result = invoke_tool_sdk(&state.tools, invocation, &name).await;
         match result {
             Ok(text) => Ok(CallToolResult::text_content(vec![TextContent::new(text, None, None)])),
-            Err(message) => Ok(CallToolResult::with_error(CallToolError::from_message(message))),
+            Err(e) => Ok(CallToolResult::with_error(CallToolError::from_message(e.to_string()))),
         }
     }
 }

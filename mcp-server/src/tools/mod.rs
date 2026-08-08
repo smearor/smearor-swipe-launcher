@@ -20,6 +20,7 @@ pub use response::ToolContent;
 pub use response::ToolResultPayload;
 pub use result::ToolResult;
 
+use crate::McpError;
 use crate::jsonrpc::JSONRPC_METHOD_NOT_FOUND;
 use crate::jsonrpc::JsonRpcResponse;
 use rust_mcp_sdk::schema::ToolInputSchema;
@@ -54,14 +55,14 @@ pub(crate) fn json_schema_to_tool_input_schema(schema: &serde_json::Value) -> To
 }
 
 /// Invoke a core tool by name and return the result as a string for the SDK
-/// ServerHandler. Returns Ok(text) on success or Err(message) on failure.
-pub async fn invoke_tool_sdk(tools: &[ToolDefinition], invocation: ToolInvocation<'_>, name: &str) -> Result<String, String> {
+/// ServerHandler. Returns Ok(text) on success or Err(McpError) on failure.
+pub async fn invoke_tool_sdk(tools: &[ToolDefinition], invocation: ToolInvocation<'_>, name: &str) -> Result<String, McpError> {
     let Some(tool) = tools.iter().find(|t| t.name == name) else {
-        return Err(format!("Tool {} not found", name));
+        return Err(McpError::ToolNotFound(name.to_string()));
     };
     match (tool.handler)(invocation).await {
         Ok(result) => Ok(result.to_string()),
-        Err(message) => Err(message),
+        Err(e) => Err(e),
     }
 }
 
@@ -73,6 +74,6 @@ pub async fn invoke_tool(tools: &[ToolDefinition], invocation: ToolInvocation<'_
 
     match (tool.handler)(invocation).await {
         Ok(result) => JsonRpcResponse::success(id, serde_json::to_value(ToolResultPayload::success(result.to_string())).unwrap_or_default()),
-        Err(message) => JsonRpcResponse::success(id, serde_json::to_value(ToolResultPayload::error(message)).unwrap_or_default()),
+        Err(e) => JsonRpcResponse::success(id, serde_json::to_value(ToolResultPayload::error(e.to_string())).unwrap_or_default()),
     }
 }

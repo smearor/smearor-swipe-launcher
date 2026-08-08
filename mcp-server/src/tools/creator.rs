@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::CommandResponseWrapper;
 use crate::McpCommand;
 use crate::McpCommandVariant;
+use crate::McpError;
 use crate::tools::definition::ToolDefinition;
 use crate::tools::handler::ToolFuture;
 use crate::tools::invocation::ToolInvocation;
@@ -32,9 +33,9 @@ pub trait ToolDefinitionCreator: JsonSchema + DeserializeOwned + McpCommandVaria
 }
 
 /// Parse tool parameters from a JSON value into a typed struct.
-fn parse_params<T: DeserializeOwned>(params: Option<&Value>) -> Result<T, String> {
-    let value = params.cloned().unwrap_or(serde_json::Value::Object(Default::default()));
-    serde_json::from_value(value).map_err(|e| format!("Invalid parameters: {e}"))
+fn parse_params<T: DeserializeOwned>(params: Option<&Value>) -> Result<T, McpError> {
+    let value = params.cloned().unwrap_or(Value::Object(Default::default()));
+    serde_json::from_value(value).map_err(|e| McpError::InvalidParams(e.to_string()))
 }
 
 /// Send a typed params struct as a command and wait for the response.
@@ -61,14 +62,12 @@ where
     let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
     let command = build_command(response_tx);
 
-    sender
-        .try_send(command)
-        .map_err(|e| format!("Failed to send command to launcher core: {}", e))?;
+    sender.try_send(command).map_err(|e| McpError::ChannelSend(e.to_string()))?;
 
     match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
         Ok(Ok(Ok(result))) => Ok(Value::String(result)),
-        Ok(Ok(Err(e))) => Err(e),
-        Ok(Err(_)) => Err("Launcher core dropped the response channel".to_string()),
-        Err(_) => Err("Tool invocation timed out".to_string()),
+        Ok(Ok(Err(e))) => Err(McpError::LauncherError(e)),
+        Ok(Err(_)) => Err(McpError::ChannelClosed),
+        Err(_) => Err(McpError::Timeout),
     }
 }

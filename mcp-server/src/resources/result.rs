@@ -1,2 +1,4 @@
+use crate::McpError;
+
 /// Result type returned by a resource handler.
-pub type ResourceResult = Result<String, String>;
+pub type ResourceResult = Result<String, McpError>;

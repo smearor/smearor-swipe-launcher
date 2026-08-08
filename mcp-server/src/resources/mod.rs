@@ -11,6 +11,7 @@ mod result;
 
 use crate::CommandResponseWrapper;
 use crate::McpCommand;
+use crate::McpError;
 use crate::ReadResourceParams;
 use crate::jsonrpc::JSONRPC_INTERNAL_ERROR;
 use crate::jsonrpc::JSONRPC_INVALID_PARAMS;
@@ -30,7 +31,7 @@ pub use resource_content::ResourceContent;
 pub use result::ResourceResult;
 
 /// Read a resource by sending the request to the launcher core.
-pub(crate) async fn read_resource(sender: Sender<McpCommand>, uri: String, mime_type: String) -> Result<ReadResourceOutput, String> {
+pub(crate) async fn read_resource(sender: Sender<McpCommand>, uri: String, mime_type: String) -> Result<ReadResourceOutput, McpError> {
     let (response_tx, response_rx) = oneshot::channel::<Result<String, String>>();
     sender
         .try_send(
@@ -40,25 +41,25 @@ pub(crate) async fn read_resource(sender: Sender<McpCommand>, uri: String, mime_
                 .build()
                 .into(),
         )
-        .map_err(|e| format!("Failed to send resource read command: {}", e))?;
+        .map_err(|e| McpError::ChannelSend(e.to_string()))?;
     match tokio::time::timeout(tokio::time::Duration::from_secs(10), response_rx).await {
         Ok(Ok(Ok(contents))) => Ok(ReadResourceOutput { contents, mime_type }),
-        Ok(Ok(Err(e))) => Err(e),
-        Ok(Err(_)) => Err("Launcher core dropped the response channel".to_string()),
-        Err(_) => Err("Resource read timed out".to_string()),
+        Ok(Ok(Err(e))) => Err(McpError::LauncherError(e)),
+        Ok(Err(_)) => Err(McpError::ChannelClosed),
+        Err(_) => Err(McpError::Timeout),
     }
 }
 
 /// Read a core resource by URI and return a `ReadResourceOutput` for the SDK
-/// ServerHandler. Returns Err(message) on failure.
-pub async fn read_resource_sdk(resources: &[ResourceDefinition], sender: Sender<McpCommand>, uri: &str) -> Result<ReadResourceOutput, String> {
+/// ServerHandler. Returns Err(McpError) on failure.
+pub async fn read_resource_sdk(resources: &[ResourceDefinition], sender: Sender<McpCommand>, uri: &str) -> Result<ReadResourceOutput, McpError> {
     let Some(resource) = resources.iter().find(|r| r.uri == uri) else {
-        return Err(format!("Resource {} not found", uri));
+        return Err(McpError::ResourceNotFound(uri.to_string()));
     };
     let mime_type = resource.mime_type.clone();
     match (resource.handler)(sender, uri.to_string()).await {
         Ok(contents) => Ok(ReadResourceOutput { contents, mime_type }),
-        Err(message) => Err(message),
+        Err(e) => Err(e),
     }
 }
 
@@ -80,6 +81,6 @@ pub async fn read_resource_response(resources: &[ResourceDefinition], sender: Se
             })
             .unwrap_or_default(),
         ),
-        Err(message) => JsonRpcResponse::error(id, JSONRPC_INTERNAL_ERROR, message, None),
+        Err(e) => JsonRpcResponse::error(id, JSONRPC_INTERNAL_ERROR, e.to_string(), None),
     }
 }
