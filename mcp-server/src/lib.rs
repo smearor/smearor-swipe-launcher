@@ -33,7 +33,6 @@ use rust_mcp_sdk::schema::ServerCapabilitiesTools;
 use rust_mcp_sdk::schema::TextContent;
 use rust_mcp_sdk::schema::TextResourceContents;
 use rust_mcp_sdk::schema::Tool;
-use rust_mcp_sdk::schema::ToolInputSchema;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use smearor_model_mcp::McpRegistry;
 use std::sync::Arc;
@@ -49,6 +48,13 @@ mod jsonrpc;
 pub mod prompts;
 pub mod resources;
 pub mod tools;
+
+use crate::prompts::IntoSdkPrompt;
+use crate::prompts::PromptDefinition;
+use crate::resources::IntoSdkResource;
+use crate::resources::ResourceDefinition;
+use crate::tools::IntoSdkTool;
+use crate::tools::ToolDefinition;
 
 pub use command::CloseAreaParams;
 pub use command::CommandResponseWrapper;
@@ -145,9 +151,9 @@ impl McpServer {
 
         let state = Arc::new(McpServerState {
             command_sender: self.command_sender.clone(),
-            tools: tools::core_tools(),
-            resources: resources::core_resources(),
-            prompts: prompts::core_prompts(),
+            tools: ToolDefinition::core_tools(),
+            resources: ResourceDefinition::core_resources(),
+            prompts: PromptDefinition::core_prompts(),
             plugin_registry: self.plugin_registry.clone(),
             correlation_counter: AtomicU64::new(1),
         });
@@ -249,33 +255,9 @@ impl ServerHandler for SwipeLauncherHandler {
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
     ) -> std::result::Result<ListToolsResult, RpcError> {
         let state = self.state.clone();
-        let mut sdk_tools: Vec<Tool> = state
-            .tools
-            .iter()
-            .map(|t| Tool {
-                name: t.name.clone(),
-                description: Some(t.description.clone()),
-                input_schema: json_schema_to_tool_input_schema(&t.input_schema),
-                annotations: None,
-                execution: None,
-                icons: vec![],
-                meta: None,
-                output_schema: None,
-                title: None,
-            })
-            .collect();
+        let mut sdk_tools: Vec<Tool> = state.tools.iter().map(|t| t.into_sdk_tool()).collect();
         for plugin_tool in state.plugin_registry.list_tools() {
-            sdk_tools.push(Tool {
-                name: plugin_tool.name.clone(),
-                description: Some(plugin_tool.description.clone()),
-                input_schema: json_schema_to_tool_input_schema(&plugin_tool.input_schema),
-                annotations: None,
-                execution: None,
-                icons: vec![],
-                meta: None,
-                output_schema: None,
-                title: None,
-            });
+            sdk_tools.push(plugin_tool.into_sdk_tool());
         }
         Ok(ListToolsResult {
             tools: sdk_tools,
@@ -344,33 +326,9 @@ impl ServerHandler for SwipeLauncherHandler {
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
     ) -> std::result::Result<ListResourcesResult, RpcError> {
         let state = self.state.clone();
-        let mut sdk_resources: Vec<Resource> = state
-            .resources
-            .iter()
-            .map(|r| Resource {
-                uri: r.uri.clone(),
-                name: r.name.clone(),
-                description: Some(r.description.clone()),
-                mime_type: Some(r.mime_type.clone()),
-                annotations: None,
-                icons: vec![],
-                meta: None,
-                size: None,
-                title: None,
-            })
-            .collect();
+        let mut sdk_resources: Vec<Resource> = state.resources.iter().map(|r| r.into_sdk_resource()).collect();
         for plugin_resource in state.plugin_registry.list_resources() {
-            sdk_resources.push(Resource {
-                uri: plugin_resource.uri.clone(),
-                name: plugin_resource.name.clone(),
-                description: Some(plugin_resource.description.clone()),
-                mime_type: Some(plugin_resource.mime_type.clone()),
-                annotations: None,
-                icons: vec![],
-                meta: None,
-                size: None,
-                title: None,
-            });
+            sdk_resources.push(plugin_resource.into_sdk_resource());
         }
         Ok(ListResourcesResult {
             resources: sdk_resources,
@@ -442,11 +400,11 @@ impl ServerHandler for SwipeLauncherHandler {
 
         // Core resource
         match resources::read_resource_sdk(&state.resources, state.command_sender.clone(), &uri).await {
-            Ok((contents, mime_type)) => Ok(ReadResourceResult {
+            Ok(output) => Ok(ReadResourceResult {
                 contents: vec![ReadResourceContent::TextResourceContents(TextResourceContents {
                     meta: None,
-                    mime_type: Some(mime_type),
-                    text: contents,
+                    mime_type: Some(output.mime_type),
+                    text: output.contents,
                     uri,
                 })],
                 meta: None,
@@ -461,16 +419,9 @@ impl ServerHandler for SwipeLauncherHandler {
         _runtime: Arc<dyn rust_mcp_sdk::McpServer>,
     ) -> std::result::Result<ListPromptsResult, RpcError> {
         let state = self.state.clone();
-        let mut sdk_prompts: Vec<rust_mcp_sdk::schema::Prompt> = state.prompts.iter().map(prompts::prompt_to_sdk).collect();
+        let mut sdk_prompts: Vec<rust_mcp_sdk::schema::Prompt> = state.prompts.iter().map(|p| p.into_sdk_prompt()).collect();
         for plugin_prompt in state.plugin_registry.list_prompts() {
-            sdk_prompts.push(rust_mcp_sdk::schema::Prompt {
-                name: plugin_prompt.name.clone(),
-                description: Some(plugin_prompt.description.clone()),
-                arguments: prompts::schema_to_prompt_arguments(&plugin_prompt.arguments_schema),
-                icons: vec![],
-                meta: None,
-                title: None,
-            });
+            sdk_prompts.push(plugin_prompt.into_sdk_prompt());
         }
         Ok(ListPromptsResult {
             prompts: sdk_prompts,
@@ -537,32 +488,4 @@ impl ServerHandler for SwipeLauncherHandler {
             Err(message) => Err(RpcError::internal_error().with_message(message)),
         }
     }
-}
-
-/// Convert a serde_json::Value JSON schema to the SDK's ToolInputSchema.
-/// The input schema must be a JSON object with "properties" and "required" fields.
-/// Properties are converted from serde_json::Map to BTreeMap<String, serde_json::Map>.
-fn json_schema_to_tool_input_schema(schema: &serde_json::Value) -> ToolInputSchema {
-    let properties = schema.get("properties").and_then(|p| p.as_object()).map(|map| {
-        map.iter()
-            .map(|(k, v)| {
-                let inner = match v {
-                    serde_json::Value::Object(obj) => obj.clone(),
-                    _ => {
-                        let mut m = serde_json::Map::new();
-                        m.insert("value".to_string(), v.clone());
-                        m
-                    }
-                };
-                (k.clone(), inner)
-            })
-            .collect::<std::collections::BTreeMap<String, serde_json::Map<String, serde_json::Value>>>()
-    });
-    let required = schema
-        .get("required")
-        .and_then(|r| r.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>())
-        .unwrap_or_default();
-    let schema_uri = schema.get("$schema").and_then(|t| t.as_str()).map(String::from);
-    ToolInputSchema::new(required, properties, schema_uri)
 }
