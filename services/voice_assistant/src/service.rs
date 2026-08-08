@@ -583,7 +583,26 @@ impl VoiceAssistantService {
                                     warn!("Voice Assistant: failed to clear LLM KV cache: {error}");
                                 }
                             }
+                            if let Some(tts) = service_tts.as_ref() {
+                                tts.cancel();
+                            }
+                            if let Ok(mut speaking) = service_is_speaking.lock() {
+                                *speaking = false;
+                            }
+                            if let Ok(mut active) = service_active.lock() {
+                                *active = false;
+                            }
+                            if let Ok(mut transcript) = service_transcript.write() {
+                                transcript.clear();
+                            }
+                            if let Ok(mut answer) = service_answer.write() {
+                                answer.clear();
+                            }
+                            if let Ok(mut response_type) = service_response_type.write() {
+                                *response_type = None;
+                            }
                             service_performance_monitor.reset();
+                            Self::set_state(&service_state, AssistantState::Idle, &service_status_sender, &service_transcript, &service_answer).await;
                         }
                         VoiceCommandAction::EnableWakeWord => {
                             let mut enabled = service_wake_word_enabled.lock().unwrap_or_else(|e| e.into_inner());
