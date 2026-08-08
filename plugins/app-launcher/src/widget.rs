@@ -3,8 +3,6 @@ use crate::personalization::PersonalizationOverride;
 use adw::gdk::pango::EllipsizeMode;
 use freedesktop_entry_parser::Entry;
 use gtk4::Align;
-use gtk4::Button;
-use gtk4::CssProvider;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::Orientation;
@@ -47,6 +45,7 @@ use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_spacer;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -305,8 +304,7 @@ impl WidgetBuilder for AppLauncherWidget {
         }
 
         // Line 3: Spacer
-        let spacer = Label::new(Some(""));
-        spacer.set_height_request(16);
+        let spacer = build_spacer(16);
         text_box.append(&spacer);
 
         if config.mode == WidgetMode::Wide {
@@ -327,27 +325,7 @@ impl WidgetBuilder for AppLauncherWidget {
 
         *self.led_indicator.write().unwrap() = Some(led_box);
 
-        // Calculate effective width with max_width enforcement
-        let effective_width = config.dimensions.width_or_default().min(config.dimensions.max_width_or_default(config.mode));
-        let mut button_builder = Button::builder()
-            .css_classes(["scroll-item", "menu-button"])
-            .width_request(effective_width)
-            .height_request(config.dimensions.height_or_default())
-            .child(&content_box);
-
-        // Enforce max_width via CSS when explicitly set
-        if let Some(max_w) = config.dimensions.max_width {
-            button_builder = button_builder.hexpand(false).halign(Align::Start);
-            let css_class = format!("app-launcher-max-width-{}", max_w);
-            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
-            let css = format!(".app-launcher-max-width-{} {{ max-width: {}px; }}", max_w, max_w);
-            if let Some(display) = gtk4::gdk::Display::default() {
-                let provider = CssProvider::new();
-                provider.load_from_string(&css);
-                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
-            }
-        }
-        let button = button_builder.build();
+        let button = config.dimensions.build_button(config.mode, &content_box, "app-launcher-max-width-");
 
         let widget_self = Rc::new(Self {
             meta: self.meta.clone(),

@@ -142,5 +142,11 @@ pub use widget::WidgetPluginVTable;
 pub use widget::WidgetTextColors;
 pub use widget::apply_widget_css_class;
 pub use widget::apply_widget_css_classes;
+pub use widget::build_content_box;
+pub use widget::build_info_box;
+pub use widget::build_info_label;
+pub use widget::build_main_label;
+pub use widget::build_spacer;
+pub use widget::build_widget_icon;
 
 pub type Rotation = SmearorRotation;

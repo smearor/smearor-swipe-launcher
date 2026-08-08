@@ -3,12 +3,9 @@ use crate::personalization::PersonalizationOverride;
 use crate::views::apply_state;
 use crate::views::render_state;
 use glib::MainContext;
-use gtk4::Align;
-use gtk4::Box;
 use gtk4::Button;
 use gtk4::Image;
 use gtk4::Label;
-use gtk4::Orientation;
 use gtk4::Spinner;
 use gtk4::Widget;
 use gtk4::prelude::*;
@@ -38,6 +35,7 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_content_box;
 use smearor_voice_assistant_model::AssistantState;
 use smearor_voice_assistant_model::AssistantStatusMessage;
 use smearor_voice_assistant_model::TOPIC_STATUS;
@@ -300,14 +298,7 @@ impl WidgetBuilder for VoiceAssistantWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
 
-        let content_box = Box::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(self.config.layout.spacing_or_default())
-            .valign(Align::Center)
-            .halign(Align::Center)
-            .vexpand(true)
-            .css_classes(["voice-assistant-widget"])
-            .build();
+        let content_box = build_content_box(self.config.layout.spacing_or_default(), &["voice-assistant-widget"]);
 
         let icon = Image::new();
         icon.set_pixel_size(self.config.icon_size);

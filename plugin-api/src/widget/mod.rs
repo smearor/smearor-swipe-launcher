@@ -1,5 +1,6 @@
 //! Widget plugin types: FFI wrappers, traits, VTable, container, and macros.
 
+mod builders;
 mod container;
 mod dimensions;
 mod factory;
@@ -14,6 +15,12 @@ mod view_data;
 mod vtable;
 mod widget;
 
+pub use builders::build_content_box;
+pub use builders::build_info_box;
+pub use builders::build_info_label;
+pub use builders::build_main_label;
+pub use builders::build_spacer;
+pub use builders::build_widget_icon;
 pub use container::WidgetPluginContainer;
 pub use dimensions::DEFAULT_WIDE_MODE_WIDGET_WIDTH;
 pub use dimensions::DEFAULT_WIDGET_HEIGHT;

@@ -1,7 +1,6 @@
 use crate::config::WeatherWidgetConfig;
 use crate::labels::WeatherLabel;
 use crate::personalization::PersonalizationOverride;
-use gtk4::Align;
 use gtk4::Box as GtkBox;
 use gtk4::Image;
 use gtk4::Label;
@@ -43,6 +42,8 @@ use smearor_swipe_launcher_plugin_api::WidgetIconRendering;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_content_box;
+use smearor_swipe_launcher_plugin_api::build_spacer;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use smearor_weather_model::TOPIC_STATUS;
 use smearor_weather_model::WeatherCode;
@@ -647,14 +648,7 @@ impl WidgetBuilder for WeatherWidget {
         outer_box.set_width_request(self.config.dimensions.width_or_default());
         outer_box.set_height_request(self.config.dimensions.height_or_default());
 
-        let inner_box = GtkBox::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(self.config.layout.spacing_or_default())
-            .valign(Align::Center)
-            .halign(Align::Center)
-            .vexpand(true)
-            .css_classes(["menu_button_inner"])
-            .build();
+        let inner_box = build_content_box(self.config.layout.spacing_or_default(), &["menu_button_inner"]);
 
         let icon_image = Image::builder().css_classes(["weather-icon", "nerd-icon"]).build();
         icon_image.set_pixel_size(self.config.icon_config.icon_size());
@@ -676,8 +670,7 @@ impl WidgetBuilder for WeatherWidget {
             inner_box.append(&info_label);
         }
 
-        let spacer = Label::new(Some(""));
-        spacer.set_height_request(16);
+        let spacer = build_spacer(16);
         inner_box.append(&spacer);
 
         outer_box.append(&inner_box);

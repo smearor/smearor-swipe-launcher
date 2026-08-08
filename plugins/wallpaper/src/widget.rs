@@ -2,16 +2,11 @@ use crate::config::WallpaperWidgetConfig;
 use crate::personalization::PersonalizationOverride;
 use crate::preview::update_preview;
 use gtk4::Align;
-use gtk4::Box as GtkBox;
-use gtk4::Button;
-use gtk4::CssProvider;
 use gtk4::Image;
 use gtk4::Label;
-use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
-use gtk4::prelude::WidgetExt;
 use gtk4::prelude::*;
 use smearor_model_mcp::InvokeToolMessage;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
@@ -41,8 +36,11 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
-use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_content_box;
+use smearor_swipe_launcher_plugin_api::build_info_label;
+use smearor_swipe_launcher_plugin_api::build_main_label;
+use smearor_swipe_launcher_plugin_api::build_spacer;
 use smearor_wallpaper_model::TOPIC_STATUS;
 use smearor_wallpaper_model::WallpaperCommandMessage;
 use smearor_wallpaper_model::WallpaperStatusMessage;
@@ -340,14 +338,7 @@ impl WidgetBuilder for WallpaperWidget {
         let config = self.config.clone();
         let show_labels = !config.icon_config.icon_only();
 
-        let content_box = GtkBox::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(config.layout.spacing_or_default())
-            .css_classes(["menu_button_inner"])
-            .halign(Align::Center)
-            .valign(Align::Center)
-            .vexpand(true)
-            .build();
+        let content_box = build_content_box(config.layout.spacing_or_default(), &["menu_button_inner"]);
 
         // Line 0: Preview image (Image with Paintable, or fallback icon)
         let preview_image = Image::builder()
@@ -371,28 +362,15 @@ impl WidgetBuilder for WallpaperWidget {
         content_box.append(&fallback_image);
 
         // Line 1: Theme name (main text)
-        let theme_label = Label::builder()
-            .label(if show_labels { "Loading..." } else { "" })
-            .css_classes(["widget-main-text"])
-            .ellipsize(gtk4::pango::EllipsizeMode::End)
-            .max_width_chars(12)
-            .build();
-        theme_label.set_height_request(20);
-        apply_text_color(&theme_label, config.text_colors.main_text_color());
+        let theme_label = build_main_label(if show_labels { "Loading..." } else { "" }, config.text_colors.main_text_color(), true, Some(12));
         content_box.append(&theme_label);
 
         // Line 2: Status (info text)
-        let status_label = Label::builder()
-            .label(if config.show_status_indicator { "N/A" } else { "" })
-            .css_classes(["widget-info-text"])
-            .build();
-        status_label.set_height_request(16);
-        apply_text_color(&status_label, config.text_colors.info_text_color());
+        let status_label = build_info_label(if config.show_status_indicator { "N/A" } else { "" }, config.text_colors.info_text_color(), false, None);
         content_box.append(&status_label);
 
         // Line 3: Spacer
-        let spacer = Label::new(Some(""));
-        spacer.set_height_request(16);
+        let spacer = build_spacer(16);
         content_box.append(&spacer);
 
         *self.preview_image.borrow_mut() = Some(preview_image);
@@ -400,24 +378,7 @@ impl WidgetBuilder for WallpaperWidget {
         *self.theme_label.borrow_mut() = Some(theme_label);
         *self.status_label.borrow_mut() = Some(status_label);
 
-        let effective_width = config.dimensions.width_or_default().min(config.dimensions.max_width_or_default(config.mode));
-        let mut button_builder = Button::builder()
-            .css_classes(["scroll-item", "menu-button"])
-            .width_request(effective_width)
-            .height_request(config.dimensions.height_or_default())
-            .child(&content_box);
-        if let Some(max_w) = config.dimensions.max_width {
-            button_builder = button_builder.hexpand(false).halign(Align::Start);
-            let css_class = format!("max-width-{}", max_w);
-            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
-            let css = format!(".max-width-{} {{ max-width: {}px; }}", max_w, max_w);
-            if let Some(display) = gtk4::gdk::Display::default() {
-                let provider = CssProvider::new();
-                provider.load_from_string(&css);
-                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
-            }
-        }
-        let button = button_builder.build();
+        let button = config.dimensions.build_button(config.mode, &content_box, "max-width-");
 
         let widget_self = Rc::new(Self {
             meta: self.meta.clone(),

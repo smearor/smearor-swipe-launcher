@@ -1,12 +1,10 @@
 use crate::config::ButtonConfig;
 use crate::personalization::PersonalizationOverride;
-use gtk4::Align;
 use gtk4::Button;
 use gtk4::EventSequenceState;
 use gtk4::GestureDrag;
 use gtk4::Image;
 use gtk4::Label;
-use gtk4::Orientation;
 use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::prelude::*;
@@ -40,6 +38,8 @@ use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_content_box;
+use smearor_swipe_launcher_plugin_api::build_spacer;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -441,14 +441,7 @@ impl WidgetBuilder for ButtonWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
 
-        let button_box = gtk4::Box::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(self.config.layout.spacing_or_default())
-            .valign(Align::Center)
-            .halign(Align::Center)
-            .vexpand(true)
-            .css_classes(["menu_button_inner"])
-            .build();
+        let button_box = build_content_box(self.config.layout.spacing_or_default(), &["menu_button_inner"]);
 
         let needs_icon_ref = self.config.state_icon.is_some();
         if let Some(icon_name) = &self.config.icon {
@@ -522,8 +515,7 @@ impl WidgetBuilder for ButtonWidget {
         button_box.append(&info_label);
         *self.info_label_widget.borrow_mut() = Some(info_label);
 
-        let spacer = Label::new(Some(""));
-        spacer.set_height_request(16);
+        let spacer = build_spacer(16);
         button_box.append(&spacer);
 
         let mut css_classes = vec!["scroll-item", "menu-button"];

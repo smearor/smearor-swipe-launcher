@@ -3,8 +3,6 @@ use crate::nav_target::WorkspaceNavTarget;
 use crate::personalization::PersonalizationOverride;
 use gtk4::Align;
 use gtk4::Box as GtkBox;
-use gtk4::Button;
-use gtk4::CssProvider;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::LevelBar;
@@ -51,8 +49,10 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
-use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_content_box;
+use smearor_swipe_launcher_plugin_api::build_info_label;
+use smearor_swipe_launcher_plugin_api::build_main_label;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -440,14 +440,7 @@ impl WidgetPlugin for WorkspaceSwitcherWidget {
 
 impl WidgetBuilder for WorkspaceSwitcherWidget {
     fn build_widget(&mut self) -> Widget {
-        let content_box = GtkBox::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(self.config.layout.spacing_or_default())
-            .valign(Align::Center)
-            .halign(Align::Center)
-            .vexpand(true)
-            .css_classes(["workspace-switcher-widget", "menu_button_inner"])
-            .build();
+        let content_box = build_content_box(self.config.layout.spacing_or_default(), &["workspace-switcher-widget", "menu_button_inner"]);
 
         let icon_size = self.config.icon_config.icon_size();
         let show_labels = !self.config.icon_config.icon_only();
@@ -462,21 +455,11 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
 
         match self.config.mode {
             WidgetMode::Compact => {
-                let main_label = Label::builder()
-                    .label(if show_labels { "..." } else { "" })
-                    .css_classes(["widget-main-text"])
-                    .build();
-                main_label.set_height_request(20);
-                apply_text_color(&main_label, self.config.text_colors.main_text_color());
+                let main_label = build_main_label(if show_labels { "..." } else { "" }, self.config.text_colors.main_text_color(), false, None);
                 content_box.append(&main_label);
                 *self.main_label.borrow_mut() = Some(main_label.clone());
 
-                let info_label = Label::builder()
-                    .label(if show_labels { "0/0" } else { "" })
-                    .css_classes(["widget-info-text"])
-                    .build();
-                info_label.set_height_request(16);
-                apply_text_color(&info_label, self.config.text_colors.info_text_color());
+                let info_label = build_info_label(if show_labels { "0/0" } else { "" }, self.config.text_colors.info_text_color(), false, None);
                 content_box.append(&info_label);
                 *self.info_label.borrow_mut() = Some(info_label.clone());
 
@@ -499,25 +482,11 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
                     .halign(Align::Start)
                     .build();
 
-                let main_label = Label::builder()
-                    .label(if show_labels { "..." } else { "" })
-                    .ellipsize(gtk4::gdk::pango::EllipsizeMode::End)
-                    .max_width_chars(24)
-                    .css_classes(["widget-main-text"])
-                    .build();
-                main_label.set_height_request(20);
-                apply_text_color(&main_label, self.config.text_colors.main_text_color());
+                let main_label = build_main_label(if show_labels { "..." } else { "" }, self.config.text_colors.main_text_color(), true, Some(24));
                 info_box.append(&main_label);
                 *self.main_label.borrow_mut() = Some(main_label.clone());
 
-                let info_label = Label::builder()
-                    .label(if show_labels { "0/0" } else { "" })
-                    .ellipsize(gtk4::gdk::pango::EllipsizeMode::End)
-                    .max_width_chars(24)
-                    .css_classes(["widget-info-text"])
-                    .build();
-                info_label.set_height_request(16);
-                apply_text_color(&info_label, self.config.text_colors.info_text_color());
+                let info_label = build_info_label(if show_labels { "0/0" } else { "" }, self.config.text_colors.info_text_color(), true, Some(24));
                 info_box.append(&info_label);
                 *self.info_label.borrow_mut() = Some(info_label.clone());
 
@@ -536,28 +505,7 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
             }
         }
 
-        let effective_width = self
-            .config
-            .dimensions
-            .width_or_default()
-            .min(self.config.dimensions.max_width_or_default(self.config.mode));
-        let mut button_builder = Button::builder()
-            .css_classes(["scroll-item", "menu-button"])
-            .width_request(effective_width)
-            .height_request(self.config.dimensions.height_or_default())
-            .child(&content_box);
-        if let Some(max_w) = self.config.dimensions.max_width {
-            button_builder = button_builder.hexpand(false).halign(Align::Start);
-            let css_class = format!("max-width-{}", max_w);
-            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
-            let css = format!(".max-width-{} {{ max-width: {}px; }}", max_w, max_w);
-            if let Some(display) = gtk4::gdk::Display::default() {
-                let provider = CssProvider::new();
-                provider.load_from_string(&css);
-                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
-            }
-        }
-        let button = button_builder.build();
+        let button = self.config.dimensions.build_button(self.config.mode, &content_box, "max-width-");
 
         let message_broadcaster = self.get_broadcaster();
 

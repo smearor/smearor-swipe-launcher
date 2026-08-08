@@ -2,16 +2,10 @@ use crate::config::AudioWidgetConfig;
 use crate::labels::AudioLabel;
 use crate::personalization::PersonalizationOverride;
 use adw::gdk;
-use adw::gdk::pango::EllipsizeMode;
 use glib::MainContext;
-use gtk4::Align;
-use gtk4::Box;
-use gtk4::Button;
-use gtk4::CssProvider;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::LevelBar;
-use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::prelude::*;
 use smearor_audio_model::AudioCommandMessage;
@@ -46,9 +40,13 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
-use smearor_swipe_launcher_plugin_api::apply_icon_color;
-use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_content_box;
+use smearor_swipe_launcher_plugin_api::build_info_box;
+use smearor_swipe_launcher_plugin_api::build_info_label;
+use smearor_swipe_launcher_plugin_api::build_main_label;
+use smearor_swipe_launcher_plugin_api::build_spacer;
+use smearor_swipe_launcher_plugin_api::build_widget_icon;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -353,22 +351,11 @@ impl WidgetBuilder for AudioWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
 
-        let content_box = Box::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(self.config.layout.spacing_or_default())
-            .valign(Align::Center)
-            .halign(Align::Center)
-            .vexpand(true)
-            .css_classes(["audio-widget", "menu_button_inner"])
-            .build();
+        let content_box = build_content_box(self.config.layout.spacing_or_default(), &["audio-widget", "menu_button_inner"]);
 
-        let icon = Image::new();
-        icon.set_pixel_size(self.config.icon_config.icon_size());
-        icon.add_css_class("nerd-icon");
-        Self::set_audio_icon(&icon, Self::select_icon_name(0.5, false));
-        if let Some(color) = self.config.icon_config.icon_color() {
-            apply_icon_color(&icon, color);
-        }
+        let icon = build_widget_icon(self.config.icon_config.icon_size(), self.config.icon_config.icon_color(), |icon| {
+            Self::set_audio_icon(icon, Self::select_icon_name(0.5, false));
+        });
         content_box.append(&icon);
         *self.icon_image.lock().unwrap() = Some(icon.clone());
 
@@ -376,57 +363,30 @@ impl WidgetBuilder for AudioWidget {
             WidgetMode::Compact => {
                 let show_labels = !self.config.icon_config.icon_only();
 
-                let main_label = Label::builder()
-                    .label(if show_labels { "50%" } else { "" })
-                    .css_classes(["widget-main-text"])
-                    .build();
-                main_label.set_height_request(20);
-                apply_text_color(&main_label, self.config.text_colors.main_text_color());
+                let main_label = build_main_label(if show_labels { "50%" } else { "" }, self.config.text_colors.main_text_color(), false, None);
                 content_box.append(&main_label);
                 *self.main_label.lock().unwrap() = Some(main_label.clone());
 
-                let info_label = Label::builder()
-                    .label(if show_labels { "Unknown Device" } else { "" })
-                    .ellipsize(EllipsizeMode::End)
-                    .max_width_chars(self.config.max_width_chars)
-                    .css_classes(["widget-info-text"])
-                    .build();
-                info_label.set_height_request(16);
-                apply_text_color(&info_label, self.config.text_colors.info_text_color());
+                let info_label = build_info_label(
+                    if show_labels { "Unknown Device" } else { "" },
+                    self.config.text_colors.info_text_color(),
+                    true,
+                    Some(self.config.max_width_chars),
+                );
                 content_box.append(&info_label);
                 *self.info_label.lock().unwrap() = Some(info_label.clone());
 
-                let spacer = Label::new(Some(""));
-                spacer.set_height_request(16);
+                let spacer = build_spacer(16);
                 content_box.append(&spacer);
             }
             WidgetMode::Wide => {
-                let info_box = Box::builder()
-                    .orientation(Orientation::Vertical)
-                    .spacing(self.config.layout.spacing_or_default())
-                    .valign(Align::Center)
-                    .halign(Align::Start)
-                    .build();
+                let info_box = build_info_box(self.config.layout.spacing_or_default());
 
-                let device_label = Label::builder()
-                    .label("Unknown Device")
-                    .ellipsize(EllipsizeMode::End)
-                    .max_width_chars(self.config.max_width_chars)
-                    .css_classes(["widget-main-text"])
-                    .build();
-                device_label.set_height_request(20);
-                apply_text_color(&device_label, self.config.text_colors.main_text_color());
+                let device_label = build_main_label("Unknown Device", self.config.text_colors.main_text_color(), true, Some(self.config.max_width_chars));
                 info_box.append(&device_label);
                 *self.device_label.lock().unwrap() = Some(device_label.clone());
 
-                let info_label = Label::builder()
-                    .label("")
-                    .ellipsize(EllipsizeMode::End)
-                    .max_width_chars(self.config.max_width_chars)
-                    .css_classes(["widget-info-text"])
-                    .build();
-                info_label.set_height_request(16);
-                apply_text_color(&info_label, self.config.text_colors.info_text_color());
+                let info_label = build_info_label("", self.config.text_colors.info_text_color(), true, Some(self.config.max_width_chars));
                 info_box.append(&info_label);
                 *self.info_label.lock().unwrap() = Some(info_label.clone());
 
@@ -447,28 +407,7 @@ impl WidgetBuilder for AudioWidget {
             }
         }
 
-        let effective_width = self
-            .config
-            .dimensions
-            .width_or_default()
-            .min(self.config.dimensions.max_width_or_default(self.config.mode));
-        let mut button_builder = Button::builder()
-            .css_classes(["scroll-item", "menu-button"])
-            .width_request(effective_width)
-            .height_request(self.config.dimensions.height_or_default())
-            .child(&content_box);
-        if let Some(max_w) = self.config.dimensions.max_width {
-            button_builder = button_builder.hexpand(false).halign(Align::Start);
-            let css_class = format!("max-width-{}", max_w);
-            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
-            let css = format!(".max-width-{} {{ max-width: {}px; }}", max_w, max_w);
-            if let Some(display) = gtk4::gdk::Display::default() {
-                let provider = CssProvider::new();
-                provider.load_from_string(&css);
-                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
-            }
-        }
-        let button = button_builder.build();
+        let button = self.config.dimensions.build_button(self.config.mode, &content_box, "max-width-");
 
         self.request_initial_status();
         self.start_status_listener();

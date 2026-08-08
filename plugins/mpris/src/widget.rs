@@ -2,17 +2,11 @@ use crate::config::MprisWidgetConfig;
 use crate::labels::MprisLabel;
 use crate::personalization::PersonalizationOverride;
 use adw::gdk;
-use adw::gdk::pango::EllipsizeMode;
 use glib::ControlFlow;
-use gtk4::Align;
-use gtk4::Box;
-use gtk4::Button;
-use gtk4::CssProvider;
 use gtk4::GestureZoom;
 use gtk4::Image;
 use gtk4::Label;
 use gtk4::LevelBar;
-use gtk4::Orientation;
 use gtk4::PropagationPhase;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
@@ -50,9 +44,13 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
-use smearor_swipe_launcher_plugin_api::apply_icon_color;
-use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_content_box;
+use smearor_swipe_launcher_plugin_api::build_info_box;
+use smearor_swipe_launcher_plugin_api::build_info_label;
+use smearor_swipe_launcher_plugin_api::build_main_label;
+use smearor_swipe_launcher_plugin_api::build_spacer;
+use smearor_swipe_launcher_plugin_api::build_widget_icon;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -432,55 +430,34 @@ impl WidgetBuilder for MprisWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
 
-        let content_box = Box::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(self.config.layout.spacing_or_default())
-            .valign(Align::Center)
-            .halign(Align::Center)
-            .vexpand(true)
-            .css_classes(["mpris-widget", "menu_button_inner"])
-            .build();
+        let content_box = build_content_box(self.config.layout.spacing_or_default(), &["mpris-widget", "menu_button_inner"]);
 
         let icon_size = self.config.icon_config.icon_size();
 
         match self.config.mode {
             WidgetMode::Compact => {
-                let playback_icon = Image::new();
-                playback_icon.set_pixel_size(icon_size);
-                playback_icon.add_css_class("nerd-icon");
-                Self::set_mpris_icon(&playback_icon, "nf-fa-play");
-                if let Some(color) = self.config.icon_config.icon_color() {
-                    apply_icon_color(&playback_icon, color);
-                }
+                let playback_icon = build_widget_icon(icon_size, self.config.icon_config.icon_color(), |icon| {
+                    Self::set_mpris_icon(icon, "nf-fa-play");
+                });
                 content_box.append(&playback_icon);
                 *self.playback_icon.lock().unwrap() = Some(playback_icon.clone());
 
                 let show_labels = !self.config.icon_config.icon_only();
 
-                let main_label = Label::builder()
-                    .label(if show_labels { "No Player" } else { "" })
-                    .ellipsize(EllipsizeMode::End)
-                    .max_width_chars(self.config.max_width_chars)
-                    .css_classes(["widget-main-text"])
-                    .build();
-                main_label.set_height_request(20);
-                apply_text_color(&main_label, self.config.text_colors.main_text_color());
+                let main_label = build_main_label(
+                    if show_labels { "No Player" } else { "" },
+                    self.config.text_colors.main_text_color(),
+                    true,
+                    Some(self.config.max_width_chars),
+                );
                 content_box.append(&main_label);
                 *self.main_label.lock().unwrap() = Some(main_label.clone());
 
-                let info_label = Label::builder()
-                    .label("")
-                    .ellipsize(EllipsizeMode::End)
-                    .max_width_chars(self.config.max_width_chars)
-                    .css_classes(["widget-info-text"])
-                    .build();
-                info_label.set_height_request(16);
-                apply_text_color(&info_label, self.config.text_colors.info_text_color());
+                let info_label = build_info_label("", self.config.text_colors.info_text_color(), true, Some(self.config.max_width_chars));
                 content_box.append(&info_label);
                 *self.info_label.lock().unwrap() = Some(info_label.clone());
 
-                let spacer = Label::new(Some(""));
-                spacer.set_height_request(16);
+                let spacer = build_spacer(16);
                 content_box.append(&spacer);
             }
             WidgetMode::Wide => {
@@ -492,32 +469,13 @@ impl WidgetBuilder for MprisWidget {
                     *self.album_art.lock().unwrap() = Some(album_art.clone());
                 }
 
-                let info_box = Box::builder()
-                    .orientation(Orientation::Vertical)
-                    .spacing(self.config.layout.spacing_or_default())
-                    .valign(Align::Center)
-                    .halign(Align::Start)
-                    .build();
+                let info_box = build_info_box(self.config.layout.spacing_or_default());
 
-                let title_label = Label::builder()
-                    .label("No Player")
-                    .ellipsize(EllipsizeMode::End)
-                    .max_width_chars(self.config.max_width_chars)
-                    .css_classes(["widget-main-text"])
-                    .build();
-                title_label.set_height_request(20);
-                apply_text_color(&title_label, self.config.text_colors.main_text_color());
+                let title_label = build_main_label("No Player", self.config.text_colors.main_text_color(), true, Some(self.config.max_width_chars));
                 info_box.append(&title_label);
                 *self.title_label.lock().unwrap() = Some(title_label.clone());
 
-                let artist_label = Label::builder()
-                    .label("")
-                    .ellipsize(EllipsizeMode::End)
-                    .max_width_chars(self.config.max_width_chars)
-                    .css_classes(["widget-info-text"])
-                    .build();
-                artist_label.set_height_request(16);
-                apply_text_color(&artist_label, self.config.text_colors.info_text_color());
+                let artist_label = build_info_label("", self.config.text_colors.info_text_color(), true, Some(self.config.max_width_chars));
                 info_box.append(&artist_label);
                 *self.artist_label.lock().unwrap() = Some(artist_label.clone());
 
@@ -538,28 +496,7 @@ impl WidgetBuilder for MprisWidget {
             }
         }
 
-        let effective_width = self
-            .config
-            .dimensions
-            .width_or_default()
-            .min(self.config.dimensions.max_width_or_default(self.config.mode));
-        let mut button_builder = Button::builder()
-            .css_classes(["scroll-item", "menu-button"])
-            .width_request(effective_width)
-            .height_request(self.config.dimensions.height_or_default())
-            .child(&content_box);
-        if let Some(max_w) = self.config.dimensions.max_width {
-            button_builder = button_builder.hexpand(false).halign(Align::Start);
-            let css_class = format!("max-width-{}", max_w);
-            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
-            let css = format!(".max-width-{} {{ max-width: {}px; }}", max_w, max_w);
-            if let Some(display) = gtk4::gdk::Display::default() {
-                let provider = CssProvider::new();
-                provider.load_from_string(&css);
-                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
-            }
-        }
-        let button = button_builder.build();
+        let button = self.config.dimensions.build_button(self.config.mode, &content_box, "max-width-");
 
         self.request_initial_status();
         self.request_personalization_status();

@@ -2,11 +2,7 @@ use crate::clock::Clock;
 use crate::config::ClockConfig;
 use crate::labels::ClockLabels;
 use gtk4::Align;
-use gtk4::Box as GtkBox;
-use gtk4::Button;
-use gtk4::CssProvider;
 use gtk4::Label;
-use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
@@ -42,6 +38,8 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_content_box;
+use smearor_swipe_launcher_plugin_api::build_spacer;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -182,14 +180,7 @@ impl WidgetBuilder for ClockWidget {
         let config = self.config.clone();
         let show_labels = !config.icon_config.icon_only();
 
-        let content_box = GtkBox::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(config.layout.spacing_or_default())
-            .css_classes(["menu_button_inner"])
-            .halign(Align::Center)
-            .valign(Align::Center)
-            .vexpand(true)
-            .build();
+        let content_box = build_content_box(config.layout.spacing_or_default(), &["menu_button_inner"]);
 
         // Line 0: Time display (replaces icon line)
         let time_label = Label::builder()
@@ -222,8 +213,7 @@ impl WidgetBuilder for ClockWidget {
         content_box.append(&weekday_label);
 
         // Line 3: Spacer
-        let spacer = Label::new(Some(""));
-        spacer.set_height_request(16);
+        let spacer = build_spacer(16);
         content_box.append(&spacer);
 
         let labels = ClockLabels {
@@ -236,24 +226,7 @@ impl WidgetBuilder for ClockWidget {
 
         *self.labels.write().unwrap() = Some(labels);
 
-        let effective_width = config.dimensions.width_or_default().min(config.dimensions.max_width_or_default(config.mode));
-        let mut button_builder = Button::builder()
-            .css_classes(["scroll-item", "menu-button"])
-            .width_request(effective_width)
-            .height_request(config.dimensions.height_or_default())
-            .child(&content_box);
-        if let Some(max_w) = config.dimensions.max_width {
-            button_builder = button_builder.hexpand(false).halign(Align::Start);
-            let css_class = format!("max-width-{}", max_w);
-            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
-            let css = format!(".max-width-{} {{ max-width: {}px; }}", max_w, max_w);
-            if let Some(display) = gtk4::gdk::Display::default() {
-                let provider = CssProvider::new();
-                provider.load_from_string(&css);
-                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
-            }
-        }
-        let button = button_builder.build();
+        let button = config.dimensions.build_button(config.mode, &content_box, "max-width-");
 
         self.start_time_update();
 

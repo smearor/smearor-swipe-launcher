@@ -2,13 +2,9 @@ use crate::config::NetworkWidgetConfig;
 use crate::labels::NetworkLabel;
 use crate::personalization::PersonalizationOverride;
 use gtk4::Align;
-use gtk4::Box as GtkBox;
-use gtk4::Button;
-use gtk4::CssProvider;
 use gtk4::DrawingArea;
 use gtk4::Image;
 use gtk4::Label;
-use gtk4::Orientation;
 use gtk4::Widget;
 use gtk4::glib::MainContext;
 use gtk4::prelude::BoxExt;
@@ -55,8 +51,12 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetIconRendering;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
-use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::build_content_box;
+use smearor_swipe_launcher_plugin_api::build_info_label;
+use smearor_swipe_launcher_plugin_api::build_main_label;
+use smearor_swipe_launcher_plugin_api::build_spacer;
+use smearor_swipe_launcher_plugin_api::build_widget_icon;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -374,42 +374,20 @@ impl WidgetBuilder for NetworkWidget {
         let broadcaster = self.get_broadcaster();
         let show_labels = !config.icon_config.icon_only();
 
-        let content_box = GtkBox::builder()
-            .orientation(Orientation::Vertical)
-            .spacing(config.layout.spacing_or_default())
-            .css_classes(["menu_button_inner"])
-            .halign(Align::Center)
-            .valign(Align::Center)
-            .vexpand(true)
-            .build();
+        let content_box = build_content_box(config.layout.spacing_or_default(), &["menu_button_inner"]);
 
         // Line 0: Icon
-        let icon_image = Image::new();
-        icon_image.set_pixel_size(config.icon_config.icon_size());
-        icon_image.add_css_class("nerd-icon");
-        if let Some(color) = config.icon_config.icon_color() {
-            apply_icon_color(&icon_image, color);
-        }
+        let icon_image = build_widget_icon(config.icon_config.icon_size(), config.icon_config.icon_color(), |_| {});
         content_box.append(&icon_image);
         *self.icon_image.borrow_mut() = Some(icon_image);
 
         // Line 1: Main label (value text)
-        let value_label = Label::builder()
-            .label(if show_labels { "Loading..." } else { "" })
-            .css_classes(["widget-main-text"])
-            .build();
-        value_label.set_height_request(20);
-        apply_text_color(&value_label, config.text_colors.main_text_color());
+        let value_label = build_main_label(if show_labels { "Loading..." } else { "" }, config.text_colors.main_text_color(), false, None);
         content_box.append(&value_label);
         *self.value_label.borrow_mut() = Some(value_label);
 
         // Line 2: Info label
-        let info_label = Label::builder()
-            .label(if show_labels { "" } else { "" })
-            .css_classes(["widget-info-text"])
-            .build();
-        info_label.set_height_request(16);
-        apply_text_color(&info_label, config.text_colors.info_text_color());
+        let info_label = build_info_label(if show_labels { "" } else { "" }, config.text_colors.info_text_color(), false, None);
         content_box.append(&info_label);
         *self.info_label.borrow_mut() = Some(info_label);
 
@@ -426,8 +404,7 @@ impl WidgetBuilder for NetworkWidget {
             .visible(false)
             .build();
 
-        let spacer = Label::new(Some(""));
-        spacer.set_height_request(16);
+        let spacer = build_spacer(16);
         content_box.append(&spacer);
         *self.spacer_label.borrow_mut() = Some(spacer);
 
@@ -457,23 +434,7 @@ impl WidgetBuilder for NetworkWidget {
         content_box.append(&qr_area);
         *self.qr_drawing_area.borrow_mut() = Some(qr_area);
 
-        let effective_width = config.dimensions.width_or_default().min(config.dimensions.max_width_or_default(config.mode));
-        let mut button_builder = Button::builder()
-            .css_classes(["scroll-item", "menu-button"])
-            .width_request(effective_width)
-            .child(&content_box);
-        if let Some(max_w) = config.dimensions.max_width {
-            button_builder = button_builder.hexpand(false).halign(Align::Start);
-            let css_class = format!("max-width-{}", max_w);
-            button_builder = button_builder.css_classes(["scroll-item", "menu-button", css_class.as_str()]);
-            let css = format!(".max-width-{} {{ max-width: {}px; }}", max_w, max_w);
-            if let Some(display) = gtk4::gdk::Display::default() {
-                let provider = CssProvider::new();
-                provider.load_from_string(&css);
-                gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
-            }
-        }
-        let button = button_builder.build();
+        let button = config.dimensions.build_button(config.mode, &content_box, "max-width-");
 
         let widget_self = Rc::new(Self {
             meta: self.meta.clone(),
