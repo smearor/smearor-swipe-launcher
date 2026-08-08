@@ -431,6 +431,26 @@ pub(crate) async fn run_mpris_async(
             }
         }
 
+        // If the active player is not playing, check if any other player started playing
+        if state.playback_status != MprisPlaybackStatus::Playing {
+            if let Some(active_idx) = state.active_player_index {
+                for (i, player) in player_names.iter().enumerate() {
+                    if i == active_idx {
+                        continue;
+                    }
+                    match query_playback_status(&conn, &player.bus_name).await {
+                        Ok(MprisPlaybackStatus::Playing) => {
+                            state.active_player_index = Some(i);
+                            trace!("MPRIS Service: auto-switched to playing player: {}", player.display_name);
+                            last_broadcast = None;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         if let Some(idx) = state.active_player_index {
             if let Some(player) = state.players.get(idx) {
                 let bus_name = &player.bus_name;
