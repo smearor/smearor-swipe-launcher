@@ -9,11 +9,13 @@ use crate::resources::core::PluginListResource;
 use crate::resources::creator::ResourceDefinitionCreator;
 use crate::resources::into_sdk_resource::SdkResourceFields;
 
+use crate::resources::result::ResourceResult;
+
 /// Resource handler signature.
 pub type ResourceHandler = Box<dyn Fn(Sender<McpCommand>, String) -> ResourceFuture + Send + Sync>;
 
 /// Future returned by a resource handler.
-pub type ResourceFuture = std::pin::Pin<Box<dyn Future<Output = Result<String, String>> + Send>>;
+pub type ResourceFuture = std::pin::Pin<Box<dyn Future<Output = ResourceResult> + Send>>;
 
 /// Built-in resource definition exposed by the MCP server.
 #[derive(TypedBuilder)]

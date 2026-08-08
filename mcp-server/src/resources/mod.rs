@@ -7,6 +7,7 @@ mod into_sdk_resource;
 mod read_resource_output;
 mod registered;
 mod resource_content;
+mod result;
 
 use crate::CommandResponseWrapper;
 use crate::McpCommand;
@@ -26,6 +27,7 @@ pub use into_sdk_resource::SdkResourceFields;
 pub use read_resource_output::ReadResourceOutput;
 pub use resource_content::ReadResourceResult;
 pub use resource_content::ResourceContent;
+pub use result::ResourceResult;
 
 /// Read a resource by sending the request to the launcher core.
 pub(crate) async fn read_resource(sender: Sender<McpCommand>, uri: String, mime_type: String) -> Result<ReadResourceOutput, String> {
