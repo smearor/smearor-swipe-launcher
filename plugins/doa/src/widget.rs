@@ -15,6 +15,8 @@ use smearor_doa_model::DoaCommandMessage;
 use smearor_doa_model::DoaStatusMessage;
 use smearor_doa_model::DoaView;
 use smearor_doa_model::TOPIC_STATUS;
+use smearor_model_mcp::InvokeToolMessage;
+use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
 use smearor_model_widget::WidgetUpdateMessage;
 use smearor_personalization_model::PersonalizationCommandMessage;
 use smearor_personalization_model::PersonalizationStatusMessage;
@@ -28,6 +30,7 @@ use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::GestureHandler;
 use smearor_swipe_launcher_plugin_api::GestureHandlersConfiguration;
 use smearor_swipe_launcher_plugin_api::Locale;
+use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
@@ -88,6 +91,7 @@ impl DoaWidget {
             view_index: Rc::new(RefCell::new(0)),
             personalization: Rc::new(RefCell::new(PersonalizationOverride::default())),
         };
+        widget.register_mcp_capabilities();
         widget.request_personalization_status();
         Ok(widget)
     }
@@ -299,7 +303,7 @@ impl MessageHandler<FfiEnvelopePayload<PersonalizationStatusMessage>> for DoaWid
 
 impl AcceptTopic<FfiEnvelope> for DoaWidget {
     fn accept_topic(&self, topic: &str) -> bool {
-        topic == TOPIC_STATUS || topic == TOPIC_PERSONALIZATION_STATUS
+        topic == TOPIC_STATUS || topic == TOPIC_MCP_INVOKE_TOOL || topic == TOPIC_PERSONALIZATION_STATUS
     }
 }
 
@@ -328,6 +332,8 @@ impl WidgetPlugin for DoaWidget {
                 let envelope = &*(message as *mut FfiEnvelope);
                 if envelope.type_id == FfiEnvelopePayload::<DoaStatusMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<DoaStatusMessage>>::handle_envelope_message(self, envelope);
+                } else if envelope.type_id == FfiEnvelopePayload::<InvokeToolMessage>::TYPE_ID {
+                    MessageHandler::<FfiEnvelopePayload<InvokeToolMessage>>::handle_envelope_message(self, envelope);
                 } else if envelope.type_id == <FfiEnvelopePayload<PersonalizationStatusMessage> as TypedMessage>::TYPE_ID {
                     MessageHandler::<FfiEnvelopePayload<PersonalizationStatusMessage>>::handle_envelope_message(self, envelope);
                 }
