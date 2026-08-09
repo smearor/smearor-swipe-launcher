@@ -864,7 +864,7 @@ async fn handle_change_split_ratio(payload: ChangeSplitRatioDispatchMessage) -> 
 }
 
 async fn handle_close_window(payload: CloseWindowDispatchMessage) -> hyprland::Result<()> {
-    let win_id = convert_window_identifier(&payload.window_identifier);
+    let win_id = OwnedWindowIdentifier::from(&payload.window_identifier);
     Dispatch::call_async(DispatchType::CloseWindow(win_id.as_ref())).await
 }
 
@@ -893,7 +893,7 @@ async fn handle_focus_monitor(payload: FocusMonitorDispatchMessage) -> hyprland:
 }
 
 async fn handle_focus_window(payload: FocusWindowDispatchMessage) -> hyprland::Result<()> {
-    let win_id = convert_window_identifier(&payload.window_identifier);
+    let win_id = OwnedWindowIdentifier::from(&payload.window_identifier);
     Dispatch::call_async(DispatchType::FocusWindow(win_id.as_ref())).await
 }
 
@@ -958,12 +958,12 @@ async fn handle_move_window(payload: MoveWindowDispatchMessage) -> hyprland::Res
 
 async fn handle_move_window_pixel(payload: MoveWindowPixelDispatchMessage) -> hyprland::Result<()> {
     let position = convert_position(payload.position);
-    let win_id = convert_window_identifier(&payload.window_identifier);
+    let win_id = OwnedWindowIdentifier::from(&payload.window_identifier);
     Dispatch::call_async(DispatchType::MoveWindowPixel(position, win_id.as_ref())).await
 }
 
 async fn handle_pass(payload: PassDispatchMessage) -> hyprland::Result<()> {
-    let win_id = convert_window_identifier(&payload.window_identifier);
+    let win_id = OwnedWindowIdentifier::from(&payload.window_identifier);
     Dispatch::call_async(DispatchType::Pass(win_id.as_ref())).await
 }
 
@@ -979,7 +979,7 @@ async fn handle_resize_active(payload: ResizeActiveDispatchMessage) -> hyprland:
 
 async fn handle_resize_window_pixel(payload: ResizeWindowPixelDispatchMessage) -> hyprland::Result<()> {
     let position = convert_position(payload.position);
-    let win_id = convert_window_identifier(&payload.window_identifier);
+    let win_id = OwnedWindowIdentifier::from(&payload.window_identifier);
     Dispatch::call_async(DispatchType::ResizeWindowPixel(position, win_id.as_ref())).await
 }
 
@@ -1309,41 +1309,43 @@ impl OwnedWindowIdentifier {
     }
 }
 
-fn convert_window_identifier(id: &HyprlandWindowIdentifier) -> OwnedWindowIdentifier {
-    id.match_ref(
-        |pid| OwnedWindowIdentifier {
-            process_id: *pid,
-            address: None,
-            class_regex: None,
-            title: None,
-            kind: OwnedWindowIdentifierKind::ProcessId,
-        },
-        |addr| OwnedWindowIdentifier {
-            process_id: 0,
-            address: Some(addr.to_string()),
-            class_regex: None,
-            title: None,
-            kind: OwnedWindowIdentifierKind::Address,
-        },
-        |s| OwnedWindowIdentifier {
-            process_id: 0,
-            address: None,
-            class_regex: Some(s.to_string()),
-            title: None,
-            kind: OwnedWindowIdentifierKind::ClassRegularExpression,
-        },
-        |s| OwnedWindowIdentifier {
-            process_id: 0,
-            address: None,
-            class_regex: None,
-            title: Some(s.to_string()),
-            kind: OwnedWindowIdentifierKind::Title,
-        },
-    )
+impl From<&HyprlandWindowIdentifier> for OwnedWindowIdentifier {
+    fn from(id: &HyprlandWindowIdentifier) -> Self {
+        id.match_ref(
+            |pid| OwnedWindowIdentifier {
+                process_id: *pid,
+                address: None,
+                class_regex: None,
+                title: None,
+                kind: OwnedWindowIdentifierKind::ProcessId,
+            },
+            |addr| OwnedWindowIdentifier {
+                process_id: 0,
+                address: Some(addr.to_string()),
+                class_regex: None,
+                title: None,
+                kind: OwnedWindowIdentifierKind::Address,
+            },
+            |s| OwnedWindowIdentifier {
+                process_id: 0,
+                address: None,
+                class_regex: Some(s.to_string()),
+                title: None,
+                kind: OwnedWindowIdentifierKind::ClassRegularExpression,
+            },
+            |s| OwnedWindowIdentifier {
+                process_id: 0,
+                address: None,
+                class_regex: None,
+                title: Some(s.to_string()),
+                kind: OwnedWindowIdentifierKind::Title,
+            },
+        )
+    }
 }
 
 fn convert_window_identifier_opt(id: &Option<HyprlandWindowIdentifier>) -> Option<OwnedWindowIdentifier> {
-    id.as_ref().map(convert_window_identifier)
+    id.as_ref().map(Into::into)
 }
 
 struct OwnedWorkspaceIdentifierWithSpecial {
