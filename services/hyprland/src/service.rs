@@ -301,6 +301,13 @@ impl HyprlandService {
         });
 
         // Spawn consolidated event listener and worker if any event tracking is enabled
+        debug!(
+            "Hyprland service config: enable_workspace_tracking={}, enable_monitor_events={}, enable_status_events={}, enable_workspace_lifecycle={}",
+            service.config.enable_workspace_tracking,
+            service.config.enable_monitor_events,
+            service.config.enable_status_events,
+            service.config.enable_workspace_lifecycle
+        );
         if service.config.enable_workspace_tracking || service.config.enable_monitor_events || service.config.enable_status_events {
             let ev_core_context = service.core_context.clone();
             let ev_meta = service.meta.clone();
@@ -313,6 +320,9 @@ impl HyprlandService {
             spawn_event_listener(event_sender, enable_workspace_tracking, enable_monitor_events, enable_status_events);
             spawn_event_worker(event_receiver, ev_core_context, ev_meta, enable_workspace_lifecycle, Arc::clone(&service.shared_state));
         }
+
+        // Request initial state so last_state is populated for MCP resource queries
+        let _ = service.command_sender.send(HyprlandCommand::StateRequest);
 
         Ok(service)
     }

@@ -41,10 +41,8 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 InvokeResourceResponse::success(correlation_id, &json)
             }
             HyprlandMcpResources::ActiveWindow => {
-                let Some(state) = shared_state.as_ref().and_then(|s| s.last_state.clone()) else {
-                    return InvokeResourceResponse::error(correlation_id, "Hyprland state not yet available");
-                };
-                match state.active_window.as_ref() {
+                let state = shared_state.as_ref().and_then(|s| s.last_state.clone());
+                match state.as_ref().and_then(|st| st.active_window.as_ref()) {
                     Some(w) => {
                         let entry = ActiveWindowEntry {
                             class: w.window_class.to_string(),
@@ -54,7 +52,40 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                         let json = serde_json::to_string(&entry).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
-                    None => InvokeResourceResponse::success(correlation_id, "null"),
+                    None => {
+                        // Fallback: extract from latest_window_event if available
+                        let window_event = shared_state.as_ref().and_then(|s| s.latest_window_event.clone());
+                        match window_event.and_then(|e| {
+                            e.match_ref(
+                                |awc| {
+                                    awc.data.as_ref().map(|d| ActiveWindowEntry {
+                                        class: d.window_class.to_string(),
+                                        title: d.window_title.to_string(),
+                                        workspace_id: d.workspace_id,
+                                    })
+                                },
+                                |opened| {
+                                    Some(ActiveWindowEntry {
+                                        class: opened.data.data.window_class.to_string(),
+                                        title: opened.data.data.window_title.to_string(),
+                                        workspace_id: opened.data.data.workspace_id,
+                                    })
+                                },
+                                |_| None,
+                                |_| None,
+                                |_| None,
+                                |_| None,
+                                |_| None,
+                                |_| None,
+                            )
+                        }) {
+                            Some(entry) => {
+                                let json = serde_json::to_string(&entry).unwrap_or_default();
+                                InvokeResourceResponse::success(correlation_id, &json)
+                            }
+                            None => InvokeResourceResponse::success(correlation_id, "null"),
+                        }
+                    }
                 }
             }
             HyprlandMcpResources::WorkspaceSnapshot => {

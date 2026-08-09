@@ -178,6 +178,9 @@ enable_workspace_tracking = true
 enable_workspace_tracking = true
 poll_interval_ms = 500
 
+[hyprland]
+enable_workspace_tracking = true
+
 [terminal_command.commands.btop]
 command = "smearor-wrot"
 args = [

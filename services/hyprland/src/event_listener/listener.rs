@@ -32,6 +32,7 @@ pub fn spawn_event_listener(
     enable_status_events: bool,
 ) {
     std::thread::spawn(move || {
+        debug!("Hyprland event listener thread starting");
         let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
             Ok(rt) => rt,
             Err(err) => {
@@ -42,6 +43,10 @@ pub fn spawn_event_listener(
 
         rt.block_on(async move {
             crate::service::ensure_hyprland_instance_signature();
+            debug!(
+                "Hyprland event listener: starting event loop with workspace_tracking={}, monitor_events={}, status_events={}",
+                enable_workspace_tracking, enable_monitor_events, enable_status_events
+            );
             let mut reconnect_attempts: u32 = 0;
             loop {
                 let mut listener = hyprland::event_listener::EventListener::new();
