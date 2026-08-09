@@ -1,0 +1,48 @@
+# Shared cross-instance navigation buttons.
+# These buttons open areas in OTHER launcher instances.
+# Each instance overrides its own local button (without click_instance)
+# in its main config file, which replaces the cross-instance version here.
+
+[open_top_area_button]
+defaults = "menu_button"
+text = "Open Example 2 Area"
+icon = "panel-top-symbolic"
+icon_only = true
+click_instance = "top"
+click_payload = { area_id = "top_area" }
+longpress_instance = "top"
+longpress_payload = { area_id = "top_area" }
+css_classes = ["menu-button", "primary"]
+
+[open_bottom_area_button]
+defaults = "menu_button"
+text = "Open Example 1 Area"
+icon = "panel-bottom-symbolic"
+icon_only = true
+click_instance = "bottom"
+click_payload = { area_id = "bottom_area" }
+longpress_instance = "bottom"
+longpress_payload = { area_id = "bottom_area" }
+css_classes = ["menu-button", "primary"]
+
+[open_left_area_button]
+defaults = "menu_button"
+text = "Open Example 3 Area"
+icon = "panel-left-symbolic"
+icon_only = true
+click_instance = "left"
+click_payload = { area_id = "left_area" }
+longpress_instance = "left"
+longpress_payload = { area_id = "left_area" }
+css_classes = ["menu-button", "primary"]
+
+[open_right_area_button]
+defaults = "menu_button"
+text = "Open Example 4 Area"
+icon = "panel-right-symbolic"
+icon_only = true
+click_instance = "right"
+click_payload = { area_id = "right_area" }
+longpress_instance = "right"
+longpress_payload = { area_id = "right_area" }
+css_classes = ["menu-button", "primary"]
