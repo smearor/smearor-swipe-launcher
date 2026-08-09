@@ -16,6 +16,7 @@ use smearor_hyprland_model::FocusMasterDispatchMessage;
 use smearor_hyprland_model::FocusMonitorDispatchMessage;
 use smearor_hyprland_model::FocusWindowDispatchMessage;
 use smearor_hyprland_model::GlobalDispatchMessage;
+use smearor_hyprland_model::GroupEvent;
 use smearor_hyprland_model::HyprlandColor;
 use smearor_hyprland_model::HyprlandCorner;
 use smearor_hyprland_model::HyprlandCycleDirection;
@@ -51,6 +52,7 @@ use smearor_hyprland_model::HyprlandWorkspaceIdentifierWithSpecial;
 use smearor_hyprland_model::HyprlandWorkspaceOptions;
 use smearor_hyprland_model::KillActiveWindowDispatchMessage;
 use smearor_hyprland_model::KillCommandMessage;
+use smearor_hyprland_model::LayerEvent;
 use smearor_hyprland_model::LockGroupsDispatchMessage;
 use smearor_hyprland_model::MoveActiveDispatchMessage;
 use smearor_hyprland_model::MoveCurrentWorkspaceToMonitorDispatchMessage;
@@ -84,6 +86,7 @@ use smearor_hyprland_model::SwapWithMasterDispatchMessage;
 use smearor_hyprland_model::SwitchXkbLayoutCommandMessage;
 use smearor_hyprland_model::SystemDispatchKind;
 use smearor_hyprland_model::SystemDispatchOps;
+use smearor_hyprland_model::SystemEvent;
 use smearor_hyprland_model::ToggleDispatchKind;
 use smearor_hyprland_model::ToggleDispatchOps;
 use smearor_hyprland_model::ToggleDpmsDispatchMessage;
@@ -91,14 +94,19 @@ use smearor_hyprland_model::ToggleFullscreenDispatchMessage;
 use smearor_hyprland_model::ToggleSpecialWorkspaceDispatchMessage;
 use smearor_hyprland_model::WindowDispatchKind;
 use smearor_hyprland_model::WindowDispatchOps;
+use smearor_hyprland_model::WindowEvent;
 use smearor_hyprland_model::WorkspaceDispatchKind;
 use smearor_hyprland_model::WorkspaceDispatchMessage;
 use smearor_hyprland_model::WorkspaceDispatchOps;
+use smearor_hyprland_model::WorkspaceEvent;
 use smearor_hyprland_model::WorkspaceOptionDispatchMessage;
 use smearor_model_compositor::CreateWorkspaceMessage;
+use smearor_model_compositor::MonitorChangedEvent;
 use smearor_model_compositor::SwitchWorkspaceMessage;
+use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_model_compositor::WorkspaceCreatePosition;
 use smearor_model_compositor::WorkspaceInfo;
+use smearor_model_compositor::WorkspaceLifecycleEvent;
 use smearor_model_compositor::WorkspaceSnapshotMessage;
 use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
 use smearor_model_mcp::InvokeResourceMessage;
@@ -152,6 +160,31 @@ pub enum HyprlandCommand {
 }
 
 /// Hyprland service plugin.
+/// Shared state for MCP resource queries — caches latest events and snapshots.
+#[derive(Default)]
+pub struct HyprlandSharedState {
+    /// Last known Hyprland state (updated on state requests).
+    pub last_state: Option<HyprlandStateMessage>,
+    /// Latest workspace snapshot (updated on snapshot broadcasts).
+    pub workspace_snapshot: Option<WorkspaceSnapshotMessage>,
+    /// Latest workspace changed event.
+    pub latest_workspace_changed: Option<WorkspaceChangedEvent>,
+    /// Latest workspace lifecycle event.
+    pub latest_workspace_lifecycle: Option<WorkspaceLifecycleEvent>,
+    /// Latest monitor changed event.
+    pub latest_monitor_changed: Option<MonitorChangedEvent>,
+    /// Latest window status event.
+    pub latest_window_event: Option<WindowEvent>,
+    /// Latest workspace status event.
+    pub latest_workspace_event: Option<WorkspaceEvent>,
+    /// Latest group status event.
+    pub latest_group_event: Option<GroupEvent>,
+    /// Latest layer status event.
+    pub latest_layer_event: Option<LayerEvent>,
+    /// Latest system status event.
+    pub latest_system_event: Option<SystemEvent>,
+}
+
 pub struct HyprlandService {
     /// Plugin metadata.
     pub meta: PluginMeta,
@@ -161,8 +194,8 @@ pub struct HyprlandService {
     pub command_sender: mpsc::UnboundedSender<HyprlandCommand>,
     /// Shared configuration for the service.
     pub config: Arc<HyprlandServiceConfig>,
-    /// Last known Hyprland state (updated on state requests).
-    pub last_state: Arc<Mutex<Option<HyprlandStateMessage>>>,
+    /// Shared state for MCP resource queries (cached events and snapshots).
+    pub shared_state: Arc<Mutex<HyprlandSharedState>>,
 }
 
 impl HyprlandService {
@@ -181,18 +214,18 @@ impl HyprlandService {
         let (command_sender, mut command_receiver) = mpsc::unbounded_channel::<HyprlandCommand>();
 
         let service_config = Arc::new(service_config);
-        let last_state = Arc::new(Mutex::new(None));
+        let shared_state = Arc::new(Mutex::new(HyprlandSharedState::default()));
         let service = HyprlandService {
             meta: PluginMeta::try_from(&config)?,
             core_context,
             command_sender,
             config: service_config,
-            last_state,
+            shared_state,
         };
         service.register_mcp_capabilities();
 
         let service_meta = service.meta.clone();
-        let shared_last_state = Arc::clone(&service.last_state);
+        let worker_shared_state = Arc::clone(&service.shared_state);
         std::thread::spawn(move || {
             let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                 Ok(rt) => rt,
@@ -224,7 +257,7 @@ impl HyprlandService {
                             handle_create_workspace(message).await;
                         }
                         HyprlandCommand::SnapshotRequest(message) => {
-                            handle_snapshot_request(message, core_context.clone()).await;
+                            handle_snapshot_request(message, core_context.clone(), &worker_shared_state).await;
                         }
                         HyprlandCommand::CtlKill(message) => {
                             handle_ctl_kill(message).await;
@@ -260,7 +293,7 @@ impl HyprlandService {
                             handle_ctl_switch_xkb_layout(message).await;
                         }
                         HyprlandCommand::StateRequest => {
-                            handle_state_request(core_context.clone(), &service_meta, &shared_last_state).await;
+                            handle_state_request(core_context.clone(), &service_meta, &worker_shared_state).await;
                         }
                     }
                 }
@@ -278,7 +311,7 @@ impl HyprlandService {
 
             let (event_sender, event_receiver) = mpsc::unbounded_channel();
             spawn_event_listener(event_sender, enable_workspace_tracking, enable_monitor_events, enable_status_events);
-            spawn_event_worker(event_receiver, ev_core_context, ev_meta, enable_workspace_lifecycle);
+            spawn_event_worker(event_receiver, ev_core_context, ev_meta, enable_workspace_lifecycle, Arc::clone(&service.shared_state));
         }
 
         Ok(service)
@@ -1015,7 +1048,11 @@ async fn handle_create_workspace(message: CreateWorkspaceMessage) {
 
 /// Handle a WorkspaceSnapshotRequestMessage by querying Hyprland for all
 /// workspaces and broadcasting a WorkspaceSnapshotMessage.
-async fn handle_snapshot_request(_message: WorkspaceSnapshotRequestMessage, core_context: Option<FfiCoreContext>) {
+async fn handle_snapshot_request(
+    _message: WorkspaceSnapshotRequestMessage,
+    core_context: Option<FfiCoreContext>,
+    shared_state: &Arc<Mutex<HyprlandSharedState>>,
+) {
     ensure_hyprland_instance_signature();
     debug!("Hyprland service: building workspace snapshot");
 
@@ -1060,6 +1097,10 @@ async fn handle_snapshot_request(_message: WorkspaceSnapshotRequestMessage, core
         active_monitor_index,
     };
 
+    if let Ok(mut guard) = shared_state.lock() {
+        guard.workspace_snapshot = Some(snapshot.clone());
+    }
+
     let Some(ctx) = core_context else {
         return;
     };
@@ -1075,7 +1116,7 @@ async fn handle_snapshot_request(_message: WorkspaceSnapshotRequestMessage, core
 ///
 /// Synchronous IPC calls are wrapped in `tokio::task::spawn_blocking` to prevent
 /// blocking the async event worker when the compositor is under load.
-async fn handle_state_request(core_context: Option<FfiCoreContext>, meta: &PluginMeta, last_state: &Arc<Mutex<Option<HyprlandStateMessage>>>) {
+async fn handle_state_request(core_context: Option<FfiCoreContext>, meta: &PluginMeta, shared_state: &Arc<Mutex<HyprlandSharedState>>) {
     ensure_hyprland_instance_signature();
 
     let state = tokio::task::spawn_blocking(|| {
@@ -1114,8 +1155,8 @@ async fn handle_state_request(core_context: Option<FfiCoreContext>, meta: &Plugi
     .await
     .unwrap_or_default();
 
-    if let Ok(mut guard) = last_state.lock() {
-        *guard = Some(state.clone());
+    if let Ok(mut guard) = shared_state.lock() {
+        guard.last_state = Some(state.clone());
     }
 
     let Some(ctx) = core_context else {
@@ -1136,7 +1177,7 @@ impl MessageHandler<FfiEnvelopePayload<HyprlandStateRequestMessage>> for Hyprlan
 
 impl HyprlandService {
     pub(crate) fn status_snapshot(&self) -> Option<HyprlandStateMessage> {
-        self.last_state.lock().ok().and_then(|s| s.clone())
+        self.shared_state.lock().ok().and_then(|s| s.last_state.clone())
     }
 }
 

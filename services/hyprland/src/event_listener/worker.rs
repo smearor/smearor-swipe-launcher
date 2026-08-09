@@ -1,8 +1,11 @@
 use crate::event_listener::listener::HyprlandEvent;
+use crate::service::HyprlandSharedState;
 use crate::status::RATE_LIMIT_MS;
 use crate::status::RateLimiter;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -14,6 +17,7 @@ pub fn spawn_event_worker(
     core_context: Option<FfiCoreContext>,
     meta: PluginMeta,
     enable_workspace_lifecycle: bool,
+    shared_state: Arc<Mutex<HyprlandSharedState>>,
 ) {
     std::thread::spawn(move || {
         let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
@@ -37,14 +41,14 @@ pub fn spawn_event_worker(
                         match event {
                             HyprlandEvent::Workspace(e) => {
                                 crate::workspace::process_event(
-                                    &mut workspace_state, e, &core_context, &meta, enable_workspace_lifecycle,
+                                    &mut workspace_state, e, &core_context, &meta, enable_workspace_lifecycle, &shared_state,
                                 ).await;
                             }
                             HyprlandEvent::Monitor(e) => {
-                                crate::monitor::process_event(e, &core_context, &meta).await;
+                                crate::monitor::process_event(e, &core_context, &meta, &shared_state).await;
                             }
                             HyprlandEvent::Status(e) => {
-                                status_rate_limiter.process_event(e, &core_context, &meta);
+                                status_rate_limiter.process_event(e, &core_context, &meta, &shared_state);
                             }
                         }
                     }

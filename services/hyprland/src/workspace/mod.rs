@@ -1,4 +1,5 @@
 use crate::event_listener::listener::HyprlandEvent;
+use crate::service::HyprlandSharedState;
 use hyprland::shared::HyprData;
 use smearor_model_compositor::WorkspaceChangedEvent;
 use smearor_model_compositor::WorkspaceLifecycleEvent;
@@ -9,6 +10,8 @@ use smearor_swipe_launcher_plugin_api::MessageTopic;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use smearor_swipe_launcher_plugin_api::TypedMessage;
 use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::warn;
@@ -56,6 +59,7 @@ pub async fn process_event(
     core_context: &Option<FfiCoreContext>,
     meta: &PluginMeta,
     enable_workspace_lifecycle: bool,
+    shared_state: &Arc<Mutex<HyprlandSharedState>>,
 ) {
     match event {
         WorkspaceEvent::Changed(mut event) => {
@@ -71,17 +75,26 @@ pub async fn process_event(
                     lifecycle_type: WorkspaceLifecycleType::Created,
                 };
                 debug!("Workspace created: {:?}", lifecycle_event);
+                if let Ok(mut guard) = shared_state.lock() {
+                    guard.latest_workspace_lifecycle = Some(lifecycle_event.clone());
+                }
                 broadcast_event(core_context, meta, lifecycle_event);
                 state.known_workspaces.insert(event.workspace_id);
             }
 
             debug!("Workspace changed: {:?}", event);
+            if let Ok(mut guard) = shared_state.lock() {
+                guard.latest_workspace_changed = Some(event.clone());
+            }
             broadcast_event(core_context, meta, event);
 
             if enable_workspace_lifecycle {
                 let removed = detect_removed_workspaces(&mut state.known_workspaces).await;
                 for lifecycle_event in removed {
                     debug!("Workspace destroyed: {:?}", lifecycle_event);
+                    if let Ok(mut guard) = shared_state.lock() {
+                        guard.latest_workspace_lifecycle = Some(lifecycle_event.clone());
+                    }
                     broadcast_event(core_context, meta, lifecycle_event);
                 }
             }

@@ -396,7 +396,8 @@ impl LauncherHost {
         for instance in instances.values() {
             if let Ok(mut window_guard) = instance.window.lock() {
                 if let Some(window) = window_guard.take() {
-                    window.close();
+                    window.set_visible(false);
+                    self.gtk_app.remove_window(&window);
                 }
             }
             if let Ok(area_manager) = instance.area_manager.lock() {

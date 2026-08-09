@@ -347,31 +347,34 @@ impl super::LauncherHost {
         };
 
         if instance_type == crate::instance::InstanceType::Gtk {
-            let self_clone = self.clone();
+            // Destroy window and clear areas synchronously to prevent duplicate windows on rapid stop/start.
             let instance_id_for_closure = instance_id_owned.clone();
-            gtk4::glib::idle_add_local_once(move || {
-                if let Ok(instances) = self_clone.instances.lock() {
-                    if let Some(instance) = instances.get(&instance_id_for_closure) {
-                        if let Some(handler_id) = instance.close_handler_id.lock().ok().and_then(|mut g| g.take()) {
-                            if let Ok(window_guard) = instance.window.lock() {
-                                if let Some(ref window) = *window_guard {
-                                    window.disconnect(handler_id);
-                                }
-                            }
-                        }
-                        if let Ok(mut window_guard) = instance.window.lock() {
-                            if let Some(window) = window_guard.take() {
-                                window.close();
-                            }
-                        }
-                        if let Ok(area_manager) = instance.area_manager.lock() {
-                            area_manager.remove_all_areas_keep_plugins();
-                            area_manager.clear_main_container();
-                        }
-                        debug!("Stopped GTK instance '{}'", instance_id_for_closure);
+            {
+                let instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
+                if let Some(instance) = instances.get(&instance_id_for_closure) {
+                    // Clear area manager first — releases references to main_container (child of window).
+                    if let Ok(area_manager) = instance.area_manager.lock() {
+                        area_manager.remove_all_areas_keep_plugins();
+                        area_manager.clear_main_container();
                     }
+                    // Disconnect close-request handler.
+                    if let Some(handler_id) = instance.close_handler_id.lock().ok().and_then(|mut g| g.take()) {
+                        if let Ok(window_guard) = instance.window.lock() {
+                            if let Some(ref window) = *window_guard {
+                                window.disconnect(handler_id);
+                            }
+                        }
+                    }
+                    // Remove and destroy window.
+                    if let Ok(mut window_guard) = instance.window.lock() {
+                        if let Some(window) = window_guard.take() {
+                            window.set_visible(false);
+                            self.gtk_app.remove_window(&window);
+                        }
+                    }
+                    debug!("Stopped GTK instance '{}'", instance_id_for_closure);
                 }
-            });
+            }
         } else {
             if instance_type == crate::instance::InstanceType::Web {
                 if let Ok(ws_guard) = self.web_server.lock() {

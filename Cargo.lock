@@ -6778,6 +6778,7 @@ dependencies = [
  "smearor-hyprland-status",
  "smearor-model-mcp",
  "smearor-swipe-launcher-plugin-api",
+ "stabby",
 ]
 
 [[package]]

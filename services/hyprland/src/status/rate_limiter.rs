@@ -1,7 +1,10 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::service::HyprlandSharedState;
 use smearor_hyprland_model::GroupEvent;
 use smearor_hyprland_model::HyprlandGroupStatusMessage;
 use smearor_hyprland_model::HyprlandLayerStatusMessage;
@@ -167,7 +170,14 @@ impl RateLimiter {
     /// If an event is dropped by the rate limiter, it is stored as the pending trailing
     /// event. The trailing event is flushed by the periodic flush interval in the
     /// worker's `tokio::select!` loop (see `spawn_event_worker`), not here.
-    pub fn process_event(&mut self, event: StatusEvent, core_context: &Option<FfiCoreContext>, meta: &PluginMeta) {
+    pub fn process_event(
+        &mut self,
+        event: StatusEvent,
+        core_context: &Option<FfiCoreContext>,
+        meta: &PluginMeta,
+        shared_state: &Arc<Mutex<HyprlandSharedState>>,
+    ) {
+        cache_event(&event, shared_state);
         if let Some(pending) = self.try_event(event) {
             Self::broadcast_event(core_context, meta, pending);
         }
@@ -199,6 +209,19 @@ impl RateLimiter {
             StatusEvent::System(event) => {
                 broadcaster.broadcast_message_to_topic(HyprlandSystemStatusMessage { event });
             }
+        }
+    }
+}
+
+/// Cache a status event into the shared state for MCP resource queries.
+fn cache_event(event: &StatusEvent, shared_state: &Arc<Mutex<HyprlandSharedState>>) {
+    if let Ok(mut guard) = shared_state.lock() {
+        match event {
+            StatusEvent::Window(e) => guard.latest_window_event = Some(e.clone()),
+            StatusEvent::Workspace(e) => guard.latest_workspace_event = Some(e.clone()),
+            StatusEvent::Group(e) => guard.latest_group_event = Some(e.clone()),
+            StatusEvent::Layer(e) => guard.latest_layer_event = Some(e.clone()),
+            StatusEvent::System(e) => guard.latest_system_event = Some(e.clone()),
         }
     }
 }

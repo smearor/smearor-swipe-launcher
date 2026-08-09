@@ -10,6 +10,7 @@ authors.workspace = true
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+stabby = { workspace = true, features = ["serde"] }
 smearor-hyprland-shared = { path = "../hyprland-shared" }
 smearor-hyprland-dispatch = { path = "../hyprland-dispatch" }
 smearor-hyprland-status = { path = "../hyprland-status" }
