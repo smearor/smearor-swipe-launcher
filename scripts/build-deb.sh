@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Build script for all Debian packages
-# Produces 33 .deb files in target/debian/:
-#   1 main package + 13 widget plugins + 18 services + 1 metapackage
+# Produces 35 .deb files in target/debian/:
+#   1 main package + 15 widget plugins + 18 services + 1 metapackage
 
 cd "$(dirname "$0")/.."
 
@@ -19,6 +19,7 @@ WIDGETS=(
     smearor-audio-widget
     smearor-button-widget
     smearor-clock-widget
+    smearor-doa-widget
     smearor-mpris-widget
     smearor-network-widget
     smearor-notifications-widget
@@ -38,6 +39,7 @@ echo "=== Phase 4: Build all service packages ==="
 SERVICES=(
     smearor-app-launcher-service
     smearor-audio-service
+    smearor-doa-service
     smearor-gnome-service
     smearor-http-service
     smearor-hyprland-service
