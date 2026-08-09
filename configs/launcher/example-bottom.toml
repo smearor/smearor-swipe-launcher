@@ -6,6 +6,10 @@ areas = ["bottom"]
 rotation = 0
 layer = "top"
 namespace = "smearor-swipe-launcher"
+exclusive_zone = 92
+#max_width = 640
+show_decorations = false
+scale = 0.9
 
 [layout]
 orientation = "horizontal"
