@@ -49,14 +49,15 @@ timezone = "local"
 
 ### `[launcher]`
 
-| Field              | Type     | Default | Description                        |
-|--------------------|----------|---------|------------------------------------|
-| `rotation`         | `i32`    | `0`     | Initial rotation (0, 90, 180, 270) |
-| `layer`            | `String` | `"top"` | Layer-shell layer                  |
-| `namespace`        | `String` | —       | Layer-shell namespace              |
-| `exclusive_zone`   | `i32`    | —       | Exclusive zone width               |
-| `max_width`        | `i32`    | —       | Maximum window width               |
-| `show_decorations` | `bool`   | `false` | Show window decorations            |
+| Field              | Type     | Default | Description                                                          |
+|--------------------|----------|---------|----------------------------------------------------------------------|
+| `rotation`         | `i32`    | `0`     | Initial rotation (0, 90, 180, 270)                                   |
+| `layer`            | `String` | `"top"` | Layer-shell layer                                                    |
+| `namespace`        | `String` | —       | Layer-shell namespace                                                |
+| `exclusive_zone`   | `i32`    | —       | Exclusive zone width                                                 |
+| `max_width`        | `i32`    | —       | Maximum window width                                                 |
+| `show_decorations` | `bool`   | `false` | Show window decorations                                              |
+| `scale`            | `f32`    | `1.0`   | Global widget scaling factor (see [Widget Scaling](#widget-scaling)) |
 
 ### `[layout]`
 
@@ -132,3 +133,38 @@ See [Design and CSS](./design-css.md) for the full CSS layer system and hot-relo
 
 See [Area Configuration](./area-config.md) for area-specific settings, and individual [plugin pages](../plugins/app-launcher.md) for plugin-specific config
 fields.
+
+## Widget Scaling
+
+The `scale` field in `[launcher]` controls a global scaling factor for all GTK widget dimensions and font sizes. This is useful for high-DPI displays or
+accessibility.
+
+### How It Works
+
+- **Pixel dimensions** (`width`, `height`, `icon_size`, spacing, label heights) are multiplied by the scale factor.
+- **CSS font sizes** are scaled via a global CSS provider (`.widget-main-text`, `.widget-info-text`, `.nerd-icon`, `.clock-time`, `.sysinfo-icon`).
+- The scale is clamped to `[0.5, 3.0]`. Values outside this range are clamped; `NaN` or infinity falls back to `1.0`.
+- Atomic widgets (Stream Deck, Loupedeck) are **not** affected — they use physical device dimensions.
+
+### Per-Widget Override
+
+Individual widgets can override the global scale by setting `scale` directly in their config section:
+
+```toml
+[launcher]
+scale = 1.5
+
+[mpris]
+scale = 1.0  # this widget uses 1.0, not the global 1.5
+
+[clock_widget]
+scale = 2.0  # this widget uses 2.0
+```
+
+The per-widget value **replaces** the global value (it is not multiplied on top of it).
+
+### CSS Provider Lifecycle
+
+CSS rules are registered exactly once per unique scale value via `register_css_once`. Rebuilding widgets (layout changes, config reloads) does not accumulate
+duplicate CSS providers. Per-widget scaling uses a CSS class (e.g. `.scale-150`) applied at `STYLE_PROVIDER_PRIORITY_APPLICATION + 2`, which takes precedence
+over the global provider at `APPLICATION + 1`.

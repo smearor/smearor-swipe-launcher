@@ -339,9 +339,9 @@ Implement `McpCapabilitiesRegistrator` and register tools during `start()` using
 
 ```rust
 let tool = RegisterToolMessage::new(
-    "my_feature_do_something",
-    "Human-readable description of the tool.",
-    r#"{ "type": "object", "properties": { "param": { "type": "string", "description": "Parameter description" } }, "required": ["param"] }"#,
+"my_feature_do_something",
+"Human-readable description of the tool.",
+r#"{ "type": "object", "properties": { "param": { "type": "string", "description": "Parameter description" } }, "required": ["param"] }"#,
 );
 broadcaster.broadcast_message_to_topic(tool);
 ```
@@ -483,7 +483,7 @@ pub struct MyWidgetConfig {
 
 Shared config structs from `plugin-api`:
 
-- `WidgetDimensions` — `width`, `height`, `max_width`
+- `WidgetDimensions` — `width`, `height`, `max_width`, `scale` (per-widget override of global scale)
 - `WidgetLayout` — layout-related fields
 - `WidgetIcon` — `icon_size`, `icon_only`
 - `WidgetTextColors` — `main_text_color`, `info_text_color`
@@ -543,16 +543,22 @@ All GTK widgets use the same vertical structure:
 
 In Compact mode with `icon_only = true`, lines 1–3 are empty but retain height for alignment.
 
+All pixel values (icon_size, label heights, spacing) and CSS font sizes are multiplied by the effective scale factor. The effective scale is
+`sanitize_scale(config.dimensions.scale.unwrap_or(global_scale))`, where `global_scale` is injected from `[launcher] scale` in the launcher config. Per-widget
+`scale` overrides the global value (it does not multiply on top of it). Use scaled builder functions (`build_button_scaled`,
+`build_main_label_scaled`, `spacing_scaled`, `icon_size_scaled`, `width_scaled`, `height_scaled`) and apply per-widget CSS via
+`apply_widget_scaled_css(&widget, scale)` when `scale != 1.0`.
+
 #### 2.4.7 Gesture Handling
 
 Use the centralized `attach_gesture_handlers` trait method:
 
 ```rust
 widget_self.attach_gesture_handlers(
-    &button_widget,
-    &config.actions,
-    &broadcaster,
-    &GestureHandlersConfiguration::default(),
+& button_widget,
+& config.actions,
+& broadcaster,
+& GestureHandlersConfiguration::default (),
 );
 ```
 
@@ -627,6 +633,7 @@ icon_name = "nf-md-my-icon"
 width = 100
 height = 100
 icon_size = 36
+#scale = 1.0  # optional per-widget override of global [launcher] scale
 views = ["PowerStatus", "ConnectedDevices"]
 
 [plugins.actions]
@@ -802,6 +809,8 @@ When writing a concept, explicitly address these potential issues:
 - [ ] Widget implements all required traits (WidgetPlugin, MessageHandler, MessageBroadcaster, PluginMetaGetter, AsRef, GestureHandler, GraphicRenderer,
   WebRenderer, AcceptTopic)
 - [ ] Widget config uses shared structs via `#[serde(flatten)]`
+- [ ] `build_widget` resolves effective scale via `sanitize_scale(config.dimensions.scale.unwrap_or(global_scale))` and uses scaled builder functions
+- [ ] Per-widget CSS scaling applied via `apply_widget_scaled_css` when `scale != 1.0`
 - [ ] `render_view` documented for all view variants
 - [ ] Click and long-press fallback tables documented
 - [ ] Instance type support (GTK, Headless, Web) documented
