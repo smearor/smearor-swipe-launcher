@@ -5,6 +5,7 @@ use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use smearor_weather_model::WeatherView;
 use typed_builder::TypedBuilder;
@@ -41,6 +42,11 @@ pub struct WeatherWidgetConfig {
     #[builder(default)]
     pub(crate) text_colors: WidgetTextColors,
 
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub metadata: WidgetMetadata,
+
     /// Action bindings for all input triggers.
     #[serde(flatten)]
     #[builder(default)]
@@ -70,6 +76,7 @@ impl Default for WeatherWidgetConfig {
             ],
             icon_config: WidgetIcon::default(),
             text_colors: WidgetTextColors::default(),
+            metadata: WidgetMetadata::default(),
             actions: ActionBindings::default(),
         }
     }

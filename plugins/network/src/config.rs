@@ -6,6 +6,7 @@ use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use typed_builder::TypedBuilder;
@@ -145,6 +146,11 @@ pub struct NetworkWidgetConfig {
     #[builder(default = 10)]
     pub(crate) max_access_points: usize,
 
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub metadata: WidgetMetadata,
+
     /// Action bindings for all input triggers.
     #[serde(flatten)]
     #[builder(default)]
@@ -190,6 +196,7 @@ impl Default for NetworkWidgetConfig {
                 NetworkView::QrCode,
             ],
             max_access_points: 10,
+            metadata: WidgetMetadata::default(),
             actions: ActionBindings::default(),
         }
     }

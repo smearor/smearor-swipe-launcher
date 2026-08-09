@@ -71,12 +71,13 @@ use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 
 fn register_tool(broadcaster: &MessageBroadcasterInner, name: &str, description: &str, schema: &str) {
-    broadcaster.broadcast_message_to_topic(RegisterToolMessage::new(name, description, schema));
+    broadcaster.broadcast_message_to_topic(RegisterToolMessage::new(name, description, schema).with_annotations(&ToolAnnotations::idempotent()));
 }
 
 fn register_resource(broadcaster: &MessageBroadcasterInner, uri: &str, name: &str, description: &str, mime_type: &str) {

@@ -41,3 +41,4 @@ pub use tools::invoke::response::TOPIC_MCP_TOOL_RESPONSE;
 pub use tools::register::RegisterToolMessage;
 pub use tools::register::RegisteredTool;
 pub use tools::register::TOPIC_MCP_REGISTER_TOOL;
+pub use tools::register::ToolAnnotations;

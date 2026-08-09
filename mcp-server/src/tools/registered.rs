@@ -12,4 +12,10 @@ impl SdkToolFields for RegisteredTool {
     fn input_schema(&self) -> &serde_json::Value {
         &self.input_schema
     }
+    fn title(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+    fn annotations(&self) -> Option<&smearor_model_mcp::ToolAnnotations> {
+        self.annotations.as_ref()
+    }
 }

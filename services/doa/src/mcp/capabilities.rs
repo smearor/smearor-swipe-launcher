@@ -6,6 +6,7 @@ use smearor_doa_model::DoaSetPollIntervalArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use tracing::debug;
@@ -32,7 +33,8 @@ impl McpCapabilitiesRegistrator for DoaService {
             "doa_get_direction",
             "Returns the current DoA angle (0-359), mapped compass direction (N/E/S/W), and device connection status.",
             &get_direction_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::read_only());
         broadcaster.broadcast_message_to_topic(get_direction_tool);
 
         let set_poll_interval_schema = serde_json::to_string(&schema_for!(DoaSetPollIntervalArgs)).unwrap_or_default();
@@ -40,7 +42,8 @@ impl McpCapabilitiesRegistrator for DoaService {
             "doa_set_poll_interval",
             "Sets the DoA polling interval in milliseconds. Lower values give more responsive direction updates but increase USB traffic. Minimum: 50ms.",
             &set_poll_interval_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(set_poll_interval_tool);
 
         let reconnect_schema = serde_json::to_string(&schema_for!(DoaReconnectArgs)).unwrap_or_default();
@@ -48,7 +51,8 @@ impl McpCapabilitiesRegistrator for DoaService {
             "doa_reconnect",
             "Forces a USB reconnection to the ReSpeaker XVF3800 device. Use this if the device was unplugged and reconnected.",
             &reconnect_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(reconnect_tool);
 
         let prompt = RegisterPromptMessage::with_memory(

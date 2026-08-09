@@ -2,6 +2,7 @@ use crate::service::LoupedeckService;
 use schemars::schema_for;
 use smearor_model_macropad::MacroPadSetBrightnessArgs;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use tracing::debug;
@@ -20,7 +21,8 @@ impl McpCapabilitiesRegistrator for LoupedeckService {
             "loupedeck_set_brightness",
             "Set the brightness of Loupedeck devices. / Helligkeit der Loupedeck Geräte setzen.",
             &set_brightness_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(set_brightness_tool);
     }
 }

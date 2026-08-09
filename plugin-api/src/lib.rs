@@ -134,6 +134,7 @@ pub use widget::WidgetDimensions;
 pub use widget::WidgetIcon;
 pub use widget::WidgetIconRendering;
 pub use widget::WidgetLayout;
+pub use widget::WidgetMetadata;
 pub use widget::WidgetMode;
 pub use widget::WidgetPlugin;
 pub use widget::WidgetPluginConstructor;

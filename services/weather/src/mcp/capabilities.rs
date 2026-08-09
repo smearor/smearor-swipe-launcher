@@ -4,6 +4,7 @@ use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_weather_model::WeatherGetForecastArgs;
@@ -24,7 +25,8 @@ impl McpCapabilitiesRegistrator for WeatherService {
         broadcaster.broadcast_message_to_topic(resource);
 
         let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();
-        let tool = RegisterToolMessage::new("weather_refresh", "Force an immediate refresh of weather data.", &no_args_schema);
+        let tool = RegisterToolMessage::new("weather_refresh", "Force an immediate refresh of weather data.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(tool);
 
         let forecast_schema = serde_json::to_string(&schema_for!(WeatherGetForecastArgs)).unwrap_or_default();
@@ -32,14 +34,16 @@ impl McpCapabilitiesRegistrator for WeatherService {
             "weather_get_forecast",
             "Get current weather conditions and forecast for the configured location or arbitrary coordinates. Uses the configured location when no coordinates are provided. Supports custom latitude and longitude for any city.",
             &forecast_schema,
-        );
+        )
+            .with_annotations(&ToolAnnotations::read_only().with_open_world(true));
         broadcaster.broadcast_message_to_topic(forecast_tool);
 
         let location_tool = RegisterToolMessage::new(
             "weather_get_location",
             "Get the configured weather location (latitude, longitude, timezone).",
             &no_args_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::read_only());
         broadcaster.broadcast_message_to_topic(location_tool);
 
         let lookup_coordinates_schema = serde_json::to_string(&schema_for!(WeatherLookupCoordinatesArgs)).unwrap_or_default();
@@ -47,7 +51,8 @@ impl McpCapabilitiesRegistrator for WeatherService {
             "weather_lookup_coordinates",
             "Resolve a place name to latitude and longitude coordinates. Use the returned latitude and longitude as parameters for the 'weather_get_forecast' tool to get the weather for that location.",
             &lookup_coordinates_schema,
-        );
+        )
+            .with_annotations(&ToolAnnotations::read_only().with_open_world(true));
         broadcaster.broadcast_message_to_topic(lookup_coordinates_tool);
 
         let lookup_location_name_schema = serde_json::to_string(&schema_for!(WeatherLookupLocationNameArgs)).unwrap_or_default();
@@ -55,7 +60,8 @@ impl McpCapabilitiesRegistrator for WeatherService {
             "weather_lookup_location_name",
             "Resolve latitude and longitude coordinates to a human-readable location name.",
             &lookup_location_name_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::read_only().with_open_world(true));
         broadcaster.broadcast_message_to_topic(lookup_location_name_tool);
 
         let query_guide_schema = serde_json::to_string(&schema_for!(WeatherQueryGuideArgs)).unwrap_or_default();

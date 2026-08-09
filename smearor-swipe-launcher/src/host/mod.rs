@@ -218,7 +218,13 @@ impl LauncherHost {
         }
         debug!("Replaying {} registered tools to voice_assistant", tools.len());
         for tool in tools {
-            let message = RegisterToolMessage::new(&tool.name, &tool.description, &tool.input_schema.to_string());
+            let mut message = RegisterToolMessage::new(&tool.name, &tool.description, &tool.input_schema.to_string());
+            if let Some(title) = &tool.title {
+                message = message.with_title(title);
+            }
+            if let Some(annotations) = &tool.annotations {
+                message = message.with_annotations(annotations);
+            }
             let payload_ptr = box_payload(message);
             let envelope = FfiEnvelope::builder()
                 .sender_id(tool.plugin_id.as_str())

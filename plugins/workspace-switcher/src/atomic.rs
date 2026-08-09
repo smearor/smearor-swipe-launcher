@@ -18,6 +18,7 @@ use smearor_model_mcp::InvokeToolMessage;
 use smearor_model_mcp::InvokeToolResponse;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_model_mcp::TOPIC_MCP_INVOKE_TOOL;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_model_widget::WidgetUpdateMessage;
 use smearor_render_utils::resolve_icon_codepoint;
 use smearor_swipe_launcher_plugin_api::AcceptTopic;
@@ -293,15 +294,15 @@ impl WorkspaceAtomicWidget {
 
 impl McpCapabilitiesRegistrator for WorkspaceAtomicWidget {
     fn register_mcp_capabilities(&self) {
-        if self.config.atomic.description.is_some() {
-            let schema = serde_json::to_string(&schema_for!(ButtonActionArgs)).unwrap_or_default();
-            let tool = RegisterToolMessage::new(
-                &format!("button_{}", self.meta.id),
-                self.config.atomic.description.as_deref().unwrap_or("Workspace atomic widget"),
-                &schema,
-            );
-            MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(tool);
-        }
+        let schema = serde_json::to_string(&schema_for!(ButtonActionArgs)).unwrap_or_default();
+        let tool = RegisterToolMessage::new(
+            &format!("button_{}", self.meta.id),
+            self.config.atomic.metadata.description().unwrap_or("Workspace atomic widget"),
+            &schema,
+        )
+        .with_annotations(&ToolAnnotations::idempotent())
+        .maybe_with_title(self.config.atomic.metadata.title());
+        MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(tool);
     }
 }
 

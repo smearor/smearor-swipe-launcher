@@ -445,7 +445,6 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
         let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
         let content_box = build_content_box(self.config.layout.spacing_scaled(scale), &["workspace-switcher-widget", "menu_button_inner"]);
 
-        let icon_size = self.config.icon_config.icon_size();
         let scaled_icon_size = self.config.icon_config.icon_size_scaled(scale);
         let show_labels = !self.config.icon_config.icon_only();
 

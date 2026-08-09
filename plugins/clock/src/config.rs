@@ -5,6 +5,7 @@ use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use typed_builder::TypedBuilder;
@@ -44,9 +45,10 @@ pub struct ClockConfig {
     #[serde(flatten)]
     #[builder(default)]
     pub(crate) layout: WidgetLayout,
-    /// Human-readable description of what the clock widget does.
-    #[serde(default)]
-    pub description: Option<String>,
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub metadata: WidgetMetadata,
 }
 
 impl ClockConfig {
@@ -67,7 +69,7 @@ impl Default for ClockConfig {
             background_color: None,
             actions: ActionBindings::default(),
             layout: WidgetLayout::default(),
-            description: None,
+            metadata: WidgetMetadata::default(),
         }
     }
 }

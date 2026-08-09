@@ -4,6 +4,7 @@ use smearor_swipe_launcher_plugin_api::ActionKind;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 
 /// Configuration for a button widget
@@ -71,11 +72,11 @@ pub struct ButtonConfig {
     /// Label format string evaluated against the internal state.
     #[serde(default)]
     pub state_label: Option<String>,
-    /// Optional description for MCP tool registration. When set, the button
+    /// Widget metadata (description for MCP tool registration). When set, the button
     /// registers an MCP tool that allows the voice assistant to trigger actions.
     /// The tool supports an "action" parameter: "click", "longpress", "hold_start", "hold_stop", "double_press", "swipe_up", "swipe_down", "right_click", "middle_click", "scroll_up", "scroll_down", "compound_longpress".
-    #[serde(default)]
-    pub description: Option<String>,
+    #[serde(flatten)]
+    pub metadata: WidgetMetadata,
 }
 
 impl ButtonConfig {

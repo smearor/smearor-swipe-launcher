@@ -5,6 +5,7 @@ use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 
@@ -36,6 +37,9 @@ pub struct MprisWidgetConfig {
     pub text_colors: WidgetTextColors,
     /// Widget layout mode (compact or wide).
     pub mode: WidgetMode,
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    pub metadata: WidgetMetadata,
     /// Action bindings for all input triggers.
     #[serde(flatten)]
     pub actions: ActionBindings,
@@ -65,6 +69,7 @@ impl Default for MprisWidgetConfig {
             icon_config: WidgetIcon::default(),
             text_colors: WidgetTextColors::default(),
             mode: WidgetMode::default(),
+            metadata: WidgetMetadata::default(),
             actions: ActionBindings::default(),
         }
     }

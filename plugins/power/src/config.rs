@@ -6,6 +6,7 @@ use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use typed_builder::TypedBuilder;
@@ -63,9 +64,10 @@ pub struct PowerWidgetConfig {
     /// Widget layout mode (compact or wide).
     #[serde(default)]
     pub(crate) mode: WidgetMode,
-    /// Human-readable description of what the power widget does.
-    #[serde(default)]
-    pub description: Option<String>,
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub metadata: WidgetMetadata,
     /// Which power action to select on startup.
     /// One of: "shutdown", "reboot", "suspend", "hibernate", "lock", "logout", "reboot_to_firmware".
     /// Defaults to the first enabled action.
@@ -95,7 +97,7 @@ impl Default for PowerWidgetConfig {
             icon_config: WidgetIcon::default(),
             text_colors: WidgetTextColors::default(),
             mode: WidgetMode::default(),
-            description: None,
+            metadata: WidgetMetadata::default(),
             default_action: None,
             actions: ActionBindings::default(),
         }

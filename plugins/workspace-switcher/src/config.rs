@@ -6,6 +6,7 @@ use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use std::collections::HashMap;
@@ -56,9 +57,10 @@ pub struct WorkspaceSwitcherConfig {
     #[builder(default = "nf-md-monitor".to_string())]
     pub(crate) default_icon: String,
 
-    /// Human-readable description of what the workspace switcher does.
-    #[serde(default)]
-    pub description: Option<String>,
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub metadata: WidgetMetadata,
 
     /// Action bindings for all input triggers.
     #[serde(flatten)]
@@ -78,7 +80,7 @@ impl Default for WorkspaceSwitcherConfig {
             show_scrollbar: true,
             icon_map: HashMap::new(),
             default_icon: "nf-md-monitor".to_string(),
-            description: None,
+            metadata: WidgetMetadata::default(),
             actions: ActionBindings::default(),
         }
     }

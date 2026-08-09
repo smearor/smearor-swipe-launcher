@@ -2,6 +2,7 @@ use crate::service::NotificationService;
 use schemars::schema_for;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_notifications_model::NotificationClearArgs;
 use smearor_notifications_model::NotificationSendArgs;
 use smearor_notifications_model::NotificationToggleDndArgs;
@@ -25,15 +26,18 @@ impl McpCapabilitiesRegistrator for NotificationService {
         broadcaster.broadcast_message_to_topic(dnd_resource);
 
         let send_schema = serde_json::to_string(&schema_for!(NotificationSendArgs)).unwrap_or_default();
-        let send_tool = RegisterToolMessage::new("notifications_send", "Send a desktop notification.", &send_schema);
+        let send_tool =
+            RegisterToolMessage::new("notifications_send", "Send a desktop notification.", &send_schema).with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(send_tool);
 
         let toggle_dnd_schema = serde_json::to_string(&schema_for!(NotificationToggleDndArgs)).unwrap_or_default();
-        let toggle_dnd_tool = RegisterToolMessage::new("notifications_toggle_dnd", "Toggle Do-Not-Disturb mode on or off.", &toggle_dnd_schema);
+        let toggle_dnd_tool = RegisterToolMessage::new("notifications_toggle_dnd", "Toggle Do-Not-Disturb mode on or off.", &toggle_dnd_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(toggle_dnd_tool);
 
         let clear_schema = serde_json::to_string(&schema_for!(NotificationClearArgs)).unwrap_or_default();
-        let clear_tool = RegisterToolMessage::new("notifications_clear", "Dismiss all active notifications.", &clear_schema);
+        let clear_tool = RegisterToolMessage::new("notifications_clear", "Dismiss all active notifications.", &clear_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(clear_tool);
     }
 }

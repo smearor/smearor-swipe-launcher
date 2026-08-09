@@ -615,14 +615,14 @@ macro_rules! atomic_widget_impl {
     ) => {
         impl smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator for $widget {
             fn register_mcp_capabilities(&self) {
-                if self.config.description.is_some() {
-                    let tool = smearor_model_mcp::RegisterToolMessage::new(
-                        &format!("button_{}", self.meta.id),
-                        self.config.description.as_deref().unwrap_or($desc),
-                        r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "hold_start", "hold_stop", "double_press", "compound_longpress"], "description": "The action to trigger" } }, "required": ["action"] }"#,
-                    );
-                    smearor_swipe_launcher_plugin_api::MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(tool);
-                }
+                let tool = smearor_model_mcp::RegisterToolMessage::new(
+                    &format!("button_{}", self.meta.id),
+                    self.config.metadata.description().unwrap_or($desc),
+                    r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "hold_start", "hold_stop", "double_press", "compound_longpress"], "description": "The action to trigger" } }, "required": ["action"] }"#,
+                )
+                .with_annotations(&smearor_model_mcp::ToolAnnotations::idempotent())
+                .maybe_with_title(self.config.metadata.title());
+                smearor_swipe_launcher_plugin_api::MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(tool);
             }
         }
 
@@ -727,14 +727,14 @@ macro_rules! atomic_widget_impl {
     ) => {
         impl smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator for $widget {
             fn register_mcp_capabilities(&self) {
-                if self.config.description.is_some() {
-                    let tool = smearor_model_mcp::RegisterToolMessage::new(
-                        &format!("button_{}", self.meta.id),
-                        self.config.description.as_deref().unwrap_or($desc),
-                        r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "hold_start", "hold_stop", "double_press", "compound_longpress"], "description": "The action to trigger" } }, "required": ["action"] }"#,
-                    );
-                    smearor_swipe_launcher_plugin_api::MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(tool);
-                }
+                let tool = smearor_model_mcp::RegisterToolMessage::new(
+                    &format!("button_{}", self.meta.id),
+                    self.config.metadata.description().unwrap_or($desc),
+                    r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "hold_start", "hold_stop", "double_press", "compound_longpress"], "description": "The action to trigger" } }, "required": ["action"] }"#,
+                )
+                .with_annotations(&smearor_model_mcp::ToolAnnotations::idempotent())
+                .maybe_with_title(self.config.metadata.title());
+                smearor_swipe_launcher_plugin_api::MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(tool);
             }
         }
 
@@ -896,14 +896,14 @@ macro_rules! atomic_widget_impl {
     ) => {
         impl smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator for $widget {
             fn register_mcp_capabilities(&self) {
-                if self.config.description.is_some() {
-                    let tool = smearor_model_mcp::RegisterToolMessage::new(
-                        &format!("button_{}", self.meta.id),
-                        self.config.description.as_deref().unwrap_or($desc),
-                        r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "hold_start", "hold_stop", "double_press", "compound_longpress"], "description": "The action to trigger" } }, "required": ["action"] }"#,
-                    );
-                    smearor_swipe_launcher_plugin_api::MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(tool);
-                }
+                let tool = smearor_model_mcp::RegisterToolMessage::new(
+                    &format!("button_{}", self.meta.id),
+                    self.config.metadata.description().unwrap_or($desc),
+                    r#"{ "type": "object", "properties": { "action": { "type": "string", "enum": ["click", "longpress", "hold_start", "hold_stop", "double_press", "compound_longpress"], "description": "The action to trigger" } }, "required": ["action"] }"#,
+                )
+                .with_annotations(&smearor_model_mcp::ToolAnnotations::idempotent())
+                .maybe_with_title(self.config.metadata.title());
+                smearor_swipe_launcher_plugin_api::MessageBroadcaster::get_broadcaster(self).broadcast_message_to_topic(tool);
             }
         }
 

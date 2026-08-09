@@ -7,6 +7,7 @@ use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use tracing::debug;
@@ -41,11 +42,13 @@ impl McpCapabilitiesRegistrator for AppLauncherService {
             "app_launcher_exec",
             "Launch an application by desktop file path. The desktop file path must be the canonical path to a .desktop file.",
             &exec_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::destructive().with_open_world(true));
         broadcaster.broadcast_message_to_topic(exec_tool);
 
         let terminate_schema = serde_json::to_string(&schema_for!(AppLauncherTerminateArgs)).unwrap_or_default();
-        let terminate_tool = RegisterToolMessage::new("app_launcher_terminate", "Terminate a running application by desktop file path.", &terminate_schema);
+        let terminate_tool = RegisterToolMessage::new("app_launcher_terminate", "Terminate a running application by desktop file path.", &terminate_schema)
+            .with_annotations(&ToolAnnotations::destructive().with_open_world(true));
         broadcaster.broadcast_message_to_topic(terminate_tool);
 
         let search_schema = serde_json::to_string(&schema_for!(AppLauncherSearchAppsArgs)).unwrap_or_default();
@@ -53,7 +56,8 @@ impl McpCapabilitiesRegistrator for AppLauncherService {
             "app_launcher_search_apps",
             "Search for available applications by name, generic name, comment, keywords, or categories. Returns matching .desktop file paths with full metadata (name, generic_name, comment, keywords, categories). Use this to find the correct desktop_file path before calling app_launcher_exec.",
             &search_schema,
-        );
+        )
+            .with_annotations(&ToolAnnotations::read_only());
         broadcaster.broadcast_message_to_topic(search_tool);
 
         let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();

@@ -10,6 +10,7 @@ use crate::action::HoldBinding;
 use crate::action::LongpressBinding;
 use crate::atomic::action::AtomicAction;
 use crate::atomic::render_mode::AtomicRenderMode;
+use crate::widget::WidgetMetadata;
 use crate::widget::WidgetTextColors;
 
 /// Configuration for an atomic widget.
@@ -34,8 +35,9 @@ pub struct AtomicWidgetConfig {
     /// Compound longpress action binding.
     #[serde(flatten)]
     pub compound_longpress: CompoundLongpressBinding,
-    /// Optional description for MCP tool registration.
-    pub description: Option<String>,
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    pub metadata: WidgetMetadata,
     /// Render mode for headless graphic output. Defaults to `Icon`.
     pub render_mode: Option<AtomicRenderMode>,
     /// Whether to show `main_text` in headless rendering. Defaults to `true`.
@@ -65,7 +67,7 @@ impl Default for AtomicWidgetConfig {
             hold: HoldBinding::default(),
             double_press: DoublePressBinding::default(),
             compound_longpress: CompoundLongpressBinding::default(),
-            description: None,
+            metadata: WidgetMetadata::default(),
             render_mode: None,
             show_main_text: None,
             show_info_text: None,

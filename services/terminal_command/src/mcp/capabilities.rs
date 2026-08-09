@@ -4,6 +4,7 @@ use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_terminal_command_model::TerminalCommandLaunchArgs;
@@ -31,11 +32,13 @@ impl McpCapabilitiesRegistrator for TerminalCommandService {
         broadcaster.broadcast_message_to_topic(configured_resource);
 
         let launch_schema = serde_json::to_string(&schema_for!(TerminalCommandLaunchArgs)).unwrap_or_default();
-        let launch_tool = RegisterToolMessage::new("terminal_command_launch", "Launch a configured terminal command by command_id.", &launch_schema);
+        let launch_tool = RegisterToolMessage::new("terminal_command_launch", "Launch a configured terminal command by command_id.", &launch_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(launch_tool);
 
         let terminate_schema = serde_json::to_string(&schema_for!(TerminalCommandTerminateArgs)).unwrap_or_default();
-        let terminate_tool = RegisterToolMessage::new("terminal_command_terminate", "Terminate a running terminal command by command_id.", &terminate_schema);
+        let terminate_tool = RegisterToolMessage::new("terminal_command_terminate", "Terminate a running terminal command by command_id.", &terminate_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(terminate_tool);
 
         let restart_schema = serde_json::to_string(&schema_for!(TerminalCommandRestartArgs)).unwrap_or_default();
@@ -43,7 +46,8 @@ impl McpCapabilitiesRegistrator for TerminalCommandService {
             "terminal_command_restart",
             "Restart a terminal command by command_id (terminate then launch).",
             &restart_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(restart_tool);
 
         let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();

@@ -6,6 +6,7 @@ use smearor_swipe_launcher_plugin_api::DEFAULT_ICON_SIZE;
 use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 
 /// Configuration for the notification widget.
 #[derive(Debug, Clone, Deserialize)]
@@ -25,6 +26,9 @@ pub struct NotificationWidgetConfig {
     /// Widget layout (spacing) for GTK container.
     #[serde(flatten)]
     pub layout: WidgetLayout,
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    pub metadata: WidgetMetadata,
     /// Action bindings for all input triggers.
     #[serde(flatten)]
     pub actions: ActionBindings,
@@ -45,6 +49,7 @@ impl Default for NotificationWidgetConfig {
             show_icons: true,
             icon_size: DEFAULT_ICON_SIZE,
             layout: WidgetLayout::default(),
+            metadata: WidgetMetadata::default(),
             actions: ActionBindings::default(),
         }
     }

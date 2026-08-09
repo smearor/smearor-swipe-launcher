@@ -8,6 +8,7 @@ use smearor_sysinfo_model::SysinfoView;
 pub use smearor_swipe_launcher_plugin_api::DEFAULT_ICON_SIZE;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 
 /// Visual representation for percentage-based widgets.
 #[repr(u8)]
@@ -111,8 +112,9 @@ pub struct SysinfoMultiWidgetConfig {
     /// Action bindings for gestures.
     #[serde(flatten)]
     pub actions: ActionBindings,
-    /// Optional description for MCP tool registration.
-    pub description: Option<String>,
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    pub metadata: WidgetMetadata,
 }
 
 impl Default for SysinfoMultiWidgetConfig {
@@ -135,7 +137,7 @@ impl Default for SysinfoMultiWidgetConfig {
                 SysinfoView::Load,
             ],
             actions: ActionBindings::default(),
-            description: None,
+            metadata: WidgetMetadata::default(),
         }
     }
 }

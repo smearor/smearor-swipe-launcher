@@ -5,6 +5,7 @@ use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use tracing::debug;
@@ -45,10 +46,12 @@ impl McpCapabilitiesRegistrator for AudioService {
 
         let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();
 
-        let volume_up_tool = RegisterToolMessage::new("audio_volume_up", "Increases the audio volume by a configured step.", &no_args_schema);
+        let volume_up_tool = RegisterToolMessage::new("audio_volume_up", "Increases the audio volume by a configured step.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(volume_up_tool);
 
-        let volume_down_tool = RegisterToolMessage::new("audio_volume_down", "Decreases the audio volume by a configured step.", &no_args_schema);
+        let volume_down_tool = RegisterToolMessage::new("audio_volume_down", "Decreases the audio volume by a configured step.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(volume_down_tool);
 
         let set_volume_schema = serde_json::to_string(&schema_for!(AudioSetVolumeArgs)).unwrap_or_default();
@@ -56,26 +59,33 @@ impl McpCapabilitiesRegistrator for AudioService {
             "audio_set_volume",
             "Sets the audio volume to an absolute value. / Lautstärke auf einen absoluten Wert setzen.",
             &set_volume_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(set_volume_tool);
 
-        let toggle_mute_tool = RegisterToolMessage::new("audio_toggle_mute", "Toggles the mute state of the default sink.", &no_args_schema);
+        let toggle_mute_tool = RegisterToolMessage::new("audio_toggle_mute", "Toggles the mute state of the default sink.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(toggle_mute_tool);
 
-        let mute_tool = RegisterToolMessage::new("audio_mute", "Mutes the default audio output sink.", &no_args_schema);
+        let mute_tool =
+            RegisterToolMessage::new("audio_mute", "Mutes the default audio output sink.", &no_args_schema).with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(mute_tool);
 
-        let unmute_tool = RegisterToolMessage::new("audio_unmute", "Unmutes the default audio output sink.", &no_args_schema);
+        let unmute_tool = RegisterToolMessage::new("audio_unmute", "Unmutes the default audio output sink.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(unmute_tool);
 
-        let next_device_tool = RegisterToolMessage::new("audio_next_device", "Switches to the next available audio output device.", &no_args_schema);
+        let next_device_tool = RegisterToolMessage::new("audio_next_device", "Switches to the next available audio output device.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(next_device_tool);
 
         let previous_device_tool =
-            RegisterToolMessage::new("audio_previous_device", "Switches to the previous available audio output device.", &no_args_schema);
+            RegisterToolMessage::new("audio_previous_device", "Switches to the previous available audio output device.", &no_args_schema)
+                .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(previous_device_tool);
 
-        let refresh_tool = RegisterToolMessage::new("audio_refresh_status", "Force an immediate refresh of the audio status from PulseAudio.", &no_args_schema);
+        let refresh_tool = RegisterToolMessage::new("audio_refresh_status", "Force an immediate refresh of the audio status from PulseAudio.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(refresh_tool);
 
         let prompt = RegisterPromptMessage::with_memory(

@@ -5,6 +5,7 @@ use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use typed_builder::TypedBuilder;
@@ -67,6 +68,11 @@ pub struct WallpaperWidgetConfig {
     #[serde(default = "default_fallback_icon")]
     pub(crate) fallback_icon: String,
 
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    #[builder(default)]
+    pub metadata: WidgetMetadata,
+
     /// Action bindings for all input triggers.
     #[serde(flatten)]
     #[builder(default)]
@@ -94,6 +100,7 @@ impl Default for WallpaperWidgetConfig {
             preview_width: Some(DEFAULT_PREVIEW_WIDTH),
             preview_height: Some(DEFAULT_PREVIEW_HEIGHT),
             fallback_icon: DEFAULT_FALLBACK_ICON.to_string(),
+            metadata: WidgetMetadata::default(),
             actions: ActionBindings::default(),
         }
     }

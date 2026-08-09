@@ -10,6 +10,7 @@ use crate::RegisterToolMessage;
 use crate::RegisteredPrompt;
 use crate::RegisteredResource;
 use crate::RegisteredTool;
+use crate::ToolAnnotations;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
 use std::sync::Arc;
@@ -126,11 +127,15 @@ impl Default for McpRegistry {
 impl MessageHandler<FfiEnvelopePayload<RegisterToolMessage>> for McpRegistry {
     fn handle_message(&self, message: FfiEnvelopePayload<RegisterToolMessage>, sender_id: &str) {
         let schema = serde_json::from_str(&message.0.input_schema.to_string()).unwrap_or(serde_json::Value::Null);
+        let title = message.0.title.as_ref().map(|t| t.to_string());
+        let annotations: Option<ToolAnnotations> = message.0.annotations.as_ref().and_then(|a| serde_json::from_str(&a.to_string()).ok());
         let tool = RegisteredTool {
             name: message.0.name.to_string(),
             description: message.0.description.to_string(),
             input_schema: schema,
             plugin_id: sender_id.to_string(),
+            title,
+            annotations,
         };
         self.register_tool(tool);
     }

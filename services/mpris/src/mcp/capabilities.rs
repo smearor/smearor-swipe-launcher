@@ -4,6 +4,7 @@ use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_mpris_model::MprisSeekArgs;
 use smearor_mpris_model::MprisSetPositionArgs;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
@@ -51,24 +52,30 @@ impl McpCapabilitiesRegistrator for MprisService {
             "mpris_play",
             "Starts or resumes playback on the active MPRIS player. German synonyms: starten, abspielen, wiedergeben, Musik starten, Lied starten, Song starten, Wiedergabe starten, weitermachen, weiter abspielen.",
             &no_args_schema,
-        );
+        )
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(play_tool);
 
-        let pause_tool = RegisterToolMessage::new("mpris_pause", "Pauses playback on the active MPRIS player.", &no_args_schema);
+        let pause_tool = RegisterToolMessage::new("mpris_pause", "Pauses playback on the active MPRIS player.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(pause_tool);
 
         let toggle_play_pause_tool =
-            RegisterToolMessage::new("mpris_toggle_play_pause", "Toggles between play and pause on the active MPRIS player.", &no_args_schema);
+            RegisterToolMessage::new("mpris_toggle_play_pause", "Toggles between play and pause on the active MPRIS player.", &no_args_schema)
+                .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(toggle_play_pause_tool);
 
-        let stop_tool = RegisterToolMessage::new("mpris_stop", "Stops playback on the active MPRIS player.", &no_args_schema);
+        let stop_tool = RegisterToolMessage::new("mpris_stop", "Stops playback on the active MPRIS player.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(stop_tool);
 
-        let next_track_tool = RegisterToolMessage::new("mpris_next_track", "Skips to the next track on the active MPRIS player.", &no_args_schema);
+        let next_track_tool = RegisterToolMessage::new("mpris_next_track", "Skips to the next track on the active MPRIS player.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(next_track_tool);
 
         let previous_track_tool =
-            RegisterToolMessage::new("mpris_previous_track", "Returns to the previous track on the active MPRIS player.", &no_args_schema);
+            RegisterToolMessage::new("mpris_previous_track", "Returns to the previous track on the active MPRIS player.", &no_args_schema)
+                .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(previous_track_tool);
 
         let seek_schema = serde_json::to_string(&schema_for!(MprisSeekArgs)).unwrap_or_default();
@@ -76,7 +83,8 @@ impl McpCapabilitiesRegistrator for MprisService {
             "mpris_seek",
             "Seeks forward or backward by an offset in microseconds on the active MPRIS player.",
             &seek_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(seek_tool);
 
         let set_position_schema = serde_json::to_string(&schema_for!(MprisSetPositionArgs)).unwrap_or_default();
@@ -84,32 +92,40 @@ impl McpCapabilitiesRegistrator for MprisService {
             "mpris_set_position",
             "Sets the playback position to an absolute value in microseconds on the active MPRIS player.",
             &set_position_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(set_position_tool);
 
         let cycle_loop_tool = RegisterToolMessage::new(
             "mpris_cycle_loop",
             "Cycles through loop modes: None -> Track -> Playlist on the active MPRIS player.",
             &no_args_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(cycle_loop_tool);
 
-        let toggle_shuffle_tool = RegisterToolMessage::new("mpris_toggle_shuffle", "Toggles shuffle on/off on the active MPRIS player.", &no_args_schema);
+        let toggle_shuffle_tool = RegisterToolMessage::new("mpris_toggle_shuffle", "Toggles shuffle on/off on the active MPRIS player.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(toggle_shuffle_tool);
 
-        let next_player_tool = RegisterToolMessage::new("mpris_next_player", "Switches to the next available MPRIS player.", &no_args_schema);
+        let next_player_tool = RegisterToolMessage::new("mpris_next_player", "Switches to the next available MPRIS player.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(next_player_tool);
 
-        let previous_player_tool = RegisterToolMessage::new("mpris_previous_player", "Switches to the previous available MPRIS player.", &no_args_schema);
+        let previous_player_tool = RegisterToolMessage::new("mpris_previous_player", "Switches to the previous available MPRIS player.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(previous_player_tool);
 
-        let raise_tool = RegisterToolMessage::new("mpris_raise", "Brings the active MPRIS player window to the foreground.", &no_args_schema);
+        let raise_tool = RegisterToolMessage::new("mpris_raise", "Brings the active MPRIS player window to the foreground.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(raise_tool);
 
-        let quit_tool = RegisterToolMessage::new("mpris_quit", "Quits the active MPRIS player application.", &no_args_schema);
+        let quit_tool = RegisterToolMessage::new("mpris_quit", "Quits the active MPRIS player application.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(quit_tool);
 
-        let refresh_tool = RegisterToolMessage::new("mpris_refresh_status", "Force an immediate refresh of the MPRIS status from D-Bus.", &no_args_schema);
+        let refresh_tool = RegisterToolMessage::new("mpris_refresh_status", "Force an immediate refresh of the MPRIS status from D-Bus.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::idempotent());
         broadcaster.broadcast_message_to_topic(refresh_tool);
 
         let prompt = RegisterPromptMessage::with_memory(

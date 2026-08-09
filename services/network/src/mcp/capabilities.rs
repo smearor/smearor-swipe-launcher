@@ -4,6 +4,7 @@ use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_network_model::NetworkConnectWifiArgs;
 use smearor_network_model::NetworkToggleRadioArgs;
 use smearor_network_model::NetworkToggleVpnArgs;
@@ -39,15 +40,18 @@ impl McpCapabilitiesRegistrator for NetworkService {
         broadcaster.broadcast_message_to_topic(vpn_resource);
 
         let toggle_radio_schema = serde_json::to_string(&schema_for!(NetworkToggleRadioArgs)).unwrap_or_default();
-        let toggle_radio_tool = RegisterToolMessage::new("network_toggle_radio", "Toggles WLAN or airplane mode on/off.", &toggle_radio_schema);
+        let toggle_radio_tool = RegisterToolMessage::new("network_toggle_radio", "Toggles WLAN or airplane mode on/off.", &toggle_radio_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(toggle_radio_tool);
 
         let connect_wifi_schema = serde_json::to_string(&schema_for!(NetworkConnectWifiArgs)).unwrap_or_default();
-        let connect_wifi_tool = RegisterToolMessage::new("network_connect_wifi", "Connects the system to a specific access point.", &connect_wifi_schema);
+        let connect_wifi_tool = RegisterToolMessage::new("network_connect_wifi", "Connects the system to a specific access point.", &connect_wifi_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(connect_wifi_tool);
 
         let toggle_vpn_schema = serde_json::to_string(&schema_for!(NetworkToggleVpnArgs)).unwrap_or_default();
-        let toggle_vpn_tool = RegisterToolMessage::new("network_toggle_vpn", "Starts or stops a specific VPN connection.", &toggle_vpn_schema);
+        let toggle_vpn_tool = RegisterToolMessage::new("network_toggle_vpn", "Starts or stops a specific VPN connection.", &toggle_vpn_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(toggle_vpn_tool);
 
         let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();
@@ -55,7 +59,8 @@ impl McpCapabilitiesRegistrator for NetworkService {
             "network_get_public_ip",
             "Queries the external IP address and provider (GeoIP) via the internal HTTP service.",
             &no_args_schema,
-        );
+        )
+        .with_annotations(&ToolAnnotations::read_only().with_open_world(true));
         broadcaster.broadcast_message_to_topic(get_public_ip_tool);
 
         let prompt = RegisterPromptMessage::with_memory(

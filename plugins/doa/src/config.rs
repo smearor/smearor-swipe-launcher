@@ -4,6 +4,7 @@ use smearor_swipe_launcher_plugin_api::ActionBindings;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 
@@ -59,6 +60,9 @@ pub struct DoaWidgetConfig {
     pub icon_speech: String,
     /// Views to cycle through on swipe up/down.
     pub views: Vec<DoaView>,
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    pub metadata: WidgetMetadata,
     /// Action bindings for all input triggers.
     #[serde(flatten)]
     pub actions: ActionBindings,
@@ -97,6 +101,7 @@ impl Default for DoaWidgetConfig {
             icon_device: DEFAULT_ICON_DEVICE.to_string(),
             icon_speech: DEFAULT_ICON_SPEECH.to_string(),
             views: vec![DoaView::Compass, DoaView::Direction, DoaView::DeviceInfo],
+            metadata: WidgetMetadata::default(),
             actions: ActionBindings::default(),
         }
     }

@@ -7,6 +7,7 @@ use smearor_swipe_launcher_plugin_api::DispatchableBinding;
 use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetIcon;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
+use smearor_swipe_launcher_plugin_api::WidgetMetadata;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 
@@ -25,9 +26,9 @@ pub struct AppLauncherConfig {
     /// Widget icon configuration (icon_size, icon_only).
     #[serde(flatten)]
     pub icon_config: WidgetIcon,
-    /// Human-readable description of what the app launcher does.
-    #[serde(default)]
-    pub description: Option<String>,
+    /// Widget metadata (description for MCP tool registration).
+    #[serde(flatten)]
+    pub metadata: WidgetMetadata,
     /// Action bindings for all input triggers.
     #[serde(flatten)]
     pub actions: ActionBindings,

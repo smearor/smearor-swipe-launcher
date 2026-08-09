@@ -4,6 +4,7 @@ use smearor_model_mcp::NoArgs;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
+use smearor_model_mcp::ToolAnnotations;
 use smearor_power_model::SystemPowerActionArgs;
 use smearor_power_model::SystemSchedulePowerActionArgs;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
@@ -44,19 +45,23 @@ impl McpCapabilitiesRegistrator for PowerService {
         broadcaster.broadcast_message_to_topic(scheduled_resource);
 
         let power_action_schema = serde_json::to_string(&schema_for!(SystemPowerActionArgs)).unwrap_or_default();
-        let power_action_tool = RegisterToolMessage::new("system_power_action", "Executes the desired power action immediately.", &power_action_schema);
+        let power_action_tool = RegisterToolMessage::new("system_power_action", "Executes the desired power action immediately.", &power_action_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(power_action_tool);
 
         let schedule_schema = serde_json::to_string(&schema_for!(SystemSchedulePowerActionArgs)).unwrap_or_default();
-        let schedule_tool = RegisterToolMessage::new("system_schedule_power_action", "Schedules a shutdown or reboot in the future.", &schedule_schema);
+        let schedule_tool = RegisterToolMessage::new("system_schedule_power_action", "Schedules a shutdown or reboot in the future.", &schedule_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(schedule_tool);
 
         let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();
-        let cancel_tool = RegisterToolMessage::new("system_cancel_power_action", "Cancels a running shutdown timer or scheduled action.", &no_args_schema);
+        let cancel_tool = RegisterToolMessage::new("system_cancel_power_action", "Cancels a running shutdown timer or scheduled action.", &no_args_schema)
+            .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(cancel_tool);
 
         let uefi_tool =
-            RegisterToolMessage::new("system_reboot_to_uefi", "Sets the firmware reboot flag and reboots directly into BIOS/UEFI.", &no_args_schema);
+            RegisterToolMessage::new("system_reboot_to_uefi", "Sets the firmware reboot flag and reboots directly into BIOS/UEFI.", &no_args_schema)
+                .with_annotations(&ToolAnnotations::destructive());
         broadcaster.broadcast_message_to_topic(uefi_tool);
 
         let prompt = RegisterPromptMessage::with_memory(
