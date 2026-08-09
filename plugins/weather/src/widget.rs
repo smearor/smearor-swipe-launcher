@@ -42,9 +42,11 @@ use smearor_swipe_launcher_plugin_api::WidgetIconRendering;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
-use smearor_swipe_launcher_plugin_api::build_spacer;
+use smearor_swipe_launcher_plugin_api::build_spacer_scaled;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use smearor_weather_model::TOPIC_STATUS;
 use smearor_weather_model::WeatherCode;
 use smearor_weather_model::WeatherCommandMessage;
@@ -638,30 +640,31 @@ impl WidgetPlugin for WeatherWidget {
 
 impl WidgetBuilder for WeatherWidget {
     fn build_widget(&mut self) -> Widget {
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
         let outer_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
-            .spacing(self.config.layout.spacing_or_default())
+            .spacing(self.config.layout.spacing_scaled(scale))
             .css_classes(["scroll-item", "menu-button", "weather-widget"])
             .vexpand(true)
             .build();
 
-        outer_box.set_width_request(self.config.dimensions.width_or_default());
-        outer_box.set_height_request(self.config.dimensions.height_or_default());
+        outer_box.set_width_request(self.config.dimensions.width_scaled(scale));
+        outer_box.set_height_request(self.config.dimensions.height_scaled(scale));
 
-        let inner_box = build_content_box(self.config.layout.spacing_or_default(), &["menu_button_inner"]);
+        let inner_box = build_content_box(self.config.layout.spacing_scaled(scale), &["menu_button_inner"]);
 
         let icon_image = Image::builder().css_classes(["weather-icon", "nerd-icon"]).build();
-        icon_image.set_pixel_size(self.config.icon_config.icon_size());
-        set_weather_icon(&self.icon_image, "nf-weather-alien", self.config.icon_config.icon_size());
+        icon_image.set_pixel_size(self.config.icon_config.icon_size_scaled(scale));
+        set_weather_icon(&self.icon_image, "nf-weather-alien", self.config.icon_config.icon_size_scaled(scale));
         let temp_label = Label::builder().css_classes(["widget-main-text".to_string()]).build();
         let info_label = Label::builder().css_classes(["widget-info-text".to_string()]).build();
 
         temp_label.set_text("--");
         info_label.set_text("Loading...");
 
-        temp_label.set_height_request(20);
+        temp_label.set_height_request((20.0 * scale).round() as i32);
         apply_text_color(&temp_label, self.config.text_colors.main_text_color());
-        info_label.set_height_request(16);
+        info_label.set_height_request((16.0 * scale).round() as i32);
         apply_text_color(&info_label, self.config.text_colors.info_text_color());
 
         inner_box.append(&icon_image);
@@ -670,7 +673,7 @@ impl WidgetBuilder for WeatherWidget {
             inner_box.append(&info_label);
         }
 
-        let spacer = build_spacer(16);
+        let spacer = build_spacer_scaled(16, scale);
         inner_box.append(&spacer);
 
         outer_box.append(&inner_box);
@@ -693,6 +696,9 @@ impl WidgetBuilder for WeatherWidget {
 
         let outer_widget = outer_box.upcast::<Widget>();
         apply_widget_css_classes(&outer_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&outer_widget, scale);
+        }
         let message_broadcaster = self.get_broadcaster();
         widget_self.attach_gesture_handlers(&outer_widget, &self.config.actions, &message_broadcaster, &GestureHandlersConfiguration::default());
 

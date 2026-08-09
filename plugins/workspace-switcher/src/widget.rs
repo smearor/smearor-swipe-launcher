@@ -50,10 +50,12 @@ use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
-use smearor_swipe_launcher_plugin_api::build_info_label;
-use smearor_swipe_launcher_plugin_api::build_main_label;
+use smearor_swipe_launcher_plugin_api::build_info_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_main_label_scaled;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -440,13 +442,15 @@ impl WidgetPlugin for WorkspaceSwitcherWidget {
 
 impl WidgetBuilder for WorkspaceSwitcherWidget {
     fn build_widget(&mut self) -> Widget {
-        let content_box = build_content_box(self.config.layout.spacing_or_default(), &["workspace-switcher-widget", "menu_button_inner"]);
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
+        let content_box = build_content_box(self.config.layout.spacing_scaled(scale), &["workspace-switcher-widget", "menu_button_inner"]);
 
         let icon_size = self.config.icon_config.icon_size();
+        let scaled_icon_size = self.config.icon_config.icon_size_scaled(scale);
         let show_labels = !self.config.icon_config.icon_only();
 
         let icon_image = Image::builder().css_classes(["workspace-switcher-icon", "nerd-icon"]).build();
-        set_workspace_icon(&icon_image, &self.config.default_icon, icon_size);
+        set_workspace_icon(&icon_image, &self.config.default_icon, scaled_icon_size);
         if let Some(color) = self.config.icon_config.icon_color() {
             apply_icon_color(&icon_image, color);
         }
@@ -455,11 +459,11 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
 
         match self.config.mode {
             WidgetMode::Compact => {
-                let main_label = build_main_label(if show_labels { "..." } else { "" }, self.config.text_colors.main_text_color(), false, None);
+                let main_label = build_main_label_scaled(if show_labels { "..." } else { "" }, self.config.text_colors.main_text_color(), false, None, scale);
                 content_box.append(&main_label);
                 *self.main_label.borrow_mut() = Some(main_label.clone());
 
-                let info_label = build_info_label(if show_labels { "0/0" } else { "" }, self.config.text_colors.info_text_color(), false, None);
+                let info_label = build_info_label_scaled(if show_labels { "0/0" } else { "" }, self.config.text_colors.info_text_color(), false, None, scale);
                 content_box.append(&info_label);
                 *self.info_label.borrow_mut() = Some(info_label.clone());
 
@@ -467,8 +471,8 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
                     .min_value(0.0)
                     .max_value(1.0)
                     .value(0.0)
-                    .width_request(self.config.dimensions.width_or_default() - 20)
-                    .height_request(16)
+                    .width_request(self.config.dimensions.width_scaled(scale) - 20)
+                    .height_request((16.0 * scale).round() as i32)
                     .css_classes(["workspace-switcher-scrollbar"])
                     .build();
                 content_box.append(&scrollbar);
@@ -477,16 +481,18 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
             WidgetMode::Wide => {
                 let info_box = GtkBox::builder()
                     .orientation(Orientation::Vertical)
-                    .spacing(self.config.layout.spacing_or_default())
+                    .spacing(self.config.layout.spacing_scaled(scale))
                     .valign(Align::Center)
                     .halign(Align::Start)
                     .build();
 
-                let main_label = build_main_label(if show_labels { "..." } else { "" }, self.config.text_colors.main_text_color(), true, Some(24));
+                let main_label =
+                    build_main_label_scaled(if show_labels { "..." } else { "" }, self.config.text_colors.main_text_color(), true, Some(24), scale);
                 info_box.append(&main_label);
                 *self.main_label.borrow_mut() = Some(main_label.clone());
 
-                let info_label = build_info_label(if show_labels { "0/0" } else { "" }, self.config.text_colors.info_text_color(), true, Some(24));
+                let info_label =
+                    build_info_label_scaled(if show_labels { "0/0" } else { "" }, self.config.text_colors.info_text_color(), true, Some(24), scale);
                 info_box.append(&info_label);
                 *self.info_label.borrow_mut() = Some(info_label.clone());
 
@@ -494,8 +500,8 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
                     .min_value(0.0)
                     .max_value(1.0)
                     .value(0.0)
-                    .width_request(self.config.dimensions.max_width_or_default(self.config.mode) - 20)
-                    .height_request(16)
+                    .width_request(self.config.dimensions.max_width_scaled(self.config.mode, scale) - 20)
+                    .height_request((16.0 * scale).round() as i32)
                     .css_classes(["workspace-switcher-scrollbar"])
                     .build();
                 info_box.append(&scrollbar);
@@ -505,7 +511,7 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
             }
         }
 
-        let button = self.config.dimensions.build_button(self.config.mode, &content_box, "max-width-");
+        let button = self.config.dimensions.build_button_scaled(self.config.mode, &content_box, "max-width-", scale);
 
         let message_broadcaster = self.get_broadcaster();
 
@@ -524,6 +530,9 @@ impl WidgetBuilder for WorkspaceSwitcherWidget {
 
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         widget_self.attach_gesture_handlers(&button_widget, &self.config.actions, &message_broadcaster, &GestureHandlersConfiguration::default());
 
         button_widget

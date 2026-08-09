@@ -41,13 +41,15 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
 use smearor_swipe_launcher_plugin_api::build_info_box;
-use smearor_swipe_launcher_plugin_api::build_info_label;
-use smearor_swipe_launcher_plugin_api::build_main_label;
-use smearor_swipe_launcher_plugin_api::build_spacer;
-use smearor_swipe_launcher_plugin_api::build_widget_icon;
+use smearor_swipe_launcher_plugin_api::build_info_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_main_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_spacer_scaled;
+use smearor_swipe_launcher_plugin_api::build_widget_icon_scaled;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -350,12 +352,18 @@ impl WidgetPlugin for AudioWidget {
 impl WidgetBuilder for AudioWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
 
-        let content_box = build_content_box(self.config.layout.spacing_or_default(), &["audio-widget", "menu_button_inner"]);
+        let content_box = build_content_box(self.config.layout.spacing_scaled(scale), &["audio-widget", "menu_button_inner"]);
 
-        let icon = build_widget_icon(self.config.icon_config.icon_size(), self.config.icon_config.icon_color(), |icon| {
-            Self::set_audio_icon(icon, Self::select_icon_name(0.5, false));
-        });
+        let icon = build_widget_icon_scaled(
+            self.config.icon_config.icon_size(),
+            self.config.icon_config.icon_color(),
+            |icon| {
+                Self::set_audio_icon(icon, Self::select_icon_name(0.5, false));
+            },
+            scale,
+        );
         content_box.append(&icon);
         *self.icon_image.lock().unwrap() = Some(icon.clone());
 
@@ -363,30 +371,32 @@ impl WidgetBuilder for AudioWidget {
             WidgetMode::Compact => {
                 let show_labels = !self.config.icon_config.icon_only();
 
-                let main_label = build_main_label(if show_labels { "50%" } else { "" }, self.config.text_colors.main_text_color(), false, None);
+                let main_label = build_main_label_scaled(if show_labels { "50%" } else { "" }, self.config.text_colors.main_text_color(), false, None, scale);
                 content_box.append(&main_label);
                 *self.main_label.lock().unwrap() = Some(main_label.clone());
 
-                let info_label = build_info_label(
+                let info_label = build_info_label_scaled(
                     if show_labels { "Unknown Device" } else { "" },
                     self.config.text_colors.info_text_color(),
                     true,
                     Some(self.config.max_width_chars),
+                    scale,
                 );
                 content_box.append(&info_label);
                 *self.info_label.lock().unwrap() = Some(info_label.clone());
 
-                let spacer = build_spacer(16);
+                let spacer = build_spacer_scaled(16, scale);
                 content_box.append(&spacer);
             }
             WidgetMode::Wide => {
-                let info_box = build_info_box(self.config.layout.spacing_or_default());
+                let info_box = build_info_box(self.config.layout.spacing_scaled(scale));
 
-                let device_label = build_main_label("Unknown Device", self.config.text_colors.main_text_color(), true, Some(self.config.max_width_chars));
+                let device_label =
+                    build_main_label_scaled("Unknown Device", self.config.text_colors.main_text_color(), true, Some(self.config.max_width_chars), scale);
                 info_box.append(&device_label);
                 *self.device_label.lock().unwrap() = Some(device_label.clone());
 
-                let info_label = build_info_label("", self.config.text_colors.info_text_color(), true, Some(self.config.max_width_chars));
+                let info_label = build_info_label_scaled("", self.config.text_colors.info_text_color(), true, Some(self.config.max_width_chars), scale);
                 info_box.append(&info_label);
                 *self.info_label.lock().unwrap() = Some(info_label.clone());
 
@@ -395,8 +405,8 @@ impl WidgetBuilder for AudioWidget {
                         .min_value(0.0)
                         .max_value(if self.config.allow_overdrive { 1.5 } else { 1.0 })
                         .value(0.5)
-                        .width_request(self.config.dimensions.max_width_or_default(self.config.mode) - 20)
-                        .height_request(16)
+                        .width_request(self.config.dimensions.max_width_scaled(self.config.mode, scale) - 20)
+                        .height_request((16.0 * scale).round() as i32)
                         .css_classes(["audio-volume-bar"])
                         .build();
                     info_box.append(&volume_bar);
@@ -407,7 +417,7 @@ impl WidgetBuilder for AudioWidget {
             }
         }
 
-        let button = self.config.dimensions.build_button(self.config.mode, &content_box, "max-width-");
+        let button = self.config.dimensions.build_button_scaled(self.config.mode, &content_box, "max-width-", scale);
 
         self.request_initial_status();
         self.start_status_listener();
@@ -432,6 +442,9 @@ impl WidgetBuilder for AudioWidget {
         });
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         widget_self.attach_gesture_handlers(
             &button_widget,
             &widget_self.config.actions,

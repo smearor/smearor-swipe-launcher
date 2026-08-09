@@ -40,6 +40,8 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use smearor_sysinfo_model::NetworkStatusMessage;
 use smearor_sysinfo_model::TOPIC_NETWORK;
 use std::cell::RefCell;
@@ -196,16 +198,18 @@ impl WidgetBuilder for NetworkWidget {
             return self.build_gauge_widget();
         }
 
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
         let container = GtkBox::builder()
             .orientation(Orientation::Horizontal)
-            .spacing(self.config.layout.spacing_or_default())
+            .spacing(self.config.layout.spacing_scaled(scale))
             .css_classes(["sysinfo-network".to_string()])
             .build();
 
         let mut icon_image = None;
         if self.config.show_icon {
             if let Some(ref icon) = self.config.icon {
-                let image = build_icon_image(icon, self.config.icon_size);
+                let scaled_icon_size = ((self.config.icon_size as f32) * scale).round() as i32;
+                let image = build_icon_image(icon, scaled_icon_size);
                 image.add_css_class("sysinfo-icon");
                 container.append(&image);
                 icon_image = Some(image);
@@ -214,7 +218,7 @@ impl WidgetBuilder for NetworkWidget {
 
         let content_area = GtkBox::builder()
             .orientation(Orientation::Vertical)
-            .spacing(self.config.layout.spacing_or_default())
+            .spacing(self.config.layout.spacing_scaled(scale))
             .build();
         container.append(&content_area);
 
@@ -245,19 +249,26 @@ impl WidgetBuilder for NetworkWidget {
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());
 
+        if scale != 1.0 {
+            apply_widget_scaled_css(&outer_widget, scale);
+        }
+
         outer_widget
     }
 }
 
 impl NetworkWidget {
     fn build_gauge_widget(&mut self) -> Widget {
-        let gauge_widget = build_gauge_container(120, "sysinfo-gauge", self.config.layout.spacing_or_default());
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
+        let gauge_size = ((120.0 * scale).round() as i32).max(1);
+        let gauge_widget = build_gauge_container(gauge_size, "sysinfo-gauge", self.config.layout.spacing_scaled(scale));
         let content_box = gauge_widget.content_box;
 
         let mut icon_image = None;
         if self.config.show_icon {
             if let Some(ref icon) = self.config.icon {
-                let image = build_icon_image(icon, self.config.icon_size);
+                let scaled_icon_size = ((self.config.icon_size as f32) * scale).round() as i32;
+                let image = build_icon_image(icon, scaled_icon_size);
                 image.add_css_class("sysinfo-icon");
                 content_box.append(&image);
                 icon_image = Some(image);
@@ -315,6 +326,10 @@ impl NetworkWidget {
         let broadcaster = self.get_broadcaster();
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());
+
+        if scale != 1.0 {
+            apply_widget_scaled_css(&outer_widget, scale);
+        }
 
         outer_widget
     }

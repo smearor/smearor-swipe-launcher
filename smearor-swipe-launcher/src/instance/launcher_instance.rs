@@ -3,6 +3,7 @@ use crate::area::instance_area_manager::InstanceAreaManager;
 use crate::config::area::config_entry::ConfigEntry;
 use crate::config::launcher::SwipeLauncherConfig;
 use crate::context::GLOBAL_JSON_CONVERTER_REGISTRY;
+use crate::css::apply_global_scaled_css;
 use crate::display::AreaSize;
 use crate::display::validate_monitor_index;
 use crate::instance::instance_type::InstanceType;
@@ -178,6 +179,8 @@ impl LauncherInstance {
         for css_class in &launcher_config.css_classes {
             window.add_css_class(css_class);
         }
+
+        apply_global_scaled_css(smearor_swipe_launcher_plugin_api::sanitize_scale(launcher_config.scale));
 
         let app_clone = app.clone();
         let handler_id = window.connect_close_request(move |_win| {

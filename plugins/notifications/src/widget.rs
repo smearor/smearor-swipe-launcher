@@ -51,6 +51,8 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -380,9 +382,10 @@ impl WidgetPlugin for NotificationWidget {
 impl WidgetBuilder for NotificationWidget {
     fn build_widget(&mut self) -> Widget {
         let locale = self.personalization.borrow().effective_locale();
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
         let main_box = Box::builder()
             .orientation(Orientation::Vertical)
-            .spacing(self.config.layout.spacing_or_default())
+            .spacing(self.config.layout.spacing_scaled(scale))
             .build();
 
         let header = Box::builder().orientation(Orientation::Horizontal).spacing(4).build();
@@ -408,7 +411,7 @@ impl WidgetBuilder for NotificationWidget {
 
         let scrolled = ScrolledWindow::builder()
             .child(&notification_list)
-            .height_request(200)
+            .height_request((200.0 * scale).round() as i32)
             .vscrollbar_policy(gtk4::PolicyType::Automatic)
             .hscrollbar_policy(gtk4::PolicyType::Never)
             .build();
@@ -416,8 +419,8 @@ impl WidgetBuilder for NotificationWidget {
 
         let button = Button::builder()
             .css_classes(["scroll-item", "menu-button"])
-            .width_request(self.config.dimensions.width_or_default())
-            .height_request(self.config.dimensions.height_or_default())
+            .width_request(self.config.dimensions.width_scaled(scale))
+            .height_request(self.config.dimensions.height_scaled(scale))
             .child(&main_box)
             .build();
 
@@ -440,6 +443,10 @@ impl WidgetBuilder for NotificationWidget {
         if self.status_receiver.borrow().is_some() {
             let broadcaster = self.get_broadcaster();
             self.start_status_listener(notification_list, count_label, dnd_badge, broadcaster);
+        }
+
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
         }
 
         button_widget

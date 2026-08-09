@@ -37,6 +37,8 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use smearor_sysinfo_model::CpuStatusMessage;
 use smearor_sysinfo_model::TOPIC_CPU;
 use smearor_sysinfo_model::TemperatureComponent;
@@ -192,6 +194,8 @@ fn format_temperature(format: &str, temperature: f32) -> String {
 }
 
 fn build_gauge_entry(comp: &TemperatureComponent, config: &TemperatureWidgetConfig) -> GaugeEntry {
+    let scale = sanitize_scale(config.dimensions.scale.unwrap_or(1.0));
+    let scaled_gauge_size = ((config.gauge_size as f32) * scale).round() as i32;
     let temperature: Option<f32> = comp.temperature.as_ref().copied().into();
     let temperature = temperature.unwrap_or(0.0);
     let max_temp: Option<f32> = comp.max_temperature.as_ref().copied().into();
@@ -204,8 +208,8 @@ fn build_gauge_entry(comp: &TemperatureComponent, config: &TemperatureWidgetConf
     }));
 
     let drawing_area = DrawingArea::builder()
-        .content_width(config.gauge_size)
-        .content_height(config.gauge_size)
+        .content_width(scaled_gauge_size)
+        .content_height(scaled_gauge_size)
         .css_classes(["sysinfo-gauge".to_string()])
         .build();
 
@@ -316,9 +320,10 @@ impl WidgetPlugin for TemperatureWidget {
 
 impl WidgetBuilder for TemperatureWidget {
     fn build_widget(&mut self) -> Widget {
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
         let container = GtkBox::builder()
             .orientation(Orientation::Horizontal)
-            .spacing(self.config.layout.spacing_or_default())
+            .spacing(self.config.layout.spacing_scaled(scale))
             .halign(Align::Center)
             .valign(Align::Center)
             .css_classes(["sysinfo-temperature-widget".to_string()])
@@ -326,7 +331,8 @@ impl WidgetBuilder for TemperatureWidget {
 
         if self.config.show_icon {
             if let Some(ref icon) = self.config.icon {
-                let image = build_icon_image(icon, self.config.icon_size);
+                let scaled_icon_size = ((self.config.icon_size as f32) * scale).round() as i32;
+                let image = build_icon_image(icon, scaled_icon_size);
                 image.add_css_class("sysinfo-icon");
                 container.append(&image);
             }
@@ -339,6 +345,10 @@ impl WidgetBuilder for TemperatureWidget {
         let broadcaster = self.get_broadcaster();
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());
+
+        if scale != 1.0 {
+            apply_widget_scaled_css(&outer_widget, scale);
+        }
 
         outer_widget
     }

@@ -39,11 +39,13 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
-use smearor_swipe_launcher_plugin_api::build_info_label;
-use smearor_swipe_launcher_plugin_api::build_main_label;
-use smearor_swipe_launcher_plugin_api::build_widget_icon;
+use smearor_swipe_launcher_plugin_api::build_info_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_main_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_widget_icon_scaled;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -342,26 +344,32 @@ impl WidgetPlugin for DoaWidget {
 impl WidgetBuilder for DoaWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
 
-        let content_box = build_content_box(self.config.layout.spacing_or_default(), &["doa-widget", "menu_button_inner"]);
+        let content_box = build_content_box(self.config.layout.spacing_scaled(scale), &["doa-widget", "menu_button_inner"]);
 
-        let icon = build_widget_icon(self.config.icon_config.icon_size(), self.config.icon_config.icon_color(), |icon| {
-            Self::set_doa_icon(icon, &self.config.icon_disconnected);
-        });
+        let icon = build_widget_icon_scaled(
+            self.config.icon_config.icon_size(),
+            self.config.icon_config.icon_color(),
+            |icon| {
+                Self::set_doa_icon(icon, &self.config.icon_disconnected);
+            },
+            scale,
+        );
         content_box.append(&icon);
         *self.icon_image.lock().unwrap() = Some(icon.clone());
 
         let show_labels = !self.config.icon_config.icon_only();
 
-        let main_label = build_main_label(if show_labels { "---" } else { "" }, self.config.text_colors.main_text_color(), false, None);
+        let main_label = build_main_label_scaled(if show_labels { "---" } else { "" }, self.config.text_colors.main_text_color(), false, None, scale);
         content_box.append(&main_label);
         *self.main_label.lock().unwrap() = Some(main_label.clone());
 
-        let info_label = build_info_label(if show_labels { "" } else { "" }, self.config.text_colors.info_text_color(), false, None);
+        let info_label = build_info_label_scaled(if show_labels { "" } else { "" }, self.config.text_colors.info_text_color(), false, None, scale);
         content_box.append(&info_label);
         *self.info_label.lock().unwrap() = Some(info_label.clone());
 
-        let button = self.config.dimensions.build_button(self.config.mode, &content_box, "max-width-");
+        let button = self.config.dimensions.build_button_scaled(self.config.mode, &content_box, "max-width-", scale);
 
         self.request_initial_status();
         self.start_status_listener();
@@ -383,6 +391,9 @@ impl WidgetBuilder for DoaWidget {
         });
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         widget_self.attach_gesture_handlers(
             &button_widget,
             &widget_self.config.actions,

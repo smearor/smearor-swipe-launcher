@@ -14,6 +14,7 @@ use gtk4::Widget;
 use gtk4::prelude::BoxExt;
 use gtk4::prelude::WidgetExt;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 
 /// RGB color with components in the range [0.0, 1.0].
 pub struct Color(pub f64, pub f64, pub f64);
@@ -51,6 +52,7 @@ pub struct PercentageWidgetContainer {
 
 /// Builds the GTK container for a percentage-based widget according to its configuration.
 pub fn build_percentage_widget(config: &PercentageWidgetConfig) -> PercentageWidgetContainer {
+    let scale = sanitize_scale(config.dimensions.scale.unwrap_or(1.0));
     let orientation = match config.bar_orientation {
         BarOrientation::Horizontal => Orientation::Horizontal,
         BarOrientation::Vertical => Orientation::Vertical,
@@ -61,13 +63,14 @@ pub fn build_percentage_widget(config: &PercentageWidgetConfig) -> PercentageWid
     };
     let container = GtkBox::builder()
         .orientation(container_orientation)
-        .spacing(config.layout.spacing_or_default())
+        .spacing(config.layout.spacing_scaled(scale))
         .build();
 
     let mut icon_image = None;
     if config.show_icon {
         if let Some(ref icon) = config.icon {
-            let image = build_icon_image(icon, config.icon_size);
+            let scaled_icon_size = ((config.icon_size as f32) * scale).round() as i32;
+            let image = build_icon_image(icon, scaled_icon_size);
             image.add_css_class("sysinfo-icon");
             container.append(&image);
             icon_image = Some(image);
@@ -92,8 +95,8 @@ pub fn build_percentage_widget(config: &PercentageWidgetConfig) -> PercentageWid
                 .orientation(orientation)
                 .min_value(0.0)
                 .max_value(100.0)
-                .width_request(config.dimensions.width_or_default())
-                .height_request(config.dimensions.height_or_default())
+                .width_request(config.dimensions.width_scaled(scale))
+                .height_request(config.dimensions.height_scaled(scale))
                 .css_classes(["sysinfo-bar".to_string(), "sysinfo-normal".to_string()])
                 .build();
             container.append(&level_bar);
@@ -101,7 +104,7 @@ pub fn build_percentage_widget(config: &PercentageWidgetConfig) -> PercentageWid
             outer_widget = container.clone().upcast::<Widget>();
         }
         DisplayMode::Gauge => {
-            let size = config.dimensions.width_or_default().max(config.dimensions.height_or_default());
+            let size = config.dimensions.width_scaled(scale).max(config.dimensions.height_scaled(scale));
             let drawing_area = DrawingArea::builder()
                 .content_width(size)
                 .content_height(size)

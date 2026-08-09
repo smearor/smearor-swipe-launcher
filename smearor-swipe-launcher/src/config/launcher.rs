@@ -13,6 +13,7 @@ use serde_json::json;
 use smearor_model_area::AreaConfig;
 use smearor_model_area::AreaType;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::collections::HashMap;
 use std::str::FromStr;
 use tracing::trace;
@@ -80,6 +81,13 @@ impl SwipeLauncherConfig {
                 wrapper.insert("rotation".to_string(), json!(launcher_rotation));
             }
         }
+
+        // Scale injection — only inject if the plugin hasn't set its own scale
+        let scale = sanitize_scale(self.launcher.scale);
+        if scale != 1.0 && config.get("scale").is_none() {
+            config["scale"] = json!(scale);
+        }
+
         PluginConfig { config }
     }
 
@@ -460,11 +468,24 @@ pub struct SwipeLauncherSettings {
     /// Defaults to `None` (no event-driven auto-stop).
     #[serde(default)]
     pub auto_stop_topic: Option<String>,
+
+    /// Global scaling factor for GTK widget dimensions.
+    ///
+    /// Multiplies all pixel-based widget dimensions (width, height, icon_size,
+    /// label heights, spacing) and CSS font sizes. Default is 1.0 (no scaling).
+    /// Values are clamped to [0.5, 3.0] on deserialization.
+    #[serde(default = "default_scale")]
+    pub scale: f32,
 }
 
 /// Default value helper for `auto_start` — returns `true`.
 fn default_true() -> bool {
     true
+}
+
+/// Default value helper for `scale` — returns `1.0`.
+fn default_scale() -> f32 {
+    1.0
 }
 
 impl MergeWithArguments<SwipeLauncherArguments> for SwipeLauncherSettings {

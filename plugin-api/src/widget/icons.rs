@@ -56,6 +56,11 @@ impl WidgetIcon {
         self.icon_size
     }
 
+    /// Returns the icon size, scaled by the given factor.
+    pub fn icon_size_scaled(&self, scale: f32) -> i32 {
+        ((self.icon_size as f32) * scale).round() as i32
+    }
+
     /// Returns whether only the icon should be shown.
     pub fn icon_only(&self) -> bool {
         self.icon_only
@@ -64,6 +69,54 @@ impl WidgetIcon {
     /// Returns the configured icon color, if set.
     pub fn icon_color(&self) -> Option<Color> {
         self.icon_color
+    }
+}
+
+#[cfg(test)]
+mod scale_tests {
+    use super::*;
+
+    #[test]
+    fn icon_size_scaled_default_unchanged() {
+        let icon = WidgetIcon::default();
+        assert_eq!(icon.icon_size_scaled(1.0), DEFAULT_ICON_SIZE);
+    }
+
+    #[test]
+    fn icon_size_scaled_doubles() {
+        let icon = WidgetIcon::default();
+        assert_eq!(icon.icon_size_scaled(2.0), 72);
+    }
+
+    #[test]
+    fn icon_size_scaled_halves() {
+        let icon = WidgetIcon::default();
+        assert_eq!(icon.icon_size_scaled(0.5), 18);
+    }
+
+    #[test]
+    fn icon_size_scaled_custom_value() {
+        let icon = WidgetIcon {
+            icon_size: 24,
+            icon_only: false,
+            icon_color: None,
+        };
+        assert_eq!(icon.icon_size_scaled(1.0), 24);
+        assert_eq!(icon.icon_size_scaled(1.5), 36);
+        assert_eq!(icon.icon_size_scaled(3.0), 72);
+    }
+
+    #[test]
+    fn icon_size_scaled_rounds_correctly() {
+        let icon = WidgetIcon {
+            icon_size: 17,
+            icon_only: false,
+            icon_color: None,
+        };
+        // 17 * 1.5 = 25.5 → rounds to 26
+        assert_eq!(icon.icon_size_scaled(1.5), 26);
+        // 17 * 0.75 = 12.75 → rounds to 13
+        assert_eq!(icon.icon_size_scaled(0.75), 13);
     }
 }
 

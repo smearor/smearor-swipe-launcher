@@ -15,6 +15,11 @@ use crate::nerd_font::apply_icon_color;
 use crate::nerd_font::apply_text_color;
 use crate::widget::Color;
 
+/// Main text label height in pixels (unscaled).
+const MAIN_LABEL_HEIGHT: f32 = 20.0;
+/// Info text label height in pixels (unscaled).
+const INFO_LABEL_HEIGHT: f32 = 16.0;
+
 /// Builds a vertical content box (centered, vexpand) with the given spacing and CSS classes.
 ///
 /// Used as the main container inside widget buttons.
@@ -44,6 +49,11 @@ pub fn build_info_box(spacing: i32) -> Box {
 /// When `ellipsize` is true, sets `EllipsizeMode::End`.
 /// When `max_width_chars` is `Some`, sets the label's `max_width_chars` property.
 pub fn build_main_label(text: &str, text_color: Option<Color>, ellipsize: bool, max_width_chars: Option<i32>) -> Label {
+    build_main_label_scaled(text, text_color, ellipsize, max_width_chars, 1.0)
+}
+
+/// Scaled variant of `build_main_label` — multiplies the label height by `scale`.
+pub fn build_main_label_scaled(text: &str, text_color: Option<Color>, ellipsize: bool, max_width_chars: Option<i32>, scale: f32) -> Label {
     let mut builder = Label::builder().label(text).css_classes(["widget-main-text"]);
     if ellipsize {
         builder = builder.ellipsize(EllipsizeMode::End);
@@ -52,7 +62,7 @@ pub fn build_main_label(text: &str, text_color: Option<Color>, ellipsize: bool, 
         builder = builder.max_width_chars(chars);
     }
     let label = builder.build();
-    label.set_height_request(20);
+    label.set_height_request((MAIN_LABEL_HEIGHT * scale).round() as i32);
     apply_text_color(&label, text_color);
     label
 }
@@ -62,6 +72,11 @@ pub fn build_main_label(text: &str, text_color: Option<Color>, ellipsize: bool, 
 /// When `ellipsize` is true, sets `EllipsizeMode::End`.
 /// When `max_width_chars` is `Some`, sets the label's `max_width_chars` property.
 pub fn build_info_label(text: &str, text_color: Option<Color>, ellipsize: bool, max_width_chars: Option<i32>) -> Label {
+    build_info_label_scaled(text, text_color, ellipsize, max_width_chars, 1.0)
+}
+
+/// Scaled variant of `build_info_label` — multiplies the label height by `scale`.
+pub fn build_info_label_scaled(text: &str, text_color: Option<Color>, ellipsize: bool, max_width_chars: Option<i32>, scale: f32) -> Label {
     let mut builder = Label::builder().label(text).css_classes(["widget-info-text"]);
     if ellipsize {
         builder = builder.ellipsize(EllipsizeMode::End);
@@ -70,15 +85,20 @@ pub fn build_info_label(text: &str, text_color: Option<Color>, ellipsize: bool, 
         builder = builder.max_width_chars(chars);
     }
     let label = builder.build();
-    label.set_height_request(16);
+    label.set_height_request((INFO_LABEL_HEIGHT * scale).round() as i32);
     apply_text_color(&label, text_color);
     label
 }
 
 /// Builds a spacer label with the given height request.
 pub fn build_spacer(height: i32) -> Label {
+    build_spacer_scaled(height, 1.0)
+}
+
+/// Scaled variant of `build_spacer` — multiplies the height by `scale`.
+pub fn build_spacer_scaled(height: i32, scale: f32) -> Label {
     let spacer = Label::new(Some(""));
-    spacer.set_height_request(height);
+    spacer.set_height_request(((height as f32) * scale).round() as i32);
     spacer
 }
 
@@ -87,8 +107,13 @@ pub fn build_spacer(height: i32) -> Label {
 /// The `setup_fn` closure is called after the icon is created to set the initial
 /// icon name or codepoint (e.g. `Self::set_audio_icon(&icon, ...)`).
 pub fn build_widget_icon(icon_size: i32, icon_color: Option<Color>, setup_fn: impl FnOnce(&Image)) -> Image {
+    build_widget_icon_scaled(icon_size, icon_color, setup_fn, 1.0)
+}
+
+/// Scaled variant of `build_widget_icon` — multiplies the icon pixel size by `scale`.
+pub fn build_widget_icon_scaled(icon_size: i32, icon_color: Option<Color>, setup_fn: impl FnOnce(&Image), scale: f32) -> Image {
     let icon = Image::new();
-    icon.set_pixel_size(icon_size);
+    icon.set_pixel_size(((icon_size as f32) * scale).round() as i32);
     icon.add_css_class("nerd-icon");
     setup_fn(&icon);
     if let Some(color) = icon_color {

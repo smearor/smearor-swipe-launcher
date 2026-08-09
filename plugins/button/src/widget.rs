@@ -38,9 +38,11 @@ use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
-use smearor_swipe_launcher_plugin_api::build_spacer;
+use smearor_swipe_launcher_plugin_api::build_spacer_scaled;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::rc::Rc;
 use std::str::FromStr;
 use tracing::debug;
@@ -335,6 +337,7 @@ fn resolve_state_format(format: &str, state: &serde_json::Value) -> String {
 
 /// Update an icon widget with a new icon name, handling both Nerd Font and standard icons.
 fn update_icon(icon: &Image, icon_name: &str, config: &ButtonConfig) {
+    let scale = sanitize_scale(config.dimensions.scale.unwrap_or(1.0));
     if icon_name.starts_with("nf-") {
         if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(icon_name) {
             icon.set_icon_name(Some(&gtk_icon_name));
@@ -342,7 +345,7 @@ fn update_icon(icon: &Image, icon_name: &str, config: &ButtonConfig) {
     } else {
         icon.set_icon_name(Some(icon_name));
     }
-    icon.set_pixel_size(config.icon_config.icon_size());
+    icon.set_pixel_size(config.icon_config.icon_size_scaled(scale));
     if let Some(color) = config.icon_config.icon_color() {
         apply_icon_color(icon, color);
     }
@@ -440,15 +443,16 @@ impl AsRef<Option<FfiCoreContext>> for ButtonWidget {
 impl WidgetBuilder for ButtonWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
 
-        let button_box = build_content_box(self.config.layout.spacing_or_default(), &["menu_button_inner"]);
+        let button_box = build_content_box(self.config.layout.spacing_scaled(scale), &["menu_button_inner"]);
 
         let needs_icon_ref = self.config.state_icon.is_some();
         if let Some(icon_name) = &self.config.icon {
             if icon_name.starts_with("nf-") {
                 if let Some(gtk_icon_name) = resolve_gtk_nerd_icon(icon_name) {
                     let icon = Image::from_icon_name(&gtk_icon_name);
-                    icon.set_pixel_size(self.config.icon_config.icon_size());
+                    icon.set_pixel_size(self.config.icon_config.icon_size_scaled(scale));
                     icon.add_css_class("nerd-icon");
                     for class in &self.config.layout.css_classes {
                         icon.add_css_class(class);
@@ -463,7 +467,7 @@ impl WidgetBuilder for ButtonWidget {
                 }
             } else {
                 let icon = Image::from_icon_name(icon_name);
-                icon.set_pixel_size(self.config.icon_config.icon_size());
+                icon.set_pixel_size(self.config.icon_config.icon_size_scaled(scale));
                 icon.add_css_class("nerd-icon");
                 if let Some(color) = self.config.icon_config.icon_color() {
                     apply_icon_color(&icon, color);
@@ -475,7 +479,7 @@ impl WidgetBuilder for ButtonWidget {
             }
         } else if needs_icon_ref {
             let icon = Image::new();
-            icon.set_pixel_size(self.config.icon_config.icon_size());
+            icon.set_pixel_size(self.config.icon_config.icon_size_scaled(scale));
             if let Some(color) = self.config.icon_config.icon_color() {
                 apply_icon_color(&icon, color);
             }
@@ -499,7 +503,7 @@ impl WidgetBuilder for ButtonWidget {
         if show_main_label {
             label.add_css_class("widget-main-text");
         }
-        label.set_height_request(20);
+        label.set_height_request((20.0 * scale).round() as i32);
         apply_text_color(&label, self.config.text_colors.main_text_color());
         button_box.append(&label);
         *self.label_widget.borrow_mut() = Some(label);
@@ -510,19 +514,19 @@ impl WidgetBuilder for ButtonWidget {
         if show_info_label {
             info_label.add_css_class("widget-info-text");
         }
-        info_label.set_height_request(16);
+        info_label.set_height_request((16.0 * scale).round() as i32);
         apply_text_color(&info_label, self.config.text_colors.info_text_color());
         button_box.append(&info_label);
         *self.info_label_widget.borrow_mut() = Some(info_label);
 
-        let spacer = build_spacer(16);
+        let spacer = build_spacer_scaled(16, scale);
         button_box.append(&spacer);
 
         let mut css_classes = vec!["scroll-item", "menu-button"];
         css_classes.extend(self.config.layout.css_classes.iter().map(String::as_str));
         let button = Button::builder()
             .css_classes(css_classes.as_slice())
-            .width_request(self.config.dimensions.width_or_default())
+            .width_request(self.config.dimensions.width_scaled(scale))
             .child(&button_box)
             .build();
 
@@ -548,6 +552,9 @@ impl WidgetBuilder for ButtonWidget {
         });
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         widget_self.attach_gesture_handlers(
             &button_widget,
             &widget_self.config.actions,

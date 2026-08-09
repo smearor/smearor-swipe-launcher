@@ -2,6 +2,7 @@
 
 mod builders;
 mod container;
+mod css;
 mod dimensions;
 mod factory;
 mod icon;
@@ -18,10 +19,17 @@ mod widget;
 pub use builders::build_content_box;
 pub use builders::build_info_box;
 pub use builders::build_info_label;
+pub use builders::build_info_label_scaled;
 pub use builders::build_main_label;
+pub use builders::build_main_label_scaled;
 pub use builders::build_spacer;
+pub use builders::build_spacer_scaled;
 pub use builders::build_widget_icon;
+pub use builders::build_widget_icon_scaled;
 pub use container::WidgetPluginContainer;
+pub use css::apply_widget_scaled_css;
+pub use css::register_css_once;
+pub use css::sanitize_scale;
 pub use dimensions::DEFAULT_WIDE_MODE_WIDGET_WIDTH;
 pub use dimensions::DEFAULT_WIDGET_HEIGHT;
 pub use dimensions::DEFAULT_WIDGET_WIDTH;

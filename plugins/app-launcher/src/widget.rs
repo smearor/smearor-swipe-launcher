@@ -45,8 +45,10 @@ use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
-use smearor_swipe_launcher_plugin_api::build_spacer;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
+use smearor_swipe_launcher_plugin_api::build_spacer_scaled;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -228,6 +230,7 @@ impl WidgetBuilder for AppLauncherWidget {
 
         let config = self.config.clone();
         let show_labels = !config.icon_config.icon_only();
+        let scale = sanitize_scale(config.dimensions.scale.unwrap_or(1.0));
 
         // Build content box based on widget mode
         let content_box = match config.mode {
@@ -235,7 +238,7 @@ impl WidgetBuilder for AppLauncherWidget {
                 // Compact: vertical layout (icon on top, name below)
                 let box_ = gtk4::Box::builder()
                     .orientation(Orientation::Vertical)
-                    .spacing(config.layout.spacing_or_default())
+                    .spacing(config.layout.spacing_scaled(scale))
                     .css_classes(["app-launcher-tile", "menu_button_inner"])
                     .halign(Align::Center)
                     .valign(Align::Center)
@@ -247,7 +250,7 @@ impl WidgetBuilder for AppLauncherWidget {
                 // Wide: horizontal layout (icon on left, name on right)
                 let box_ = gtk4::Box::builder()
                     .orientation(Orientation::Horizontal)
-                    .spacing(config.layout.spacing_or_default())
+                    .spacing(config.layout.spacing_scaled(scale))
                     .css_classes(["app-launcher-tile", "menu_button_inner", "app-launcher-wide"])
                     .halign(Align::Center)
                     .valign(Align::Center)
@@ -267,8 +270,9 @@ impl WidgetBuilder for AppLauncherWidget {
         } else {
             Image::from_icon_name(&self.icon_name)
         };
-        image.set_pixel_size(config.icon_config.icon_size());
-        image.set_height_request(config.icon_config.icon_size());
+        let scaled_icon_size = config.icon_config.icon_size_scaled(scale);
+        image.set_pixel_size(scaled_icon_size);
+        image.set_height_request(scaled_icon_size);
         if let Some(color) = config.icon_config.icon_color() {
             apply_icon_color(&image, color);
         }
@@ -285,7 +289,7 @@ impl WidgetBuilder for AppLauncherWidget {
             .css_classes(["app-launcher-label", "widget-main-text"])
             .halign(if config.mode == WidgetMode::Wide { Align::Start } else { Align::Center })
             .build();
-        name_label.set_height_request(20);
+        name_label.set_height_request((20.0 * scale).round() as i32);
         apply_text_color(&name_label, config.text_colors.main_text_color());
         if show_labels {
             text_box.append(&name_label);
@@ -297,14 +301,14 @@ impl WidgetBuilder for AppLauncherWidget {
             .css_classes(["widget-info-text"])
             .halign(if config.mode == WidgetMode::Wide { Align::Start } else { Align::Center })
             .build();
-        info_label.set_height_request(16);
+        info_label.set_height_request((16.0 * scale).round() as i32);
         apply_text_color(&info_label, config.text_colors.info_text_color());
         if show_labels {
             text_box.append(&info_label);
         }
 
         // Line 3: Spacer
-        let spacer = build_spacer(16);
+        let spacer = build_spacer_scaled(16, scale);
         text_box.append(&spacer);
 
         if config.mode == WidgetMode::Wide {
@@ -325,7 +329,9 @@ impl WidgetBuilder for AppLauncherWidget {
 
         *self.led_indicator.write().unwrap() = Some(led_box);
 
-        let button = config.dimensions.build_button(config.mode, &content_box, "app-launcher-max-width-");
+        let button = config
+            .dimensions
+            .build_button_scaled(config.mode, &content_box, "app-launcher-max-width-", scale);
 
         let widget_self = Rc::new(Self {
             meta: self.meta.clone(),
@@ -339,6 +345,9 @@ impl WidgetBuilder for AppLauncherWidget {
         });
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         let message_broadcaster = self.get_broadcaster();
         widget_self.attach_gesture_handlers(
             &button_widget,

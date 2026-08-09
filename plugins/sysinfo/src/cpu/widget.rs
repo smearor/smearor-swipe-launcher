@@ -37,6 +37,8 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use smearor_sysinfo_model::CpuStatusMessage;
 use smearor_sysinfo_model::TOPIC_CPU;
 use std::cell::RefCell;
@@ -243,6 +245,11 @@ impl WidgetBuilder for CpuWidget {
         let broadcaster = self.get_broadcaster();
         let fallback = std::rc::Rc::new(crate::shared::NoOpFallback);
         fallback.attach_gesture_handlers(&outer_widget, &self.config.actions, &broadcaster, &GestureHandlersConfiguration::default());
+
+        let scale = sanitize_scale(self.config.percentage.dimensions.scale.unwrap_or(1.0));
+        if scale != 1.0 {
+            apply_widget_scaled_css(&outer_widget, scale);
+        }
 
         outer_widget
     }

@@ -57,6 +57,11 @@ namespace = "smearor-swipe-launcher"
 exclusive_zone = 105
 max_width = 1080
 show_decorations = false
+# Global scaling factor for GTK widget dimensions and font sizes.
+# Multiplies all pixel-based dimensions (width, height, icon_size, label heights, spacing)
+# and CSS font sizes. Clamped to [0.5, 3.0]. Default: 1.0 (no scaling).
+# Individual widgets can override this with a per-widget `scale` field.
+# scale = 1.0
 
 [layout]
 orientation = "horizontal"
@@ -215,6 +220,7 @@ icon_only = false
 mode = "wide"
 width = 100
 max_width = 200
+scale = 3.0
 
 [audio]
 max_width_chars = 18

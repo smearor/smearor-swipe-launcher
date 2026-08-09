@@ -41,4 +41,47 @@ impl WidgetLayout {
     pub fn spacing_or_default(&self) -> i32 {
         self.spacing.unwrap_or(DEFAULT_WIDGET_SPACING)
     }
+
+    /// Returns the spacing, scaled by the given factor.
+    pub fn spacing_scaled(&self, scale: f32) -> i32 {
+        ((self.spacing.unwrap_or(DEFAULT_WIDGET_SPACING) as f32) * scale).round() as i32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spacing_scaled_uses_default_when_none() {
+        let layout = WidgetLayout {
+            spacing: None,
+            css_classes: Vec::new(),
+        };
+        assert_eq!(layout.spacing_scaled(1.0), DEFAULT_WIDGET_SPACING);
+        assert_eq!(layout.spacing_scaled(2.0), 0);
+        assert_eq!(layout.spacing_scaled(0.5), 0);
+    }
+
+    #[test]
+    fn spacing_scaled_uses_configured_value() {
+        let layout = WidgetLayout {
+            spacing: Some(10),
+            css_classes: Vec::new(),
+        };
+        assert_eq!(layout.spacing_scaled(1.0), 10);
+        assert_eq!(layout.spacing_scaled(2.0), 20);
+        assert_eq!(layout.spacing_scaled(1.5), 15);
+        assert_eq!(layout.spacing_scaled(0.5), 5);
+    }
+
+    #[test]
+    fn spacing_scaled_rounds_correctly() {
+        let layout = WidgetLayout {
+            spacing: Some(7),
+            css_classes: Vec::new(),
+        };
+        assert_eq!(layout.spacing_scaled(1.5), 11);
+        assert_eq!(layout.spacing_scaled(0.75), 5);
+    }
 }

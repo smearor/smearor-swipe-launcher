@@ -45,12 +45,14 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
-use smearor_swipe_launcher_plugin_api::build_info_label;
-use smearor_swipe_launcher_plugin_api::build_main_label;
-use smearor_swipe_launcher_plugin_api::build_spacer;
-use smearor_swipe_launcher_plugin_api::build_widget_icon;
+use smearor_swipe_launcher_plugin_api::build_info_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_main_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_spacer_scaled;
+use smearor_swipe_launcher_plugin_api::build_widget_icon_scaled;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -376,6 +378,7 @@ impl WidgetBuilder for PowerWidget {
     fn build_widget(&mut self) -> Widget {
         let config = self.config.clone();
         let broadcaster = self.get_broadcaster();
+        let scale = sanitize_scale(config.dimensions.scale.unwrap_or(1.0));
 
         let actions = self.enabled_actions.borrow().clone();
         if let Some(ref default_action) = config.default_action {
@@ -389,22 +392,27 @@ impl WidgetBuilder for PowerWidget {
         let show_labels = !config.icon_config.icon_only();
         let display_name = PowerLabel::from_action(&current_action, Locale::default());
 
-        let button_inner = build_content_box(config.layout.spacing_or_default(), &["menu_button_inner"]);
+        let button_inner = build_content_box(config.layout.spacing_scaled(scale), &["menu_button_inner"]);
 
         // Line 0: Icon
-        let icon = build_widget_icon(config.icon_config.icon_size(), config.icon_config.icon_color(), |icon| {
-            set_power_icon(icon, icon_name);
-        });
+        let icon = build_widget_icon_scaled(
+            config.icon_config.icon_size(),
+            config.icon_config.icon_color(),
+            |icon| {
+                set_power_icon(icon, icon_name);
+            },
+            scale,
+        );
         button_inner.append(&icon);
         *self.action_icon.lock().unwrap() = Some(icon);
 
         // Line 1: Main label (action name)
-        let main_label = build_main_label(if show_labels { &display_name } else { "" }, config.text_colors.main_text_color(), false, None);
+        let main_label = build_main_label_scaled(if show_labels { &display_name } else { "" }, config.text_colors.main_text_color(), false, None, scale);
         button_inner.append(&main_label);
         *self.main_label.borrow_mut() = Some(main_label);
 
         // Line 2: Info label (countdown/scheduled status)
-        let info_label = build_info_label("", config.text_colors.info_text_color(), false, None);
+        let info_label = build_info_label_scaled("", config.text_colors.info_text_color(), false, None, scale);
         button_inner.append(&info_label);
         *self.info_label.borrow_mut() = Some(info_label);
 
@@ -417,19 +425,19 @@ impl WidgetBuilder for PowerWidget {
                     .value(0.0)
                     .css_classes(["power-timeout-bar"])
                     .build();
-                timeout_bar.set_height_request(16);
+                timeout_bar.set_height_request((16.0 * scale).round() as i32);
                 button_inner.append(&timeout_bar);
                 *self.timeout_bar.lock().unwrap() = Some(timeout_bar);
             }
             WidgetMode::Compact => {
-                let spacer = build_spacer(16);
+                let spacer = build_spacer_scaled(16, scale);
                 button_inner.append(&spacer);
             }
         }
 
         *self.button_inner.borrow_mut() = Some(button_inner.clone());
 
-        let button = config.dimensions.build_button(config.mode, &button_inner, "max-width-");
+        let button = config.dimensions.build_button_scaled(config.mode, &button_inner, "max-width-", scale);
 
         *self.action_button.borrow_mut() = Some(button.clone());
 
@@ -459,6 +467,9 @@ impl WidgetBuilder for PowerWidget {
 
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         widget_self.attach_gesture_handlers(
             &button_widget,
             &widget_self.config.actions,

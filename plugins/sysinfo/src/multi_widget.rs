@@ -43,7 +43,9 @@ use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use smearor_sysinfo_model::BatteryLevel;
 use smearor_sysinfo_model::BatteryStatus;
 use smearor_sysinfo_model::BatteryStatusMessage;
@@ -151,7 +153,8 @@ impl SysinfoMultiWidget {
         );
 
         if let Some(ref img) = *self.icon_image.borrow() {
-            update_icon_display(img, &view_data, self.config.icon_config.icon_size(), self.config.icon_config.icon_color());
+            let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
+            update_icon_display(img, &view_data, self.config.icon_config.icon_size_scaled(scale), self.config.icon_config.icon_color());
         }
         if let Some(ref label) = *self.value_label.borrow() {
             label.set_text(&view_data.main_text);
@@ -208,7 +211,8 @@ impl SysinfoMultiWidget {
         );
 
         if let Some(ref img) = *self.icon_image.borrow() {
-            update_icon_display(img, &view_data, self.config.icon_config.icon_size(), self.config.icon_config.icon_color());
+            let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
+            update_icon_display(img, &view_data, self.config.icon_config.icon_size_scaled(scale), self.config.icon_config.icon_color());
         }
         if let Some(ref label) = *self.value_label.borrow() {
             label.set_text(&view_data.main_text);
@@ -351,10 +355,11 @@ impl WidgetBuilder for SysinfoMultiWidget {
         let config = self.config.clone();
         let broadcaster = self.get_broadcaster();
         let show_labels = !config.icon_config.icon_only();
+        let scale = sanitize_scale(config.dimensions.scale.unwrap_or(1.0));
 
         let content_box = GtkBox::builder()
             .orientation(Orientation::Vertical)
-            .spacing(config.layout.spacing_or_default())
+            .spacing(config.layout.spacing_scaled(scale))
             .css_classes(["menu_button_inner"])
             .halign(Align::Center)
             .valign(Align::Center)
@@ -362,7 +367,7 @@ impl WidgetBuilder for SysinfoMultiWidget {
             .build();
 
         let icon_image = Image::new();
-        icon_image.set_pixel_size(config.icon_config.icon_size());
+        icon_image.set_pixel_size(config.icon_config.icon_size_scaled(scale));
         icon_image.add_css_class("nerd-icon");
         if let Some(color) = config.icon_config.icon_color() {
             apply_icon_color(&icon_image, color);
@@ -374,7 +379,7 @@ impl WidgetBuilder for SysinfoMultiWidget {
             .label(if show_labels { "Loading..." } else { "" })
             .css_classes(["widget-main-text"])
             .build();
-        value_label.set_height_request(20);
+        value_label.set_height_request((20.0 * scale).round() as i32);
         apply_text_color(&value_label, config.text_colors.main_text_color());
         content_box.append(&value_label);
         *self.value_label.borrow_mut() = Some(value_label);
@@ -383,18 +388,21 @@ impl WidgetBuilder for SysinfoMultiWidget {
             .label(if show_labels { "" } else { "" })
             .css_classes(["widget-info-text"])
             .build();
-        info_label.set_height_request(16);
+        info_label.set_height_request((16.0 * scale).round() as i32);
         apply_text_color(&info_label, config.text_colors.info_text_color());
         content_box.append(&info_label);
         *self.info_label.borrow_mut() = Some(info_label);
 
-        let effective_width = config.dimensions.width_or_default().min(config.dimensions.max_width_or_default(config.mode));
+        let effective_width = config
+            .dimensions
+            .width_scaled(scale)
+            .min(config.dimensions.max_width_scaled(config.mode, scale));
         let bar = LevelBar::builder()
             .min_value(0.0)
             .max_value(100.0)
             .orientation(Orientation::Horizontal)
             .width_request(effective_width)
-            .height_request(16)
+            .height_request((16.0 * scale).round() as i32)
             .css_classes(["sysinfo-bar", "sysinfo-normal"])
             .visible(false)
             .build();
@@ -402,7 +410,7 @@ impl WidgetBuilder for SysinfoMultiWidget {
         *self.level_bar.borrow_mut() = Some(bar);
 
         let spacer = Label::new(Some(""));
-        spacer.set_height_request(16);
+        spacer.set_height_request((16.0 * scale).round() as i32);
         content_box.append(&spacer);
         *self.spacer_label.borrow_mut() = Some(spacer);
 
@@ -445,6 +453,10 @@ impl WidgetBuilder for SysinfoMultiWidget {
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
         widget_self.attach_gesture_handlers(&button_widget, &config.actions, &broadcaster, &GestureHandlersConfiguration::default());
+
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
 
         button_widget
     }

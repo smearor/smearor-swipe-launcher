@@ -2,6 +2,7 @@ use serde::Deserialize;
 use smearor_swipe_launcher_plugin_api::ActionBindings;
 use smearor_swipe_launcher_plugin_api::ActionKind;
 use smearor_swipe_launcher_plugin_api::DispatchableBinding;
+use smearor_swipe_launcher_plugin_api::WidgetDimensions;
 use smearor_swipe_launcher_plugin_api::WidgetLayout;
 use smearor_swipe_launcher_plugin_api::WidgetTextColors;
 
@@ -41,6 +42,9 @@ pub struct UptimeWidgetConfig {
     pub icon: Option<String>,
     /// Size of the icon in pixels.
     pub icon_size: i32,
+    /// Widget dimensions (width, height, scale) for GTK layout.
+    #[serde(flatten)]
+    pub dimensions: WidgetDimensions,
     /// Widget layout (spacing) for GTK container.
     #[serde(flatten)]
     pub layout: WidgetLayout,
@@ -64,6 +68,7 @@ impl Default for UptimeWidgetConfig {
             show_icon: true,
             icon: Some(String::from("nf-md-clock_start")),
             icon_size: DEFAULT_ICON_SIZE,
+            dimensions: WidgetDimensions::default(),
             layout: WidgetLayout::default(),
             text_colors: WidgetTextColors::default(),
             actions: ActionBindings::default(),

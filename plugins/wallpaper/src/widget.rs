@@ -37,10 +37,12 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
-use smearor_swipe_launcher_plugin_api::build_info_label;
-use smearor_swipe_launcher_plugin_api::build_main_label;
-use smearor_swipe_launcher_plugin_api::build_spacer;
+use smearor_swipe_launcher_plugin_api::build_info_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_main_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_spacer_scaled;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use smearor_wallpaper_model::TOPIC_STATUS;
 use smearor_wallpaper_model::WallpaperCommandMessage;
 use smearor_wallpaper_model::WallpaperStatusMessage;
@@ -337,15 +339,16 @@ impl WidgetBuilder for WallpaperWidget {
     fn build_widget(&mut self) -> Widget {
         let config = self.config.clone();
         let show_labels = !config.icon_config.icon_only();
+        let scale = sanitize_scale(config.dimensions.scale.unwrap_or(1.0));
 
-        let content_box = build_content_box(config.layout.spacing_or_default(), &["menu_button_inner"]);
+        let content_box = build_content_box(config.layout.spacing_scaled(scale), &["menu_button_inner"]);
 
         // Line 0: Preview image (Image with Paintable, or fallback icon)
         let preview_image = Image::builder()
             .css_classes(["wallpaper-preview", "nerd-icon"])
             .halign(Align::Center)
             .valign(Align::Center)
-            .pixel_size(config.icon_config.icon_size())
+            .pixel_size(config.icon_config.icon_size_scaled(scale))
             .build();
         content_box.append(&preview_image);
 
@@ -354,7 +357,7 @@ impl WidgetBuilder for WallpaperWidget {
             .css_classes(["wallpaper-fallback-icon", "nerd-icon"])
             .halign(Align::Center)
             .valign(Align::Center)
-            .pixel_size(config.icon_config.icon_size())
+            .pixel_size(config.icon_config.icon_size_scaled(scale))
             .build();
         if let Some(color) = config.icon_config.icon_color() {
             apply_icon_color(&fallback_image, color);
@@ -362,15 +365,21 @@ impl WidgetBuilder for WallpaperWidget {
         content_box.append(&fallback_image);
 
         // Line 1: Theme name (main text)
-        let theme_label = build_main_label(if show_labels { "Loading..." } else { "" }, config.text_colors.main_text_color(), true, Some(12));
+        let theme_label = build_main_label_scaled(if show_labels { "Loading..." } else { "" }, config.text_colors.main_text_color(), true, Some(12), scale);
         content_box.append(&theme_label);
 
         // Line 2: Status (info text)
-        let status_label = build_info_label(if config.show_status_indicator { "N/A" } else { "" }, config.text_colors.info_text_color(), false, None);
+        let status_label = build_info_label_scaled(
+            if config.show_status_indicator { "N/A" } else { "" },
+            config.text_colors.info_text_color(),
+            false,
+            None,
+            scale,
+        );
         content_box.append(&status_label);
 
         // Line 3: Spacer
-        let spacer = build_spacer(16);
+        let spacer = build_spacer_scaled(16, scale);
         content_box.append(&spacer);
 
         *self.preview_image.borrow_mut() = Some(preview_image);
@@ -378,7 +387,7 @@ impl WidgetBuilder for WallpaperWidget {
         *self.theme_label.borrow_mut() = Some(theme_label);
         *self.status_label.borrow_mut() = Some(status_label);
 
-        let button = config.dimensions.build_button(config.mode, &content_box, "max-width-");
+        let button = config.dimensions.build_button_scaled(config.mode, &content_box, "max-width-", scale);
 
         let widget_self = Rc::new(Self {
             meta: self.meta.clone(),
@@ -395,6 +404,9 @@ impl WidgetBuilder for WallpaperWidget {
 
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         let message_broadcaster = self.get_broadcaster();
         widget_self.attach_gesture_handlers(&button_widget, &self.config.actions, &message_broadcaster, &GestureHandlersConfiguration::default());
 

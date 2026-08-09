@@ -38,8 +38,10 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_text_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
-use smearor_swipe_launcher_plugin_api::build_spacer;
+use smearor_swipe_launcher_plugin_api::build_spacer_scaled;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -179,8 +181,9 @@ impl WidgetBuilder for ClockWidget {
     fn build_widget(&mut self) -> Widget {
         let config = self.config.clone();
         let show_labels = !config.icon_config.icon_only();
+        let scale = sanitize_scale(config.dimensions.scale.unwrap_or(1.0));
 
-        let content_box = build_content_box(config.layout.spacing_or_default(), &["menu_button_inner"]);
+        let content_box = build_content_box(config.layout.spacing_scaled(scale), &["menu_button_inner"]);
 
         // Line 0: Time display (replaces icon line)
         let time_label = Label::builder()
@@ -189,7 +192,7 @@ impl WidgetBuilder for ClockWidget {
             .halign(Align::Center)
             .valign(Align::Center)
             .build();
-        time_label.set_height_request(config.icon_config.icon_size());
+        time_label.set_height_request(config.icon_config.icon_size_scaled(scale));
         content_box.append(&time_label);
 
         // Line 1: Date (main text)
@@ -198,7 +201,7 @@ impl WidgetBuilder for ClockWidget {
             .css_classes(["widget-main-text"])
             .halign(Align::Center)
             .build();
-        date_label.set_height_request(20);
+        date_label.set_height_request((20.0 * scale).round() as i32);
         apply_text_color(&date_label, config.text_colors.main_text_color());
         content_box.append(&date_label);
 
@@ -208,12 +211,12 @@ impl WidgetBuilder for ClockWidget {
             .css_classes(["widget-info-text"])
             .halign(Align::Center)
             .build();
-        weekday_label.set_height_request(16);
+        weekday_label.set_height_request((16.0 * scale).round() as i32);
         apply_text_color(&weekday_label, config.text_colors.info_text_color());
         content_box.append(&weekday_label);
 
         // Line 3: Spacer
-        let spacer = build_spacer(16);
+        let spacer = build_spacer_scaled(16, scale);
         content_box.append(&spacer);
 
         let labels = ClockLabels {
@@ -226,7 +229,7 @@ impl WidgetBuilder for ClockWidget {
 
         *self.labels.write().unwrap() = Some(labels);
 
-        let button = config.dimensions.build_button(config.mode, &content_box, "max-width-");
+        let button = config.dimensions.build_button_scaled(config.mode, &content_box, "max-width-", scale);
 
         self.start_time_update();
 
@@ -240,6 +243,9 @@ impl WidgetBuilder for ClockWidget {
         });
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         let message_broadcaster = self.get_broadcaster();
         widget_self.attach_gesture_handlers(&button_widget, &self.config.actions, &message_broadcaster, &GestureHandlersConfiguration::default());
 

@@ -45,13 +45,15 @@ use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetMode;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
 use smearor_swipe_launcher_plugin_api::build_info_box;
-use smearor_swipe_launcher_plugin_api::build_info_label;
-use smearor_swipe_launcher_plugin_api::build_main_label;
-use smearor_swipe_launcher_plugin_api::build_spacer;
-use smearor_swipe_launcher_plugin_api::build_widget_icon;
+use smearor_swipe_launcher_plugin_api::build_info_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_main_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_spacer_scaled;
+use smearor_swipe_launcher_plugin_api::build_widget_icon_scaled;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -429,53 +431,61 @@ impl WidgetPlugin for MprisWidget {
 impl WidgetBuilder for MprisWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
 
-        let content_box = build_content_box(self.config.layout.spacing_or_default(), &["mpris-widget", "menu_button_inner"]);
+        let content_box = build_content_box(self.config.layout.spacing_scaled(scale), &["mpris-widget", "menu_button_inner"]);
 
         let icon_size = self.config.icon_config.icon_size();
 
         match self.config.mode {
             WidgetMode::Compact => {
-                let playback_icon = build_widget_icon(icon_size, self.config.icon_config.icon_color(), |icon| {
-                    Self::set_mpris_icon(icon, "nf-fa-play");
-                });
+                let playback_icon = build_widget_icon_scaled(
+                    icon_size,
+                    self.config.icon_config.icon_color(),
+                    |icon| {
+                        Self::set_mpris_icon(icon, "nf-fa-play");
+                    },
+                    scale,
+                );
                 content_box.append(&playback_icon);
                 *self.playback_icon.lock().unwrap() = Some(playback_icon.clone());
 
                 let show_labels = !self.config.icon_config.icon_only();
 
-                let main_label = build_main_label(
+                let main_label = build_main_label_scaled(
                     if show_labels { "No Player" } else { "" },
                     self.config.text_colors.main_text_color(),
                     true,
                     Some(self.config.max_width_chars),
+                    scale,
                 );
                 content_box.append(&main_label);
                 *self.main_label.lock().unwrap() = Some(main_label.clone());
 
-                let info_label = build_info_label("", self.config.text_colors.info_text_color(), true, Some(self.config.max_width_chars));
+                let info_label = build_info_label_scaled("", self.config.text_colors.info_text_color(), true, Some(self.config.max_width_chars), scale);
                 content_box.append(&info_label);
                 *self.info_label.lock().unwrap() = Some(info_label.clone());
 
-                let spacer = build_spacer(16);
+                let spacer = build_spacer_scaled(16, scale);
                 content_box.append(&spacer);
             }
             WidgetMode::Wide => {
                 if self.config.show_album_art {
                     let album_art = Image::from_icon_name("audio-x-generic-symbolic");
-                    album_art.set_pixel_size(icon_size);
+                    album_art.set_pixel_size(((icon_size as f32) * scale).round() as i32);
                     album_art.add_css_class("nerd-icon");
                     content_box.append(&album_art);
                     *self.album_art.lock().unwrap() = Some(album_art.clone());
                 }
 
-                let info_box = build_info_box(self.config.layout.spacing_or_default());
+                let info_box = build_info_box(self.config.layout.spacing_scaled(scale));
 
-                let title_label = build_main_label("No Player", self.config.text_colors.main_text_color(), true, Some(self.config.max_width_chars));
+                let title_label =
+                    build_main_label_scaled("No Player", self.config.text_colors.main_text_color(), true, Some(self.config.max_width_chars), scale);
                 info_box.append(&title_label);
                 *self.title_label.lock().unwrap() = Some(title_label.clone());
 
-                let artist_label = build_info_label("", self.config.text_colors.info_text_color(), true, Some(self.config.max_width_chars));
+                let artist_label = build_info_label_scaled("", self.config.text_colors.info_text_color(), true, Some(self.config.max_width_chars), scale);
                 info_box.append(&artist_label);
                 *self.artist_label.lock().unwrap() = Some(artist_label.clone());
 
@@ -484,8 +494,8 @@ impl WidgetBuilder for MprisWidget {
                         .min_value(0.0)
                         .max_value(1.0)
                         .value(0.0)
-                        .width_request(self.config.dimensions.max_width_or_default(self.config.mode) - 20)
-                        .height_request(16)
+                        .width_request(self.config.dimensions.max_width_scaled(self.config.mode, scale) - 20)
+                        .height_request((16.0 * scale).round() as i32)
                         .css_classes(["mpris-progress-bar"])
                         .build();
                     info_box.append(&progress_bar);
@@ -496,7 +506,7 @@ impl WidgetBuilder for MprisWidget {
             }
         }
 
-        let button = self.config.dimensions.build_button(self.config.mode, &content_box, "max-width-");
+        let button = self.config.dimensions.build_button_scaled(self.config.mode, &content_box, "max-width-", scale);
 
         self.request_initial_status();
         self.request_personalization_status();
@@ -523,6 +533,9 @@ impl WidgetBuilder for MprisWidget {
         });
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         widget_self.attach_gesture_handlers(
             &button_widget,
             &widget_self.config.actions,

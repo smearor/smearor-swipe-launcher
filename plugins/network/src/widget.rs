@@ -52,12 +52,14 @@ use smearor_swipe_launcher_plugin_api::WidgetIconRendering;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_icon_color;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
-use smearor_swipe_launcher_plugin_api::build_info_label;
-use smearor_swipe_launcher_plugin_api::build_main_label;
-use smearor_swipe_launcher_plugin_api::build_spacer;
-use smearor_swipe_launcher_plugin_api::build_widget_icon;
+use smearor_swipe_launcher_plugin_api::build_info_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_main_label_scaled;
+use smearor_swipe_launcher_plugin_api::build_spacer_scaled;
+use smearor_swipe_launcher_plugin_api::build_widget_icon_scaled;
 use smearor_swipe_launcher_plugin_api::resolve_gtk_nerd_icon;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -373,26 +375,27 @@ impl WidgetBuilder for NetworkWidget {
         let config = self.config.clone();
         let broadcaster = self.get_broadcaster();
         let show_labels = !config.icon_config.icon_only();
+        let scale = sanitize_scale(config.dimensions.scale.unwrap_or(1.0));
 
-        let content_box = build_content_box(config.layout.spacing_or_default(), &["menu_button_inner"]);
+        let content_box = build_content_box(config.layout.spacing_scaled(scale), &["menu_button_inner"]);
 
         // Line 0: Icon
-        let icon_image = build_widget_icon(config.icon_config.icon_size(), config.icon_config.icon_color(), |_| {});
+        let icon_image = build_widget_icon_scaled(config.icon_config.icon_size(), config.icon_config.icon_color(), |_| {}, scale);
         content_box.append(&icon_image);
         *self.icon_image.borrow_mut() = Some(icon_image);
 
         // Line 1: Main label (value text)
-        let value_label = build_main_label(if show_labels { "Loading..." } else { "" }, config.text_colors.main_text_color(), false, None);
+        let value_label = build_main_label_scaled(if show_labels { "Loading..." } else { "" }, config.text_colors.main_text_color(), false, None, scale);
         content_box.append(&value_label);
         *self.value_label.borrow_mut() = Some(value_label);
 
         // Line 2: Info label
-        let info_label = build_info_label(if show_labels { "" } else { "" }, config.text_colors.info_text_color(), false, None);
+        let info_label = build_info_label_scaled(if show_labels { "" } else { "" }, config.text_colors.info_text_color(), false, None, scale);
         content_box.append(&info_label);
         *self.info_label.borrow_mut() = Some(info_label);
 
         // Line 3: Spacer (hidden in QR view) or QR area (square, sized to widget height)
-        let qr_size = config.dimensions.height_or_default() - 10;
+        let qr_size = config.dimensions.height_scaled(scale) - 10;
         let qr_area = DrawingArea::builder()
             .css_classes(["network-qr"])
             .width_request(qr_size)
@@ -404,7 +407,7 @@ impl WidgetBuilder for NetworkWidget {
             .visible(false)
             .build();
 
-        let spacer = build_spacer(16);
+        let spacer = build_spacer_scaled(16, scale);
         content_box.append(&spacer);
         *self.spacer_label.borrow_mut() = Some(spacer);
 
@@ -434,7 +437,7 @@ impl WidgetBuilder for NetworkWidget {
         content_box.append(&qr_area);
         *self.qr_drawing_area.borrow_mut() = Some(qr_area);
 
-        let button = config.dimensions.build_button(config.mode, &content_box, "max-width-");
+        let button = config.dimensions.build_button_scaled(config.mode, &content_box, "max-width-", scale);
 
         let widget_self = Rc::new(Self {
             meta: self.meta.clone(),
@@ -462,6 +465,9 @@ impl WidgetBuilder for NetworkWidget {
 
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
         widget_self.attach_gesture_handlers(&button_widget, &config.actions, &broadcaster, &GestureHandlersConfiguration::default());
 
         self.start_listeners();

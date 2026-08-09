@@ -35,7 +35,9 @@ use smearor_swipe_launcher_plugin_api::TypedMessage;
 use smearor_swipe_launcher_plugin_api::WidgetBuilder;
 use smearor_swipe_launcher_plugin_api::WidgetPlugin;
 use smearor_swipe_launcher_plugin_api::apply_widget_css_classes;
+use smearor_swipe_launcher_plugin_api::apply_widget_scaled_css;
 use smearor_swipe_launcher_plugin_api::build_content_box;
+use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use smearor_voice_assistant_model::AssistantState;
 use smearor_voice_assistant_model::AssistantStatusMessage;
 use smearor_voice_assistant_model::TOPIC_STATUS;
@@ -297,11 +299,12 @@ impl WidgetPlugin for VoiceAssistantWidget {
 impl WidgetBuilder for VoiceAssistantWidget {
     fn build_widget(&mut self) -> Widget {
         let _ = adw::init();
+        let scale = sanitize_scale(self.config.dimensions.scale.unwrap_or(1.0));
 
-        let content_box = build_content_box(self.config.layout.spacing_or_default(), &["voice-assistant-widget"]);
+        let content_box = build_content_box(self.config.layout.spacing_scaled(scale), &["voice-assistant-widget"]);
 
         let icon = Image::new();
-        icon.set_pixel_size(self.config.icon_size);
+        icon.set_pixel_size(((self.config.icon_size as f32) * scale).round() as i32);
         crate::views::set_icon_image(&icon, &self.config.icon_idle);
         content_box.append(&icon);
         *self.icon_widget.lock().unwrap() = Some(icon.clone());
@@ -322,14 +325,17 @@ impl WidgetBuilder for VoiceAssistantWidget {
 
         let button = Button::builder()
             .css_classes(["scroll-item", "menu-button"])
-            .width_request(self.config.dimensions.width_or_default())
-            .height_request(self.config.dimensions.height_or_default())
+            .width_request(self.config.dimensions.width_scaled(scale))
+            .height_request(self.config.dimensions.height_scaled(scale))
             .child(&content_box)
             .build();
 
         let broadcaster = self.get_broadcaster();
         let button_widget = button.upcast::<Widget>();
         apply_widget_css_classes(&button_widget, &self.meta.id, &self.config.layout.css_classes);
+        if scale != 1.0 {
+            apply_widget_scaled_css(&button_widget, scale);
+        }
 
         let widget_self = Rc::new(Self {
             meta: self.meta.clone(),
