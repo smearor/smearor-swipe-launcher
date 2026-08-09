@@ -42,6 +42,7 @@ pub use command::McpCommandVariant;
 pub use command::OpenAreaParams;
 pub use command::OpenTransientAreaParams;
 pub use command::ReadResourceParams;
+pub use command::ReadResourceToolParams;
 pub use command::ReloadInstanceParams;
 pub use command::SendMessageParams;
 pub use command::SendMultipleMessagesParams;

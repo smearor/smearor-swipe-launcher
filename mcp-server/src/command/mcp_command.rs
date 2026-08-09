@@ -13,6 +13,7 @@ use crate::command::load_instance::LoadInstanceParams;
 use crate::command::open_area::OpenAreaParams;
 use crate::command::open_transient_area::OpenTransientAreaParams;
 use crate::command::read_resource::ReadResourceParams;
+use crate::command::read_resource_tool::ReadResourceToolParams;
 use crate::command::reload_instance::ReloadInstanceParams;
 use crate::command::send_message::SendMessageParams;
 use crate::command::send_multiple_messages::SendMultipleMessagesParams;
@@ -56,6 +57,9 @@ pub enum McpCommand {
     /// Invoke a prompt by name (bridges prompts/get for tools/call-only clients).
     /// Intercepted directly in handle_call_tool_request; no-op in the launcher core.
     InvokePrompt(CommandResponseWrapper<InvokePromptParams>),
+    /// Read a resource by URI (bridges resources/read for tools/call-only clients).
+    /// Intercepted directly in handle_call_tool_request; no-op in the launcher core.
+    ReadResourceTool(CommandResponseWrapper<ReadResourceToolParams>),
     /// Invoke a prompt registered by a plugin.
     InvokePluginPrompt(CommandResponseWrapper<InvokePluginPromptParams>),
     /// Dynamically load a new launcher instance.

@@ -9,6 +9,7 @@ use crate::ListInstancesParams;
 use crate::LoadInstanceParams;
 use crate::OpenAreaParams;
 use crate::OpenTransientAreaParams;
+use crate::ReadResourceToolParams;
 use crate::ReloadInstanceParams;
 use crate::SendMessageParams;
 use crate::SendMultipleMessagesParams;
@@ -53,6 +54,7 @@ impl ToolDefinition {
             WebServerStatusParams::create_tool_definition(),
             GetLogsParams::create_tool_definition(),
             InvokePromptParams::create_tool_definition(),
+            ReadResourceToolParams::create_tool_definition(),
         ]
     }
 }

@@ -30,6 +30,7 @@ use crate::InvokePluginPromptParams;
 use crate::InvokePluginResourceParams;
 use crate::InvokePluginToolParams;
 use crate::InvokePromptParams;
+use crate::ReadResourceToolParams;
 use crate::prompts::IntoSdkPrompt;
 use crate::prompts::PromptResolver;
 use crate::resources::IntoSdkResource;
@@ -324,6 +325,20 @@ impl ServerHandler for SwipeLauncherHandler {
             match self.handle_get_prompt_request(prompt_params, _runtime).await {
                 Ok(result) => {
                     let json = serde_json::to_string(&result).unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize prompt result: {e}\"}}"));
+                    return Ok(CallToolResult::text_content(vec![TextContent::new(json, None, None)]));
+                }
+                Err(e) => return Ok(CallToolResult::with_error(CallToolError::from_message(e.message))),
+            }
+        }
+
+        // Direct handler for read_resource — bridges resources/read for MCP clients
+        // that only support tools/call. Delegates to handle_read_resource_request.
+        if name == ReadResourceToolParams::tool_name() {
+            let uri = arguments_value.get("uri").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let resource_params = ReadResourceRequestParams { uri, meta: None };
+            match self.handle_read_resource_request(resource_params, _runtime).await {
+                Ok(result) => {
+                    let json = serde_json::to_string(&result).unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize resource result: {e}\"}}"));
                     return Ok(CallToolResult::text_content(vec![TextContent::new(json, None, None)]));
                 }
                 Err(e) => return Ok(CallToolResult::with_error(CallToolError::from_message(e.message))),
