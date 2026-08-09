@@ -94,7 +94,7 @@ window {
 .scroll-area {
     /*background-color: rgba(0, 0, 0, 0.8);*/
     border-radius: 8px;
-    padding: 10px;
+    padding: 0px;
 }
 
 .scroll-area-transparent {
@@ -317,7 +317,7 @@ window {
 .static-area {
     /*background-color: rgba(0, 0, 0, 0.5);*/
     border-radius: 8px;
-    padding: 10px;
+    padding: 0px;
 }
 
 /* Center alignment for plugin containers */
