@@ -406,7 +406,7 @@ plugins = [
     { id = "shelly_office_window_light_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_office_kommode_light_button", path = "target/release/libsmearor_button_widget.so" },
     { id = "shelly_office_floor_light_button", path = "target/release/libsmearor_button_widget.so" },
-    { id = "shelly_fan_button", path = "target/release/libsmearor_button_widget.so" }
+    { id = "shelly_office_fan_button", path = "target/release/libsmearor_button_widget.so" }
 ]
 
 [office_area_close_button]
@@ -1454,6 +1454,21 @@ init_payload = { method = "Get", url = "http://192.168.178.34/relay/0", response
 state_icon = "{ison?nf-md-floor_lamp:nf-md-floor_lamp_outline}"
 state_css_class = "light-active"
 
+[shelly_office_fan_button]
+main_text = "Fan"
+info_text = "Office"
+description = "Schaltet den Ventilator im Büro an (click) oder aus (longpress)"
+icon = "nf-md-fan"
+click_topic = "service.http.request"
+click_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=on", response_topic = "service.http.response.shelly.fan" }
+longpress_topic = "service.http.request"
+longpress_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=off", response_topic = "service.http.response.shelly.fan" }
+state_topic = "service.http.response.shelly.fan"
+init_topic = "service.http.request"
+init_payload = { method = "Get", url = "http://192.168.178.39/relay/0", response_topic = "service.http.response.shelly.fan" }
+state_icon = "{ison?nf-md-fan:nf-md-fan_off}"
+state_css_class = "fan-active"
+
 [shelly_livingroom_couch_floor_light_button]
 main_text = "Couch Floor"
 info_text = "Living Room"
@@ -1619,21 +1634,6 @@ swipe_up_topic = "service.http.request"
 swipe_up_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=on&red=255&green=0&blue=0&gain={gain+10}", response_topic = "service.http.response.shelly.bedroom.kommode.light" }
 swipe_down_topic = "service.http.request"
 swipe_down_payload = { method = "Get", url = "http://192.168.178.33/color/0?turn=on&red=255&green=0&blue=0&gain={gain-10}", response_topic = "service.http.response.shelly.bedroom.kommode.light" }
-
-[shelly_fan_button]
-main_text = "Fan"
-info_text = "Office"
-description = "Schaltet den Ventilator im Büro an (click) oder aus (longpress)"
-icon = "nf-md-fan"
-click_topic = "service.http.request"
-click_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=on", response_topic = "service.http.response.shelly.fan" }
-longpress_topic = "service.http.request"
-longpress_payload = { method = "Get", url = "http://192.168.178.39/relay/0?turn=off", response_topic = "service.http.response.shelly.fan" }
-state_topic = "service.http.response.shelly.fan"
-init_topic = "service.http.request"
-init_payload = { method = "Get", url = "http://192.168.178.39/relay/0", response_topic = "service.http.response.shelly.fan" }
-state_icon = "{ison?nf-md-fan:nf-md-fan_off}"
-state_css_class = "fan-active"
 
 
 # Sample button widget with dynamic label (button-side handling to be solved later)
