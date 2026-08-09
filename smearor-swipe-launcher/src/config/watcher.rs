@@ -58,11 +58,15 @@ pub struct ConfigReloadRequest {
 #[derive(Clone)]
 pub struct ConfigWatcher {
     /// Maps any watched file path (main config or include) to instance ID.
-    path_to_instance: DashMap<PathBuf, String>,
+    ///
+    /// Wrapped in `Arc` so that the debouncer task shares the same map
+    /// as the `ConfigWatcher`. This is critical for dynamically loaded
+    /// instances whose configs are registered after `start()`.
+    path_to_instance: Arc<DashMap<PathBuf, String>>,
     /// Maps instance ID to the main config path (used for reload).
-    instance_to_config: DashMap<String, PathBuf>,
+    instance_to_config: Arc<DashMap<String, PathBuf>>,
     /// Maps watched file path to its last known content hash.
-    file_hashes: DashMap<PathBuf, u64>,
+    file_hashes: Arc<DashMap<PathBuf, u64>>,
     /// Flag to stop the debounce task.
     cancel_flag: Arc<AtomicBool>,
 }
@@ -71,9 +75,9 @@ impl ConfigWatcher {
     /// Creates a new, empty `ConfigWatcher`.
     pub fn new() -> Self {
         Self {
-            path_to_instance: DashMap::new(),
-            instance_to_config: DashMap::new(),
-            file_hashes: DashMap::new(),
+            path_to_instance: Arc::new(DashMap::new()),
+            instance_to_config: Arc::new(DashMap::new()),
+            file_hashes: Arc::new(DashMap::new()),
             cancel_flag: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -216,9 +220,9 @@ impl ConfigWatcher {
             }
         }
 
-        let path_to_instance = self.path_to_instance.clone();
-        let instance_to_config = self.instance_to_config.clone();
-        let file_hashes = self.file_hashes.clone();
+        let path_to_instance = Arc::clone(&self.path_to_instance);
+        let instance_to_config = Arc::clone(&self.instance_to_config);
+        let file_hashes = Arc::clone(&self.file_hashes);
         let cancel_flag = Arc::clone(&self.cancel_flag);
         let watcher_count = path_to_instance.len();
 
@@ -340,10 +344,11 @@ fn has_content_changed(file_hashes: &DashMap<PathBuf, u64>, path: &Path) -> bool
     let mut hasher = DefaultHasher::new();
     hasher.write(&content);
     let new_hash = hasher.finish();
-    match file_hashes.get(path) {
-        Some(stored) if *stored == new_hash => false,
+    let stored_hash = file_hashes.get(path).map(|entry| *entry);
+    match stored_hash {
+        Some(stored) if stored == new_hash => false,
         Some(stored) => {
-            debug!("DEBUG: has_content_changed: {} CHANGED (stored={}, new={})", path.display(), *stored, new_hash);
+            debug!("DEBUG: has_content_changed: {} CHANGED (stored={}, new={})", path.display(), stored, new_hash);
             file_hashes.insert(path.to_path_buf(), new_hash);
             true
         }
