@@ -1,5 +1,7 @@
 # smearor-swipe-launcher Configuration
 
+includes = ["../shared/defaults.toml"]
+
 ### Define the layout order
 
 #areas = ["left_area", "scroll_band", "right_area"]
@@ -11,35 +13,6 @@ areas = ["scroll_band"]
 trigger = { Workspace = 2 }
 #areas = ["development_band", "right_area"]
 areas = ["development_band"]
-
-# Global default templates for plugin configs.
-# Individual plugins reference a template with: defaults = "template_name"
-# Instance-specific values always override the template values.
-#
-# Text color configuration (optional, supported by all widgets):
-#   main_text_color = "#RRGGBBAA"  - Color for the primary text line
-#   info_text_color = "#RRGGBBAA"  - Color for the secondary/info text line
-# Both accept hex color strings (e.g. "#ff6600", "#f60", "#ff660080").
-# If omitted, the default text color from the theme is used.
-
-[defaults.menu_button]
-click_topic = "area.open"
-longpress_topic = "area.close"
-enabled = true
-active = false
-css_classes = ["menu-button", "glow-blue"]
-
-[defaults.close_button]
-main_text = ""
-info_text = "Zurück"
-icon = "nf-md-undo"
-icon_color = "#dc0073ff"
-click_topic = "area.close"
-enabled = true
-active = false
-css_classes = ["close-button"]
-
-[defaults.app_launcher]
 
 ### Configure the app launcher service
 

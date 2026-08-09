@@ -40,7 +40,20 @@ impl super::LauncherHost {
 
         let config_content = std::fs::read_to_string(config_path).map_err(|e| format!("Failed to read config file '{}': {}", config_path, e))?;
         let mut config: SwipeLauncherConfig = toml::from_str(&config_content).map_err(|e| format!("Failed to parse config '{}': {}", config_path, e))?;
+
+        // 1. Resolve top-level includes (shared config fragments from external files)
+        config
+            .resolve_top_level_includes(std::path::Path::new(config_path))
+            .map_err(|e| format!("{e}"))?;
+
+        // 2. Resolve per-area includes (external TOML files referenced by area configs)
+        config.resolve_includes(std::path::Path::new(config_path)).map_err(|e| format!("{e}"))?;
+
+        // 3. Resolve global defaults for plugin configs (template expansion)
         config.resolve_defaults();
+
+        // 4. Validate that the merged config defines at least one area.
+        config.validate().map_err(|e| format!("{e}"))?;
 
         if let Ok(instances) = self.instances.lock() {
             if instances.contains_key(&instance_id) {

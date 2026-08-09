@@ -41,4 +41,13 @@ pub enum ConfigValidationError {
 
     #[error("Include for area '{area_id}' contains unknown field '{field}' — only area config keys and plugin sections are allowed")]
     UnknownIncludeField { area_id: String, field: String },
+
+    #[error("Failed to load top-level include '{path}': {reason}")]
+    TopLevelIncludeNotFound { path: String, reason: String },
+
+    #[error("Failed to parse top-level include '{path}': {reason}")]
+    InvalidTopLevelInclude { path: String, reason: String },
+
+    #[error("Circular include detected: '{path}' is already in the include chain")]
+    IncludeCycle { path: String },
 }

@@ -16,15 +16,18 @@ use smearor_swipe_launcher_plugin_api::PluginConfig;
 use smearor_swipe_launcher_plugin_api::sanitize_scale;
 use std::collections::HashMap;
 use std::str::FromStr;
+use tracing::debug;
 use tracing::trace;
 
 /// Main configuration for the swipe launcher
 #[derive(Debug, Clone, Deserialize)]
 pub struct SwipeLauncherConfig {
     /// Default layout area order
+    #[serde(default)]
     pub areas: Vec<String>,
 
     /// Launcher settings (layer, rotation, etc.)
+    #[serde(default)]
     pub launcher: SwipeLauncherSettings,
 
     /// Layout configuration
@@ -44,6 +47,21 @@ pub struct SwipeLauncherConfig {
     /// Area configurations and plugin configs keyed by ID
     #[serde(flatten)]
     pub entries: HashMap<String, ConfigEntry>,
+
+    /// Top-level include files to merge as a base layer before the main config.
+    ///
+    /// Each path is resolved relative to the config file's directory.
+    /// Include files are TOML files containing any combination of:
+    /// - `[defaults.*]` templates
+    /// - Plugin configs (top-level `[plugin_id]` tables)
+    /// - Area configs (top-level `[area_id]` tables with `area_type` or `plugins`)
+    ///
+    /// Merge order: first include = deepest base, last include = higher base,
+    /// main config = highest priority (overrides all includes).
+    /// Entries are merged by key — if the same ID appears in an include and the
+    /// main config, the main config wins.
+    #[serde(default)]
+    pub includes: Vec<String>,
 }
 
 impl SwipeLauncherConfig {
@@ -201,7 +219,7 @@ impl SwipeLauncherConfig {
 
     fn validate_layout_profile(&self, profile: &LayoutProfile) -> Result<(), ConfigValidationError> {
         for area_id in &profile.areas {
-            if !profile.entries.contains_key(area_id) {
+            if !profile.entries.contains_key(area_id) && !self.entries.contains_key(area_id) {
                 return Err(ConfigValidationError::AreaNotFound { area_id: area_id.clone() });
             }
         }
@@ -257,20 +275,24 @@ impl SwipeLauncherConfig {
         }
     }
 
-    /// Collect all include file paths referenced by area configurations,
-    /// resolved relative to the given base config file path.
+    /// Collect all include file paths referenced by the config, resolved
+    /// relative to the given base config file path.
+    ///
+    /// Includes both top-level `includes` paths and per-area `include` paths.
+    /// Top-level include paths are flattened to absolute paths by
+    /// `resolve_top_level_includes()`, so `base_dir.join()` on an absolute
+    /// path returns the absolute path directly.
     ///
     /// Returns absolute paths to all include files. Used by the config
     /// watcher to also watch include files for changes.
     pub fn collect_include_paths(&self, base_path: &std::path::Path) -> Vec<std::path::PathBuf> {
         let base_dir = base_path.parent().unwrap_or_else(|| std::path::Path::new("."));
-        self.entries
-            .values()
-            .filter_map(|entry| match entry {
-                ConfigEntry::Area(area) => area.include.as_ref().map(|inc| base_dir.join(inc)),
-                ConfigEntry::Plugin(_) => None,
-            })
-            .collect()
+        let mut paths: Vec<std::path::PathBuf> = self.includes.iter().map(|inc| base_dir.join(inc)).collect();
+        paths.extend(self.entries.values().filter_map(|entry| match entry {
+            ConfigEntry::Area(area) => area.include.as_ref().map(|inc| base_dir.join(inc)),
+            ConfigEntry::Plugin(_) => None,
+        }));
+        paths
     }
 
     /// Resolve `include` directives in area configurations by loading
@@ -395,6 +417,121 @@ impl SwipeLauncherConfig {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    /// Resolve top-level `includes` by loading each include file and merging
+    /// its `defaults` and `entries` as a base layer beneath the main config.
+    ///
+    /// Include files are loaded in declaration order. Earlier includes form
+    /// deeper base layers; later includes and the main config override them.
+    /// The main config always wins on key conflicts.
+    ///
+    /// Include files may themselves declare `includes` (recursive includes).
+    /// Cycles are detected and reported as `ConfigValidationError::IncludeCycle`.
+    ///
+    /// After resolution, `self.includes` is flattened to contain all direct
+    /// and transitive include paths (as absolute paths), enabling
+    /// `collect_include_paths()` to watch the full dependency tree.
+    pub fn resolve_top_level_includes(&mut self, base_path: &std::path::Path) -> Result<(), ConfigValidationError> {
+        if self.includes.is_empty() {
+            return Ok(());
+        }
+
+        let mut visited: std::collections::HashSet<std::path::PathBuf> = std::collections::HashSet::new();
+        let canonical_base = std::fs::canonicalize(base_path).unwrap_or_else(|_| base_path.to_path_buf());
+        visited.insert(canonical_base);
+
+        self.resolve_top_level_includes_with_visited(base_path, &mut visited)
+    }
+
+    /// Private helper for recursive include resolution with cycle detection.
+    ///
+    /// `visited` tracks all canonicalized config file paths already in the
+    /// include chain. The main config path is pre-seeded by the public method.
+    fn resolve_top_level_includes_with_visited(
+        &mut self,
+        base_path: &std::path::Path,
+        visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    ) -> Result<(), ConfigValidationError> {
+        if self.includes.is_empty() {
+            return Ok(());
+        }
+
+        let base_dir = base_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+        let direct_includes: Vec<String> = self.includes.clone();
+        let mut all_include_paths: Vec<String> = Vec::new();
+        let mut include_configs: Vec<SwipeLauncherConfig> = Vec::new();
+
+        for include_path in &direct_includes {
+            let full_path = base_dir.join(include_path);
+            let canonical = std::fs::canonicalize(&full_path).map_err(|e| ConfigValidationError::TopLevelIncludeNotFound {
+                path: include_path.clone(),
+                reason: e.to_string(),
+            })?;
+
+            if !visited.insert(canonical.clone()) {
+                return Err(ConfigValidationError::IncludeCycle {
+                    path: canonical.to_string_lossy().to_string(),
+                });
+            }
+
+            let content = std::fs::read_to_string(&full_path).map_err(|e| ConfigValidationError::TopLevelIncludeNotFound {
+                path: include_path.clone(),
+                reason: e.to_string(),
+            })?;
+
+            let mut include_config: SwipeLauncherConfig = toml::from_str(&content).map_err(|e| ConfigValidationError::InvalidTopLevelInclude {
+                path: include_path.clone(),
+                reason: e.to_string(),
+            })?;
+
+            // Warn about ignored top-level structural fields (rule 3, section 3.3).
+            // Include files may only contribute defaults, entries, and nested includes.
+            if !include_config.areas.is_empty() || !include_config.profiles.is_empty() {
+                debug!(
+                    path = %include_path,
+                    "Top-level structural fields (areas, profiles) in include file are ignored"
+                );
+            }
+
+            // Record this direct include path (absolute, for collect_include_paths).
+            all_include_paths.push(full_path.to_string_lossy().to_string());
+
+            // Recursively resolve nested includes.
+            include_config.resolve_top_level_includes_with_visited(&full_path, visited)?;
+
+            // Collect transitive include paths discovered during recursion.
+            // These are already absolute paths (flattened by the recursive call).
+            for transitive in &include_config.includes {
+                if !direct_includes.contains(transitive) && !all_include_paths.contains(transitive) {
+                    all_include_paths.push(transitive.clone());
+                }
+            }
+
+            include_configs.push(include_config);
+        }
+
+        // Merge in reverse declaration order: the last include has the highest
+        // priority among includes, so it is inserted first. Earlier includes
+        // only fill gaps via or_insert. The main config (already in self)
+        // always wins because its entries are present before any include is merged.
+        for include_config in include_configs.iter().rev() {
+            for (key, value) in &include_config.defaults {
+                self.defaults.entry(key.clone()).or_insert(value.clone());
+            }
+
+            for (key, entry) in &include_config.entries {
+                self.entries.entry(key.clone()).or_insert(entry.clone());
+            }
+        }
+
+        // Flatten self.includes to include all transitive paths (absolute)
+        // so that collect_include_paths() returns the full dependency tree.
+        // Deduplicate while preserving order.
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        self.includes = all_include_paths.into_iter().filter(|p| seen.insert(p.clone())).collect();
 
         Ok(())
     }

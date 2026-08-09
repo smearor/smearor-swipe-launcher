@@ -39,11 +39,19 @@ impl SwipeLauncherArguments {
         let config_content = std::fs::read_to_string(config_path).into_diagnostic()?;
         let mut config: SwipeLauncherConfig = toml::from_str(&config_content).into_diagnostic()?;
 
-        // Resolve global defaults for plugin configs (layered: hard-coded → global → instance)
+        // 1. Resolve top-level includes (shared config fragments from external files)
+        config.resolve_top_level_includes(config_path).map_err(|e| miette::miette!("{e}"))?;
+
+        // 2. Resolve per-area includes (external TOML files referenced by area configs)
+        config.resolve_includes(config_path).map_err(|e| miette::miette!("{e}"))?;
+
+        // 3. Resolve global defaults for plugin configs (template expansion via defaults = "...")
+        //    Must run after both include phases so that plugins loaded by includes
+        //    also receive their default template values.
         config.resolve_defaults();
 
-        // Resolve area includes (external TOML files referenced by area configs)
-        config.resolve_includes(config_path).map_err(|e| miette::miette!("{e}"))?;
+        // 4. Validate that the merged config defines at least one area.
+        config.validate().map_err(|e| miette::miette!("{e}"))?;
 
         let total_plugins: usize = config
             .areas
