@@ -376,8 +376,8 @@ scrolledwindow {
 
 .menu-button image {
     -gtk-icon-size: 36px;
-    min-width: 36px;
-    min-height: 36px;
+    /*min-width: 36px;*/
+    /*min-height: 36px;*/
     /*background-color: transparent;*/
     color: #000000;
     filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
