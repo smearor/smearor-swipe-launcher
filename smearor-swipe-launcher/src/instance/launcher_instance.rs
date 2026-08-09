@@ -144,6 +144,7 @@ impl LauncherInstance {
         let main_container = HeadlessContainer;
 
         if let Ok(area_manager) = self.area_manager.lock() {
+            area_manager.remove_all_areas_keep_plugins();
             if let Err(e) = area_manager.set_main_container_headless(main_container) {
                 error!("Failed to set main container for headless instance '{}': {}", self.instance_id, e);
             }
@@ -216,6 +217,7 @@ impl LauncherInstance {
         rotation_widget.set_child(Some(&main_container));
 
         if let Ok(area_manager) = self.area_manager.lock() {
+            area_manager.remove_all_areas_keep_plugins();
             if let Err(e) = area_manager.set_main_container_gtk(main_container) {
                 error!("{e}");
             }

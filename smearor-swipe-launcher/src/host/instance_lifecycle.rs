@@ -61,6 +61,10 @@ impl super::LauncherHost {
             }
         }
 
+        // Register config file and includes for hot-reload watching.
+        let include_paths = config.collect_include_paths(std::path::Path::new(config_path));
+        self.config_watcher.add_config(std::path::Path::new(config_path), &instance_id, &include_paths);
+
         // Set lifecycle to Loading before creating the instance.
         self.create_instance(instance_id.clone(), config.clone(), instance_type);
 
@@ -141,18 +145,39 @@ impl super::LauncherHost {
             let self_clone = self.clone();
             let instance_id_clone = instance_id.to_string();
             gtk4::glib::idle_add_local_once(move || {
-                if let Ok(instances) = self_clone.instances.lock() {
-                    if let Some(instance) = instances.get(&instance_id_clone) {
-                        match instance.build_window(&self_clone.gtk_app) {
-                            Ok(window) => {
+                // If the activate handler already built the window and set
+                // lifecycle to Running, skip the idle callback entirely.
+                let already_running = {
+                    let Ok(instances) = self_clone.instances.lock() else { return };
+                    let Some(instance) = instances.get(&instance_id_clone) else { return };
+                    instance.lifecycle.lock().map(|g| *g == LauncherInstanceLifecycle::Running).unwrap_or(false)
+                };
+                if already_running {
+                    debug!("GTK instance '{}' already running (via activate), skipping idle callback", instance_id_clone);
+                    return;
+                }
+
+                let build_result = {
+                    let Ok(instances) = self_clone.instances.lock() else { return };
+                    let Some(instance) = instances.get(&instance_id_clone) else { return };
+                    instance.build_window(&self_clone.gtk_app)
+                };
+                match build_result {
+                    Ok(window) => {
+                        if let Ok(instances) = self_clone.instances.lock() {
+                            if let Some(instance) = instances.get(&instance_id_clone) {
                                 if let Ok(mut window_guard) = instance.window.lock() {
                                     *window_guard = Some(window);
                                 }
-                                debug!("Started GTK instance '{}'", instance_id_clone);
                             }
-                            Err(e) => {
-                                error!("Failed to build window for instance '{}': {}", instance_id_clone, e);
-                                // Rollback lifecycle to Ready.
+                        }
+                        debug!("Started GTK instance '{}'", instance_id_clone);
+                        self_clone.finalize_instance_start(&instance_id_clone);
+                    }
+                    Err(e) => {
+                        error!("Failed to build window for instance '{}': {}", instance_id_clone, e);
+                        if let Ok(instances) = self_clone.instances.lock() {
+                            if let Some(instance) = instances.get(&instance_id_clone) {
                                 if let Ok(mut lifecycle) = instance.lifecycle.lock() {
                                     *lifecycle = LauncherInstanceLifecycle::Ready;
                                 }
@@ -170,12 +195,20 @@ impl super::LauncherHost {
                     }
                 }
             }
+            self.finalize_instance_start(instance_id);
         }
 
-        // Set lifecycle to Running.
+        Ok(format!("Instance '{}' started", instance_id))
+    }
+
+    /// Finalize instance start: set lifecycle to `Running`, recalculate sizes,
+    /// update persisted state, broadcast status, and spawn auto-stop TTL timer.
+    ///
+    /// Called after the window or headless areas have been successfully built.
+    pub(super) fn finalize_instance_start(&self, instance_id: &str) {
         let auto_stop_ttl = {
-            let instances = self.instances.lock().map_err(|e| format!("Failed to lock instances: {}", e))?;
-            let instance = instances.get(instance_id).ok_or_else(|| format!("Instance '{}' not found", instance_id))?;
+            let Ok(instances) = self.instances.lock() else { return };
+            let Some(instance) = instances.get(instance_id) else { return };
             if let Ok(mut lifecycle) = instance.lifecycle.lock() {
                 *lifecycle = LauncherInstanceLifecycle::Running;
             }
@@ -183,10 +216,7 @@ impl super::LauncherHost {
         };
 
         self.calculate_coordinated_sizes();
-
-        // Update persisted state to running.
         self.update_persisted_lifecycle(instance_id, "running");
-
         self.broadcast_instance_status(instance_id, LauncherInstanceLifecycle::Running);
 
         // Spawn auto-stop TTL timer if configured.
@@ -217,8 +247,6 @@ impl super::LauncherHost {
                 }
             }
         }
-
-        Ok(format!("Instance '{}' started", instance_id))
     }
 
     /// Subscribe to `auto_start_topic` and `auto_stop_topic` for event-driven lifecycle control.

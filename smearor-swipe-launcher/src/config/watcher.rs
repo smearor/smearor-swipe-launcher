@@ -163,6 +163,7 @@ impl ConfigWatcher {
                         event.kind,
                         EventKind::Modify(ModifyKind::Data(_))
                             | EventKind::Modify(ModifyKind::Any)
+                            | EventKind::Modify(ModifyKind::Name(_))
                             | EventKind::Create(_)
                             | EventKind::Access(AccessKind::Close(_))
                     );
@@ -341,7 +342,13 @@ fn has_content_changed(file_hashes: &DashMap<PathBuf, u64>, path: &Path) -> bool
     let new_hash = hasher.finish();
     match file_hashes.get(path) {
         Some(stored) if *stored == new_hash => false,
-        _ => {
+        Some(stored) => {
+            debug!("DEBUG: has_content_changed: {} CHANGED (stored={}, new={})", path.display(), *stored, new_hash);
+            file_hashes.insert(path.to_path_buf(), new_hash);
+            true
+        }
+        None => {
+            debug!("DEBUG: has_content_changed: {} NEW (new={})", path.display(), new_hash);
             file_hashes.insert(path.to_path_buf(), new_hash);
             true
         }

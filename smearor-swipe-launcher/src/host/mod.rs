@@ -17,6 +17,7 @@ use gtk4::gio::prelude::*;
 use gtk4::glib::MainContext;
 use gtk4::prelude::*;
 use smearor_mcp_server::LogBuffer;
+use smearor_model_instance_control::LauncherInstanceLifecycle;
 use smearor_model_mcp::McpRegistry;
 use smearor_model_mcp::RegisterToolMessage;
 use smearor_swipe_launcher_plugin_api::FfiEnvelope;
@@ -273,6 +274,12 @@ impl LauncherHost {
                 instances
                     .values()
                     .filter(|i| i.instance_type == crate::instance::InstanceType::Gtk)
+                    .filter(|i| {
+                        i.lifecycle
+                            .lock()
+                            .map(|g| *g == LauncherInstanceLifecycle::Ready || *g == LauncherInstanceLifecycle::Starting)
+                            .unwrap_or(false)
+                    })
                     .map(|i| (i.instance_id.clone(), i.build_window(app)))
                     .collect::<Vec<_>>()
             } else {
@@ -289,6 +296,8 @@ impl LauncherHost {
                                 }
                             }
                         }
+                        debug!("Started GTK instance '{}' (via activate)", instance_id);
+                        self_clone.finalize_instance_start(&instance_id);
                     }
                     Err(e) => {
                         error!("Failed to build window for instance {}: {}", instance_id, e);

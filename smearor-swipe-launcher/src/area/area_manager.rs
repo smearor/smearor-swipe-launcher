@@ -184,7 +184,11 @@ impl<B: AreaBackend> AreaManager<B> {
         let main_container = match self.get_main_container() {
             Ok(container) => container,
             Err(_) => {
-                debug!("Main container not initialized, skipping area removal");
+                debug!("Main container not initialized, clearing areas without overlay removal");
+                self.areas.clear();
+                if let Ok(mut visible_id) = self.visible_area_id.write() {
+                    *visible_id = None;
+                }
                 return;
             }
         };
