@@ -1,0 +1,11 @@
+pub(crate) mod kill;
+pub(crate) mod notify;
+pub(crate) mod output_create;
+pub(crate) mod output_remove;
+pub(crate) mod plugin_load;
+pub(crate) mod plugin_unload;
+pub(crate) mod reload;
+pub(crate) mod set_cursor;
+pub(crate) mod set_error;
+pub(crate) mod set_prop;
+pub(crate) mod switch_xkb_layout;
