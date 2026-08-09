@@ -23,7 +23,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
 
         match request.resource {
             HyprlandMcpResources::State => {
-                let Some(state) = self.status_snapshot() else {
+                let Some(state) = shared_state.as_ref().and_then(|s| s.last_state.clone()) else {
                     return InvokeResourceResponse::error(correlation_id, "Hyprland state not yet available");
                 };
                 let active_window = state.active_window.as_ref().map(|w| ActiveWindowEntry {
@@ -41,7 +41,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 InvokeResourceResponse::success(correlation_id, &json)
             }
             HyprlandMcpResources::ActiveWindow => {
-                let Some(state) = self.status_snapshot() else {
+                let Some(state) = shared_state.as_ref().and_then(|s| s.last_state.clone()) else {
                     return InvokeResourceResponse::error(correlation_id, "Hyprland state not yet available");
                 };
                 match state.active_window.as_ref() {
