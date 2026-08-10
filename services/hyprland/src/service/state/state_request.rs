@@ -6,9 +6,7 @@ use hyprland::shared::HyprData;
 use hyprland::shared::HyprDataActive;
 use smearor_hyprland_model::HyprlandStateMessage;
 use smearor_hyprland_model::HyprlandWindowEventData;
-use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
-use smearor_swipe_launcher_plugin_api::PluginMeta;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -17,7 +15,7 @@ use std::sync::Mutex;
 ///
 /// Synchronous IPC calls are wrapped in `tokio::task::spawn_blocking` to prevent
 /// blocking the async event worker when the compositor is under load.
-pub(crate) async fn handle_state_request(core_context: Option<FfiCoreContext>, meta: &PluginMeta, shared_state: &Arc<Mutex<HyprlandSharedState>>) {
+pub(crate) async fn handle_state_request(broadcaster: &MessageBroadcasterInner, shared_state: &Arc<Mutex<HyprlandSharedState>>) {
     ensure_hyprland_instance_signature();
 
     let state = tokio::task::spawn_blocking(|| {
@@ -60,12 +58,5 @@ pub(crate) async fn handle_state_request(core_context: Option<FfiCoreContext>, m
         guard.last_state = Some(state.clone());
     }
 
-    let Some(ctx) = core_context else {
-        return;
-    };
-    let broadcaster = MessageBroadcasterInner {
-        meta: meta.clone(),
-        core_context: Some(ctx),
-    };
     broadcaster.broadcast_message_to_topic(state);
 }

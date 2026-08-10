@@ -27,6 +27,8 @@ pub enum HyprlandMcpResources {
     SystemStatus,
     /// List of all windows (clients).
     Windows,
+    /// Hyprland version information.
+    Version,
 }
 
 impl AsRef<str> for HyprlandMcpResources {
@@ -43,6 +45,7 @@ impl AsRef<str> for HyprlandMcpResources {
             Self::LayerStatus => "hyprland://layer-status",
             Self::SystemStatus => "hyprland://system-status",
             Self::Windows => "hyprland://windows",
+            Self::Version => "hyprland://version",
         }
     }
 }
@@ -63,6 +66,7 @@ impl FromStr for HyprlandMcpResources {
             "hyprland://layer-status" => Ok(Self::LayerStatus),
             "hyprland://system-status" => Ok(Self::SystemStatus),
             "hyprland://windows" => Ok(Self::Windows),
+            "hyprland://version" => Ok(Self::Version),
             _ => Err(UnknownResourceError::new(uri)),
         }
     }
@@ -92,6 +96,7 @@ mod tests {
             HyprlandMcpResources::LayerStatus,
             HyprlandMcpResources::SystemStatus,
             HyprlandMcpResources::Windows,
+            HyprlandMcpResources::Version,
         ];
 
         for resource in &all_resources {
@@ -100,7 +105,7 @@ mod tests {
             assert_eq!(*resource, parsed, "resource roundtrip mismatch for {uri}");
         }
 
-        assert_eq!(all_resources.len(), 11, "expected 11 resource variants");
+        assert_eq!(all_resources.len(), 12, "expected 12 resource variants");
     }
 
     #[test]

@@ -142,6 +142,12 @@ pub enum HyprlandMcpTools {
     CtlSetProp,
     /// Switch the XKB keyboard layout.
     CtlSwitchXkbLayout,
+    /// Set a Hyprland configuration keyword at runtime.
+    CtlKeywordSet,
+    /// Get a Hyprland configuration keyword value.
+    CtlKeywordGet,
+    /// Send a keyboard shortcut to a window.
+    CtlSendShortcut,
 
     // Compositor workspace tools
     /// Switch to a workspace by ID.
@@ -223,6 +229,9 @@ impl AsRef<str> for HyprlandMcpTools {
             Self::CtlSetError => "hyprland_ctl_set_error",
             Self::CtlSetProp => "hyprland_ctl_set_prop",
             Self::CtlSwitchXkbLayout => "hyprland_ctl_switch_xkb_layout",
+            Self::CtlKeywordSet => "hyprland_ctl_keyword_set",
+            Self::CtlKeywordGet => "hyprland_ctl_keyword_get",
+            Self::CtlSendShortcut => "hyprland_ctl_send_shortcut",
             Self::SwitchWorkspace => "hyprland_switch_workspace",
             Self::CompositorCreateWorkspace => "hyprland_compositor_create_workspace",
             Self::CompositorSwitchWorkspace => "hyprland_compositor_switch_workspace",
@@ -300,6 +309,9 @@ impl FromStr for HyprlandMcpTools {
             "hyprland_ctl_set_error" => Ok(Self::CtlSetError),
             "hyprland_ctl_set_prop" => Ok(Self::CtlSetProp),
             "hyprland_ctl_switch_xkb_layout" => Ok(Self::CtlSwitchXkbLayout),
+            "hyprland_ctl_keyword_set" => Ok(Self::CtlKeywordSet),
+            "hyprland_ctl_keyword_get" => Ok(Self::CtlKeywordGet),
+            "hyprland_ctl_send_shortcut" => Ok(Self::CtlSendShortcut),
             "hyprland_switch_workspace" => Ok(Self::SwitchWorkspace),
             "hyprland_compositor_create_workspace" => Ok(Self::CompositorCreateWorkspace),
             "hyprland_compositor_switch_workspace" => Ok(Self::CompositorSwitchWorkspace),
@@ -386,6 +398,9 @@ mod tests {
             HyprlandMcpTools::CtlSetError,
             HyprlandMcpTools::CtlSetProp,
             HyprlandMcpTools::CtlSwitchXkbLayout,
+            HyprlandMcpTools::CtlKeywordSet,
+            HyprlandMcpTools::CtlKeywordGet,
+            HyprlandMcpTools::CtlSendShortcut,
             HyprlandMcpTools::SwitchWorkspace,
             HyprlandMcpTools::CompositorCreateWorkspace,
             HyprlandMcpTools::CompositorSwitchWorkspace,
@@ -398,7 +413,7 @@ mod tests {
             assert_eq!(*tool, parsed, "tool roundtrip mismatch for {name}");
         }
 
-        assert_eq!(all_tools.len(), 68, "expected 68 tool variants");
+        assert_eq!(all_tools.len(), 71, "expected 71 tool variants");
     }
 
     #[test]

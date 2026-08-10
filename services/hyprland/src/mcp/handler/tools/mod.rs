@@ -107,7 +107,10 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for HyprlandService {
             | HyprlandMcpTools::CtlSetCursor
             | HyprlandMcpTools::CtlSetError
             | HyprlandMcpTools::CtlSetProp
-            | HyprlandMcpTools::CtlSwitchXkbLayout => {
+            | HyprlandMcpTools::CtlSwitchXkbLayout
+            | HyprlandMcpTools::CtlKeywordSet
+            | HyprlandMcpTools::CtlKeywordGet
+            | HyprlandMcpTools::CtlSendShortcut => {
                 self.handle_ctl_tool(tool, &arguments, &correlation_id, &broadcaster);
             }
 

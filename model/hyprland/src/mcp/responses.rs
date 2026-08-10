@@ -8,6 +8,8 @@ pub struct ActiveWindowEntry {
     pub class: String,
     /// Window title
     pub title: String,
+    /// Window address as a hex string (e.g. "0x1234567")
+    pub address: String,
     /// Workspace ID the window is on
     pub workspace_id: i32,
 }
@@ -63,6 +65,32 @@ pub struct MonitorEntry {
     pub monitor_index: u32,
     /// The connector name of the monitor (e.g. "HDMI-A-1", "eDP-1")
     pub connector_name: String,
+    /// Monitor width in pixels
+    pub width: u32,
+    /// Monitor height in pixels
+    pub height: u32,
+    /// Refresh rate in Hz
+    pub refresh_rate: f32,
+    /// X position in the global coordinate space
+    pub x: i32,
+    /// Y position in the global coordinate space
+    pub y: i32,
+    /// Active workspace ID on this monitor
+    pub active_workspace_id: i32,
+    /// Active workspace name on this monitor
+    pub active_workspace_name: String,
+    /// Scale factor (e.g. 1.0, 1.5, 2.0)
+    pub scale: f32,
+    /// Transform as a string ("normal", "90", "180", "270", "flipped", "90_flipped", "180_flipped", "270_flipped")
+    pub transform: String,
+    /// Whether this monitor is the primary/focused monitor
+    pub focused: bool,
+    /// DPMS (display power management) status
+    pub dpms_status: bool,
+    /// Variable refresh rate enabled
+    pub vrr: bool,
+    /// Whether this monitor is disabled
+    pub disabled: bool,
 }
 
 /// Response body for the `hyprland://monitors` MCP resource.
@@ -186,4 +214,38 @@ pub struct WindowEntry {
 pub struct WindowsResponse {
     /// List of all windows
     pub windows: Vec<WindowEntry>,
+}
+
+/// Response body for the `hyprland://version` MCP resource.
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct VersionResponse {
+    /// Hyprland version tag (e.g. "0.49.0")
+    pub tag: String,
+    /// Git branch
+    pub branch: String,
+    /// Git commit hash
+    pub commit: String,
+    /// Whether dirty (uncommitted changes)
+    pub dirty: bool,
+    /// Git commit message
+    pub commit_message: String,
+    /// Git commit date
+    pub commit_date: String,
+    /// Number of commits at build time
+    pub commits: String,
+    /// Aquamarine build version
+    pub build_aquamarine: String,
+    /// Build flags
+    pub flags: Vec<String>,
+}
+
+/// Response body for the `hyprland_ctl_keyword_get` MCP tool.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KeywordGetResponse {
+    /// The keyword name that was queried
+    pub keyword: String,
+    /// The value as a string (Hyprland returns int/float/str)
+    pub value: String,
+    /// Whether the keyword was set by the user (vs default)
+    pub set: bool,
 }

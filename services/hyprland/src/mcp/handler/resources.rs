@@ -9,7 +9,6 @@ use smearor_hyprland_model::HyprlandStateResponse;
 use smearor_hyprland_model::LayerEvent;
 use smearor_hyprland_model::LayerStatusEvent;
 use smearor_hyprland_model::LayerStatusResponse;
-use smearor_hyprland_model::MonitorEntry;
 use smearor_hyprland_model::MonitorsResponse;
 use smearor_hyprland_model::SystemEvent;
 use smearor_hyprland_model::SystemStatusEvent;
@@ -49,6 +48,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 let active_window = state.active_window.as_ref().map(|w| ActiveWindowEntry {
                     class: w.window_class.to_string(),
                     title: w.window_title.to_string(),
+                    address: w.window_address.to_string(),
                     workspace_id: w.workspace_id,
                 });
                 let response = HyprlandStateResponse {
@@ -67,6 +67,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                         let entry = ActiveWindowEntry {
                             class: w.window_class.to_string(),
                             title: w.window_title.to_string(),
+                            address: w.window_address.to_string(),
                             workspace_id: w.workspace_id,
                         };
                         let json = serde_json::to_string(&entry).unwrap_or_default();
@@ -81,6 +82,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                                     awc.data.as_ref().map(|d| ActiveWindowEntry {
                                         class: d.window_class.to_string(),
                                         title: d.window_title.to_string(),
+                                        address: d.window_address.to_string(),
                                         workspace_id: d.workspace_id,
                                     })
                                 },
@@ -88,6 +90,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                                     Some(ActiveWindowEntry {
                                         class: opened.data.data.window_class.to_string(),
                                         title: opened.data.data.window_title.to_string(),
+                                        address: opened.data.data.window_address.to_string(),
                                         workspace_id: opened.data.data.workspace_id,
                                     })
                                 },
@@ -162,18 +165,36 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 InvokeResourceResponse::success(correlation_id, &json)
             }
             HyprlandMcpResources::Monitors => {
-                let monitor = shared_state.as_ref().and_then(|s| s.latest_monitor_changed.clone());
-                match monitor {
-                    Some(event) => {
-                        let entry = MonitorEntry {
-                            monitor_index: event.monitor_index,
-                            connector_name: event.connector_name.to_string(),
-                        };
-                        let response = MonitorsResponse { monitors: vec![entry] };
+                let monitors = shared_state.as_ref().and_then(|s| s.last_monitors.clone());
+                match monitors {
+                    Some(entries) if !entries.is_empty() => {
+                        let response = MonitorsResponse { monitors: entries };
                         let json = serde_json::to_string(&response).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
-                    None => InvokeResourceResponse::success(correlation_id, "null"),
+                    _ => {
+                        let _ = self.command_sender.send(HyprlandCommand::MonitorsRequest);
+                        InvokeResourceResponse::error(
+                            correlation_id,
+                            "Monitors list not yet available. A monitors request has been triggered; please retry shortly.",
+                        )
+                    }
+                }
+            }
+            HyprlandMcpResources::Version => {
+                let version = shared_state.as_ref().and_then(|s| s.last_version.clone());
+                match version {
+                    Some(v) => {
+                        let json = serde_json::to_string(&v).unwrap_or_default();
+                        InvokeResourceResponse::success(correlation_id, &json)
+                    }
+                    None => {
+                        let _ = self.command_sender.send(HyprlandCommand::VersionRequest);
+                        InvokeResourceResponse::error(
+                            correlation_id,
+                            "Version info not yet available. A version request has been triggered; please retry shortly.",
+                        )
+                    }
                 }
             }
             HyprlandMcpResources::WindowStatus => {
@@ -601,7 +622,6 @@ mod tests {
     fn all_status_resources_return_null_when_empty() {
         let service = test_service();
         let status_resources = [
-            HyprlandMcpResources::Monitors,
             HyprlandMcpResources::WindowStatus,
             HyprlandMcpResources::WorkspaceStatus,
             HyprlandMcpResources::GroupStatus,
@@ -679,5 +699,113 @@ mod tests {
         assert!(response.contents.contains("kitty"), "response should contain kitty");
         assert!(response.contents.contains("\"windows\""), "response should use DTO format with windows field");
         assert!(response.contents.contains("\"is_active\":true"), "response should contain is_active field");
+    }
+
+    #[test]
+    fn monitors_resource_returns_error_when_no_monitors() {
+        let service = test_service();
+        let request = ResourceRequest {
+            resource: HyprlandMcpResources::Monitors,
+            correlation_id: "corr-monitors-1",
+            sender_id: "test",
+        };
+        let response = <HyprlandService as McpResourceHandler<HyprlandMcpResources>>::get_response(&service, &request);
+        assert!(response.contents.is_empty(), "error response should have empty contents");
+    }
+
+    #[test]
+    fn monitors_resource_returns_json_when_monitors_present() {
+        use smearor_hyprland_model::MonitorEntry;
+        let service = test_service();
+        service.shared_state.lock().unwrap().last_monitors = Some(vec![
+            MonitorEntry {
+                monitor_index: 0,
+                connector_name: "eDP-1".to_string(),
+                width: 1920,
+                height: 1080,
+                refresh_rate: 60.0,
+                x: 0,
+                y: 0,
+                active_workspace_id: 1,
+                active_workspace_name: "web".to_string(),
+                scale: 1.0,
+                transform: "normal".to_string(),
+                focused: true,
+                dpms_status: true,
+                vrr: false,
+                disabled: false,
+            },
+            MonitorEntry {
+                monitor_index: 1,
+                connector_name: "HDMI-A-1".to_string(),
+                width: 2560,
+                height: 1440,
+                refresh_rate: 144.0,
+                x: 1920,
+                y: 0,
+                active_workspace_id: 2,
+                active_workspace_name: "dev".to_string(),
+                scale: 1.25,
+                transform: "normal".to_string(),
+                focused: false,
+                dpms_status: true,
+                vrr: true,
+                disabled: false,
+            },
+        ]);
+        let request = ResourceRequest {
+            resource: HyprlandMcpResources::Monitors,
+            correlation_id: "corr-monitors-2",
+            sender_id: "test",
+        };
+        let response = <HyprlandService as McpResourceHandler<HyprlandMcpResources>>::get_response(&service, &request);
+        assert!(response.contents.contains("eDP-1"), "response should contain connector name");
+        assert!(response.contents.contains("HDMI-A-1"), "response should contain second monitor");
+        assert!(response.contents.contains("\"monitors\""), "response should use DTO format with monitors field");
+        assert!(response.contents.contains("\"focused\":true"), "response should contain focused field");
+        assert!(response.contents.contains("\"dpms_status\":true"), "response should contain dpms_status field");
+        assert!(response.contents.contains("\"vrr\":true"), "response should contain vrr field");
+        assert!(response.contents.contains("\"active_workspace_id\":1"), "response should contain active_workspace_id field");
+    }
+
+    #[test]
+    fn version_resource_returns_error_when_no_version() {
+        let service = test_service();
+        let request = ResourceRequest {
+            resource: HyprlandMcpResources::Version,
+            correlation_id: "corr-version-1",
+            sender_id: "test",
+        };
+        let response = <HyprlandService as McpResourceHandler<HyprlandMcpResources>>::get_response(&service, &request);
+        assert!(response.contents.is_empty(), "error response should have empty contents");
+    }
+
+    #[test]
+    fn version_resource_returns_json_when_version_present() {
+        use smearor_hyprland_model::VersionResponse;
+        let service = test_service();
+        service.shared_state.lock().unwrap().last_version = Some(VersionResponse {
+            tag: "0.49.0".to_string(),
+            branch: "main".to_string(),
+            commit: "abc123".to_string(),
+            dirty: false,
+            commit_message: "feat: something".to_string(),
+            commit_date: "2024-01-01".to_string(),
+            commits: "1234".to_string(),
+            build_aquamarine: "0.1.0".to_string(),
+            flags: vec!["debug".to_string()],
+        });
+        let request = ResourceRequest {
+            resource: HyprlandMcpResources::Version,
+            correlation_id: "corr-version-2",
+            sender_id: "test",
+        };
+        let response = <HyprlandService as McpResourceHandler<HyprlandMcpResources>>::get_response(&service, &request);
+        assert!(response.contents.contains("0.49.0"), "response should contain tag");
+        assert!(response.contents.contains("main"), "response should contain branch");
+        assert!(response.contents.contains("abc123"), "response should contain commit");
+        assert!(response.contents.contains("\"flags\""), "response should contain flags array");
+        assert!(response.contents.contains("\"commit_date\""), "response should contain commit_date field");
+        assert!(response.contents.contains("\"build_aquamarine\""), "response should contain build_aquamarine field");
     }
 }

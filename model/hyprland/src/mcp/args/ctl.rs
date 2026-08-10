@@ -95,6 +95,33 @@ pub struct SwitchXkbLayoutArgs {
     pub cmd: McpSwitchXkbLayoutCmd,
 }
 
+/// Arguments for the `hyprland_ctl_keyword_set` MCP tool.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct KeywordSetArgs {
+    /// The configuration keyword name (e.g. "general:gaps_in")
+    pub keyword: String,
+    /// The value to set (as a string; Hyprland parses int/float/str)
+    pub value: String,
+}
+
+/// Arguments for the `hyprland_ctl_keyword_get` MCP tool.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct KeywordGetArgs {
+    /// The configuration keyword name (e.g. "general:gaps_in")
+    pub keyword: String,
+}
+
+/// Arguments for the `hyprland_ctl_send_shortcut` MCP tool.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct SendShortcutArgs {
+    /// Modifier keys as a comma-separated string (e.g. "SUPER", "CTRL,SHIFT")
+    pub mods: String,
+    /// The key name (e.g. "S", "F1", "space")
+    pub key: String,
+    /// Optional window identifier (e.g. "address:0x1234"). If omitted, sends to active window.
+    pub window: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,5 +172,49 @@ mod tests {
     #[test]
     fn kill_args_from_empty_json() {
         let _args: KillArgs = serde_json::from_str("{}").unwrap();
+    }
+
+    #[test]
+    fn keyword_set_args_roundtrip() {
+        let original = KeywordSetArgs {
+            keyword: "general:gaps_in".to_string(),
+            value: "5".to_string(),
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: KeywordSetArgs = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.keyword, original.keyword);
+        assert_eq!(parsed.value, original.value);
+    }
+
+    #[test]
+    fn keyword_get_args_roundtrip() {
+        let original = KeywordGetArgs {
+            keyword: "general:gaps_in".to_string(),
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: KeywordGetArgs = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.keyword, original.keyword);
+    }
+
+    #[test]
+    fn send_shortcut_args_roundtrip() {
+        let original = SendShortcutArgs {
+            mods: "CTRL,SHIFT".to_string(),
+            key: "S".to_string(),
+            window: Some("address:0x1234".to_string()),
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: SendShortcutArgs = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.mods, original.mods);
+        assert_eq!(parsed.key, original.key);
+        assert_eq!(parsed.window, original.window);
+    }
+
+    #[test]
+    fn send_shortcut_args_default_window_is_none() {
+        let args: SendShortcutArgs = serde_json::from_str("{}").unwrap_or_default();
+        assert_eq!(args.mods, "");
+        assert_eq!(args.key, "");
+        assert!(args.window.is_none());
     }
 }

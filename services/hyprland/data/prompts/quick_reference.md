@@ -10,7 +10,9 @@ Current state: `{{active_window_class}}` on workspace `{{active_workspace_id}}`,
 | `hyprland://active-window`      | focused window   |
 | `hyprland://workspace-snapshot` | all workspaces   |
 | `hyprland://workspaces`         | workspace list   |
-| `hyprland://monitors`           | monitor events   |
+| `hyprland://monitors`           | monitor list     |
+| `hyprland://windows`            | all windows      |
+| `hyprland://version`            | version info     |
 | `hyprland://window-status`      | window events    |
 | `hyprland://workspace-status`   | workspace events |
 | `hyprland://group-status`       | group events     |
@@ -101,13 +103,23 @@ Current state: `{{active_window_class}}` on workspace `{{active_workspace_id}}`,
 | `hyprland_ctl_set_error`         | set error state        |
 | `hyprland_ctl_set_prop`          | set window property    |
 | `hyprland_ctl_switch_xkb_layout` | switch keyboard layout |
+| `hyprland_ctl_keyword_set`       | set config keyword     |
+| `hyprland_ctl_keyword_get`       | get config keyword     |
+| `hyprland_ctl_send_shortcut`     | send keyboard shortcut |
 
 ## Compositor Tools
 
 | Tool                                   | Description                          |
 |----------------------------------------|--------------------------------------|
+| `hyprland_switch_workspace`            | switch to workspace by ID            |
 | `hyprland_compositor_create_workspace` | create workspace relative to another |
 | `hyprland_compositor_switch_workspace` | switch to workspace by ID            |
+
+## State Tools
+
+| Tool                     | Description                                     |
+|--------------------------|-------------------------------------------------|
+| `hyprland_refresh_state` | refresh state+snapshot+windows+monitors+version |
 
 ## Prompts
 

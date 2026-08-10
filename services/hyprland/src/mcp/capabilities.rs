@@ -19,6 +19,8 @@ use smearor_hyprland_model::FocusWindowArgs;
 use smearor_hyprland_model::ForceRendererReloadArgs;
 use smearor_hyprland_model::FullscreenTypeArgs;
 use smearor_hyprland_model::GlobalDispatchArgs;
+use smearor_hyprland_model::KeywordGetArgs;
+use smearor_hyprland_model::KeywordSetArgs;
 use smearor_hyprland_model::KillActiveWindowArgs;
 use smearor_hyprland_model::KillArgs;
 use smearor_hyprland_model::LockGroupsArgs;
@@ -47,6 +49,7 @@ use smearor_hyprland_model::RemoveMasterArgs;
 use smearor_hyprland_model::RenameWorkspaceArgs;
 use smearor_hyprland_model::ResizeActiveArgs;
 use smearor_hyprland_model::ResizeWindowPixelArgs;
+use smearor_hyprland_model::SendShortcutArgs;
 use smearor_hyprland_model::SetCursorArgs;
 use smearor_hyprland_model::SetCursorCtlArgs;
 use smearor_hyprland_model::SetErrorArgs;
@@ -110,7 +113,7 @@ impl McpCapabilitiesRegistrator for HyprlandService {
             &broadcaster,
             "hyprland://active-window",
             "Active Window",
-            "Information about the currently focused window (class, title, workspace).",
+            "Information about the currently focused window (class, title, workspace, address).",
             "application/json",
         );
         register_resource(
@@ -121,7 +124,20 @@ impl McpCapabilitiesRegistrator for HyprlandService {
             "application/json",
         );
         register_resource(&broadcaster, "hyprland://workspaces", "Workspaces", "List of all workspaces.", "application/json");
-        register_resource(&broadcaster, "hyprland://monitors", "Monitors", "List of all monitors.", "application/json");
+        register_resource(
+            &broadcaster,
+            "hyprland://monitors",
+            "Monitors",
+            "List of all monitors with resolution, refresh rate, position, scale, transform, DPMS, VRR, and active workspace.",
+            "application/json",
+        );
+        register_resource(
+            &broadcaster,
+            "hyprland://version",
+            "Hyprland Version",
+            "Hyprland compositor version information (tag, branch, commit, dirty, commit message, commit date, commits, aquamarine build, build flags).",
+            "application/json",
+        );
         register_resource(&broadcaster, "hyprland://window-status", "Window Status", "Recent window status events.", "application/json");
         register_resource(
             &broadcaster,
@@ -534,6 +550,24 @@ impl McpCapabilitiesRegistrator for HyprlandService {
             "hyprland_ctl_switch_xkb_layout",
             "Switch the XKB keyboard layout.",
             &serde_json::to_string(&schema_for!(SwitchXkbLayoutArgs)).unwrap_or_default(),
+        );
+        register_tool(
+            &broadcaster,
+            "hyprland_ctl_keyword_set",
+            "Set a Hyprland configuration keyword at runtime (e.g. gaps, borders, colors, layout settings).",
+            &serde_json::to_string(&schema_for!(KeywordSetArgs)).unwrap_or_default(),
+        );
+        register_tool(
+            &broadcaster,
+            "hyprland_ctl_keyword_get",
+            "Get the current value of a Hyprland configuration keyword.",
+            &serde_json::to_string(&schema_for!(KeywordGetArgs)).unwrap_or_default(),
+        );
+        register_tool(
+            &broadcaster,
+            "hyprland_ctl_send_shortcut",
+            "Send a keyboard shortcut to a window (e.g. Ctrl+S, Super+D). Useful for apps without IPC.",
+            &serde_json::to_string(&schema_for!(SendShortcutArgs)).unwrap_or_default(),
         );
 
         register_tool(

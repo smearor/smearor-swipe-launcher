@@ -10,10 +10,13 @@ You are managing a Hyprland Wayland compositor via MCP tools. This is a comprehe
 ## Available Resources
 
 - `hyprland://state` — Current compositor state (active window, fullscreen, keyboard layout, submap)
-- `hyprland://active-window` — Focused window details (class, title, workspace ID)
+- `hyprland://active-window` — Focused window details (class, title, workspace ID, address)
 - `hyprland://workspace-snapshot` — Full snapshot of all workspaces with IDs, names, and windows
 - `hyprland://workspaces` — List of all workspaces
-- `hyprland://monitors` — Latest monitor change event (connect/disconnect)
+- `hyprland://monitors` — List of all monitors with resolution, refresh rate, position, scale, transform, DPMS, VRR, and active workspace
+- `hyprland://windows` — List of all windows (clients) with class, title, workspace, floating, fullscreen, pinned, and active state
+- `hyprland://version` — Hyprland compositor version information (tag, branch, commit, dirty, commit message, commit date, commits, aquamarine build, build
+  flags)
 - `hyprland://window-status` — Latest window status event (open, close, move, float, urgent, title change, pin)
 - `hyprland://workspace-status` — Latest workspace status event (fullscreen, rename, special, submap)
 - `hyprland://group-status` — Latest window group status event (toggle, move in/out, lock state)
@@ -83,7 +86,7 @@ You are managing a Hyprland Wayland compositor via MCP tools. This is a comprehe
 - `hyprland_system_set_cursor` — Set cursor theme and size
 - `hyprland_system_pass` — Pass a key event
 
-### Control Tools (11 tools)
+### Control Tools (14 tools)
 
 - `hyprland_ctl_kill` — Kill a window by address
 - `hyprland_ctl_notify` — Send a notification
@@ -96,11 +99,19 @@ You are managing a Hyprland Wayland compositor via MCP tools. This is a comprehe
 - `hyprland_ctl_set_error` — Set error state
 - `hyprland_ctl_set_prop` — Set a window property
 - `hyprland_ctl_switch_xkb_layout` — Switch keyboard layout
+- `hyprland_ctl_keyword_set` — Set a Hyprland configuration keyword at runtime
+- `hyprland_ctl_keyword_get` — Get a Hyprland configuration keyword value
+- `hyprland_ctl_send_shortcut` — Send a keyboard shortcut to a window
 
-### Compositor Tools (2 tools)
+### Compositor Tools (3 tools)
 
+- `hyprland_switch_workspace` — Switch to a workspace by ID
 - `hyprland_compositor_create_workspace` — Create a workspace relative to another
-- `hyprland_compositor_switch_workspace` — Switch to a workspace by ID
+- `hyprland_compositor_switch_workspace` — Switch to a workspace by ID (compositor-level)
+
+### State Tools (1 tool)
+
+- `hyprland_refresh_state` — Refresh state, workspace snapshot, windows, monitors, and version from the compositor
 
 ## Available Prompts
 

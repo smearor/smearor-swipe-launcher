@@ -1,7 +1,9 @@
 use smearor_hyprland_model::GroupEvent;
 use smearor_hyprland_model::HyprlandStateMessage;
 use smearor_hyprland_model::LayerEvent;
+use smearor_hyprland_model::MonitorEntry;
 use smearor_hyprland_model::SystemEvent;
+use smearor_hyprland_model::VersionResponse;
 use smearor_hyprland_model::WindowEntry;
 use smearor_hyprland_model::WindowEvent;
 use smearor_hyprland_model::WorkspaceEvent;
@@ -36,4 +38,8 @@ pub struct HyprlandSharedState {
     pub latest_system_event: Option<SystemEvent>,
     /// Latest window list (updated on windows requests).
     pub last_windows: Option<Vec<WindowEntry>>,
+    /// Latest monitors list (updated on monitors requests and at service startup).
+    pub last_monitors: Option<Vec<MonitorEntry>>,
+    /// Latest Hyprland version info (fetched at service startup).
+    pub last_version: Option<VersionResponse>,
 }

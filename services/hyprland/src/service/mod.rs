@@ -16,6 +16,7 @@ use crate::event_listener::spawn_event_listener;
 use crate::event_listener::spawn_event_worker;
 use command::spawn_command_worker;
 use smearor_hyprland_model::HyprlandStateMessage;
+use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
 use smearor_swipe_launcher_plugin_api::McpCapabilitiesRegistrator;
 use smearor_swipe_launcher_plugin_api::PluginConfig;
@@ -75,6 +76,13 @@ impl HyprlandService {
 
         // Request initial state so last_state is populated for MCP resource queries
         let _ = service.command_sender.send(HyprlandCommand::StateRequest);
+        let _ = service
+            .command_sender
+            .send(HyprlandCommand::SnapshotRequest(WorkspaceSnapshotRequestMessage { monitor_index: 0 }));
+        let _ = service.command_sender.send(HyprlandCommand::WindowsRequest);
+        // Eager fetch monitors and version to avoid cold-start issues for MCP resources
+        let _ = service.command_sender.send(HyprlandCommand::MonitorsRequest);
+        let _ = service.command_sender.send(HyprlandCommand::VersionRequest);
 
         Ok(service)
     }

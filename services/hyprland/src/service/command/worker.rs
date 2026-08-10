@@ -1,6 +1,7 @@
 use crate::service::command::HyprlandCommand;
 use crate::service::shared_state::HyprlandSharedState;
 use smearor_swipe_launcher_plugin_api::FfiCoreContext;
+use smearor_swipe_launcher_plugin_api::MessageBroadcasterInner;
 use smearor_swipe_launcher_plugin_api::PluginMeta;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -22,9 +23,14 @@ pub(crate) fn spawn_command_worker(
             }
         };
 
+        let broadcaster = MessageBroadcasterInner {
+            meta: service_meta.clone(),
+            core_context: core_context.clone(),
+        };
+
         rt.block_on(async move {
             while let Some(command) = command_receiver.recv().await {
-                command.handle(&core_context, &service_meta, &shared_state).await;
+                command.handle(&broadcaster, &shared_state).await;
             }
         });
     });

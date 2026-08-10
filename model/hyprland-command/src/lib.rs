@@ -1,3 +1,5 @@
+pub mod keyword_get;
+pub mod keyword_set;
 pub mod kill;
 pub mod notify;
 pub mod output_create;
@@ -5,11 +7,14 @@ pub mod output_remove;
 pub mod plugin_load;
 pub mod plugin_unload;
 pub mod reload;
+pub mod send_shortcut;
 mod set_cursor;
 pub mod set_error;
 pub mod set_prop;
 pub mod switch_xkb_layout;
 
+pub use keyword_get::KeywordGetCommandMessage;
+pub use keyword_set::KeywordSetCommandMessage;
 pub use kill::KillCommandMessage;
 pub use notify::NotifyCommandMessage;
 pub use output_create::OutputCreateCommandMessage;
@@ -17,6 +22,7 @@ pub use output_remove::OutputRemoveCommandMessage;
 pub use plugin_load::PluginLoadCommandMessage;
 pub use plugin_unload::PluginUnloadCommandMessage;
 pub use reload::ReloadCommandMessage;
+pub use send_shortcut::SendShortcutCommandMessage;
 pub use set_cursor::SetCursorCommandMessage;
 pub use set_error::SetErrorCommandMessage;
 pub use set_prop::SetPropCommandMessage;
@@ -57,6 +63,15 @@ impl_json_convertible!(SetPropCommandMessageConverter, SetPropCommandMessage, |j
 impl_json_convertible!(SwitchXkbLayoutCommandMessageConverter, SwitchXkbLayoutCommandMessage, |json: serde_json::Value| {
     serde_json::from_value(json).unwrap_or_default()
 });
+impl_json_convertible!(KeywordSetCommandMessageConverter, KeywordSetCommandMessage, |json: serde_json::Value| {
+    serde_json::from_value(json).unwrap_or_default()
+});
+impl_json_convertible!(KeywordGetCommandMessageConverter, KeywordGetCommandMessage, |json: serde_json::Value| {
+    serde_json::from_value(json).unwrap_or_default()
+});
+impl_json_convertible!(SendShortcutCommandMessageConverter, SendShortcutCommandMessage, |json: serde_json::Value| {
+    serde_json::from_value(json).unwrap_or_default()
+});
 
 /// Register JSON converters for command messages.
 pub fn register_json_converters(context: Option<FfiCoreContext>) {
@@ -71,4 +86,7 @@ pub fn register_json_converters(context: Option<FfiCoreContext>) {
     SetErrorCommandMessageConverter::register_in_host(context);
     SetPropCommandMessageConverter::register_in_host(context);
     SwitchXkbLayoutCommandMessageConverter::register_in_host(context);
+    KeywordSetCommandMessageConverter::register_in_host(context);
+    KeywordGetCommandMessageConverter::register_in_host(context);
+    SendShortcutCommandMessageConverter::register_in_host(context);
 }

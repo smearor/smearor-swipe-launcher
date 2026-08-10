@@ -1,6 +1,8 @@
 use crate::service::HyprlandCommand;
 use crate::service::HyprlandService;
 use smearor_hyprland_model::HyprlandMcpTools;
+use smearor_hyprland_model::KeywordGetArgs;
+use smearor_hyprland_model::KeywordSetArgs;
 use smearor_hyprland_model::KillArgs;
 use smearor_hyprland_model::NotifyArgs;
 use smearor_hyprland_model::OutputCreateArgs;
@@ -8,6 +10,7 @@ use smearor_hyprland_model::OutputRemoveArgs;
 use smearor_hyprland_model::PluginLoadArgs;
 use smearor_hyprland_model::PluginUnloadArgs;
 use smearor_hyprland_model::ReloadArgs;
+use smearor_hyprland_model::SendShortcutArgs;
 use smearor_hyprland_model::SetCursorCtlArgs;
 use smearor_hyprland_model::SetErrorArgs;
 use smearor_hyprland_model::SetPropArgs;
@@ -139,6 +142,41 @@ impl HyprlandService {
                     }));
                 CtlToolResult {
                     response_message: "Switched XKB keyboard layout",
+                }
+            }
+            HyprlandMcpTools::CtlKeywordSet => {
+                let args: KeywordSetArgs = serde_json::from_str(arguments).unwrap_or_default();
+                let _ = self
+                    .command_sender
+                    .send(HyprlandCommand::CtlKeywordSet(smearor_hyprland_model::KeywordSetCommandMessage {
+                        keyword: args.keyword,
+                        value: args.value,
+                    }));
+                CtlToolResult {
+                    response_message: "Set keyword",
+                }
+            }
+            HyprlandMcpTools::CtlKeywordGet => {
+                let args: KeywordGetArgs = serde_json::from_str(arguments).unwrap_or_default();
+                let _ = self
+                    .command_sender
+                    .send(HyprlandCommand::CtlKeywordGet(smearor_hyprland_model::KeywordGetCommandMessage {
+                        correlation_id: correlation_id.to_string(),
+                        keyword: args.keyword,
+                    }));
+                return;
+            }
+            HyprlandMcpTools::CtlSendShortcut => {
+                let args: SendShortcutArgs = serde_json::from_str(arguments).unwrap_or_default();
+                let _ = self
+                    .command_sender
+                    .send(HyprlandCommand::CtlSendShortcut(smearor_hyprland_model::SendShortcutCommandMessage {
+                        mods: args.mods,
+                        key: args.key,
+                        window: args.window,
+                    }));
+                CtlToolResult {
+                    response_message: "Sent shortcut",
                 }
             }
             _ => return,
