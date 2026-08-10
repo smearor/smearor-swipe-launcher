@@ -17,6 +17,7 @@ use smearor_hyprland_model::SystemStatusResponse;
 use smearor_hyprland_model::WindowEvent;
 use smearor_hyprland_model::WindowStatusEvent;
 use smearor_hyprland_model::WindowStatusResponse;
+use smearor_hyprland_model::WindowsResponse;
 use smearor_hyprland_model::WorkspaceEntry;
 use smearor_hyprland_model::WorkspaceEvent;
 use smearor_hyprland_model::WorkspaceSnapshotResponse;
@@ -233,6 +234,23 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
                     None => InvokeResourceResponse::success(correlation_id, "null"),
+                }
+            }
+            HyprlandMcpResources::Windows => {
+                let windows = shared_state.as_ref().and_then(|s| s.last_windows.clone());
+                match windows {
+                    Some(wins) => {
+                        let response = WindowsResponse { windows: wins };
+                        let json = serde_json::to_string(&response).unwrap_or_default();
+                        InvokeResourceResponse::success(correlation_id, &json)
+                    }
+                    None => {
+                        let _ = self.command_sender.send(HyprlandCommand::WindowsRequest);
+                        InvokeResourceResponse::error(
+                            correlation_id,
+                            "Windows list not yet available. A windows request has been triggered; please retry shortly.",
+                        )
+                    }
                 }
             }
         }
@@ -605,5 +623,61 @@ mod tests {
                 i
             );
         }
+    }
+
+    #[test]
+    fn windows_resource_returns_error_when_no_windows() {
+        let service = test_service();
+        let request = ResourceRequest {
+            resource: HyprlandMcpResources::Windows,
+            correlation_id: "corr-windows-1",
+            sender_id: "test",
+        };
+        let response = <HyprlandService as McpResourceHandler<HyprlandMcpResources>>::get_response(&service, &request);
+        assert!(response.contents.is_empty(), "error response should have empty contents");
+    }
+
+    #[test]
+    fn windows_resource_returns_json_when_windows_present() {
+        use smearor_hyprland_model::WindowEntry;
+        let service = test_service();
+        service.shared_state.lock().unwrap().last_windows = Some(vec![
+            WindowEntry {
+                class: "firefox".to_string(),
+                title: "Mozilla Firefox".to_string(),
+                address: "0x123".to_string(),
+                workspace_id: 1,
+                monitor: Some(0),
+                floating: false,
+                fullscreen_mode: "fullscreen".to_string(),
+                pinned: false,
+                mapped: true,
+                pid: 1234,
+                is_active: true,
+            },
+            WindowEntry {
+                class: "kitty".to_string(),
+                title: "kitty".to_string(),
+                address: "0x456".to_string(),
+                workspace_id: 2,
+                monitor: Some(0),
+                floating: false,
+                fullscreen_mode: "none".to_string(),
+                pinned: false,
+                mapped: true,
+                pid: 5678,
+                is_active: false,
+            },
+        ]);
+        let request = ResourceRequest {
+            resource: HyprlandMcpResources::Windows,
+            correlation_id: "corr-windows-2",
+            sender_id: "test",
+        };
+        let response = <HyprlandService as McpResourceHandler<HyprlandMcpResources>>::get_response(&service, &request);
+        assert!(response.contents.contains("firefox"), "response should contain firefox");
+        assert!(response.contents.contains("kitty"), "response should contain kitty");
+        assert!(response.contents.contains("\"windows\""), "response should use DTO format with windows field");
+        assert!(response.contents.contains("\"is_active\":true"), "response should contain is_active field");
     }
 }

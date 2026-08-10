@@ -18,6 +18,7 @@ use crate::service::dispatch::handle_switch_workspace;
 use crate::service::shared_state::HyprlandSharedState;
 use crate::service::state::handle_snapshot_request;
 use crate::service::state::handle_state_request;
+use crate::service::state::handle_windows_request;
 use smearor_hyprland_model::HyprlandSystemDispatchMessage;
 use smearor_hyprland_model::HyprlandToggleDispatchMessage;
 use smearor_hyprland_model::HyprlandWindowDispatchMessage;
@@ -51,6 +52,7 @@ pub enum HyprlandCommand {
     CreateWorkspace(CreateWorkspaceMessage),
     SnapshotRequest(WorkspaceSnapshotRequestMessage),
     StateRequest,
+    WindowsRequest,
     CtlKill(KillCommandMessage),
     CtlNotify(NotifyCommandMessage),
     CtlOutputCreate(OutputCreateCommandMessage),
@@ -86,6 +88,7 @@ impl HyprlandCommand {
             HyprlandCommand::CtlSetProp(message) => handle_ctl_set_prop(message).await,
             HyprlandCommand::CtlSwitchXkbLayout(message) => handle_ctl_switch_xkb_layout(message).await,
             HyprlandCommand::StateRequest => handle_state_request(core_context.clone(), service_meta, shared_state).await,
+            HyprlandCommand::WindowsRequest => handle_windows_request(shared_state).await,
         }
     }
 }

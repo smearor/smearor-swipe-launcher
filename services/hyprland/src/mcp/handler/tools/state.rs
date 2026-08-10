@@ -10,7 +10,8 @@ impl HyprlandService {
         let _ = self
             .command_sender
             .send(HyprlandCommand::SnapshotRequest(WorkspaceSnapshotRequestMessage { monitor_index: 0 }));
-        let response = InvokeToolResponse::success(correlation_id, "State and workspace snapshot refresh requested");
+        let _ = self.command_sender.send(HyprlandCommand::WindowsRequest);
+        let response = InvokeToolResponse::success(correlation_id, "State, workspace snapshot, and windows list refresh requested");
         broadcaster.broadcast_message_to_topic(response);
     }
 }

@@ -153,3 +153,37 @@ pub struct SystemStatusEvent {
     /// The event type as a string
     pub event_type: String,
 }
+
+/// A single window entry in MCP resource responses.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WindowEntry {
+    /// The window class (application identifier)
+    pub class: String,
+    /// The window title
+    pub title: String,
+    /// The window address as a hex string (e.g. "0x1234")
+    pub address: String,
+    /// The workspace ID the window is on
+    pub workspace_id: i32,
+    /// The monitor ID the window is on (may be None in some cases)
+    pub monitor: Option<i128>,
+    /// Whether this window is floating
+    pub floating: bool,
+    /// The fullscreen mode as a string ("none", "maximized", "fullscreen", "maximized_fullscreen")
+    pub fullscreen_mode: String,
+    /// Whether this window is pinned
+    pub pinned: bool,
+    /// Whether this window is mapped (visible on screen)
+    pub mapped: bool,
+    /// The process ID of the window
+    pub pid: i32,
+    /// Whether this window is the currently focused window
+    pub is_active: bool,
+}
+
+/// Response body for the `hyprland://windows` MCP resource.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WindowsResponse {
+    /// List of all windows
+    pub windows: Vec<WindowEntry>,
+}

@@ -139,6 +139,13 @@ impl McpCapabilitiesRegistrator for HyprlandService {
             "application/json",
         );
         register_resource(&broadcaster, "hyprland://system-status", "System Status", "Recent system status events.", "application/json");
+        register_resource(
+            &broadcaster,
+            "hyprland://windows",
+            "Windows",
+            "List of all windows (clients) with class, title, workspace, floating, fullscreen, pinned, and active state.",
+            "application/json",
+        );
 
         register_tool(
             &broadcaster,
