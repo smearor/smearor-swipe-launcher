@@ -1,14 +1,29 @@
+use crate::service::HyprlandCommand;
 use crate::service::HyprlandService;
 use smearor_hyprland_model::ActiveWindowEntry;
 use smearor_hyprland_model::GroupEvent;
+use smearor_hyprland_model::GroupStatusEvent;
+use smearor_hyprland_model::GroupStatusResponse;
 use smearor_hyprland_model::HyprlandMcpResources;
 use smearor_hyprland_model::HyprlandStateResponse;
 use smearor_hyprland_model::LayerEvent;
+use smearor_hyprland_model::LayerStatusEvent;
+use smearor_hyprland_model::LayerStatusResponse;
+use smearor_hyprland_model::MonitorEntry;
+use smearor_hyprland_model::MonitorsResponse;
 use smearor_hyprland_model::SystemEvent;
+use smearor_hyprland_model::SystemStatusEvent;
+use smearor_hyprland_model::SystemStatusResponse;
 use smearor_hyprland_model::WindowEvent;
+use smearor_hyprland_model::WindowStatusEvent;
+use smearor_hyprland_model::WindowStatusResponse;
+use smearor_hyprland_model::WorkspaceEntry;
 use smearor_hyprland_model::WorkspaceEvent;
-use smearor_model_compositor::MonitorChangedEvent;
-use smearor_model_compositor::WorkspaceInfo;
+use smearor_hyprland_model::WorkspaceSnapshotResponse;
+use smearor_hyprland_model::WorkspaceStatusEvent;
+use smearor_hyprland_model::WorkspaceStatusResponse;
+use smearor_hyprland_model::WorkspacesResponse;
+use smearor_model_compositor::WorkspaceSnapshotRequestMessage;
 use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeResourceResponse;
 use smearor_model_mcp::resources::handler::McpResourceHandler;
@@ -24,7 +39,11 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
         match request.resource {
             HyprlandMcpResources::State => {
                 let Some(state) = shared_state.as_ref().and_then(|s| s.last_state.clone()) else {
-                    return InvokeResourceResponse::error(correlation_id, "Hyprland state not yet available");
+                    let _ = self.command_sender.send(HyprlandCommand::StateRequest);
+                    return InvokeResourceResponse::error(
+                        correlation_id,
+                        "Hyprland state not yet available. A state request has been triggered; please retry shortly.",
+                    );
                 };
                 let active_window = state.active_window.as_ref().map(|w| ActiveWindowEntry {
                     class: w.window_class.to_string(),
@@ -92,26 +111,65 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 let snapshot = shared_state.as_ref().and_then(|s| s.workspace_snapshot.clone());
                 match snapshot {
                     Some(snap) => {
-                        let json = serde_json::to_string(&snap).unwrap_or_default();
+                        let workspaces: Vec<WorkspaceEntry> = snap
+                            .workspaces
+                            .iter()
+                            .map(|w| WorkspaceEntry {
+                                workspace_id: w.workspace_id,
+                                workspace_name: w.workspace_name.to_string(),
+                                monitor_index: w.monitor_index,
+                                is_active: w.is_active,
+                            })
+                            .collect();
+                        let response = WorkspaceSnapshotResponse {
+                            workspaces,
+                            active_workspace_id: snap.active_workspace_id,
+                            active_monitor_index: snap.active_monitor_index,
+                        };
+                        let json = serde_json::to_string(&response).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
-                    None => InvokeResourceResponse::error(correlation_id, "Workspace snapshot not yet available. Send a snapshot request first."),
+                    None => {
+                        let _ = self
+                            .command_sender
+                            .send(HyprlandCommand::SnapshotRequest(WorkspaceSnapshotRequestMessage { monitor_index: 0 }));
+                        InvokeResourceResponse::error(
+                            correlation_id,
+                            "Workspace snapshot not yet available. A snapshot request has been triggered; please retry shortly.",
+                        )
+                    }
                 }
             }
             HyprlandMcpResources::Workspaces => {
-                let workspaces: Vec<WorkspaceInfo> = shared_state
+                let workspaces: Vec<WorkspaceEntry> = shared_state
                     .as_ref()
                     .and_then(|s| s.workspace_snapshot.as_ref())
-                    .map(|snap| snap.workspaces.iter().cloned().collect())
+                    .map(|snap| {
+                        snap.workspaces
+                            .iter()
+                            .map(|w| WorkspaceEntry {
+                                workspace_id: w.workspace_id,
+                                workspace_name: w.workspace_name.to_string(),
+                                monitor_index: w.monitor_index,
+                                is_active: w.is_active,
+                            })
+                            .collect()
+                    })
                     .unwrap_or_default();
-                let json = serde_json::to_string(&workspaces).unwrap_or_default();
+                let response = WorkspacesResponse { workspaces };
+                let json = serde_json::to_string(&response).unwrap_or_default();
                 InvokeResourceResponse::success(correlation_id, &json)
             }
             HyprlandMcpResources::Monitors => {
-                let monitor: Option<MonitorChangedEvent> = shared_state.as_ref().and_then(|s| s.latest_monitor_changed.clone());
+                let monitor = shared_state.as_ref().and_then(|s| s.latest_monitor_changed.clone());
                 match monitor {
                     Some(event) => {
-                        let json = serde_json::to_string(&event).unwrap_or_default();
+                        let entry = MonitorEntry {
+                            monitor_index: event.monitor_index,
+                            connector_name: event.connector_name.to_string(),
+                        };
+                        let response = MonitorsResponse { monitors: vec![entry] };
+                        let json = serde_json::to_string(&response).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
                     None => InvokeResourceResponse::success(correlation_id, "null"),
@@ -121,7 +179,9 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 let event: Option<WindowEvent> = shared_state.as_ref().and_then(|s| s.latest_window_event.clone());
                 match event {
                     Some(e) => {
-                        let json = serde_json::to_string(&e).unwrap_or_default();
+                        let entry = window_event_to_dto(&e);
+                        let response = WindowStatusResponse { events: vec![entry] };
+                        let json = serde_json::to_string(&response).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
                     None => InvokeResourceResponse::success(correlation_id, "null"),
@@ -131,7 +191,9 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 let event: Option<WorkspaceEvent> = shared_state.as_ref().and_then(|s| s.latest_workspace_event.clone());
                 match event {
                     Some(e) => {
-                        let json = serde_json::to_string(&e).unwrap_or_default();
+                        let entry = workspace_event_to_dto(&e);
+                        let response = WorkspaceStatusResponse { events: vec![entry] };
+                        let json = serde_json::to_string(&response).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
                     None => InvokeResourceResponse::success(correlation_id, "null"),
@@ -141,7 +203,9 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 let event: Option<GroupEvent> = shared_state.as_ref().and_then(|s| s.latest_group_event.clone());
                 match event {
                     Some(e) => {
-                        let json = serde_json::to_string(&e).unwrap_or_default();
+                        let entry = group_event_to_dto(&e);
+                        let response = GroupStatusResponse { events: vec![entry] };
+                        let json = serde_json::to_string(&response).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
                     None => InvokeResourceResponse::success(correlation_id, "null"),
@@ -151,7 +215,9 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 let event: Option<LayerEvent> = shared_state.as_ref().and_then(|s| s.latest_layer_event.clone());
                 match event {
                     Some(e) => {
-                        let json = serde_json::to_string(&e).unwrap_or_default();
+                        let entry = layer_event_to_dto(&e);
+                        let response = LayerStatusResponse { events: vec![entry] };
+                        let json = serde_json::to_string(&response).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
                     None => InvokeResourceResponse::success(correlation_id, "null"),
@@ -161,7 +227,9 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                 let event: Option<SystemEvent> = shared_state.as_ref().and_then(|s| s.latest_system_event.clone());
                 match event {
                     Some(e) => {
-                        let json = serde_json::to_string(&e).unwrap_or_default();
+                        let entry = system_event_to_dto(&e);
+                        let response = SystemStatusResponse { events: vec![entry] };
+                        let json = serde_json::to_string(&response).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
                     }
                     None => InvokeResourceResponse::success(correlation_id, "null"),
@@ -175,6 +243,139 @@ impl MessageHandler<FfiEnvelopePayload<InvokeResourceMessage>> for HyprlandServi
     fn handle_message(&self, message: FfiEnvelopePayload<InvokeResourceMessage>, sender_id: &str) {
         self.handle_invoke_resource_message(message, sender_id);
     }
+}
+
+fn window_event_to_dto(event: &WindowEvent) -> WindowStatusEvent {
+    event.match_ref(
+        |awc| {
+            let d = awc.data.as_ref();
+            WindowStatusEvent {
+                event_type: "active_changed".to_string(),
+                class: d.map(|d| d.window_class.to_string()),
+                title: d.map(|d| d.window_title.to_string()),
+                workspace_id: d.map(|d| d.workspace_id),
+            }
+        },
+        |opened| WindowStatusEvent {
+            event_type: "opened".to_string(),
+            class: Some(opened.data.data.window_class.to_string()),
+            title: Some(opened.data.data.window_title.to_string()),
+            workspace_id: Some(opened.data.data.workspace_id),
+        },
+        |_closed| WindowStatusEvent {
+            event_type: "closed".to_string(),
+            class: None,
+            title: None,
+            workspace_id: None,
+        },
+        |moved| WindowStatusEvent {
+            event_type: "moved".to_string(),
+            class: None,
+            title: None,
+            workspace_id: Some(moved.data.workspace_id),
+        },
+        |_float_state| WindowStatusEvent {
+            event_type: "float_state_changed".to_string(),
+            class: None,
+            title: None,
+            workspace_id: None,
+        },
+        |_urgent_state| WindowStatusEvent {
+            event_type: "urgent_state_changed".to_string(),
+            class: None,
+            title: None,
+            workspace_id: None,
+        },
+        |title_changed| WindowStatusEvent {
+            event_type: "title_changed".to_string(),
+            class: None,
+            title: Some(title_changed.data.window_title.to_string()),
+            workspace_id: None,
+        },
+        |_pinned| WindowStatusEvent {
+            event_type: "pinned".to_string(),
+            class: None,
+            title: None,
+            workspace_id: None,
+        },
+    )
+}
+
+fn workspace_event_to_dto(event: &WorkspaceEvent) -> WorkspaceStatusEvent {
+    event.match_ref(
+        |_| WorkspaceStatusEvent {
+            event_type: "fullscreen_state_changed".to_string(),
+            workspace_id: None,
+            workspace_name: None,
+        },
+        |renamed| WorkspaceStatusEvent {
+            event_type: "renamed".to_string(),
+            workspace_id: Some(renamed.data.workspace_id),
+            workspace_name: Some(renamed.data.workspace_name.to_string()),
+        },
+        |_| WorkspaceStatusEvent {
+            event_type: "special_removed".to_string(),
+            workspace_id: None,
+            workspace_name: None,
+        },
+        |changed_special| WorkspaceStatusEvent {
+            event_type: "changed_special".to_string(),
+            workspace_id: None,
+            workspace_name: Some(changed_special.data.special_workspace_name.to_string()),
+        },
+        |sub_map_changed| WorkspaceStatusEvent {
+            event_type: "sub_map_changed".to_string(),
+            workspace_id: None,
+            workspace_name: Some(sub_map_changed.sub_map.to_string()),
+        },
+    )
+}
+
+fn group_event_to_dto(event: &GroupEvent) -> GroupStatusEvent {
+    event.match_ref(
+        |_| GroupStatusEvent {
+            event_type: "toggled".to_string(),
+        },
+        |_| GroupStatusEvent {
+            event_type: "moved_into".to_string(),
+        },
+        |_| GroupStatusEvent {
+            event_type: "moved_out".to_string(),
+        },
+        |_| GroupStatusEvent {
+            event_type: "ignore_lock_changed".to_string(),
+        },
+        |_| GroupStatusEvent {
+            event_type: "lock_changed".to_string(),
+        },
+    )
+}
+
+fn layer_event_to_dto(event: &LayerEvent) -> LayerStatusEvent {
+    event.match_ref(
+        |opened| LayerStatusEvent {
+            event_type: "opened".to_string(),
+            namespace: Some(opened.layer_name.to_string()),
+        },
+        |closed| LayerStatusEvent {
+            event_type: "closed".to_string(),
+            namespace: Some(closed.layer_name.to_string()),
+        },
+    )
+}
+
+fn system_event_to_dto(event: &SystemEvent) -> SystemStatusEvent {
+    event.match_ref(
+        |_| SystemStatusEvent {
+            event_type: "keyboard_layout_changed".to_string(),
+        },
+        |_| SystemStatusEvent {
+            event_type: "screencast".to_string(),
+        },
+        |_| SystemStatusEvent {
+            event_type: "config_reloaded".to_string(),
+        },
+    )
 }
 
 #[cfg(test)]
@@ -331,6 +532,7 @@ mod tests {
         let response = <HyprlandService as McpResourceHandler<HyprlandMcpResources>>::get_response(&service, &request);
         assert!(response.contents.contains("web"), "response should contain workspace name");
         assert!(response.contents.contains("\"active_workspace_id\":1"), "response should contain active workspace id");
+        assert!(response.contents.contains("\"workspaces\""), "response should use DTO format with workspaces field");
     }
 
     #[test]
@@ -342,7 +544,7 @@ mod tests {
             sender_id: "test",
         };
         let response = <HyprlandService as McpResourceHandler<HyprlandMcpResources>>::get_response(&service, &request);
-        assert_eq!(response.contents.to_string(), "[]");
+        assert!(response.contents.contains("\"workspaces\":[]"), "response should use DTO format with empty workspaces array");
     }
 
     #[test]
@@ -374,6 +576,7 @@ mod tests {
         let response = <HyprlandService as McpResourceHandler<HyprlandMcpResources>>::get_response(&service, &request);
         assert!(response.contents.contains("web"));
         assert!(response.contents.contains("dev"));
+        assert!(response.contents.contains("\"workspaces\""), "response should use DTO format with workspaces field");
     }
 
     #[test]

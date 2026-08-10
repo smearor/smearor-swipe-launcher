@@ -1,5 +1,6 @@
 pub mod compositor;
 pub mod ctl;
+pub mod state;
 pub mod system;
 pub mod toggle;
 pub mod window;
@@ -112,6 +113,10 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for HyprlandService {
 
             HyprlandMcpTools::SwitchWorkspace | HyprlandMcpTools::CompositorCreateWorkspace | HyprlandMcpTools::CompositorSwitchWorkspace => {
                 self.handle_compositor_tool(tool, &arguments, &correlation_id, &broadcaster);
+            }
+
+            HyprlandMcpTools::RefreshState => {
+                self.handle_refresh_state_tool(&correlation_id, &broadcaster);
             }
         }
     }

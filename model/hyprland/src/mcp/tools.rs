@@ -150,6 +150,10 @@ pub enum HyprlandMcpTools {
     CompositorCreateWorkspace,
     /// Switch workspace (compositor-level).
     CompositorSwitchWorkspace,
+
+    // State refresh tools
+    /// Refresh the Hyprland state and workspace snapshot from the compositor.
+    RefreshState,
 }
 
 impl AsRef<str> for HyprlandMcpTools {
@@ -222,6 +226,7 @@ impl AsRef<str> for HyprlandMcpTools {
             Self::SwitchWorkspace => "hyprland_switch_workspace",
             Self::CompositorCreateWorkspace => "hyprland_compositor_create_workspace",
             Self::CompositorSwitchWorkspace => "hyprland_compositor_switch_workspace",
+            Self::RefreshState => "hyprland_refresh_state",
         }
     }
 }
@@ -298,6 +303,7 @@ impl FromStr for HyprlandMcpTools {
             "hyprland_switch_workspace" => Ok(Self::SwitchWorkspace),
             "hyprland_compositor_create_workspace" => Ok(Self::CompositorCreateWorkspace),
             "hyprland_compositor_switch_workspace" => Ok(Self::CompositorSwitchWorkspace),
+            "hyprland_refresh_state" => Ok(Self::RefreshState),
             _ => Err(UnknownToolError::new(tool)),
         }
     }
@@ -383,6 +389,7 @@ mod tests {
             HyprlandMcpTools::SwitchWorkspace,
             HyprlandMcpTools::CompositorCreateWorkspace,
             HyprlandMcpTools::CompositorSwitchWorkspace,
+            HyprlandMcpTools::RefreshState,
         ];
 
         for tool in &all_tools {
@@ -391,7 +398,7 @@ mod tests {
             assert_eq!(*tool, parsed, "tool roundtrip mismatch for {name}");
         }
 
-        assert_eq!(all_tools.len(), 67, "expected 67 tool variants");
+        assert_eq!(all_tools.len(), 68, "expected 68 tool variants");
     }
 
     #[test]

@@ -547,6 +547,12 @@ impl McpCapabilitiesRegistrator for HyprlandService {
             "Switch workspace (compositor-level).",
             &serde_json::to_string(&schema_for!(SwitchWorkspaceCompositorArgs)).unwrap_or_default(),
         );
+        register_tool(
+            &broadcaster,
+            "hyprland_refresh_state",
+            "Refresh the Hyprland state and workspace snapshot from the compositor. Use this before reading hyprland://state or hyprland://workspace-snapshot resources to ensure fresh data.",
+            &serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default(),
+        );
 
         let no_args_schema = serde_json::to_string(&schema_for!(NoArgs)).unwrap_or_default();
 
