@@ -189,6 +189,10 @@ pub struct WindowEntry {
     pub class: String,
     /// The window title
     pub title: String,
+    /// The initial window class (set when the window was first created)
+    pub initial_class: String,
+    /// The initial window title (set when the window was first created)
+    pub initial_title: String,
     /// The window address as a hex string (e.g. "0x1234")
     pub address: String,
     /// The workspace ID the window is on
@@ -203,8 +207,14 @@ pub struct WindowEntry {
     pub pinned: bool,
     /// Whether this window is mapped (visible on screen)
     pub mapped: bool,
+    /// Whether this window is running under XWayland
+    pub xwayland: bool,
     /// The process ID of the window
     pub pid: i32,
+    /// The XDG tag for the window
+    pub xdg_tag: String,
+    /// The XDG description for the window
+    pub xdg_description: String,
     /// Whether this window is the currently focused window
     pub is_active: bool,
 }

@@ -14,7 +14,8 @@ You are managing a Hyprland Wayland compositor via MCP tools. This is a comprehe
 - `hyprland://workspace-snapshot` — Full snapshot of all workspaces with IDs, names, and windows
 - `hyprland://workspaces` — List of all workspaces
 - `hyprland://monitors` — List of all monitors with resolution, refresh rate, position, scale, transform, DPMS, VRR, and active workspace
-- `hyprland://windows` — List of all windows (clients) with class, title, workspace, floating, fullscreen, pinned, and active state
+- `hyprland://windows` — List of all windows (clients) with class, title, initial class, initial title, workspace, floating, fullscreen, pinned, mapped,
+  xwayland, PID, XDG tag, XDG description, and active state
 - `hyprland://version` — Hyprland compositor version information (tag, branch, commit, dirty, commit message, commit date, commits, aquamarine build, build
   flags)
 - `hyprland://window-status` — Latest window status event (open, close, move, float, urgent, title change, pin)

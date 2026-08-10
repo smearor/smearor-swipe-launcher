@@ -159,7 +159,7 @@ impl McpCapabilitiesRegistrator for HyprlandService {
             &broadcaster,
             "hyprland://windows",
             "Windows",
-            "List of all windows (clients) with class, title, workspace, floating, fullscreen, pinned, and active state.",
+            "List of all windows (clients) with class, title, initial class, initial title, workspace, floating, fullscreen, pinned, mapped, xwayland, PID, XDG tag, XDG description, and active state.",
             "application/json",
         );
 

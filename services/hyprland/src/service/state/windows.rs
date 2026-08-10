@@ -12,13 +12,15 @@ use tracing::error;
 pub(crate) async fn handle_windows_request(shared_state: &Arc<Mutex<HyprlandSharedState>>) {
     ensure_hyprland_instance_signature();
 
-    let windows = tokio::task::spawn_blocking(|| match hyprland::data::Clients::get() {
+    let windows = match hyprland::data::Clients::get_async().await {
         Ok(clients) => {
             let entries: Vec<WindowEntry> = clients
                 .into_iter()
                 .map(|c| WindowEntry {
                     class: c.class.clone(),
                     title: c.title.clone(),
+                    initial_class: c.initial_class.clone(),
+                    initial_title: c.initial_title.clone(),
                     address: c.address.to_string(),
                     workspace_id: c.workspace.id,
                     monitor: c.monitor,
@@ -26,7 +28,10 @@ pub(crate) async fn handle_windows_request(shared_state: &Arc<Mutex<HyprlandShar
                     fullscreen_mode: fullscreen_mode_to_string(c.fullscreen),
                     pinned: c.pinned,
                     mapped: c.mapped,
+                    xwayland: c.xwayland,
                     pid: c.pid,
+                    xdg_tag: c.xdg_tag.clone(),
+                    xdg_description: c.xdg_description.clone(),
                     is_active: c.focus_history_id == 0,
                 })
                 .collect();
@@ -36,9 +41,7 @@ pub(crate) async fn handle_windows_request(shared_state: &Arc<Mutex<HyprlandShar
             error!("Hyprland service: failed to query windows: {error}");
             Vec::new()
         }
-    })
-    .await
-    .unwrap_or_default();
+    };
 
     if let Ok(mut guard) = shared_state.lock() {
         guard.last_windows = Some(windows);
