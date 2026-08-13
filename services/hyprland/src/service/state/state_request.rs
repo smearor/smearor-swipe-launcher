@@ -26,7 +26,7 @@ pub(crate) async fn handle_state_request(broadcaster: &MessageBroadcasterInner, 
                 window_class: c.class.clone().into(),
                 window_title: c.title.clone().into(),
                 window_address: c.address.to_string().into(),
-                workspace_id: c.workspace.id,
+                workspace_id: stabby::option::Option::Some(c.workspace.id),
             });
 
         let is_fullscreen = active_window

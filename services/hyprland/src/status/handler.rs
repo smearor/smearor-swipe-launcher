@@ -48,7 +48,7 @@ fn convert_window_event_data(data: Option<hyprland::event_listener::WindowEventD
         window_class: d.class.into(),
         window_title: d.title.into(),
         window_address: d.address.to_string().into(),
-        workspace_id: 0,
+        workspace_id: stabby::option::Option::None(),
     })
     .into()
 }
@@ -76,7 +76,7 @@ pub fn register_handlers(listener: &mut hyprland::event_listener::EventListener,
                 window_class: data.window_class.into(),
                 window_title: data.window_title.into(),
                 window_address: data.window_address.to_string().into(),
-                workspace_id: 0,
+                workspace_id: stabby::option::Option::None(),
             },
             floats: false,
             workspace_name: data.workspace_name.into(),

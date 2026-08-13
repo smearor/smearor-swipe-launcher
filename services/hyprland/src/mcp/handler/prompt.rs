@@ -161,7 +161,7 @@ mod tests {
                 window_class: "firefox".into(),
                 window_title: "Firefox".into(),
                 window_address: "0x1".into(),
-                workspace_id: 1,
+                workspace_id: stabby::option::Option::Some(1),
             })
             .into(),
             ..Default::default()

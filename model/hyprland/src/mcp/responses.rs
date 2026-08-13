@@ -10,8 +10,8 @@ pub struct ActiveWindowEntry {
     pub title: String,
     /// Window address as a hex string (e.g. "0x1234567")
     pub address: String,
-    /// Workspace ID the window is on
-    pub workspace_id: i32,
+    /// Workspace ID the window is on, if available
+    pub workspace_id: Option<i32>,
 }
 
 /// Response body for the `hyprland://state` MCP resource.

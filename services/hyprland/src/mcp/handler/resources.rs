@@ -49,7 +49,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                     class: w.window_class.to_string(),
                     title: w.window_title.to_string(),
                     address: w.window_address.to_string(),
-                    workspace_id: w.workspace_id,
+                    workspace_id: w.workspace_id.as_ref().copied(),
                 });
                 let response = HyprlandStateResponse {
                     active_window,
@@ -68,7 +68,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                             class: w.window_class.to_string(),
                             title: w.window_title.to_string(),
                             address: w.window_address.to_string(),
-                            workspace_id: w.workspace_id,
+                            workspace_id: w.workspace_id.as_ref().copied(),
                         };
                         let json = serde_json::to_string(&entry).unwrap_or_default();
                         InvokeResourceResponse::success(correlation_id, &json)
@@ -83,7 +83,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                                         class: d.window_class.to_string(),
                                         title: d.window_title.to_string(),
                                         address: d.window_address.to_string(),
-                                        workspace_id: d.workspace_id,
+                                        workspace_id: d.workspace_id.as_ref().copied(),
                                     })
                                 },
                                 |opened| {
@@ -91,7 +91,7 @@ impl McpResourceHandler<HyprlandMcpResources> for HyprlandService {
                                         class: opened.data.data.window_class.to_string(),
                                         title: opened.data.data.window_title.to_string(),
                                         address: opened.data.data.window_address.to_string(),
-                                        workspace_id: opened.data.data.workspace_id,
+                                        workspace_id: opened.data.data.workspace_id.as_ref().copied(),
                                     })
                                 },
                                 |_| None,
@@ -292,14 +292,14 @@ fn window_event_to_dto(event: &WindowEvent) -> WindowStatusEvent {
                 event_type: "active_changed".to_string(),
                 class: d.map(|d| d.window_class.to_string()),
                 title: d.map(|d| d.window_title.to_string()),
-                workspace_id: d.map(|d| d.workspace_id),
+                workspace_id: d.and_then(|d| d.workspace_id.as_ref().copied()),
             }
         },
         |opened| WindowStatusEvent {
             event_type: "opened".to_string(),
             class: Some(opened.data.data.window_class.to_string()),
             title: Some(opened.data.data.window_title.to_string()),
-            workspace_id: Some(opened.data.data.workspace_id),
+            workspace_id: opened.data.data.workspace_id.as_ref().copied(),
         },
         |_closed| WindowStatusEvent {
             event_type: "closed".to_string(),
@@ -481,7 +481,7 @@ mod tests {
                 window_class: "firefox".into(),
                 window_title: "Mozilla Firefox".into(),
                 window_address: "0x123".into(),
-                workspace_id: 1,
+                workspace_id: stabby::option::Option::Some(1),
             })
             .into(),
             is_fullscreen: true,
@@ -523,7 +523,7 @@ mod tests {
                 window_class: "kitty".into(),
                 window_title: "kitty".into(),
                 window_address: "0x456".into(),
-                workspace_id: 2,
+                workspace_id: stabby::option::Option::Some(2),
             })
             .into(),
             ..Default::default()

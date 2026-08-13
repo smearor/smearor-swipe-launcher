@@ -14,8 +14,8 @@ pub struct HyprlandWindowEventData {
     pub window_title: stabby::string::String,
     /// The window address as a string (e.g. "0x1234567").
     pub window_address: stabby::string::String,
-    /// The workspace ID the window is on.
-    pub workspace_id: i32,
+    /// The workspace ID the window is on, if available.
+    pub workspace_id: stabby::option::Option<i32>,
 }
 
 impl TypedMessage for HyprlandWindowEventData {
