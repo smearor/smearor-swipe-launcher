@@ -121,6 +121,11 @@ impl WallpaperServiceConfig {
                 debug!("Discovered wallpaper config in working directory: {}", path.display());
                 return Some(path);
             }
+            let configs_path = cwd.join("configs").join("services").join("wallpaper.toml");
+            if configs_path.is_file() {
+                debug!("Discovered wallpaper config in configs/services: {}", configs_path.display());
+                return Some(configs_path);
+            }
         }
 
         if let Some(config_dir) = dirs::config_dir() {

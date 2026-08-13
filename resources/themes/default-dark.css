@@ -1,0 +1,129 @@
+/*
+ * Default Smearor theme - Dark mode
+ * Preserves the signature blue glow aesthetic on a dark background.
+ * Theme color variables (--theme-color-1..5) are injected by the theme service.
+ */
+
+/* Base window and area backgrounds */
+window {
+    background-color: transparent;
+}
+
+/* Text colors for dark mode */
+.widget-main-text {
+    color: #ffffff;
+}
+
+.widget-info-text {
+    color: #88ccff;
+}
+
+/* Icon base color - black icons with blue glow */
+.menu-button image {
+    color: #000000;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+.menu-button .nerd-icon {
+    color: #000000;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+.clock-time {
+    color: black;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+.sysinfo-icon {
+    color: #000000;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+/* Weather icon - blue glow */
+.weather-icon {
+    color: white;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+/* Network icon - blue glow */
+.network-icon {
+    color: white;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+/* Workspace switcher icon - blue glow */
+.workspace-switcher-icon {
+    color: white;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+/* Wallpaper fallback icon - blue glow */
+.wallpaper-widget .wallpaper-fallback-icon {
+    color: white;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+/* Info text */
+.network-info {
+    color: #88ccff;
+}
+
+.network-value {
+    color: #ffffff;
+    text-shadow: 0 0 4px rgba(0, 170, 255, 0.6);
+}
+
+.workspace-switcher-label {
+    color: #ffffff;
+    text-shadow: 0 0 4px rgba(0, 170, 255, 0.6);
+}
+
+.workspace-dot-active {
+    text-shadow: 0 0 4px rgba(0, 170, 255, 0.8);
+}
+
+/* Progress bars - celestial blue */
+.audio-volume-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+.mpris-progress-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+.power-timeout-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+.sysinfo-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+/* Hover backgrounds */
+.menu-button:hover {
+    background-color: color-mix(in srgb, var(--theme-color-3) 20%, transparent);
+}
+
+.wallpaper-widget:hover {
+    background-color: color-mix(in srgb, var(--theme-color-3) 20%, transparent);
+}
+
+.network-widget:hover {
+    background-color: color-mix(in srgb, var(--theme-color-3) 20%, transparent);
+}
+
+.workspace-switcher-widget:hover {
+    background-color: color-mix(in srgb, var(--theme-color-3) 20%, transparent);
+}
+
+/* Power widget colors */
+.power-scheduled {
+    color: #88ccff;
+    text-shadow: 0 0 4px rgba(136, 204, 255, 0.4);
+}
+
+/* Wallpaper widget */
+.wallpaper-widget .wallpaper-theme-name {
+    color: white;
+    text-shadow: 0 0 4px rgba(136, 204, 255, 0.4);
+}

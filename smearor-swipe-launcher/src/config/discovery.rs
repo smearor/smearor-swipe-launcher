@@ -177,6 +177,13 @@ impl ConfigDiscoveryService {
         Self::bootstrap_file(system_dir.join("services/services.toml"), xdg_dir.join("services/services.toml"));
 
         Self::bootstrap_file(system_dir.join("services/wallpaper.toml"), xdg_dir.join("services/wallpaper.toml"));
+
+        Self::bootstrap_file(system_dir.join("services/themes.toml"), xdg_dir.join("services/themes.toml"));
+
+        let themes_dir = xdg_dir.join("themes");
+        Self::bootstrap_file(system_dir.join("themes/default-dark.css"), themes_dir.join("default-dark.css"));
+        Self::bootstrap_file(system_dir.join("themes/default-light.css"), themes_dir.join("default-light.css"));
+        Self::bootstrap_file(system_dir.join("themes/halloween.css"), themes_dir.join("halloween.css"));
     }
 
     /// Copies a file from `source` to `destination` if the destination does not exist.

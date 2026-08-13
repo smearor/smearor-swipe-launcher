@@ -93,6 +93,10 @@ id = "wallpaper"
 path = "target/release/libsmearor_wallpaper_service.so"
 
 [[services]]
+id = "theme"
+path = "target/release/libsmearor_theme_service.so"
+
+[[services]]
 id = "streamdeck"
 path = "target/release/libsmearor_streamdeck_service.so"
 
@@ -170,6 +174,14 @@ auto_start = false
 # working dir > ~/.config/smearor/services/wallpaper.toml > /usr/share/smearor/services/wallpaper.toml
 #config_path = "configs/services/wallpaper.toml"
 kill_grace_period_ms = 3000
+
+[theme]
+default_theme = "default"
+auto_apply = true
+follow_system_color_scheme = true
+# config_path is optional. If omitted, the launcher resolves themes.toml via:
+# working dir > ~/.config/smearor/services/themes.toml > /usr/share/smearor/services/themes.toml
+#config_path = "configs/services/themes.toml"
 
 [wayland]
 enable_workspace_tracking = true

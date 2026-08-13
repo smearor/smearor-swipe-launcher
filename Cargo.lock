@@ -7438,6 +7438,68 @@ dependencies = [
 ]
 
 [[package]]
+name = "smearor-theme-model"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "smearor-model-mcp",
+ "smearor-personalization-model",
+ "smearor-swipe-launcher-plugin-api",
+ "stabby",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "smearor-theme-service"
+version = "0.1.0"
+dependencies = [
+ "dirs 6.0.0",
+ "glib",
+ "gtk4",
+ "paste",
+ "schemars",
+ "serde",
+ "serde_json",
+ "shellexpand",
+ "smearor-model-mcp",
+ "smearor-personalization-model",
+ "smearor-swipe-launcher-plugin-api",
+ "smearor-theme-model",
+ "smearor-wallpaper-model",
+ "stabby",
+ "thiserror 2.0.20",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
+name = "smearor-theme-widget"
+version = "0.1.0"
+dependencies = [
+ "glib",
+ "gtk4",
+ "paste",
+ "schemars",
+ "serde",
+ "serde_json",
+ "smearor-model-mcp",
+ "smearor-model-widget",
+ "smearor-personalization-model",
+ "smearor-render-utils",
+ "smearor-swipe-launcher-plugin-api",
+ "smearor-theme-model",
+ "stabby",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "typed-builder",
+]
+
+[[package]]
 name = "smearor-voice-assistant-model"
 version = "0.1.0"
 dependencies = [

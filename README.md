@@ -117,6 +117,7 @@ Plugins communicate via the message broker using typed messages defined in model
 | **power**            | Power management via systemd-logind (shutdown, reboot, suspend, etc.)            |
 | **streamdeck**       | Elgato Stream Deck USB HID driver (all models)                                   |
 | **sysinfo**          | System metrics: CPU, memory, disk, network, temperature, uptime, load            |
+| **theme**            | Theme management: CSS application, color variables, wallpaper coupling           |
 | **terminal_command** | Launches and manages terminal commands from widgets                              |
 | **voice_assistant**  | Local LLM voice assistant with ReAct tool selection, STT (whisper-rs), TTS       |
 | **wallpaper**        | Wallpaper theme scanning and application                                         |
@@ -139,6 +140,7 @@ Plugins communicate via the message broker using typed messages defined in model
 | **notifications**      | Notification badge counter and slide-in banners                                         |
 | **power**              | Power actions: shutdown, reboot, suspend, hibernate, lock, logout, firmware reboot      |
 | **sysinfo**            | Real-time system monitoring sub-widgets (CPU, memory, disk, network, temperature, etc.) |
+| **theme**              | Theme switcher with per-theme views, preview images, and swipe navigation               |
 | **voice_assistant**    | Voice assistant UI with microphone icon and state feedback                              |
 | **wallpaper**          | Wallpaper theme browser with preview images                                             |
 | **weather**            | Weather forecast with 15 views (current, forecast, wind, UV, sunrise/sunset, etc.)      |

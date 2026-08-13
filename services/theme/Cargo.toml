@@ -1,0 +1,43 @@
+[package]
+name = "smearor-theme-service"
+version = "0.1.0"
+description = "Theme management service plugin for the Smearor Swipe Launcher"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dirs = { workspace = true }
+glib = { workspace = true }
+gtk4 = { workspace = true }
+paste = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+shellexpand = { workspace = true }
+stabby = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+
+smearor-model-mcp = { path = "../../model/mcp" }
+smearor-personalization-model = { path = "../../model/personalization" }
+smearor-theme-model = { path = "../../model/theme" }
+smearor-wallpaper-model = { path = "../../model/wallpaper" }
+smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
+
+[package.metadata.deb]
+name = "smearor-service-theme"
+depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
+assets = [
+    ["target/release/libsmearor_theme_service.so", "/usr/lib/smearor/", "644"],
+    ["../resources/themes/default-dark.css", "/usr/share/smearor/themes/", "644"],
+    ["../resources/themes/default-light.css", "/usr/share/smearor/themes/", "644"],
+    ["../resources/themes/halloween.css", "/usr/share/smearor/themes/", "644"],
+    ["../configs/system/services/themes.toml", "/usr/share/smearor/services/themes.toml", "644"],
+]

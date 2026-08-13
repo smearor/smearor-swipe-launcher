@@ -69,6 +69,10 @@ id = "wallpaper"
 name = "wallpaper_service"
 
 [[services]]
+id = "theme"
+name = "theme_service"
+
+[[services]]
 id = "streamdeck"
 name = "streamdeck_service"
 
@@ -130,6 +134,11 @@ public_ip_url = "https://api.ipify.org?format=json"
 default_theme = "Smearor"
 auto_start = false
 kill_grace_period_ms = 3000
+
+[theme]
+default_theme = "default"
+auto_apply = true
+follow_system_color_scheme = true
 
 [wayland]
 enable_workspace_tracking = true

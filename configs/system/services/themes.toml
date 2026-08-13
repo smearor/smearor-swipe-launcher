@@ -1,0 +1,29 @@
+# System-wide default theme definitions
+# Installed to /usr/share/smearor/services/themes.toml
+# Users can override by creating ~/.config/smearor/services/themes.toml
+
+[[themes]]
+name = "default"
+description = "Default Smearor theme with the official design palette"
+mode = "System"
+css_files_dark = ["~/.config/smearor/themes/default-dark.css"]
+css_files_light = ["~/.config/smearor/themes/default-light.css"]
+preview_icon = "nf-md-palette"
+preview_image_path = ""
+wallpaper_theme = "Smearor"
+
+[[themes]]
+name = "Halloween"
+description = "Spooky Halloween theme with coupled wallpaper"
+mode = "Dark"
+css_files_dark = ["~/.config/smearor/themes/halloween.css"]
+preview_icon = "nf-md-ghost"
+preview_image_path = ""
+wallpaper_theme = "Halloween"
+
+[themes.colors.dark]
+color_1 = "#ff6b00ff"
+color_2 = "#8b00ffff"
+color_3 = "#00ff00ff"
+color_4 = "#ff0000ff"
+color_5 = "#fff200ff"

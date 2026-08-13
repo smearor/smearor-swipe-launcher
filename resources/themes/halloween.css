@@ -1,0 +1,208 @@
+/*
+ * Halloween theme - Dark mode only
+ * Spooky orange/purple/green aesthetic on a dark background.
+ * Theme color variables (--theme-color-1..5) are injected by the theme service:
+ *   --theme-color-1: pumpkin orange (#ff6b00)
+ *   --theme-color-2: witch purple (#8b00ff)
+ *   --theme-color-3: toxic green (#00ff00)
+ *   --theme-color-4: blood red (#ff0000)
+ *   --theme-color-5: moon yellow (#fff200)
+ */
+
+/* Base window */
+window {
+    background-color: transparent;
+}
+
+/* Text colors - spooky styling */
+.widget-main-text {
+    color: #ffcc66;
+    text-shadow: 0 0 6px rgba(255, 107, 0, 0.5);
+}
+
+.widget-info-text {
+    color: #bb88ff;
+    opacity: 0.9;
+}
+
+/* Icon base color - dark with orange glow */
+.menu-button image {
+    color: #1a0a00;
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-1)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-1) 67%, transparent));
+}
+
+.menu-button .nerd-icon {
+    color: #1a0a00;
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-1)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-1) 67%, transparent));
+}
+
+/* Clock - pumpkin orange glow */
+.clock-time {
+    color: #1a0a00;
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-1)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-1) 67%, transparent));
+}
+
+/* Sysinfo icons - toxic green glow */
+.sysinfo-icon {
+    color: #1a0a00;
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 67%, transparent));
+}
+
+/* Sysinfo status colors */
+.sysinfo-normal {
+    color: var(--theme-color-3);
+}
+
+.sysinfo-warning {
+    color: var(--theme-color-5);
+}
+
+.sysinfo-critical {
+    color: var(--theme-color-4);
+}
+
+.sysinfo-temperature,
+.sysinfo-details,
+.sysinfo-status {
+    color: #aa8866;
+}
+
+.sysinfo-temperature-label {
+    color: #886644;
+}
+
+/* Progress bars - toxic green */
+.audio-volume-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+.mpris-progress-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+.power-timeout-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+.sysinfo-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+/* Hover backgrounds - purple tint */
+.menu-button:hover {
+    background-color: color-mix(in srgb, var(--theme-color-2) 20%, transparent);
+}
+
+.wallpaper-widget:hover {
+    background-color: color-mix(in srgb, var(--theme-color-2) 20%, transparent);
+}
+
+.network-widget:hover {
+    background-color: color-mix(in srgb, var(--theme-color-2) 20%, transparent);
+}
+
+.workspace-switcher-widget:hover {
+    background-color: color-mix(in srgb, var(--theme-color-2) 20%, transparent);
+}
+
+/* Fan-active - purple glow */
+.menu-button.fan-active image {
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-2)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-2) 67%, transparent));
+}
+
+/* Light-active - moon yellow glow */
+.menu-button.light-active image {
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-5)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-5) 67%, transparent));
+}
+
+/* Longpress glow - blood red */
+@keyframes longpress-glow {
+    0% {
+        box-shadow: 0 0 5px color-mix(in srgb, var(--theme-color-1) 20%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 40px var(--theme-color-4),
+        0 0 60px color-mix(in srgb, var(--theme-color-4) 60%, transparent);
+    }
+}
+
+/* Games area - blood red border */
+.games-icon-color .nerd-icon {
+    color: var(--theme-color-4);
+}
+
+.games-area-bg {
+    border: 1px solid color-mix(in srgb, var(--theme-color-4) 20%, transparent);
+}
+
+/* Weather icon - orange glow */
+.weather-icon {
+    color: #ffcc66;
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-1)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-1) 67%, transparent));
+}
+
+/* Network widget */
+.network-icon {
+    color: #ffcc66;
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-1)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-1) 67%, transparent));
+}
+
+.network-value {
+    color: #ffcc66;
+    text-shadow: 0 0 4px rgba(255, 107, 0, 0.6);
+}
+
+.network-info {
+    color: #bb88ff;
+    text-shadow: 0 0 4px rgba(139, 0, 255, 0.4);
+}
+
+/* Workspace switcher */
+.workspace-switcher-icon {
+    color: #ffcc66;
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-1)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-1) 67%, transparent));
+}
+
+.workspace-switcher-label {
+    color: #ffcc66;
+    text-shadow: 0 0 4px rgba(255, 107, 0, 0.6);
+}
+
+.workspace-dot-active {
+    color: var(--theme-color-1);
+    text-shadow: 0 0 4px rgba(255, 107, 0, 0.8);
+}
+
+.workspace-dot-inactive {
+    color: #553333;
+}
+
+/* Wallpaper widget */
+.wallpaper-widget .wallpaper-fallback-icon {
+    color: #ffcc66;
+    filter: brightness(0.7) drop-shadow(0 0 4px var(--theme-color-1)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-1) 67%, transparent));
+}
+
+.wallpaper-widget .wallpaper-theme-name {
+    color: #ffcc66;
+    text-shadow: 0 0 4px rgba(255, 107, 0, 0.4);
+}
+
+/* Power widget - blood red theme */
+.power-inhibitor-warning {
+    color: var(--theme-color-5);
+    text-shadow: 0 0 4px rgba(255, 242, 0, 0.4);
+    border: 1px solid var(--theme-color-5);
+}
+
+.power-countdown {
+    color: var(--theme-color-4);
+    text-shadow: 0 0 4px rgba(255, 0, 0, 0.4);
+    border: 1px solid var(--theme-color-4);
+}
+
+.power-scheduled {
+    color: #bb88ff;
+    text-shadow: 0 0 4px rgba(139, 0, 255, 0.4);
+    border: 1px solid var(--theme-color-2);
+}

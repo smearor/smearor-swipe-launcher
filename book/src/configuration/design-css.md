@@ -77,6 +77,20 @@ transparent).
 
 Widgets can read the system accent color via the [personalization service](../services/personalization.md) and adapt their icon colors accordingly.
 
+### Theme Color Variables
+
+The [theme service](../services/theme.md) injects CSS custom properties for the currently applied theme. These are available in all CSS layers:
+
+| Variable          | Description             |
+|-------------------|-------------------------|
+| `--theme-color-1` | Primary accent color    |
+| `--theme-color-2` | Secondary accent color  |
+| `--theme-color-3` | Tertiary accent color   |
+| `--theme-color-4` | Quaternary accent color |
+| `--theme-color-5` | Quinary accent color    |
+
+Each theme defines 5 colors per mode (dark/light) in `themes.toml`. See [theme service](../services/theme.md) for details.
+
 ## Automatic CSS Classes
 
 The launcher applies CSS classes automatically based on context. These classes are always present and can be used in any CSS layer.

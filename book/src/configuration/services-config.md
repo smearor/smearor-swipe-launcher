@@ -121,6 +121,7 @@ Some services have their own config files:
 
 - `configs/services/services.toml` — Main services list
 - `configs/services/wallpaper.toml` — Wallpaper service config
+- `configs/services/themes.toml` — Theme service config
 
 ### Config Discovery
 
@@ -137,6 +138,12 @@ The wallpaper config (`wallpaper.toml`) is discovered similarly:
 2. `~/.config/smearor/services/wallpaper.toml` (user config)
 3. `/usr/share/smearor/services/wallpaper.toml` (system default)
 
+The theme config (`themes.toml`) is discovered similarly:
+
+1. `themes.toml` in the working directory
+2. `~/.config/smearor/services/themes.toml` (user config)
+3. `/usr/share/smearor/services/themes.toml` (system default)
+
 On first run, the launcher copies default configs from `/usr/share/smearor/` to `~/.config/smearor/` if they don't already exist.
 
 ## Topic Routing
@@ -146,6 +153,7 @@ Service topics follow the pattern `service.{id}.{action}`:
 - `service.audio.command` → routed to the `audio` service
 - `service.doa.command` → routed to the `doa` service
 - `service.hyprland.dispatch` → routed to the `hyprland` service
+- `service.theme.command` → routed to the `theme` service
 - `service.weather.command` → routed to the `weather` service
 
 The `ServiceManager` matches the topic prefix to the service ID and routes the message accordingly.

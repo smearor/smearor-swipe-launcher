@@ -142,3 +142,18 @@ wallpaper_type = "Application"
 config.Application.command = "smearor-wrot"
 config.Application.outputs = ["ALL"]
 config.Application.arguments = ["--layer", "Background", "-f", "~/.local/bin/mousam"]
+
+[[themes]]
+name = "Halloween"
+description = "Spooky Halloween background videos"
+preview_image_path = "~/Bilder/Themes/halloween-preview.png"
+preview_icon = "nf-md-ghost"
+wallpaper_type = "Video"
+config.Video.directory = "~/Videos/Halloween"
+config.Video.outputs = ["ALL"]
+config.Video.loop_playlist = true
+config.Video.shuffle = false
+config.Video.muted = true
+config.Video.volume = 0
+config.Video.speed_percentage = 100
+config.Video.extra_arguments = []

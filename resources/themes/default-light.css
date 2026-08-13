@@ -1,0 +1,141 @@
+/*
+ * Default Smearor theme - Light mode
+ * Blue glow aesthetic adapted for a light background.
+ * Theme color variables (--theme-color-1..5) are injected by the theme service.
+ */
+
+/* Base window and area backgrounds */
+window {
+    background-color: transparent;
+}
+
+/* Text colors for light mode - darker text for readability */
+.widget-main-text {
+    color: #1a1a2e;
+}
+
+.widget-info-text {
+    color: #0066aa;
+}
+
+/* Icon base color - dark icons with blue glow for light mode */
+.menu-button image {
+    color: #1a1a2e;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+.menu-button .nerd-icon {
+    color: #1a1a2e;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+.clock-time {
+    color: #1a1a2e;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+.sysinfo-icon {
+    color: #1a1a2e;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+/* Info text */
+.network-info {
+    color: #0066aa;
+}
+
+.network-value {
+    color: #1a1a2e;
+    text-shadow: 0 0 4px rgba(0, 170, 255, 0.4);
+}
+
+.workspace-switcher-label {
+    color: #1a1a2e;
+    text-shadow: 0 0 4px rgba(0, 170, 255, 0.4);
+}
+
+.workspace-dot-active {
+    text-shadow: 0 0 4px rgba(0, 170, 255, 0.6);
+}
+
+.workspace-dot-inactive {
+    color: #999999;
+}
+
+/* Progress bars - celestial blue */
+.audio-volume-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+.mpris-progress-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+.power-timeout-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+.sysinfo-bar block.filled {
+    background-color: var(--theme-color-3);
+}
+
+/* Hover backgrounds - slightly stronger for light mode visibility */
+.menu-button:hover {
+    background-color: color-mix(in srgb, var(--theme-color-3) 15%, transparent);
+}
+
+.wallpaper-widget:hover {
+    background-color: color-mix(in srgb, var(--theme-color-3) 15%, transparent);
+}
+
+.network-widget:hover {
+    background-color: color-mix(in srgb, var(--theme-color-3) 15%, transparent);
+}
+
+.workspace-switcher-widget:hover {
+    background-color: color-mix(in srgb, var(--theme-color-3) 15%, transparent);
+}
+
+/* Sysinfo detail colors - darker for light mode */
+.sysinfo-temperature,
+.sysinfo-details,
+.sysinfo-status {
+    color: #555555;
+}
+
+.sysinfo-temperature-label {
+    color: #777777;
+}
+
+/* Power widget colors */
+.power-scheduled {
+    color: #0066aa;
+    text-shadow: 0 0 4px rgba(0, 102, 170, 0.3);
+}
+
+/* Wallpaper widget */
+.wallpaper-widget .wallpaper-theme-name {
+    color: #1a1a2e;
+    text-shadow: 0 0 4px rgba(0, 102, 170, 0.3);
+}
+
+/* Weather and network icons - dark with blue glow for light mode */
+.weather-icon {
+    color: #1a1a2e;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+.network-icon {
+    color: #1a1a2e;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+.workspace-switcher-icon {
+    color: #1a1a2e;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}
+
+.wallpaper-widget .wallpaper-fallback-icon {
+    color: #1a1a2e;
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
+}

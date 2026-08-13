@@ -20,13 +20,13 @@
 }
 
 .games-icon-color .nerd-icon {
-    color: #dc0073;
+    color: var(--theme-color-4);
 }
 
 .games-area-bg {
     background: rgba(0, 0, 0, 0.1);
-    border: 1px solid #dc007333;
-    /*background-color: #dc007333;*/
+    border: 1px solid color-mix(in srgb, var(--theme-color-4) 20%, transparent);
+    /*background-color: color-mix(in srgb, var(--theme-color-4) 20%, transparent);*/
 }
 
 @keyframes longpress-fill {
@@ -40,11 +40,11 @@
 
 @keyframes longpress-glow {
     0% {
-        box-shadow: 0 0 5px #00a1e433;
+        box-shadow: 0 0 5px color-mix(in srgb, var(--theme-color-3) 20%, transparent);
     }
     100% {
-        box-shadow: 0 0 40px #dc0073ff,
-        0 0 60px #dc007399;
+        box-shadow: 0 0 40px var(--theme-color-4),
+        0 0 60px color-mix(in srgb, var(--theme-color-4) 60%, transparent);
     }
 }
 
@@ -341,7 +341,7 @@ scrolledwindow {
 }
 
 .menu-button:hover {
-    background-color: #00a1e433;
+    background-color: color-mix(in srgb, var(--theme-color-3) 20%, transparent);
 }
 
 @keyframes fan-spin {
@@ -355,22 +355,22 @@ scrolledwindow {
 
 .menu-button.fan-active image {
     animation: fan-spin 2s linear infinite;
-    filter: brightness(1.0) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4aa);
+    filter: brightness(1.0) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 67%, transparent));
     transition: filter 0.3s ease-in-out;
 }
 
 .menu-button.light-active image {
-    filter: brightness(1.0) drop-shadow(0 0 4px #f5b700ff) drop-shadow(0 0 8px #f5b700aa);
+    filter: brightness(1.0) drop-shadow(0 0 4px var(--theme-color-2)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-2) 67%, transparent));
     transition: filter 0.3s ease-in-out;
 }
 
 /*.menu-button.glow-blue:hover {*/
-/*    box-shadow: 0 0 15px #00a1e4cc, 0 0 30px #00a1e466;*/
+/*    box-shadow: 0 0 15px color-mix(in srgb, var(--theme-color-3) 80%, transparent), 0 0 30px #00a1e466;*/
 /*    transition: box-shadow 0.3s ease-in-out;*/
 /*}*/
 
 /*.menu-button.glow-blue.longpress-active {*/
-/*    box-shadow: 0 0 25px #00a1e4ff, 0 0 50px #00a1e4cc, 0 0 75px #00a1e499;*/
+/*    box-shadow: 0 0 25px var(--theme-color-3), 0 0 50px color-mix(in srgb, var(--theme-color-3) 80%, transparent), 0 0 75px #00a1e499;*/
 /*    transition: box-shadow 0.2s ease-in-out;*/
 /*}*/
 
@@ -380,7 +380,7 @@ scrolledwindow {
     /*min-height: 36px;*/
     /*background-color: transparent;*/
     color: #000000;
-    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
 }
 
 .widget-main-text {
@@ -405,7 +405,7 @@ scrolledwindow {
 }
 
 .audio-volume-bar block.filled {
-    background-color: #00a1e4;
+    background-color: var(--theme-color-3);
     border-radius: 4px;
 }
 
@@ -420,7 +420,7 @@ scrolledwindow {
 }
 
 .mpris-progress-bar block.filled {
-    background-color: #00a1e4;
+    background-color: var(--theme-color-3);
     border-radius: 4px;
 }
 
@@ -435,7 +435,7 @@ scrolledwindow {
 }
 
 .power-timeout-bar block.filled {
-    background-color: #00a1e4;
+    background-color: var(--theme-color-3);
     border-radius: 4px;
 }
 
@@ -450,7 +450,7 @@ scrolledwindow {
     font-size: 32px;
     font-weight: 900;
     color: black;
-    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
 }
 
 /* Sysinfo widgets */
@@ -458,7 +458,7 @@ scrolledwindow {
     font-family: 'NerdFontsSymbolsOnly';
     font-size: 1.5em;
     color: #000000;
-    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
 }
 
 .sysinfo-value {
@@ -478,15 +478,15 @@ scrolledwindow {
 }
 
 .sysinfo-normal {
-    color: #04e762;
+    color: var(--theme-color-1);
 }
 
 .sysinfo-warning {
-    color: #f5b700;
+    color: var(--theme-color-2);
 }
 
 .sysinfo-critical {
-    color: #dc0073;
+    color: var(--theme-color-4);
 }
 
 .sysinfo-bar trough {
@@ -496,7 +496,7 @@ scrolledwindow {
 }
 
 .sysinfo-bar block.filled {
-    background-color: #00a1e4;
+    background-color: var(--theme-color-3);
     border-radius: 4px;
 }
 
@@ -512,13 +512,13 @@ scrolledwindow {
 .weather-icon {
     font-family: 'NerdFontsSymbolsOnly';
     color: white;
-    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
 }
 
 .menu-button .nerd-icon {
     font-size: 1.8em;
     color: #000000;
-    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
 }
 
 .power-inhibitor-warning {
@@ -547,12 +547,12 @@ scrolledwindow {
 }
 
 .wallpaper-widget:hover {
-    background-color: #00a1e433;
+    background-color: color-mix(in srgb, var(--theme-color-3) 20%, transparent);
 }
 
 .wallpaper-widget .wallpaper-fallback-icon {
     color: white;
-    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
 }
 
 .wallpaper-widget .wallpaper-theme-name {
@@ -566,12 +566,12 @@ scrolledwindow {
 }
 
 .network-widget:hover {
-    background-color: #00a1e433;
+    background-color: color-mix(in srgb, var(--theme-color-3) 20%, transparent);
 }
 
 .network-icon {
     color: white;
-    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
 }
 
 .network-value {
@@ -599,12 +599,12 @@ scrolledwindow {
 }
 
 .workspace-switcher-widget:hover {
-    background-color: #00a1e433;
+    background-color: color-mix(in srgb, var(--theme-color-3) 20%, transparent);
 }
 
 .workspace-switcher-icon {
     color: white;
-    filter: brightness(0.8) drop-shadow(0 0 4px #00a1e4ff) drop-shadow(0 0 8px #00a1e4cc);
+    filter: brightness(0.8) drop-shadow(0 0 4px var(--theme-color-3)) drop-shadow(0 0 8px color-mix(in srgb, var(--theme-color-3) 80%, transparent));
 }
 
 .workspace-switcher-label {
@@ -620,7 +620,7 @@ scrolledwindow {
 }
 
 .workspace-dot-active {
-    color: #00a1e4;
+    color: var(--theme-color-3);
     font-size: 1.2em;
     text-shadow: 0 0 4px rgba(0, 170, 255, 0.8);
 }

@@ -1,0 +1,45 @@
+# Theme definitions for the Smearor Swipe Launcher
+# Each theme bundles CSS files, colors, and optional wallpaper coupling.
+# Colors default to the official Smearor design palette (see docs/DESIGN.md).
+
+[[themes]]
+name = "default"
+description = "Default Smearor theme with the official design palette"
+mode = "System"
+css_files_dark = ["~/.config/smearor/themes/default-dark.css"]
+css_files_light = ["~/.config/smearor/themes/default-light.css"]
+preview_icon = "nf-md-palette"
+preview_image_path = ""
+wallpaper_theme = "Smearor"
+
+# Both dark and light palettes default to the Smearor design palette.
+# Override either one to customize per mode:
+# [themes.colors.dark]
+# color_1 = "#04e762ff"  # malachite
+# color_2 = "#f5b700ff"  # selective-yellow
+# color_3 = "#00a1e4ff"  # celestial-blue
+# color_4 = "#dc0073ff"  # mexican-pink
+# color_5 = "#89fc00ff"  # chartreuse
+
+# [themes.colors.light]
+# color_1 = "#04e762ff"  # malachite
+# color_2 = "#f5b700ff"  # selective-yellow
+# color_3 = "#00a1e4ff"  # celestial-blue
+# color_4 = "#dc0073ff"  # mexican-pink
+# color_5 = "#89fc00ff"  # chartreuse
+
+[[themes]]
+name = "Halloween"
+description = "Spooky Halloween theme with coupled wallpaper"
+mode = "Dark"
+css_files_dark = ["~/.config/smearor/themes/halloween.css"]
+preview_icon = "nf-md-ghost"
+preview_image_path = "/home/aschaeffer/Bilder/Themes/halloween-preview.png"
+wallpaper_theme = "Halloween"
+
+[themes.colors.dark]
+color_1 = "#ff6b00ff"  # pumpkin orange
+color_2 = "#8b00ffff"  # witch purple
+color_3 = "#00ff00ff"  # toxic green
+color_4 = "#ff0000ff"  # blood red
+color_5 = "#fff200ff"  # moon yellow
