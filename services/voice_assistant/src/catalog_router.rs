@@ -109,13 +109,6 @@ impl CatalogRouter {
         self.dirty.load(Ordering::Relaxed)
     }
 
-    /// Selects the top N entries relevant to the user query using semantic similarity.
-    /// Filters out entries below the similarity threshold, then takes top_n.
-    /// Returns serialized entry strings, best-scored first.
-    pub fn select(&self, query: &str, top_n: usize, threshold: f32) -> Vec<String> {
-        self.select_with_ranking(query, top_n, threshold).0
-    }
-
     /// Like `select` but also returns the top-5 scored entries with their scores.
     pub fn select_with_ranking(&self, query: &str, top_n: usize, threshold: f32) -> (Vec<String>, Vec<(String, f32)>) {
         if self.entries.is_empty() {
