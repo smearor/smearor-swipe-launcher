@@ -246,6 +246,7 @@ impl GpuConfig {
 #[derive(Debug, Clone)]
 pub struct ContextConfig {
     /// Maximum tokens before context shifting is triggered.
+    #[allow(dead_code)]
     pub max_context_tokens: usize,
     /// Ratio of tokens to keep when shifting (0.0–1.0).
     pub context_keep_ratio: f64,

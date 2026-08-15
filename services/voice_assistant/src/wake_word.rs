@@ -78,6 +78,7 @@ impl SharedAudioConsumer {
     }
 
     /// Returns the number of samples currently available in the buffer.
+    #[allow(dead_code)]
     pub fn available(&self) -> usize {
         self.buffer.lock().map(|buf| buf.occupied_len()).unwrap_or(0)
     }
@@ -87,6 +88,7 @@ impl SharedAudioConsumer {
 /// thread and is kept alive for the lifetime of this handle.
 pub struct SharedAudioHandle {
     consumers: Vec<Arc<Mutex<HeapRb<f32>>>>,
+    #[allow(dead_code)]
     sample_rate: u32,
     stop_tx: Option<std::sync::mpsc::Sender<()>>,
     join_handle: Option<std::thread::JoinHandle<()>>,
@@ -99,6 +101,7 @@ impl SharedAudioHandle {
     }
 
     /// Returns the sample rate of the captured audio.
+    #[allow(dead_code)]
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
