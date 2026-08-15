@@ -4,6 +4,7 @@ After=graphical-session.target
 
 [Service]
 Type=simple
+Environment=LD_LIBRARY_PATH=/usr/lib/smearor
 ExecStart=/usr/bin/smearor-swipe-launcher
 Restart=on-failure
 RestartSec=5
