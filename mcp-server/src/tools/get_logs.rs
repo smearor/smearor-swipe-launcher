@@ -34,10 +34,36 @@ pub fn handle_get_logs(log_buffer: &Option<Arc<LogBuffer>>, params: Option<&Valu
 
     let entries = log_buffer.query(Some(min_level), log_params.target_prefix.as_deref(), since_ms, Some(log_params.limit));
 
+    let counts = log_buffer.per_level_counts();
+    let caps = log_buffer.per_level_capacities();
+    let per_level = vec![
+        crate::LevelStats {
+            count: counts[0],
+            capacity: caps[0],
+        },
+        crate::LevelStats {
+            count: counts[1],
+            capacity: caps[1],
+        },
+        crate::LevelStats {
+            count: counts[2],
+            capacity: caps[2],
+        },
+        crate::LevelStats {
+            count: counts[3],
+            capacity: caps[3],
+        },
+        crate::LevelStats {
+            count: counts[4],
+            capacity: caps[4],
+        },
+    ];
+
     let response = LogQueryResponse {
         total_returned: entries.len(),
         total_in_buffer: log_buffer.len(),
         buffer_capacity: log_buffer.capacity(),
+        per_level,
         entries,
     };
 
@@ -85,7 +111,9 @@ mod tests {
         assert!(obj.contains_key("total_in_buffer"));
         assert!(obj.contains_key("buffer_capacity"));
         assert_eq!(obj["total_in_buffer"].as_u64().unwrap(), 5);
-        assert_eq!(obj["buffer_capacity"].as_u64().unwrap(), 100);
+        // Capacity is clamped to minimum per-level guarantees (100+200+500+500+500).
+        assert_eq!(obj["buffer_capacity"].as_u64().unwrap(), 1800);
+        assert!(obj.contains_key("per_level"));
     }
 
     #[test]

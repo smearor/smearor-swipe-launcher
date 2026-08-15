@@ -8,4 +8,5 @@ pub use buffer::LogBuffer;
 pub use buffer_layer::LogBufferLayer;
 pub use entry::LogEntry;
 pub use entry_visitor::LogEntryVisitor;
+pub use query_response::LevelStats;
 pub use query_response::LogQueryResponse;

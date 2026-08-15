@@ -14,6 +14,7 @@ pub mod server;
 pub mod tools;
 
 pub use crate::error::McpError;
+pub use crate::logs::LevelStats;
 pub use crate::logs::LogBuffer;
 pub use crate::logs::LogBufferLayer;
 pub use crate::logs::LogEntry;

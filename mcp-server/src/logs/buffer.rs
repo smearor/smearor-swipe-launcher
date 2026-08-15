@@ -7,30 +7,50 @@ use crate::logs::entry::LogEntry;
 
 /// Thread-safe ring buffer for capturing tracing log events.
 ///
-/// Uses `parking_lot::Mutex` for performance in the tracing hot path.
-/// `push()` evicts oldest entry at capacity. `query()` filters by level,
-/// target prefix, timestamp, and limit.
+/// Uses per-level ring buffers so that high-volume trace/debug logs cannot
+/// evict important error/warn/info entries. Each level gets its own bounded
+/// `VecDeque`. `push()` routes into the appropriate level buffer.
+/// `query()` merges entries from all levels >= `min_level`.
 #[derive(Debug)]
 pub struct LogBuffer {
-    /// Inner ring buffer protected by `parking_lot::Mutex` for concurrent access.
-    inner: Mutex<VecDeque<LogEntry>>,
-    /// Maximum number of entries the buffer can hold before evicting the oldest.
-    capacity: usize,
+    /// Per-level ring buffers, indexed by `Level` ordering (ERROR=0 .. TRACE=4).
+    /// Each buffer has its own capacity, preventing noisy levels from
+    /// evicting important entries in other levels.
+    buffers: [Mutex<VecDeque<LogEntry>>; 5],
+    /// Per-level capacities, indexed identically to `buffers`.
+    capacities: [usize; 5],
 }
 
 impl LogBuffer {
-    /// Create a new `LogBuffer` with the given bounded capacity.
+    /// Create a new `LogBuffer` with the given total capacity distributed
+    /// across per-level buffers.
+    ///
+    /// The capacity is split as follows:
+    /// - ERROR: 10% (min 100)
+    /// - WARN: 15% (min 200)
+    /// - INFO: 25% (min 500)
+    /// - DEBUG: 25% (min 500)
+    /// - TRACE: 25% (min 500)
     pub fn new(capacity: usize) -> Self {
+        let capacities = split_capacity(capacity);
         Self {
-            inner: Mutex::new(VecDeque::with_capacity(capacity)),
-            capacity,
+            buffers: [
+                Mutex::new(VecDeque::with_capacity(capacities[0])),
+                Mutex::new(VecDeque::with_capacity(capacities[1])),
+                Mutex::new(VecDeque::with_capacity(capacities[2])),
+                Mutex::new(VecDeque::with_capacity(capacities[3])),
+                Mutex::new(VecDeque::with_capacity(capacities[4])),
+            ],
+            capacities,
         }
     }
 
-    /// Push a new entry into the ring buffer, evicting the oldest if at capacity.
+    /// Push a new entry into the ring buffer for its level, evicting the
+    /// oldest if that level's buffer is at capacity.
     pub fn push(&self, entry: LogEntry) {
-        let mut guard = self.inner.lock();
-        if guard.len() >= self.capacity {
+        let index = level_to_index(&entry.level);
+        let mut guard = self.buffers[index].lock();
+        if guard.len() >= self.capacities[index] {
             guard.pop_front();
         }
         guard.push_back(entry);
@@ -43,53 +63,133 @@ impl LogBuffer {
     /// - `since_ms`: Only entries with `timestamp_ms >= since_ms`.
     /// - `limit`: Maximum number of entries to return (most recent N).
     ///
-    /// Iterates backwards to collect the most recent matching entries,
-    /// then reverses the result to restore chronological order.
+    /// Collects matching entries from all per-level buffers, merges them
+    /// chronologically, then returns the most recent `limit` entries.
     pub fn query(&self, min_level: Option<Level>, target_prefix: Option<&str>, since_ms: Option<u64>, limit: Option<usize>) -> Vec<LogEntry> {
-        let guard = self.inner.lock();
         let max = limit.unwrap_or(usize::MAX);
-        let mut results: Vec<LogEntry> = guard
-            .iter()
-            .rev()
-            .filter(|entry| {
-                if let Some(req_level) = min_level {
-                    if entry.level > req_level {
-                        return false;
-                    }
-                }
+        let max_index = match min_level {
+            Some(level) => level_to_index(&level),
+            None => 4, // TRACE — all levels
+        };
+
+        // Collect matching entries from all relevant level buffers.
+        let mut merged: Vec<LogEntry> = Vec::new();
+        for index in 0..=max_index {
+            let guard = self.buffers[index].lock();
+            for entry in guard.iter() {
                 if let Some(prefix) = target_prefix {
                     if !entry.target.starts_with(prefix) {
-                        return false;
+                        continue;
                     }
                 }
                 if let Some(since) = since_ms {
                     if entry.timestamp_ms < since {
-                        return false;
+                        continue;
                     }
                 }
-                true
-            })
-            .take(max)
-            .cloned()
-            .collect();
-        results.reverse();
-        results
+                merged.push(entry.clone());
+            }
+        }
+
+        // Sort chronologically by timestamp_ms (stable for equal timestamps).
+        merged.sort_by_key(|entry| entry.timestamp_ms);
+
+        // Return the most recent `max` entries.
+        if merged.len() > max {
+            let drop_count = merged.len() - max;
+            merged.drain(..drop_count);
+            merged
+        } else {
+            merged
+        }
     }
 
-    /// Clear all entries from the buffer.
+    /// Clear all entries from all level buffers.
     pub fn clear(&self) {
-        self.inner.lock().clear();
+        for buffer in &self.buffers {
+            buffer.lock().clear();
+        }
     }
 
-    /// Current number of entries in the buffer.
+    /// Current total number of entries across all level buffers.
     pub fn len(&self) -> usize {
-        self.inner.lock().len()
+        self.buffers.iter().map(|buffer| buffer.lock().len()).sum()
     }
 
-    /// Maximum number of entries the buffer can hold.
+    /// Total maximum number of entries across all level buffers.
     pub fn capacity(&self) -> usize {
-        self.capacity
+        self.capacities.iter().sum()
     }
+
+    /// Per-level entry counts, indexed as `[error, warn, info, debug, trace]`.
+    pub fn per_level_counts(&self) -> [usize; 5] {
+        [
+            self.buffers[0].lock().len(),
+            self.buffers[1].lock().len(),
+            self.buffers[2].lock().len(),
+            self.buffers[3].lock().len(),
+            self.buffers[4].lock().len(),
+        ]
+    }
+
+    /// Per-level capacities, indexed as `[error, warn, info, debug, trace]`.
+    pub fn per_level_capacities(&self) -> [usize; 5] {
+        self.capacities
+    }
+}
+
+/// Maps a `tracing::Level` to a buffer index (ERROR=0, WARN=1, INFO=2, DEBUG=3, TRACE=4).
+///
+/// This is intentionally **reversed** from `tracing`'s internal `LevelInner`
+/// ordering (Trace=0..Error=4) so that `query()` can iterate `0..=max_index`
+/// to collect all levels with priority >= `min_level`.
+fn level_to_index(level: &Level) -> usize {
+    match level {
+        &Level::ERROR => 0,
+        &Level::WARN => 1,
+        &Level::INFO => 2,
+        &Level::DEBUG => 3,
+        &Level::TRACE => 4,
+    }
+}
+
+/// Splits a total capacity across the 5 log levels.
+///
+/// Returns `[error_cap, warn_cap, info_cap, debug_cap, trace_cap]`.
+/// Higher-priority levels get smaller but guaranteed minimums so that
+/// trace/debug noise can never fully displace error/warn entries.
+fn split_capacity(total: usize) -> [usize; 5] {
+    const MIN_ERROR: usize = 100;
+    const MIN_WARN: usize = 200;
+    const MIN_INFO: usize = 500;
+    const MIN_DEBUG: usize = 500;
+    const MIN_TRACE: usize = 500;
+    const MIN_TOTAL: usize = MIN_ERROR + MIN_WARN + MIN_INFO + MIN_DEBUG + MIN_TRACE;
+
+    if total <= MIN_TOTAL {
+        return [MIN_ERROR, MIN_WARN, MIN_INFO, MIN_DEBUG, MIN_TRACE];
+    }
+
+    let remaining = total - MIN_TOTAL;
+    let extra = remaining / 5;
+    let remainder = remaining % 5;
+
+    // Distribute remainder to higher-priority levels first.
+    let mut result = [
+        MIN_ERROR + extra + (if remainder > 0 { 1 } else { 0 }),
+        MIN_WARN + extra + (if remainder > 1 { 1 } else { 0 }),
+        MIN_INFO + extra + (if remainder > 2 { 1 } else { 0 }),
+        MIN_DEBUG + extra + (if remainder > 3 { 1 } else { 0 }),
+        MIN_TRACE + extra,
+    ];
+
+    // Ensure the sum matches exactly.
+    let sum: usize = result.iter().sum();
+    if sum != total {
+        result[4] += total - sum;
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -122,8 +222,15 @@ mod tests {
 
     #[test]
     fn test_capacity() {
+        // Small capacities are clamped to the minimum per-level guarantees.
         let buffer = LogBuffer::new(42);
-        assert_eq!(buffer.capacity(), 42);
+        assert_eq!(buffer.capacity(), 100 + 200 + 500 + 500 + 500);
+    }
+
+    #[test]
+    fn test_capacity_large() {
+        let buffer = LogBuffer::new(10000);
+        assert_eq!(buffer.capacity(), 10000);
     }
 
     #[test]
@@ -200,19 +307,44 @@ mod tests {
     }
 
     #[test]
-    fn test_ring_buffer_eviction_at_capacity() {
-        let buffer = LogBuffer::new(3);
-        buffer.push(make_entry(100, Level::INFO, "mod", "first"));
-        buffer.push(make_entry(200, Level::INFO, "mod", "second"));
-        buffer.push(make_entry(300, Level::INFO, "mod", "third"));
-        assert_eq!(buffer.len(), 3);
+    fn test_per_level_eviction_does_not_cross_levels() {
+        // With a large capacity, INFO buffer holds all entries.
+        let buffer = LogBuffer::new(10000);
+        // Fill INFO buffer beyond its capacity to trigger eviction.
+        let info_cap = split_capacity(10000)[2]; // INFO index = 2
+        for i in 0..(info_cap + 5) {
+            buffer.push(make_entry(i as u64 * 100, Level::INFO, "mod", &format!("info_{i}")));
+        }
+        // ERROR buffer should be unaffected by INFO eviction.
+        buffer.push(make_entry(0, Level::ERROR, "mod", "error_0"));
 
-        buffer.push(make_entry(400, Level::INFO, "mod", "fourth"));
-        assert_eq!(buffer.len(), 3);
+        let error_results = buffer.query(Some(Level::ERROR), None, None, None);
+        assert_eq!(error_results.len(), 1);
+        assert_eq!(error_results[0].message, "error_0");
 
-        let results = buffer.query(Some(Level::TRACE), None, None, None);
-        assert_eq!(results[0].message, "second");
-        assert_eq!(results[2].message, "fourth");
+        // INFO buffer should have evicted the oldest entries.
+        let info_results = buffer.query(Some(Level::INFO), None, None, None);
+        // Includes 1 ERROR entry + info_cap INFO entries.
+        assert_eq!(info_results.len(), info_cap + 1);
+        // First 5 INFO entries should have been evicted; first remaining is info_5.
+        assert_eq!(info_results[1].message, "info_5");
+    }
+
+    #[test]
+    fn test_trace_does_not_evict_error() {
+        // Verify that flooding TRACE does not evict ERROR entries.
+        let buffer = LogBuffer::new(10000);
+        buffer.push(make_entry(0, Level::ERROR, "mod", "important_error"));
+
+        // Flood with trace entries.
+        let trace_cap = split_capacity(10000)[4]; // TRACE index = 4
+        for i in 0..(trace_cap + 100) {
+            buffer.push(make_entry((i + 1) as u64, Level::TRACE, "mod", &format!("trace_{i}")));
+        }
+
+        let error_results = buffer.query(Some(Level::ERROR), None, None, None);
+        assert_eq!(error_results.len(), 1);
+        assert_eq!(error_results[0].message, "important_error");
     }
 
     #[test]
