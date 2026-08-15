@@ -37,17 +37,6 @@ pub enum NotificationAtomicView {
     Dnd,
 }
 
-impl NotificationAtomicView {
-    /// Returns the default nerd font icon name for this view.
-    pub fn icon_name(&self) -> &'static str {
-        match self {
-            Self::Count => "nf-fa-bell",
-            Self::Latest => "nf-fa-bell",
-            Self::Dnd => "nf-md-bell_off",
-        }
-    }
-}
-
 impl FromStr for NotificationAtomicView {
     type Err = String;
 
