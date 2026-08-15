@@ -8,5 +8,6 @@ use smearor_swipe_launcher_plugin_api::Locale;
 #[derive(Clone, Debug, Default)]
 pub struct PersonalizationOverride {
     /// Locale for workspace name sorting.
+    #[allow(dead_code)]
     pub locale: Locale,
 }
