@@ -43,18 +43,6 @@ impl CompoundTrie {
         node.is_word_end = true;
     }
 
-    /// Check if a word exists in the trie.
-    fn contains(&self, word: &str) -> bool {
-        let mut node = &self.root;
-        for ch in word.chars() {
-            match node.children.get(&ch) {
-                Some(child) => node = child,
-                None => return false,
-            }
-        }
-        node.is_word_end
-    }
-
     /// Attempt to decompose a German compound word into known stems.
     ///
     /// Uses a greedy longest-match approach: starting from the beginning,
