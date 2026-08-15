@@ -3,12 +3,6 @@ use smearor_swipe_launcher_plugin_api::Locale;
 /// Wallpaper widget labels that can be localized.
 #[derive(Copy, Clone, Debug)]
 pub enum WallpaperLabel {
-    /// Label for the light color scheme.
-    Light,
-    /// Label for the dark color scheme.
-    Dark,
-    /// Label for the system color scheme.
-    System,
     /// Label for the next wallpaper action.
     Next,
     /// Label for the previous wallpaper action.
@@ -42,9 +36,6 @@ impl WallpaperLabel {
 
     fn english(&self) -> String {
         match self {
-            WallpaperLabel::Light => "Light".to_string(),
-            WallpaperLabel::Dark => "Dark".to_string(),
-            WallpaperLabel::System => "System".to_string(),
             WallpaperLabel::Next => "Next".to_string(),
             WallpaperLabel::Previous => "Previous".to_string(),
             WallpaperLabel::Random => "Random".to_string(),
@@ -58,9 +49,6 @@ impl WallpaperLabel {
 
     fn german(&self) -> String {
         match self {
-            WallpaperLabel::Light => "Hell".to_string(),
-            WallpaperLabel::Dark => "Dunkel".to_string(),
-            WallpaperLabel::System => "System".to_string(),
             WallpaperLabel::Next => "Weiter".to_string(),
             WallpaperLabel::Previous => "Zur\u{fc}ck".to_string(),
             WallpaperLabel::Random => "Zuf\u{e4}llig".to_string(),
@@ -74,9 +62,6 @@ impl WallpaperLabel {
 
     fn french(&self) -> String {
         match self {
-            WallpaperLabel::Light => "Clair".to_string(),
-            WallpaperLabel::Dark => "Sombre".to_string(),
-            WallpaperLabel::System => "Syst\u{e8}me".to_string(),
             WallpaperLabel::Next => "Suivant".to_string(),
             WallpaperLabel::Previous => "Pr\u{e9}c\u{e9}dent".to_string(),
             WallpaperLabel::Random => "Al\u{e9}atoire".to_string(),
@@ -90,9 +75,6 @@ impl WallpaperLabel {
 
     fn spanish(&self) -> String {
         match self {
-            WallpaperLabel::Light => "Claro".to_string(),
-            WallpaperLabel::Dark => "Oscuro".to_string(),
-            WallpaperLabel::System => "Sistema".to_string(),
             WallpaperLabel::Next => "Siguiente".to_string(),
             WallpaperLabel::Previous => "Anterior".to_string(),
             WallpaperLabel::Random => "Aleatorio".to_string(),
@@ -106,9 +88,6 @@ impl WallpaperLabel {
 
     fn italian(&self) -> String {
         match self {
-            WallpaperLabel::Light => "Chiaro".to_string(),
-            WallpaperLabel::Dark => "Scuro".to_string(),
-            WallpaperLabel::System => "Sistema".to_string(),
             WallpaperLabel::Next => "Avanti".to_string(),
             WallpaperLabel::Previous => "Indietro".to_string(),
             WallpaperLabel::Random => "Casuale".to_string(),
