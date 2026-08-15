@@ -163,8 +163,10 @@ pub enum DeviceType {
 #[derive(Debug, Clone)]
 pub struct GpuConfig {
     /// GPU device type
+    #[allow(dead_code)]
     pub device_type: DeviceType,
     /// Available VRAM budget in MB
+    #[allow(dead_code)]
     pub vram_budget_mb: usize,
     /// Number of layers to offload to GPU (-1 = all layers)
     pub n_gpu_layers: i32,

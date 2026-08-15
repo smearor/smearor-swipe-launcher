@@ -19,10 +19,8 @@ pub enum GpuError {
     ParseError(String),
     /// No GPU was detected on the system.
     #[error("No GPU detected")]
+    #[allow(dead_code)]
     NoGpuDetected,
-    /// Vulkan runtime is not available on the system.
-    #[error("Vulkan not available")]
-    VulkanNotAvailable,
 }
 
 /// Check if Vulkan is available on the system.
@@ -231,6 +229,7 @@ pub fn get_system_memory() -> usize {
 }
 
 /// Check if ROCm/HIPBLAS libraries are actually available on the system.
+#[allow(dead_code)]
 pub fn hipblas_libraries_available() -> bool {
     use glob::glob;
 
@@ -252,6 +251,7 @@ pub fn hipblas_libraries_available() -> bool {
 }
 
 /// Check if the discrete GPU is AMD (for ROCm optimization).
+#[allow(dead_code)]
 pub fn is_amd_discrete_gpu() -> bool {
     // This would query GPU vendor information
     // For now, assume AMD if we have a discrete GPU on Linux
@@ -259,6 +259,7 @@ pub fn is_amd_discrete_gpu() -> bool {
 }
 
 /// Query detailed VRAM information.
+#[allow(dead_code)]
 pub fn query_vram_info() -> Result<usize, GpuError> {
     let vram = get_available_vram();
 
@@ -271,6 +272,7 @@ pub fn query_vram_info() -> Result<usize, GpuError> {
 }
 
 /// Get GPU information including vendor and model.
+#[allow(dead_code)]
 pub fn get_gpu_info() -> Result<GpuInfo, GpuError> {
     let output = Command::new("lspci")
         .args(&["-nn", "-d", "::0300"])
