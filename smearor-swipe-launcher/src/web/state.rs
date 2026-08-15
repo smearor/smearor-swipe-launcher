@@ -19,6 +19,7 @@ pub struct WebAppState {
     /// All loaded launcher instances, keyed by instance ID.
     pub instances: Arc<Mutex<HashMap<String, LauncherInstance>>>,
     /// Sender for forwarding broker messages to the message routing pipeline.
+    #[allow(dead_code)]
     pub broker_sender: UnboundedSender<FfiEnvelope>,
     /// Template engine for rendering web instance HTML pages.
     pub template_engine: TemplateEngine,

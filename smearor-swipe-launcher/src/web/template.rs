@@ -76,6 +76,7 @@ impl TemplateEngine {
     }
 
     /// Clear the template cache.
+    #[allow(dead_code)]
     pub fn clear_cache(&self) {
         if let Ok(mut cache) = self.template_cache.lock() {
             cache.clear();

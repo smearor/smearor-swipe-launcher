@@ -8,8 +8,6 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 
-const DEFAULT_LOG_BUFFER_CAPACITY: usize = 10000;
-
 /// Initialize the tracing subscriber and log tracer.
 ///
 /// Returns `Some(Arc<LogBuffer>)` when log capture is enabled, or `None` when

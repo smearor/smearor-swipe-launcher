@@ -12,6 +12,7 @@ use tracing::error;
 ///
 /// This ensures that if a lifecycle method fails or panics, the lifecycle state
 /// is automatically rolled back to a known-good state.
+#[allow(dead_code)]
 pub struct LifecycleGuard<'a> {
     lifecycle: &'a Mutex<LauncherInstanceLifecycle>,
     rollback: LauncherInstanceLifecycle,
@@ -25,6 +26,7 @@ impl<'a> LifecycleGuard<'a> {
     /// Transitions the lifecycle state from `expected_current` to `intermediate`.
     /// On drop, rolls back to `rollback` if `complete()` was not called,
     /// or transitions to `target` if `complete()` was called.
+    #[allow(dead_code)]
     pub fn new(
         lifecycle: &'a Mutex<LauncherInstanceLifecycle>,
         expected_current: LauncherInstanceLifecycle,
@@ -58,6 +60,7 @@ impl<'a> LifecycleGuard<'a> {
     /// Mark the transition as completed.
     ///
     /// On drop, the lifecycle state will be transitioned to `target` instead of `rollback`.
+    #[allow(dead_code)]
     pub fn complete(&mut self) {
         self.completed = true;
     }
