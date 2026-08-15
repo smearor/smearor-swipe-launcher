@@ -7,8 +7,6 @@ pub enum NotificationLabel {
     Notifications,
     /// "No notifications" empty state label.
     NoNotifications,
-    /// "Clear" action label.
-    Clear,
     /// "Do Not Disturb" label.
     DoNotDisturb,
     /// "DND" short label.
@@ -21,10 +19,6 @@ pub enum NotificationLabel {
     HoursAgo,
     /// "X days ago" relative time label.
     DaysAgo,
-    /// "Dismiss" action label.
-    Dismiss,
-    /// "Dismiss all" action label.
-    DismissAll,
 }
 
 impl NotificationLabel {
@@ -44,15 +38,12 @@ impl NotificationLabel {
         match self {
             Self::Notifications => "Notifications",
             Self::NoNotifications => "No notifications",
-            Self::Clear => "Clear",
             Self::DoNotDisturb => "Do Not Disturb",
             Self::Dnd => "DND",
             Self::JustNow => "Just now",
             Self::MinutesAgo => "min ago",
             Self::HoursAgo => "h ago",
             Self::DaysAgo => "d ago",
-            Self::Dismiss => "Dismiss",
-            Self::DismissAll => "Dismiss all",
         }
     }
 
@@ -60,15 +51,12 @@ impl NotificationLabel {
         match self {
             Self::Notifications => "Benachrichtigungen",
             Self::NoNotifications => "Keine Benachrichtigungen",
-            Self::Clear => "Leeren",
             Self::DoNotDisturb => "Nicht st\u{f6}ren",
             Self::Dnd => "NS",
             Self::JustNow => "Gerade eben",
             Self::MinutesAgo => "min",
             Self::HoursAgo => "Std",
             Self::DaysAgo => "T",
-            Self::Dismiss => "Schlie\u{df}en",
-            Self::DismissAll => "Alle schlie\u{df}en",
         }
     }
 
@@ -76,15 +64,12 @@ impl NotificationLabel {
         match self {
             Self::Notifications => "Notifications",
             Self::NoNotifications => "Aucune notification",
-            Self::Clear => "Effacer",
             Self::DoNotDisturb => "Ne pas d\u{e9}ranger",
             Self::Dnd => "NPD",
             Self::JustNow => "\u{c0} l'instant",
             Self::MinutesAgo => "min",
             Self::HoursAgo => "h",
             Self::DaysAgo => "j",
-            Self::Dismiss => "Fermer",
-            Self::DismissAll => "Tout fermer",
         }
     }
 
@@ -92,15 +77,12 @@ impl NotificationLabel {
         match self {
             Self::Notifications => "Notificaciones",
             Self::NoNotifications => "Sin notificaciones",
-            Self::Clear => "Borrar",
             Self::DoNotDisturb => "No molestar",
             Self::Dnd => "NM",
             Self::JustNow => "Ahora mismo",
             Self::MinutesAgo => "min",
             Self::HoursAgo => "h",
             Self::DaysAgo => "d",
-            Self::Dismiss => "Cerrar",
-            Self::DismissAll => "Cerrar todo",
         }
     }
 
@@ -108,15 +90,12 @@ impl NotificationLabel {
         match self {
             Self::Notifications => "Notifiche",
             Self::NoNotifications => "Nessuna notifica",
-            Self::Clear => "Cancella",
             Self::DoNotDisturb => "Non disturbare",
             Self::Dnd => "ND",
             Self::JustNow => "Adesso",
             Self::MinutesAgo => "min",
             Self::HoursAgo => "h",
             Self::DaysAgo => "g",
-            Self::Dismiss => "Chiudi",
-            Self::DismissAll => "Chiudi tutto",
         }
     }
 }
