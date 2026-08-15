@@ -76,8 +76,10 @@ pub type PendingResourceReads = Arc<Mutex<HashMap<String, oneshot::Sender<Resour
 #[derive(Debug)]
 pub struct PromptInvocationResult {
     /// The prompt response as a JSON string (serialized GetPromptResult). Empty on error.
+    #[allow(dead_code)]
     pub result: String,
     /// The error message. Empty when the invocation succeeded.
+    #[allow(dead_code)]
     pub error: String,
 }
 
