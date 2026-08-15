@@ -45,9 +45,6 @@ pub enum TtsError {
     /// Failed to create an ONNX input tensor.
     #[error("Failed to create input tensor: {0}")]
     TensorCreate(String),
-    /// Failed to create the model inputs container.
-    #[error("Failed to create model inputs: {0}")]
-    InputCreate(String),
     /// ONNX inference failed.
     #[error("ONNX inference failed: {0}")]
     Inference(String),
