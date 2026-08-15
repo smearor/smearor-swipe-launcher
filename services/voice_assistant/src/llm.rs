@@ -385,7 +385,7 @@ impl<'a> LlmSession<'a> {
             let gen_len = generated_tokens.len();
             if gen_len >= MIN_PATTERN_LEN * REQUIRED_REPETITIONS {
                 let max_pattern_len = gen_len / REQUIRED_REPETITIONS;
-                'pattern_search: for pattern_len in MIN_PATTERN_LEN..=max_pattern_len {
+                for pattern_len in MIN_PATTERN_LEN..=max_pattern_len {
                     let repeat_len = pattern_len * REQUIRED_REPETITIONS;
                     if gen_len < repeat_len {
                         continue;
