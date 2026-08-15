@@ -8,6 +8,7 @@ Type=simple
 ExecStart=/usr/bin/smearor-swipe-launcher
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=10
 
 [Install]
 WantedBy=graphical-session.target
