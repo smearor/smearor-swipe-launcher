@@ -51,17 +51,6 @@ fn fallback_entry(filename: &str) -> Option<FallbackModelEntry> {
     load_fallback_table().into_iter().find(|entry| lower.contains(&entry.pattern.to_lowercase()))
 }
 
-/// Resolves the HuggingFace repo ID for a model file.
-///
-/// If `explicit_repo` is set in the config, it takes precedence.
-/// Otherwise, the fallback mapping from `data/fallback_models.toml` is used.
-pub fn resolve_repo(filename: &str, explicit_repo: &str) -> Option<String> {
-    if !explicit_repo.is_empty() {
-        return Some(explicit_repo.to_string());
-    }
-    fallback_entry(filename).map(|entry| entry.repo)
-}
-
 /// Resolves the full fallback entry (repo + optional remote_path) for a model file.
 ///
 /// If `explicit_repo` is set in the config, it takes precedence and
