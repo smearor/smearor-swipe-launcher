@@ -258,9 +258,12 @@ impl TtsEngine {
         {
             use ort::execution_providers::ROCm;
             debug!("Voice Assistant TTS: using ROCm execution provider");
-            return vec![ROCm::default().build().into()];
+            vec![ROCm::default().build().into()]
         }
-        Vec::new()
+        #[cfg(not(all(feature = "ort-rocm", target_os = "linux")))]
+        {
+            Vec::new()
+        }
     }
 
     /// Extracts the phoneme ID map from a Piper-style config JSON.
