@@ -97,9 +97,6 @@ pub enum LlmError {
     /// The generation exceeded the maximum token limit without producing an EOS.
     #[error("Max tokens ({0}) reached")]
     MaxTokensReached(usize),
-    /// The generation entered a repetition loop (same token sequence repeated).
-    #[error("Repetition loop detected: {0} tokens repeated {1} times")]
-    RepetitionLoop(usize, usize),
     /// The worker channel was closed.
     #[error("Worker channel closed")]
     ChannelClosed,
