@@ -1,51 +1,80 @@
 use hf_hub::api::sync::ApiBuilder;
+use serde::Deserialize;
 use std::path::Path;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-/// Hardcoded fallback mapping: filename pattern -> HuggingFace repo ID.
+/// A single fallback model mapping entry loaded from `data/fallback_models.toml`.
 ///
-/// Used when no explicit `*_repo` is set in the config. The mapping is
-/// matched by checking if the filename **contains** the pattern key.
-fn fallback_repo(filename: &str) -> Option<&'static str> {
-    let lower = filename.to_lowercase();
-    let mappings: &[(&str, &str)] = &[
-        // LLM — Gemma 4 GGUF quantizations
-        ("gemma-4-12b", "unsloth/gemma-4-12b-it-GGUF"),
-        ("gemma-4-e4b", "unsloth/gemma-4-E4B-it-GGUF"),
-        ("gemma-4-e2b", "unsloth/gemma-4-E2B-it-GGUF"),
-        // LLM — Qwen 2.5
-        ("qwen2.5-1.5b", "Qwen/Qwen2.5-1.5B-Instruct-GGUF"),
-        ("qwen2.5-3b", "Qwen/Qwen2.5-3B-Instruct-GGUF"),
-        // Whisper GGML
-        ("ggml-tiny", "openai/whisper-tiny"),
-        ("ggml-base", "openai/whisper-base"),
-        ("ggml-small", "openai/whisper-small"),
-        ("ggml-large-v3-turbo", "openai/whisper-large-v3-turbo"),
-        // Silero VAD
-        ("silero_vad", "snakers4/silero-vad"),
-        // Piper TTS — German thorsten
-        ("de_de-thorsten", "rhasspy/piper-voices"),
-    ];
+/// Matching is case-insensitive: the local filename is checked whether it
+/// *contains* the `pattern` string.  The first matching entry wins.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FallbackModelEntry {
+    /// Substring pattern to match against the local filename (case-insensitive).
+    pub pattern: String,
+    /// HuggingFace repository ID (e.g. `ggerganov/whisper.cpp`).
+    pub repo: String,
+    /// Optional subdirectory within the repo where the file lives.
+    /// When set, the file is fetched from `<repo>/resolve/main/<remote_path>/<filename>`.
+    /// When absent, the file is fetched from the repository root.
+    pub remote_path: Option<String>,
+}
 
-    for (pattern, repo) in mappings {
-        if lower.contains(pattern) {
-            return Some(repo);
+/// Container struct for deserializing the TOML file.
+#[derive(Debug, Clone, Deserialize)]
+struct FallbackModelTable {
+    models: Vec<FallbackModelEntry>,
+}
+
+/// Load the fallback model mappings from the embedded TOML file.
+///
+/// The file `data/fallback_models.toml` is compiled into the binary via
+/// `include_str!` so no runtime file access is needed.
+fn load_fallback_table() -> Vec<FallbackModelEntry> {
+    const TOML_CONTENT: &str = include_str!("../data/fallback_models.toml");
+    match toml::from_str::<FallbackModelTable>(TOML_CONTENT) {
+        Ok(table) => table.models,
+        Err(error) => {
+            warn!("Model downloader: failed to parse fallback_models.toml: {error}");
+            Vec::new()
         }
     }
-    None
+}
+
+/// Resolve the fallback mapping for a given filename.
+///
+/// Returns the first matching entry from the TOML table (case-insensitive
+/// substring match on `pattern`).
+fn fallback_entry(filename: &str) -> Option<FallbackModelEntry> {
+    let lower = filename.to_lowercase();
+    load_fallback_table().into_iter().find(|entry| lower.contains(&entry.pattern.to_lowercase()))
 }
 
 /// Resolves the HuggingFace repo ID for a model file.
 ///
 /// If `explicit_repo` is set in the config, it takes precedence.
-/// Otherwise, the hardcoded fallback mapping is used.
+/// Otherwise, the fallback mapping from `data/fallback_models.toml` is used.
 pub fn resolve_repo(filename: &str, explicit_repo: &str) -> Option<String> {
     if !explicit_repo.is_empty() {
         return Some(explicit_repo.to_string());
     }
-    fallback_repo(filename).map(|r| r.to_string())
+    fallback_entry(filename).map(|entry| entry.repo)
+}
+
+/// Resolves the full fallback entry (repo + optional remote_path) for a model file.
+///
+/// If `explicit_repo` is set in the config, it takes precedence and
+/// `remote_path` is set to `None` (explicit repos always fetch from root).
+fn resolve_fallback(filename: &str, explicit_repo: &str) -> Option<FallbackModelEntry> {
+    if !explicit_repo.is_empty() {
+        return Some(FallbackModelEntry {
+            pattern: String::new(),
+            repo: explicit_repo.to_string(),
+            remote_path: None,
+        });
+    }
+    fallback_entry(filename)
 }
 
 /// Ensures a model file exists at `local_path`. If it doesn't exist,
@@ -69,15 +98,15 @@ pub fn ensure_model(local_path: &str, explicit_repo: &str) {
         }
     };
 
-    let repo = match resolve_repo(filename, explicit_repo) {
-        Some(r) => r,
+    let entry = match resolve_fallback(filename, explicit_repo) {
+        Some(e) => e,
         None => {
             warn!("Model downloader: no repo configured for {filename}, skipping download");
             return;
         }
     };
 
-    info!("Model downloader: {filename} not found, downloading from HuggingFace repo {repo}");
+    info!("Model downloader: {filename} not found, downloading from HuggingFace repo {}", entry.repo);
 
     if let Some(parent) = path.parent() {
         if let Err(error) = std::fs::create_dir_all(parent) {
@@ -94,8 +123,15 @@ pub fn ensure_model(local_path: &str, explicit_repo: &str) {
         }
     };
 
-    let repo_api = api.model(repo.clone());
-    match repo_api.get(filename) {
+    let repo_api = api.model(entry.repo.clone());
+
+    // Fetch from the repo root or from a subdirectory when `remote_path` is set.
+    let remote_file = match &entry.remote_path {
+        Some(subdir) => format!("{subdir}/{filename}"),
+        None => filename.to_string(),
+    };
+
+    match repo_api.get(&remote_file) {
         Ok(downloaded_path) => {
             if let Err(error) = std::fs::rename(&downloaded_path, local_path) {
                 // rename may fail across filesystems — try copy + remove
@@ -108,7 +144,7 @@ pub fn ensure_model(local_path: &str, explicit_repo: &str) {
             info!("Model downloader: successfully downloaded {filename} to {local_path}");
         }
         Err(error) => {
-            warn!("Model downloader: failed to download {filename} from {repo}: {error}");
+            warn!("Model downloader: failed to download {remote_file} from {}: {error}", entry.repo);
         }
     }
 }

@@ -39,6 +39,7 @@ smearor-personalization-model = { path = "../../model/personalization" }
 smearor-doa-model = { path = "../../model/doa" }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 text-processing-rs = { workspace = true }
+toml = { workspace = true }
 unicode-normalization = { workspace = true }
 smearor-model-mcp = { path = "../../model/mcp" }
 smearor-voice-assistant-model = { path = "../../model/voice_assistant" }

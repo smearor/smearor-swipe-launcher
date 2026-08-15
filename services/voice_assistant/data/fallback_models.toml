@@ -1,0 +1,67 @@
+# Fallback model mappings for automatic HuggingFace downloads.
+#
+# When a model file is missing on disk and no explicit `*_model_repo` is set
+# in the service config, the downloader uses this table to find the correct
+# HuggingFace repository.
+#
+# Matching is case-insensitive and checks whether the local filename *contains*
+# the `pattern` string.  The first matching entry wins, so order matters — put
+# more specific patterns before generic ones.
+#
+# `remote_path` is optional.  When set, the file is fetched from
+# `<repo>/resolve/main/<remote_path>/<filename>` instead of the repository root.
+# This is needed for repos that store models in subdirectories (e.g. Piper
+# voices).
+
+[[models]]
+pattern = "gemma-4-12b"
+repo = "unsloth/gemma-4-12b-it-GGUF"
+
+[[models]]
+pattern = "gemma-4-e4b"
+repo = "unsloth/gemma-4-E4B-it-GGUF"
+
+[[models]]
+pattern = "gemma-4-e2b"
+repo = "unsloth/gemma-4-E2B-it-GGUF"
+
+[[models]]
+pattern = "qwen2.5-1.5b"
+repo = "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
+
+[[models]]
+pattern = "qwen2.5-3b"
+repo = "Qwen/Qwen2.5-3B-Instruct-GGUF"
+
+[[models]]
+pattern = "ggml-large-v3-turbo"
+repo = "ggerganov/whisper.cpp"
+
+[[models]]
+pattern = "ggml-large-v3"
+repo = "ggerganov/whisper.cpp"
+
+[[models]]
+pattern = "ggml-large-v2"
+repo = "ggerganov/whisper.cpp"
+
+[[models]]
+pattern = "ggml-small"
+repo = "ggerganov/whisper.cpp"
+
+[[models]]
+pattern = "ggml-base"
+repo = "ggerganov/whisper.cpp"
+
+[[models]]
+pattern = "ggml-tiny"
+repo = "ggerganov/whisper.cpp"
+
+[[models]]
+pattern = "silero_vad"
+repo = "onnx-community/silero-vad"
+
+[[models]]
+pattern = "de_de-thorsten"
+repo = "rhasspy/piper-voices"
+remote_path = "de/de_DE/thorsten/medium"
