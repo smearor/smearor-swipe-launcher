@@ -207,15 +207,18 @@ fn build_execution_providers() -> Vec<ExecutionProviderDispatch> {
     {
         use ort::execution_providers::CUDA;
         debug!("Silero VAD: using CUDA execution provider");
-        return vec![CUDA::default().build().into()];
+        vec![CUDA::default().build().into()]
     }
     #[cfg(all(feature = "ort-rocm", target_os = "linux"))]
     {
         use ort::execution_providers::ROCm;
         debug!("Silero VAD: using ROCm execution provider");
-        return vec![ROCm::default().build().into()];
+        vec![ROCm::default().build().into()]
     }
-    Vec::new()
+    #[cfg(not(any(all(feature = "ort-cuda", target_os = "linux"), all(feature = "ort-rocm", target_os = "linux"))))]
+    {
+        Vec::new()
+    }
 }
 
 /// Shared Silero VAD engine type.
