@@ -13,7 +13,6 @@ use ort::execution_providers::ExecutionProviderDispatch;
 use ort::session::Session;
 use regex::Regex;
 use smearor_voice_assistant_model::TtsConfig;
-use smearor_voice_assistant_model::TtsModelType;
 use text_processing_rs::tn_normalize_lang;
 use tracing::debug;
 use tracing::warn;
@@ -84,8 +83,6 @@ pub struct TtsEngine {
     cpal_device: cpal::Device,
     /// cpal supported stream configuration.
     cpal_config: cpal::SupportedStreamConfig,
-    /// TTS model type (Piper or Kokoro).
-    model_type: TtsModelType,
     /// Native sample rate of the TTS model (e.g., 22050 for Piper, 24000 for Kokoro).
     model_sample_rate: u32,
     /// BCP-47 language tag for text normalization language detection.
@@ -178,7 +175,6 @@ impl TtsEngine {
             onnx_session: std::sync::Mutex::new(session),
             cpal_device: device,
             cpal_config,
-            model_type: config.model_type.clone(),
             model_sample_rate: config.model_sample_rate,
             language: config.phonemizer_config.language.clone(),
             espeak_engine,
