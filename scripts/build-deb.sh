@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Build script for all Debian packages
-# Produces 35 .deb files in target/debian/:
-#   1 main package + 15 widget plugins + 18 services + 1 metapackage
+# Produces 37 .deb files in target/debian/:
+#   1 main package + 16 widget plugins + 19 services + 1 metapackage
 
 cd "$(dirname "$0")/.."
 
@@ -25,6 +25,7 @@ WIDGETS=(
     smearor-notifications-widget
     smearor-power-widget
     smearor-sysinfo-widget
+    smearor-theme-widget
     smearor-voice-assistant-widget
     smearor-wallpaper-widget
     smearor-weather-widget
@@ -51,6 +52,7 @@ SERVICES=(
     smearor-power-service
     smearor-streamdeck-service
     smearor-sysinfo-service
+    smearor-theme-service
     smearor-terminal-command-service
     smearor-voice-assistant-service
     smearor-wallpaper-service
