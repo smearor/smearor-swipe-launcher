@@ -36,8 +36,8 @@ name = "smearor-service-theme"
 depends = "$auto, smearor-swipe-launcher (>= 0.1.0)"
 assets = [
     ["target/release/libsmearor_theme_service.so", "/usr/lib/smearor/", "644"],
-    ["../resources/themes/default-dark.css", "/usr/share/smearor/themes/", "644"],
-    ["../resources/themes/default-light.css", "/usr/share/smearor/themes/", "644"],
-    ["../resources/themes/halloween.css", "/usr/share/smearor/themes/", "644"],
-    ["../configs/system/services/themes.toml", "/usr/share/smearor/services/themes.toml", "644"],
+    ["../../resources/themes/default-dark.css", "/usr/share/smearor/themes/", "644"],
+    ["../../resources/themes/default-light.css", "/usr/share/smearor/themes/", "644"],
+    ["../../resources/themes/halloween.css", "/usr/share/smearor/themes/", "644"],
+    ["../../configs/system/services/themes.toml", "/usr/share/smearor/services/themes.toml", "644"],
 ]
