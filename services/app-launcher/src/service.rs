@@ -346,13 +346,13 @@ impl MessageHandler<FfiEnvelopePayload<DesktopFileCommandMessage>> for AppLaunch
         trace!("handle_message: {message:?}");
         match message.action {
             DesktopFileCommandAction::Exec => {
-                self.handle_exec(&message.desktop_file, message.wrapper.clone(), message.forked, message.terminate_on_exit);
+                let _ = self.handle_exec(&message.desktop_file, message.wrapper.clone(), message.forked, message.terminate_on_exit);
             }
             DesktopFileCommandAction::ExecStart => {
-                self.handle_exec(&message.desktop_file, message.wrapper.clone(), message.forked, message.terminate_on_exit);
+                let _ = self.handle_exec(&message.desktop_file, message.wrapper.clone(), message.forked, message.terminate_on_exit);
             }
             DesktopFileCommandAction::ExecReload => {
-                self.handle_exec(&message.desktop_file, message.wrapper.clone(), message.forked, message.terminate_on_exit);
+                let _ = self.handle_exec(&message.desktop_file, message.wrapper.clone(), message.forked, message.terminate_on_exit);
             }
             DesktopFileCommandAction::Terminate => {
                 self.handle_terminate(&message.desktop_file);
