@@ -147,7 +147,6 @@ pub struct ClockAtomicWidget {
     pub span_group: Option<String>,
     pub span_index: u32,
     pub span_rows: u32,
-    pub span_cols: u32,
     pub shared_state: Arc<Mutex<SpanGroupState>>,
 }
 
@@ -166,7 +165,6 @@ impl ClockAtomicWidget {
         let span_group = config.config.get("span_group").and_then(|v| v.as_str()).map(|s| s.to_string());
         let span_index = config.config.get("span_index").and_then(|v| v.as_u64()).map(|v| v as u32).unwrap_or(0);
         let span_rows = config.config.get("span_rows").and_then(|v| v.as_u64()).map(|v| v as u32).unwrap_or(1);
-        let span_cols = config.config.get("span_cols").and_then(|v| v.as_u64()).map(|v| v as u32).unwrap_or(1);
 
         let initial_state = match view {
             ClockAtomicView::Timer => SpanGroupState::Timer(TimerState::default()),
@@ -188,7 +186,6 @@ impl ClockAtomicWidget {
             span_group: span_group.clone(),
             span_index,
             span_rows,
-            span_cols,
             shared_state: shared_state.clone(),
         };
         widget.register_mcp_capabilities();
