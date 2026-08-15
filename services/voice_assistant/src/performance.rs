@@ -165,6 +165,7 @@ impl PerformanceMonitor {
 
     /// Returns a snapshot of the current performance report.
     #[must_use]
+    #[allow(dead_code)]
     pub fn snapshot(&self) -> PerformanceReport {
         self.report.read().map(|r| r.clone()).unwrap_or_default()
     }
