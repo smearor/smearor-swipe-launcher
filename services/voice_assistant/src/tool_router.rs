@@ -100,14 +100,6 @@ impl ToolRouter {
         self.dirty.load(Ordering::Relaxed)
     }
 
-    /// Selects the top N tools relevant to the user query using semantic similarity.
-    /// Embeds the query and computes cosine similarity against all tool embeddings.
-    /// Filters out tools below the similarity threshold, then takes top_n.
-    /// Always returns <= top_n tools (never all).
-    pub fn select_tools(&self, query: &str, top_n: usize, threshold: f32) -> Vec<ToolCatalogEntry> {
-        self.select_tools_with_ranking(query, top_n, threshold).0
-    }
-
     /// Like `select_tools` but also returns the top-5 scored tools with their scores.
     pub fn select_tools_with_ranking(&self, query: &str, top_n: usize, threshold: f32) -> (Vec<ToolCatalogEntry>, Vec<(String, f32)>) {
         if self.tools.is_empty() {

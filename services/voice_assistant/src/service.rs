@@ -1313,6 +1313,7 @@ impl VoiceAssistantService {
     }
 
     /// Returns a snapshot of current performance metrics.
+    #[allow(dead_code)]
     pub fn performance_report(&self) -> crate::performance::PerformanceReport {
         self.performance_monitor.snapshot()
     }
