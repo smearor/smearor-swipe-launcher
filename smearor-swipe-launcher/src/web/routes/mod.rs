@@ -21,4 +21,3 @@ pub use r#static::serve_static_js;
 pub use r#static::serve_static_nerdfont_css;
 pub use r#static::serve_static_nerdfont_woff2;
 pub use utils::extract_payload_as_json;
-pub use utils::uuid_v4_simple;

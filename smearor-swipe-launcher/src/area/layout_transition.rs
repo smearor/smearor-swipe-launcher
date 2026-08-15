@@ -20,11 +20,13 @@ impl LayoutTransition {
     }
 
     /// Create a new LayoutTransition with custom duration
+    #[allow(dead_code)]
     pub fn with_duration(duration_ms: u32) -> Self {
         Self { duration_ms }
     }
 
     /// Animate a width change for smooth layout transitions
+    #[allow(dead_code)]
     pub fn animate_width_change(&self, widget: &Widget, target_width: i32) {
         let current_width = widget.width_request();
         if current_width == target_width {

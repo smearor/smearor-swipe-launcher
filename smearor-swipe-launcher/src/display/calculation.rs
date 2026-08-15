@@ -28,6 +28,7 @@ pub fn calculate_area_size_for_monitor(rotation: SmearorRotation, default_size: 
     }
 }
 
+#[allow(dead_code)]
 pub fn calculate_area_size(rotation: SmearorRotation, default_size: i32) -> AreaSize {
     let monitor = resolve_monitor(None);
     calculate_area_size_for_monitor(rotation, default_size, &monitor)

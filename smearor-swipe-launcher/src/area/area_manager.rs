@@ -237,6 +237,7 @@ impl<B: AreaBackend> AreaManager<B> {
     }
 
     /// Remove all areas immediately without animation, unloading plugins.
+    #[allow(dead_code)]
     pub fn clear_areas(&self) {
         self.remove_all_areas_immediate();
     }
@@ -343,12 +344,14 @@ impl<B: AreaBackend> AreaManager<B> {
     }
 
     /// Check if an area exists
+    #[allow(dead_code)]
     pub fn has_area(&self, area_id: &str) -> bool {
         self.areas.contains_key(area_id)
     }
 
     /// Find the area that contains a button whose click_payload references
     /// the given area_id.
+    #[allow(dead_code)]
     pub fn find_area_containing_area_button(&self, target_area_id: &str) -> Option<String> {
         for managed_area in &self.areas {
             for plugin_entry in &managed_area.config.plugins {
@@ -415,6 +418,7 @@ impl<B: AreaBackend> AreaManager<B> {
     }
 
     /// Show the area widget.
+    #[allow(dead_code)]
     pub fn open(&self, area_id: &str) -> Result<(), String> {
         let Some(area) = self.areas.get(area_id) else {
             return Err(format!("Area {} not found", area_id));
@@ -425,6 +429,7 @@ impl<B: AreaBackend> AreaManager<B> {
     }
 
     /// Hide the area widget.
+    #[allow(dead_code)]
     pub fn close(&self, area_id: &str) -> Result<(), String> {
         let Some(area) = self.areas.get(area_id) else {
             return Err(format!("Area {} not found", area_id));
@@ -504,6 +509,7 @@ impl<B: AreaBackend> AreaManager<B> {
     }
 
     /// Return the plugin IDs of the currently visible area.
+    #[allow(dead_code)]
     pub fn visible_area_plugin_ids(&self) -> Vec<String> {
         if let Ok(visible_id) = self.visible_area_id.read() {
             if let Some(ref area_id) = *visible_id {
@@ -568,6 +574,7 @@ impl<B: AreaBackend> AreaManager<B> {
 /// GTK-specific methods for `AreaManager<GtkBackend>`.
 impl AreaManager<GtkBackend> {
     /// Get the scrolled window widget for a scroll-type area.
+    #[allow(dead_code)]
     pub fn get_first_scrolled_window(&self, area_id: &str) -> Option<ScrolledWindow> {
         let Some(managed_area) = self.areas.get(area_id) else {
             return None;

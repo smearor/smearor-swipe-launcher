@@ -7,6 +7,7 @@ pub enum AddAreaError {
     #[error(transparent)]
     CreateAreaError(#[from] CreateAreaError),
     #[error("Overlay not set")]
+    #[allow(dead_code)]
     OverlayNotSetError,
     #[error(transparent)]
     MainContainerNotInitialized(#[from] MainContainerNotInitialized),
@@ -23,6 +24,7 @@ pub enum RemoveAreaError {
 #[derive(Debug, Error)]
 pub enum CreateAreaError {
     #[error("Area {0} not found")]
+    #[allow(dead_code)]
     AreaNotFound(String),
 }
 

@@ -72,6 +72,7 @@ impl InstanceAreaManager {
     }
 
     /// Check if an area exists.
+    #[allow(dead_code)]
     pub fn has_area(&self, area_id: &str) -> bool {
         match self {
             Self::Gtk(manager) => manager.has_area(area_id),
@@ -129,6 +130,7 @@ impl InstanceAreaManager {
     }
 
     /// Clear all areas (alias for `remove_all_areas_immediate`).
+    #[allow(dead_code)]
     pub fn clear_areas(&self) {
         match self {
             Self::Gtk(manager) => manager.clear_areas(),
@@ -145,6 +147,7 @@ impl InstanceAreaManager {
     }
 
     /// Show an area.
+    #[allow(dead_code)]
     pub fn open(&self, area_id: &str) -> Result<(), String> {
         match self {
             Self::Gtk(manager) => manager.open(area_id),
@@ -153,6 +156,7 @@ impl InstanceAreaManager {
     }
 
     /// Hide an area.
+    #[allow(dead_code)]
     pub fn close(&self, area_id: &str) -> Result<(), String> {
         match self {
             Self::Gtk(manager) => manager.close(area_id),
@@ -201,6 +205,7 @@ impl InstanceAreaManager {
     }
 
     /// Return plugin IDs of the currently visible area.
+    #[allow(dead_code)]
     pub fn visible_area_plugin_ids(&self) -> Vec<String> {
         match self {
             Self::Gtk(manager) => manager.visible_area_plugin_ids(),
@@ -217,6 +222,7 @@ impl InstanceAreaManager {
     }
 
     /// Find the area containing a button that references the given area ID.
+    #[allow(dead_code)]
     pub fn find_area_containing_area_button(&self, target_area_id: &str) -> Option<String> {
         match self {
             Self::Gtk(manager) => manager.find_area_containing_area_button(target_area_id),

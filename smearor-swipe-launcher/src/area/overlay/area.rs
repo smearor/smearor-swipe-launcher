@@ -9,6 +9,7 @@ pub trait AreaOverlay: Clone + PartialEq + std::fmt::Debug + 'static {
     type Widget: AreaWidget;
 
     /// Set the main child widget of this overlay.
+    #[allow(dead_code)]
     fn area_set_child(&self, child: &Self::Widget);
 
     /// Add a nested overlay on top of the child widget.
@@ -18,6 +19,7 @@ pub trait AreaOverlay: Clone + PartialEq + std::fmt::Debug + 'static {
     fn area_remove_overlay(&self, overlay: &Self);
 
     /// Add a CSS class to this overlay.
+    #[allow(dead_code)]
     fn area_add_css_class(&self, class: &str);
 
     /// Retrieve the current child widget, if any.

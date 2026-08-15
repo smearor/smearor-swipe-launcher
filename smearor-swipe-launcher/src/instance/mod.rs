@@ -6,7 +6,6 @@ mod validate;
 
 pub use instance_type::InstanceType;
 pub use launcher_instance::LauncherInstance;
-pub use lifecycle::LifecycleGuard;
 pub use persisted_instance::PersistedInstance;
 pub use persisted_instance::get_instances_state_path;
 pub use persisted_instance::read_instances_state;

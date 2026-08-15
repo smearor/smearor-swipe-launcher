@@ -202,9 +202,7 @@ impl LauncherInstance {
             // Destroy payload after handling
             if !envelope.payload.is_null() {
                 if let Some(destroy) = envelope.destroy_payload {
-                    unsafe {
-                        (destroy)(envelope.payload);
-                    }
+                    (destroy)(envelope.payload);
                 }
             }
             return;
@@ -221,9 +219,7 @@ impl LauncherInstance {
             }
             if !envelope.payload.is_null() {
                 if let Some(destroy) = envelope.destroy_payload {
-                    unsafe {
-                        (destroy)(envelope.payload);
-                    }
+                    (destroy)(envelope.payload);
                 }
             }
             return;
@@ -240,9 +236,7 @@ impl LauncherInstance {
             }
             if !envelope.payload.is_null() {
                 if let Some(destroy) = envelope.destroy_payload {
-                    unsafe {
-                        (destroy)(envelope.payload);
-                    }
+                    (destroy)(envelope.payload);
                 }
             }
             return;
@@ -251,9 +245,7 @@ impl LauncherInstance {
         // Destroy the payload after all handlers have processed the message
         if !envelope.payload.is_null() {
             if let Some(destroy) = envelope.destroy_payload {
-                unsafe {
-                    (destroy)(envelope.payload);
-                }
+                (destroy)(envelope.payload);
             }
         }
     }

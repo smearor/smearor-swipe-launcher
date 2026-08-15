@@ -1,5 +1,5 @@
 use crate::host::LauncherHost;
-use crate::mcp::resource_reader::read_mcp_resource;
+use crate::mcp::resource_reader::resource::read_mcp_resource;
 use smearor_mcp_server::McpCommand;
 
 /// Handle resource read commands.

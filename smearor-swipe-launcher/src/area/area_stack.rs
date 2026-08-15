@@ -1,11 +1,13 @@
 use std::collections::VecDeque;
 
 /// Manages a stack of areas for nested sub-menus
+#[allow(dead_code)]
 pub struct AreaStack {
     /// Stack of areas, with the top being the most recently added
     stack: VecDeque<String>,
 }
 
+#[allow(dead_code)]
 impl AreaStack {
     /// Create a new empty AreaStack
     pub fn new() -> Self {

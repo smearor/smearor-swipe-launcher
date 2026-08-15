@@ -483,7 +483,6 @@ impl super::LauncherHost {
                 }
                 _ => (1, member_count),
             };
-            let group_size = span_rows * span_cols;
 
             let combined_width = info.key_width * span_cols;
             let combined_height = info.key_height * span_rows;

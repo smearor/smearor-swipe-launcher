@@ -182,9 +182,7 @@ impl super::LauncherHost {
             if let Some(converted) = try_convert_string_to_typed_envelope(registry, &envelope) {
                 if !envelope.payload.is_null() {
                     if let Some(destroy) = envelope.destroy_payload {
-                        unsafe {
-                            (destroy)(envelope.payload);
-                        }
+                        (destroy)(envelope.payload);
                     }
                 }
                 envelope = converted;

@@ -24,6 +24,7 @@ impl<B: AreaBackend> AreaSource<B> {
     }
 
     /// Returns `true` if all fields are `None`.
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.overlay.is_none() && self.widget.is_none() && self.area_id.is_none()
     }
