@@ -181,9 +181,23 @@ fn spawn_main_loop_tasks(
     let shutdown_flag = Arc::new(AtomicBool::new(false));
     let shutdown_flag_for_signal = shutdown_flag.clone();
     tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            debug!("SIGINT received, quitting GTK application gracefully");
-            shutdown_flag_for_signal.store(true, Ordering::SeqCst);
+        use tokio::signal::unix::SignalKind;
+        let sigint = tokio::signal::unix::signal(SignalKind::interrupt());
+        let sigterm = tokio::signal::unix::signal(SignalKind::terminate());
+        match (sigint, sigterm) {
+            (Ok(mut sigint), Ok(mut sigterm)) => {
+                tokio::select! {
+                    _ = sigint.recv() => debug!("SIGINT received, quitting GTK application gracefully"),
+                    _ = sigterm.recv() => debug!("SIGTERM received, quitting GTK application gracefully"),
+                }
+                shutdown_flag_for_signal.store(true, Ordering::SeqCst);
+            }
+            _ => {
+                if tokio::signal::ctrl_c().await.is_ok() {
+                    debug!("SIGINT received, quitting GTK application gracefully");
+                    shutdown_flag_for_signal.store(true, Ordering::SeqCst);
+                }
+            }
         }
     });
     let gtk_app_for_signal = gtk_app.clone();
