@@ -19,11 +19,11 @@ repo = "unsloth/gemma-4-12b-it-GGUF"
 
 [[models]]
 pattern = "gemma-4-e4b"
-repo = "unsloth/gemma-4-E4B-it-GGUF"
+repo = "unsloth/gemma-4-E4B-it-qat-GGUF"
 
 [[models]]
 pattern = "gemma-4-e2b"
-repo = "unsloth/gemma-4-E2B-it-GGUF"
+repo = "unsloth/gemma-4-E2B-it-qat-GGUF"
 
 [[models]]
 pattern = "qwen2.5-1.5b"
