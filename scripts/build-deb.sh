@@ -42,6 +42,7 @@ echo "=== Voice Assistant features: ${VOICE_ASSISTANT_FEATURES:-none} ==="
 echo ""
 
 rm -f target/debian/smearor-service-voice-assistant*.deb
+rm -f target/debian/smearor-swipe-launcher-full*.deb
 
 echo "=== Phase 1: Release build for entire workspace ==="
 if [ -n "$VOICE_ASSISTANT_FEATURES" ]; then
@@ -113,7 +114,11 @@ for pkg in "${SERVICES[@]}"; do
 done
 
 echo "=== Phase 5: Build metapackage ==="
-cargo deb -p smearor-swipe-launcher-full
+if [ -n "$VOICE_ASSISTANT_FEATURES" ]; then
+    cargo deb -p smearor-swipe-launcher-full --variant "$BUILD_VARIANT"
+else
+    cargo deb -p smearor-swipe-launcher-full
+fi
 
 echo "=== Done! ($VARIANT_LABEL) ==="
 echo "All .deb files in target/debian/"
