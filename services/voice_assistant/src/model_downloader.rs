@@ -131,14 +131,15 @@ pub fn ensure_model(local_path: &str, explicit_repo: &str) {
 
     match repo_api.get(&remote_file) {
         Ok(downloaded_path) => {
-            if let Err(error) = std::fs::rename(&downloaded_path, local_path) {
-                // rename may fail across filesystems — try copy + remove
-                if let Err(copy_error) = std::fs::copy(&downloaded_path, local_path) {
-                    warn!("Model downloader: failed to move downloaded file to {local_path}: rename={error}, copy={copy_error}");
-                    return;
-                }
-                let _ = std::fs::remove_file(&downloaded_path);
+            // hf-hub 0.5+ stores cached files as relative symlinks (snapshot -> ../../blobs/<hash>).
+            // Using `rename` would move the symlink itself, breaking the relative target.
+            // `std::fs::copy` follows symlinks and copies the actual file content.
+            if let Err(error) = std::fs::copy(&downloaded_path, local_path) {
+                warn!("Model downloader: failed to copy downloaded file to {local_path}: {error}");
+                return;
             }
+            // Remove the symlink from the cache snapshot (not the blob it points to).
+            let _ = std::fs::remove_file(&downloaded_path);
             info!("Model downloader: successfully downloaded {filename} to {local_path}");
         }
         Err(error) => {
