@@ -77,6 +77,8 @@ pub struct VoiceAssistantSwitchModelArgs {
     pub n_ctx: Option<i32>,
     /// Override the max tokens to generate per response. Omit to use the default of 512.
     pub max_tokens: Option<i32>,
+    /// When true, download the model from HuggingFace if it doesn't exist locally. Uses fallback_models.toml mapping. Default: false.
+    pub ensure_model: Option<bool>,
 }
 
 /// Arguments for the `resource_discovery_guide` MCP prompt.
@@ -110,21 +112,21 @@ pub struct VoiceAssistantTrainingGetArgs {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct VoiceAssistantSetThresholdArgs {
     /// Minimum cosine similarity (0.0–1.0). Default: 0.3. Lower = more tools, higher = fewer tools.
-    pub threshold: f32,
+    pub threshold: Option<f32>,
 }
 
 /// Arguments for the `voice_assistant_set_rolling_window` MCP tool.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct VoiceAssistantSetRollingWindowArgs {
     /// Number of trailing messages to keep (default: 6, i.e. 3 tool-call/response pairs). Minimum: 2.
-    pub keep_last: i32,
+    pub keep_last: Option<i32>,
 }
 
 /// Arguments for the `voice_assistant_set_max_tokens` MCP tool.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub struct VoiceAssistantSetMaxTokensArgs {
     /// Maximum number of tokens to generate per LLM response (default: 512). Typical range: 256–2048.
-    pub max_tokens: i32,
+    pub max_tokens: Option<i32>,
 }
 
 /// Arguments for the `voice_assistant_set_system_prompt` MCP tool.

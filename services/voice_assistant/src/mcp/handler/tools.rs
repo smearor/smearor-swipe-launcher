@@ -5,7 +5,18 @@ use smearor_model_mcp::InvokeToolResponse;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageBroadcaster;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
+use smearor_voice_assistant_model::MemoryStoreBatchArgs;
 use smearor_voice_assistant_model::VoiceAssistantMcpTools;
+use smearor_voice_assistant_model::VoiceAssistantSaveSystemPromptArgs;
+use smearor_voice_assistant_model::VoiceAssistantSetMaxTokensArgs;
+use smearor_voice_assistant_model::VoiceAssistantSetRollingWindowArgs;
+use smearor_voice_assistant_model::VoiceAssistantSetSystemPromptArgs;
+use smearor_voice_assistant_model::VoiceAssistantSetThresholdArgs;
+use smearor_voice_assistant_model::VoiceAssistantSetWakeWordModelArgs;
+use smearor_voice_assistant_model::VoiceAssistantSpeakArgs;
+use smearor_voice_assistant_model::VoiceAssistantSwitchModelArgs;
+use smearor_voice_assistant_model::VoiceAssistantTrainingGetArgs;
+use smearor_voice_assistant_model::VoiceAssistantTrainingStartArgs;
 use std::str::FromStr;
 use tracing::debug;
 use tracing::error;
@@ -163,23 +174,18 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 }
             }
             VoiceAssistantMcpTools::MemoryStoreBatch => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let facts_json = match args.get("facts").and_then(|v| v.as_array()) {
-                    Some(arr) if !arr.is_empty() => arr,
-                    _ => {
-                        let response = InvokeToolResponse::error(&message.0.correlation_id, "Missing required parameter: facts (non-empty array)");
-                        broadcaster.broadcast_message_to_topic(response);
-                        return;
-                    }
-                };
-                let facts: Vec<(String, String, FactCategory)> = facts_json
+                let args: MemoryStoreBatchArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                if args.facts.is_empty() {
+                    let response = InvokeToolResponse::error(&message.0.correlation_id, "Missing required parameter: facts (non-empty array)");
+                    broadcaster.broadcast_message_to_topic(response);
+                    return;
+                }
+                let facts: Vec<(String, String, FactCategory)> = args
+                    .facts
                     .iter()
                     .filter_map(|item| {
-                        let key = item.get("key").and_then(|v| v.as_str())?;
-                        let value = item.get("value").and_then(|v| v.as_str())?;
-                        let category_str = item.get("category").and_then(|v| v.as_str()).unwrap_or("fact");
-                        let category = category_str.parse().unwrap_or(FactCategory::Fact);
-                        Some((key.to_string(), value.to_string(), category))
+                        let category = item.category.as_deref().unwrap_or("fact").parse().unwrap_or(FactCategory::Fact);
+                        Some((item.key.clone(), item.value.clone(), category))
                     })
                     .collect();
                 if facts.is_empty() {
@@ -203,8 +209,8 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 }
             }
             VoiceAssistantMcpTools::TrainingStart => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let label = args.get("label").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let args: VoiceAssistantTrainingStartArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                let label = args.label;
                 if let Ok(mut mode) = self.training_mode.lock() {
                     *mode = true;
                 }
@@ -245,19 +251,16 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 broadcaster.broadcast_message_to_topic(response);
             }
             VoiceAssistantMcpTools::TrainingGet => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
-                let label = args.get("label").and_then(|v| v.as_str()).map(|s| s.to_string());
-                let query = args.get("query").and_then(|v| v.as_str()).map(|s| s.to_string());
-                let trace_id = args.get("trace_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let args: VoiceAssistantTrainingGetArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                let limit = args.limit.unwrap_or(1) as usize;
 
-                let traces = if let Some(ref tid) = trace_id {
+                let traces = if let Some(ref tid) = args.trace_id {
                     crate::training::get_trace_by_id(&self.training_history, tid)
                         .or_else(|| crate::training::get_active_trace(&self.active_trace, tid))
                         .map(|t| vec![t])
                         .unwrap_or_default()
                 } else {
-                    crate::training::query_traces(&self.training_history, limit, label.as_deref(), query.as_deref())
+                    crate::training::query_traces(&self.training_history, limit, args.label.as_deref(), args.query.as_deref())
                 };
 
                 let json = serde_json::to_string(&traces).unwrap_or_else(|_| "[]".to_string());
@@ -265,14 +268,16 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 broadcaster.broadcast_message_to_topic(response);
             }
             VoiceAssistantMcpTools::SwitchModel => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let model_path = args.get("model_path").and_then(|v| v.as_str());
-                let n_ctx_override = args.get("n_ctx").and_then(|v| v.as_u64()).map(|v| v as u32);
-                let max_tokens_override = args.get("max_tokens").and_then(|v| v.as_u64()).map(|v| v as usize);
-                match model_path {
-                    Some(path) if !path.is_empty() => {
-                        let path = shellexpand::tilde(path).into_owned();
-                        let new_llm_config = self.config.to_llm_config_with_model(&path, n_ctx_override, max_tokens_override);
+                let args: VoiceAssistantSwitchModelArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                match args.model_path.is_empty() {
+                    false => {
+                        let path = shellexpand::tilde(&args.model_path).into_owned();
+                        if args.ensure_model.unwrap_or(false) {
+                            crate::model_downloader::ensure_model(&path, &self.config.llm_model_repo);
+                        }
+                        let new_llm_config = self
+                            .config
+                            .to_llm_config_with_model(&path, args.n_ctx.map(|v| v as u32), args.max_tokens.map(|v| v as usize));
                         match &self.llm_worker {
                             Some(worker) => {
                                 let worker = worker.clone();
@@ -313,8 +318,8 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 }
             }
             VoiceAssistantMcpTools::SetThreshold => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let threshold = args.get("threshold").and_then(|v| v.as_f64());
+                let args: VoiceAssistantSetThresholdArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                let threshold = args.threshold.map(|v| v as f64);
                 match threshold {
                     Some(value) if (0.0..=1.0).contains(&value) => {
                         let new_threshold = value as f32;
@@ -341,8 +346,8 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 }
             }
             VoiceAssistantMcpTools::SetRollingWindow => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let keep_last = args.get("keep_last").and_then(|v| v.as_u64());
+                let args: VoiceAssistantSetRollingWindowArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                let keep_last = args.keep_last.map(|v| v as u64);
                 match keep_last {
                     Some(value) if value >= 2 => {
                         let new_keep_last = value as usize;
@@ -393,8 +398,8 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 }
             }
             VoiceAssistantMcpTools::SetMaxTokens => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let max_tokens = args.get("max_tokens").and_then(|v| v.as_u64());
+                let args: VoiceAssistantSetMaxTokensArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                let max_tokens = args.max_tokens.map(|v| v as u64);
                 match max_tokens {
                     Some(value) if value >= 64 && value <= 8192 => {
                         let new_max_tokens = value as usize;
@@ -435,8 +440,8 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 broadcaster.broadcast_message_to_topic(response);
             }
             VoiceAssistantMcpTools::SetSystemPrompt => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let new_prompt = args.get("system_prompt").and_then(|v| v.as_str()).unwrap_or("");
+                let args: VoiceAssistantSetSystemPromptArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                let new_prompt = &args.system_prompt;
                 if new_prompt.is_empty() {
                     if let Ok(mut guard) = self.runtime_system_prompt.write() {
                         *guard = None;
@@ -457,8 +462,8 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 }
             }
             VoiceAssistantMcpTools::SaveSystemPrompt => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let prompt_text = args.get("system_prompt").and_then(|v| v.as_str()).unwrap_or("");
+                let args: VoiceAssistantSaveSystemPromptArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                let prompt_text = &args.system_prompt;
                 if prompt_text.is_empty() {
                     let response = InvokeToolResponse::error(&message.0.correlation_id, "system_prompt must not be empty");
                     broadcaster.broadcast_message_to_topic(response);
@@ -494,9 +499,9 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 broadcaster.broadcast_message_to_topic(response);
             }
             VoiceAssistantMcpTools::SetWakeWordModel => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let model = args.get("model").and_then(|v| v.as_str()).unwrap_or("Alexa");
-                let threshold = args.get("threshold").and_then(|v| v.as_f64()).map(|t| t as f32);
+                let args: VoiceAssistantSetWakeWordModelArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                let model = if args.model.is_empty() { "Alexa" } else { &args.model };
+                let threshold = args.threshold;
                 self.set_wake_word_model(model, threshold);
                 let msg = match threshold {
                     Some(t) => format!("Wake word model set to '{model}' with threshold {t}."),
@@ -506,10 +511,11 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 broadcaster.broadcast_message_to_topic(response);
             }
             VoiceAssistantMcpTools::Speak => {
-                let args: serde_json::Value = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or(serde_json::Value::Null);
-                let text = args.get("text").and_then(|v| v.as_str()).map(|s| s.to_string());
-                match text {
-                    Some(text) if !text.is_empty() => {
+                let args: VoiceAssistantSpeakArgs = serde_json::from_str(&message.0.arguments.to_string()).unwrap_or_default();
+                let text = args.text;
+                match text.is_empty() {
+                    false => {
+                        let text = text;
                         let tts_engine = self.tts_engine.clone();
                         let is_speaking = self.is_speaking.clone();
                         let correlation_id = message.0.correlation_id.clone();
@@ -545,12 +551,8 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                             }
                         }
                     }
-                    Some(_) => {
+                    _ => {
                         let response = InvokeToolResponse::error(&message.0.correlation_id, "text must not be empty");
-                        broadcaster.broadcast_message_to_topic(response);
-                    }
-                    None => {
-                        let response = InvokeToolResponse::error(&message.0.correlation_id, "Missing required parameter: text");
                         broadcaster.broadcast_message_to_topic(response);
                     }
                 }
