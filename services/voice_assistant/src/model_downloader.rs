@@ -16,9 +16,14 @@ pub struct FallbackModelEntry {
     /// HuggingFace repository ID (e.g. `ggerganov/whisper.cpp`).
     pub repo: String,
     /// Optional subdirectory within the repo where the file lives.
-    /// When set, the file is fetched from `<repo>/resolve/main/<remote_path>/<filename>`.
+    /// When set, the file is fetched from `<repo>/resolve/main/<remote_path>/<remote_filename>`.
     /// When absent, the file is fetched from the repository root.
     pub remote_path: Option<String>,
+    /// Optional remote filename when it differs from the local filename.
+    /// When set, the file is fetched as `<remote_filename>` (or
+    /// `<remote_path>/<remote_filename>` when `remote_path` is also set).
+    /// When absent, the local filename is used on the remote side as well.
+    pub remote_filename: Option<String>,
 }
 
 /// Container struct for deserializing the TOML file.
@@ -61,6 +66,7 @@ fn resolve_fallback(filename: &str, explicit_repo: &str) -> Option<FallbackModel
             pattern: String::new(),
             repo: explicit_repo.to_string(),
             remote_path: None,
+            remote_filename: None,
         });
     }
     fallback_entry(filename)
@@ -114,10 +120,13 @@ pub fn ensure_model(local_path: &str, explicit_repo: &str) {
 
     let repo_api = api.model(entry.repo.clone());
 
+    // Determine the remote filename: use `remote_filename` if set, otherwise the local filename.
+    let remote_name = entry.remote_filename.as_deref().unwrap_or(filename);
+
     // Fetch from the repo root or from a subdirectory when `remote_path` is set.
     let remote_file = match &entry.remote_path {
-        Some(subdir) => format!("{subdir}/{filename}"),
-        None => filename.to_string(),
+        Some(subdir) => format!("{subdir}/{remote_name}"),
+        None => remote_name.to_string(),
     };
 
     match repo_api.get(&remote_file) {

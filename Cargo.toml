@@ -176,7 +176,7 @@ glib = "0.22"
 glib-build-tools = "0.22"
 gio = "0.22"
 gtk4-layer-shell = "0.8"
-hf-hub = "0.3"
+hf-hub = "0.5"
 #hyprland = "0.3.13"
 hyprland = { git = "https://github.com/aschaeffer/hyprland-rs", branch = "master" }
 libpulse-binding = "2.30"

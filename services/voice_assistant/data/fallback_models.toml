@@ -9,9 +9,14 @@
 # more specific patterns before generic ones.
 #
 # `remote_path` is optional.  When set, the file is fetched from
-# `<repo>/resolve/main/<remote_path>/<filename>` instead of the repository root.
+# `<repo>/resolve/main/<remote_path>/<remote_filename>` instead of the repository root.
 # This is needed for repos that store models in subdirectories (e.g. Piper
 # voices).
+#
+# `remote_filename` is optional.  When set, the file is downloaded from the
+# remote repo using this name instead of the local filename.  This is needed
+# when the remote file has a different name (e.g. Silero VAD: local
+# `silero_vad.onnx` vs remote `model.onnx`).
 
 [[models]]
 pattern = "gemma-4-12b"
@@ -60,6 +65,8 @@ repo = "ggerganov/whisper.cpp"
 [[models]]
 pattern = "silero_vad"
 repo = "onnx-community/silero-vad"
+remote_path = "onnx"
+remote_filename = "model.onnx"
 
 [[models]]
 pattern = "de_de-thorsten"
