@@ -7,6 +7,7 @@ pub(crate) mod config;
 pub(crate) mod embedding_engine;
 pub(crate) mod gpu_detection;
 pub(crate) mod llm;
+pub(crate) mod llm_backend;
 pub(crate) mod mcp;
 pub(crate) mod memory;
 pub(crate) mod model_downloader;

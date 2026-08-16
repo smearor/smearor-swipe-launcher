@@ -5,7 +5,6 @@ use std::sync::RwLock;
 use moka::sync::Cache;
 
 use glib::MainContext;
-use llama_cpp_4::model::LlamaChatMessage;
 use smearor_model_mcp::RegisterPromptMessage;
 use smearor_model_mcp::RegisterResourceMessage;
 use smearor_model_mcp::RegisterToolMessage;
@@ -57,8 +56,10 @@ use crate::catalog_router::SharedCatalogRouter;
 use crate::config::VoiceAssistantServiceConfig;
 use crate::config::WakeWordModelType;
 use crate::embedding_engine::SharedEmbeddingEngine;
-use crate::llm::LlmInferenceEngine;
-use crate::llm::LlmWorker;
+use crate::llm_backend::ChatMessage;
+use crate::llm_backend::LlmBackend;
+use crate::llm_backend::LlmBackendConfig;
+use crate::llm_backend::LlmBackendType;
 use crate::memory::EntityStore;
 use crate::memory::SemanticMemory;
 use crate::memory::SharedSemanticMemory;
@@ -99,12 +100,11 @@ pub struct VoiceAssistantService {
     pub tools_json_cache: Cache<Vec<String>, String>,
     pub whisper_context: Option<Arc<WhisperContext>>,
     pub vad_engine: Option<SharedSileroVad>,
-    pub llm_engine: Option<Arc<LlmInferenceEngine>>,
-    pub llm_worker: Option<Arc<LlmWorker>>,
+    pub llm_backend: Arc<RwLock<Option<Arc<dyn LlmBackend>>>>,
     pub entity_store: EntityStore,
     pub semantic_memory: SharedSemanticMemory,
     pub embedding_engine: Option<SharedEmbeddingEngine>,
-    pub conversation_history: Arc<RwLock<Vec<LlamaChatMessage>>>,
+    pub conversation_history: Arc<RwLock<Vec<ChatMessage>>>,
     pub pending_invocations: PendingInvocations,
     pub pending_resource_reads: PendingResourceReads,
     pub pending_prompt_invocations: PendingPromptInvocations,
@@ -180,7 +180,7 @@ impl VoiceAssistantService {
         let tool_cache = crate::tool_cache::ToolCache::new();
         let performance_monitor = crate::performance::PerformanceMonitor::new();
         let entity_store = Arc::new(RwLock::new(std::collections::HashMap::new()));
-        let conversation_history: Arc<RwLock<Vec<LlamaChatMessage>>> = Arc::new(RwLock::new(Vec::new()));
+        let conversation_history: Arc<RwLock<Vec<ChatMessage>>> = Arc::new(RwLock::new(Vec::new()));
         let tools_json_cache = Cache::builder().max_capacity(128).time_to_live(std::time::Duration::from_secs(600)).build();
         let tool_selection_threshold = Arc::new(RwLock::new(service_config.tool_selection_threshold));
         let wake_word_model_init = service_config.wake_word.model.clone();
@@ -202,8 +202,7 @@ impl VoiceAssistantService {
             tools_json_cache,
             whisper_context: None,
             vad_engine: None,
-            llm_engine: None,
-            llm_worker: None,
+            llm_backend: Arc::new(RwLock::new(None)),
             entity_store,
             semantic_memory: Arc::new(RwLock::new(SemanticMemory::uninit())),
             embedding_engine: None,
@@ -276,17 +275,29 @@ impl VoiceAssistantService {
             }
         }
 
-        // Initialize LLM engine and persistent worker.
-        let llm_config = service.config.to_llm_config();
-        match LlmInferenceEngine::load(&llm_config) {
-            Ok(engine) => {
-                debug!("Voice Assistant: LLM engine loaded");
-                let worker = LlmWorker::spawn(engine);
-                service.llm_worker = Some(Arc::new(worker));
+        // Initialize LLM backend based on configured backend type.
+        match service.config.llm_backend_type {
+            LlmBackendType::Local => {
+                let llm_config = service.config.to_llm_config();
+                match crate::llm_backend::create_backend(&LlmBackendConfig::Local(llm_config)) {
+                    Ok(backend) => {
+                        debug!("Voice Assistant: Local LLM backend loaded");
+                        *service.llm_backend.write().unwrap() = Some(backend);
+                    }
+                    Err(error) => {
+                        error!("Voice Assistant: Failed to load local LLM backend: {error}");
+                    }
+                }
             }
-            Err(error) => {
-                error!("Voice Assistant: Failed to load LLM engine: {error}");
-            }
+            LlmBackendType::Ollama => match crate::llm_backend::create_backend(&LlmBackendConfig::Ollama(service.config.ollama.clone())) {
+                Ok(backend) => {
+                    debug!("Voice Assistant: Ollama LLM backend created");
+                    *service.llm_backend.write().unwrap() = Some(backend);
+                }
+                Err(error) => {
+                    error!("Voice Assistant: Failed to create Ollama backend: {error}");
+                }
+            },
         }
 
         // Initialize semantic memory (L2/L3: entity states + long-term facts).
@@ -328,8 +339,7 @@ impl VoiceAssistantService {
         let service_state = service.state.clone();
         let service_whisper = service.whisper_context.clone();
         let service_vad = service.vad_engine.clone();
-        let service_llm = service.llm_engine.clone();
-        let service_worker = service.llm_worker.clone();
+        let service_llm_backend = service.llm_backend.clone();
         let service_entity_store = service.entity_store.clone();
         let service_semantic_memory = service.semantic_memory.clone();
         let service_conversation_history = service.conversation_history.clone();
@@ -414,8 +424,7 @@ impl VoiceAssistantService {
                                 &service_state,
                                 &service_whisper,
                                 &service_vad,
-                                &service_llm,
-                                &service_worker,
+                                &service_llm_backend,
                                 &service_entity_store,
                                 &service_semantic_memory,
                                 &service_conversation_history,
@@ -530,8 +539,7 @@ impl VoiceAssistantService {
                                 &message.text,
                                 &service_config,
                                 &service_state,
-                                &service_llm,
-                                &service_worker,
+                                &service_llm_backend,
                                 &service_entity_store,
                                 &service_semantic_memory,
                                 &service_conversation_history,
@@ -578,8 +586,8 @@ impl VoiceAssistantService {
                             if let Ok(mut history) = service_conversation_history.write() {
                                 history.clear();
                             }
-                            if let Some(worker) = service_worker.as_ref() {
-                                if let Err(error) = worker.clear_conversation().await {
+                            if let Some(backend) = service_llm_backend.read().unwrap().clone() {
+                                if let Err(error) = backend.clear_conversation().await {
                                     warn!("Voice Assistant: failed to clear LLM KV cache: {error}");
                                 }
                             }
@@ -816,11 +824,10 @@ impl VoiceAssistantService {
         state: &Arc<RwLock<AssistantState>>,
         whisper_context: &Option<Arc<WhisperContext>>,
         vad_engine: &Option<SharedSileroVad>,
-        llm_engine: &Option<Arc<LlmInferenceEngine>>,
-        llm_worker: &Option<Arc<LlmWorker>>,
+        llm_backend: &Arc<RwLock<Option<Arc<dyn LlmBackend>>>>,
         entity_store: &EntityStore,
         semantic_memory: &SharedSemanticMemory,
-        conversation_history: &Arc<RwLock<Vec<LlamaChatMessage>>>,
+        conversation_history: &Arc<RwLock<Vec<ChatMessage>>>,
         tool_router: &SharedToolRouter,
         resource_router: &SharedCatalogRouter,
         prompt_router: &SharedCatalogRouter,
@@ -956,8 +963,7 @@ impl VoiceAssistantService {
             &transcribed,
             config,
             state,
-            llm_engine,
-            llm_worker,
+            llm_backend,
             entity_store,
             semantic_memory,
             conversation_history,
@@ -999,11 +1005,10 @@ impl VoiceAssistantService {
         text: &str,
         config: &VoiceAssistantServiceConfig,
         state: &Arc<RwLock<AssistantState>>,
-        llm_engine: &Option<Arc<LlmInferenceEngine>>,
-        llm_worker: &Option<Arc<LlmWorker>>,
+        llm_backend: &Arc<RwLock<Option<Arc<dyn LlmBackend>>>>,
         entity_store: &EntityStore,
         semantic_memory: &SharedSemanticMemory,
-        conversation_history: &Arc<RwLock<Vec<LlamaChatMessage>>>,
+        conversation_history: &Arc<RwLock<Vec<ChatMessage>>>,
         tool_router: &SharedToolRouter,
         resource_router: &SharedCatalogRouter,
         prompt_router: &SharedCatalogRouter,
@@ -1042,8 +1047,7 @@ impl VoiceAssistantService {
             text,
             config,
             state,
-            llm_engine,
-            llm_worker,
+            llm_backend,
             entity_store,
             semantic_memory,
             conversation_history,
@@ -1085,11 +1089,10 @@ impl VoiceAssistantService {
         user_text: &str,
         config: &VoiceAssistantServiceConfig,
         state: &Arc<RwLock<AssistantState>>,
-        llm_engine: &Option<Arc<LlmInferenceEngine>>,
-        llm_worker: &Option<Arc<LlmWorker>>,
+        llm_backend: &Arc<RwLock<Option<Arc<dyn LlmBackend>>>>,
         entity_store: &EntityStore,
         semantic_memory: &SharedSemanticMemory,
-        conversation_history: &Arc<RwLock<Vec<LlamaChatMessage>>>,
+        conversation_history: &Arc<RwLock<Vec<ChatMessage>>>,
         tool_router: &SharedToolRouter,
         resource_router: &SharedCatalogRouter,
         prompt_router: &SharedCatalogRouter,
@@ -1137,8 +1140,7 @@ impl VoiceAssistantService {
             tools_json_cache: Cache::builder().build(),
             whisper_context: None,
             vad_engine: None,
-            llm_engine: llm_engine.clone(),
-            llm_worker: llm_worker.clone(),
+            llm_backend: llm_backend.clone(),
             entity_store: entity_store.clone(),
             semantic_memory: semantic_memory.clone(),
             embedding_engine: semantic_memory.read().ok().and_then(|m| m.embedding_engine().cloned()),
@@ -1180,17 +1182,16 @@ impl VoiceAssistantService {
 
         // Proactively trim KV cache when conversation history is long,
         // keeping recent context and avoiding overflow during generation.
-        if let Some(worker) = llm_worker.as_ref() {
+        if let Some(backend) = llm_backend.read().unwrap().clone() {
             let history_len = conversation_history.read().map(|h| h.len()).unwrap_or(0);
             let max_messages = config.max_history_messages;
             if history_len >= max_messages {
-                let n_ctx = worker.config().n_ctx as usize;
-                let target_tokens = (n_ctx as f64 * config.context_keep_ratio) as usize;
+                let target_tokens = (config.llm_context_size as f64 * config.context_keep_ratio) as usize;
                 debug!(
                     "Voice Assistant: proactively trimming KV cache to ~{} tokens (history: {}/{})",
                     target_tokens, history_len, max_messages
                 );
-                if let Err(error) = worker.trim_context(target_tokens).await {
+                if let Err(error) = backend.trim_context(target_tokens).await {
                     warn!("Voice Assistant: proactive trim_context failed: {error}");
                 }
             }

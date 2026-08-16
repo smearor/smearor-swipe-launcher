@@ -11,6 +11,7 @@ authors.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+async-trait = { workspace = true }
 chrono = { workspace = true }
 cpal = { workspace = true }
 encoding_rs = { workspace = true }
@@ -24,11 +25,13 @@ llm_json = "1.0"
 miette = { workspace = true }
 moka = { workspace = true }
 ndarray = { workspace = true }
+once_cell = { workspace = true }
 ort = { workspace = true }
 oww-rs = { workspace = true }
 gguf = { workspace = true }
 paste = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true }
 ringbuf = { workspace = true }
 rusqlite = { workspace = true }
 schemars = { workspace = true }

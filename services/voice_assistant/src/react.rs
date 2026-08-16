@@ -4,7 +4,8 @@ use std::sync::Mutex;
 use tokio::sync::oneshot;
 use tracing::debug;
 
-use llama_cpp_4::model::LlamaChatMessage;
+use crate::llm_backend::ChatMessage;
+use crate::llm_backend::LlmBackend;
 use llm_json::repair_json;
 use regex::Regex;
 use smearor_model_mcp::InvokePromptResponse;
@@ -19,7 +20,6 @@ use smearor_voice_assistant_model::LlmResponse;
 use smearor_voice_assistant_model::NewInsight;
 use smearor_voice_assistant_model::ToolResult;
 
-use crate::llm::LlmWorker;
 use crate::memory::FactCategory;
 use crate::memory::extract_entity_state;
 use crate::service::VoiceAssistantService;
@@ -586,12 +586,14 @@ impl VoiceAssistantService {
             calls.clear();
         }
 
-        let worker = self
-            .llm_worker
-            .as_ref()
-            .ok_or(AssistantError::LlmInference("LLM worker not initialized".to_string()))?;
+        let backend = self
+            .llm_backend
+            .read()
+            .unwrap()
+            .clone()
+            .ok_or(AssistantError::LlmInference("LLM backend not initialized".to_string()))?;
 
-        let max_tokens = worker.config().max_tokens;
+        let max_tokens = backend.max_tokens();
         let max_iterations = self.config.max_react_iterations;
 
         // 0. Skip unconditional reset — the worker handles session management
@@ -606,12 +608,12 @@ impl VoiceAssistantService {
         // 3. Create a separate vector for the active LLM call.
         //    Tool results are appended ONLY to active_payload, never to conversation.
         let mut active_payload = Vec::with_capacity(conversation.len() + 2);
-        active_payload.push(LlamaChatMessage::new("user".to_string(), context_message).map_err(|e| AssistantError::LlmInference(e.to_string()))?);
+        active_payload.push(ChatMessage::new("user", context_message));
         active_payload.extend(conversation.iter().cloned());
-        active_payload.push(LlamaChatMessage::new("user".to_string(), user_text.to_string()).map_err(|e| AssistantError::LlmInference(e.to_string()))?);
+        active_payload.push(ChatMessage::new("user", user_text.to_string()));
 
         // 4. Add the user message to persistent history.
-        conversation.push(LlamaChatMessage::new("user".to_string(), user_text.to_string()).map_err(|e| AssistantError::LlmInference(e.to_string()))?);
+        conversation.push(ChatMessage::new("user", user_text.to_string()));
 
         // 5. Initialize training trace if training mode is active.
         let is_training = self.training_mode.lock().map(|m| *m).unwrap_or(false);
@@ -636,7 +638,7 @@ impl VoiceAssistantService {
         let mut rejected_final_answer = false;
         for iteration in 0..max_iterations {
             let llm_start = std::time::Instant::now();
-            let (llm_output, trimmed_payload) = worker
+            let (llm_output, trimmed_payload) = backend
                 .generate(&system_prompt, active_payload.clone(), max_tokens, self.config.use_grammar)
                 .await
                 .map_err(|e| AssistantError::LlmInference(e.to_string()))?;
@@ -668,16 +670,12 @@ impl VoiceAssistantService {
                         }
                     }
                     if iteration + 1 < max_iterations {
+                        active_payload.push(ChatMessage::new("assistant", llm_output_without_cot.clone()));
                         active_payload.push(
-                            LlamaChatMessage::new("assistant".to_string(), llm_output_without_cot.clone())
-                                .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
-                        );
-                        active_payload.push(
-                            LlamaChatMessage::new(
-                                "user".to_string(),
+                            ChatMessage::new(
+                                "user",
                                 "Your previous response was not valid JSON. Please respond with ONLY a JSON object: either {\"tool\": \"<name>\", \"parameters\": {...}}, {\"resource\": \"<uri>\"}, {\"final_answer\": \"<text>\"}, or {\"clarify\": {{\"question\": \"...\"}}}.".to_string(),
-                            )
-                                .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
+                            ),
                         );
                         continue;
                     }
@@ -691,8 +689,7 @@ impl VoiceAssistantService {
             // Add the CoT-stripped LLM output as a single assistant message so
             // the prompt stays consistent with the KV cache state and no raw
             // channel tokens leak into the conversation history.
-            active_payload
-                .push(LlamaChatMessage::new("assistant".to_string(), llm_output_without_cot.clone()).map_err(|e| AssistantError::LlmInference(e.to_string()))?);
+            active_payload.push(ChatMessage::new("assistant", llm_output_without_cot.clone()));
 
             // Execute only the first parsed action. Remaining planned actions
             // are preserved as a "discarded plan" and injected into the next
@@ -750,11 +747,10 @@ impl VoiceAssistantService {
                                 }
                             }
                             active_payload.push(
-                                LlamaChatMessage::new(
-                                    "user".to_string(),
+                                ChatMessage::new(
+                                    "user",
                                     format!("The tool '{tool}' was already executed in the previous step with the same arguments. Do not call it again with identical parameters. Either call a different tool, call the same tool with different arguments, ask a clarifying question with {{\"clarify\": {{\"question\": \"...\"}}}}, or provide a final answer with {{\"final_answer\": \"<text>\"}}."),
                                 )
-                                    .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
                             );
                             continue;
                         }
@@ -801,18 +797,15 @@ impl VoiceAssistantService {
                                                 } else {
                                                     resource_result
                                                 };
-                                                active_payload.push(
-                                                    LlamaChatMessage::new(
-                                                        "user".to_string(),
-                                                        format!(
-                                                            "Tool '{tool}' does not exist, but the resource '{resource_uri}' was read instead.\n\
+                                                active_payload.push(ChatMessage::new(
+                                                    "user",
+                                                    format!(
+                                                        "Tool '{tool}' does not exist, but the resource '{resource_uri}' was read instead.\n\
                                                              Observation: {display_result}\n\n\
                                                              Note: for future requests of this type, use {{\"resource\": \"{resource_uri}\"}} directly.\n\
                                                              Now process the observation and respond with a final answer or next action."
-                                                        ),
-                                                    )
-                                                    .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
-                                                );
+                                                    ),
+                                                ));
                                                 continue;
                                             }
                                             Err(resource_error) => {
@@ -843,11 +836,10 @@ impl VoiceAssistantService {
                                 }
                                 let schema_hint = self.lookup_tool_schema(&tool);
                                 active_payload.push(
-                                    LlamaChatMessage::new(
-                                        "user".to_string(),
+                                    ChatMessage::new(
+                                        "user",
                                         format!("Tool '{tool}' failed with error: {error}\n{schema_hint}\n\nThe tool call failed. Either try a different tool, read a resource with {{\"resource\": \"<uri>\"}}, ask a clarifying question with {{\"clarify\": {{\"question\": \"...\"}}}}, or inform the user with {{\"final_answer\": \"<text>\"}}."),
                                     )
-                                        .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
                                 );
                                 debug!("Voice Assistant: ReAct iteration {iteration}: tool '{tool}' failed: {error}");
                                 continue;
@@ -885,7 +877,7 @@ impl VoiceAssistantService {
                         let display_result = if tool == "get_area_config" {
                             tool_result
                         } else if tool_result.len() > MAX_TOOL_RESULT_CHARS {
-                            self.summarize_tool_result(&tool, &tool_result, user_text, worker, max_tokens)
+                            self.summarize_tool_result(&tool, &tool_result, user_text, &backend, max_tokens)
                                 .await
                                 .unwrap_or_else(|error| {
                                     debug!("Voice Assistant: tool result summarization failed ({error}), falling back to truncation");
@@ -901,11 +893,10 @@ impl VoiceAssistantService {
                         let answer_hint = self.build_answer_hint(&tool, user_text);
                         let plan_note = discarded_plan.unwrap_or_default();
                         active_payload.push(
-                            LlamaChatMessage::new(
-                                "user".to_string(),
+                            ChatMessage::new(
+                                "user",
                                 format!("Tool {tool} executed successfully. Result: {display_result}\n\n{plan_note}\n\nBased on the result, decide the next step: call another tool if needed (e.g. execute an app after searching), ask a clarifying question with {{\"clarify\": {{\"question\": \"...\"}}}}, or provide a final answer with {{\"final_answer\": \"<text>\"}}.{answer_hint}"),
                             )
-                                .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
                         );
                         debug!("Voice Assistant: ReAct iteration {iteration}: tool '{tool}' invoked, continuing");
                     }
@@ -928,11 +919,10 @@ impl VoiceAssistantService {
                                 }
                             }
                             active_payload.push(
-                                LlamaChatMessage::new(
-                                    "user".to_string(),
+                                ChatMessage::new(
+                                    "user",
                                     format!("The resource '{resource}' was already read in the previous step. Do not read it again. Try a different approach: call a tool with {{\"tool\": \"<name>\", \"arguments\": {{...}}}} to get the data you need, or reason about the information you already have and provide a final answer with {{\"final_answer\": \"<text>\"}}. Only if you cannot proceed, ask a clarifying question with {{\"clarify\": {{\"question\": \"...\"}}}}."),
                                 )
-                                    .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
                             );
                             continue;
                         }
@@ -968,11 +958,10 @@ impl VoiceAssistantService {
                                     String::new()
                                 };
                                 active_payload.push(
-                                    LlamaChatMessage::new(
-                                        "user".to_string(),
+                                    ChatMessage::new(
+                                        "user",
                                         format!("Resource '{resource}' failed with error: {error}\n\nThe resource URI does not exist. Resources do not accept query parameters (no '?' or '&').{tool_suggestions} Check the 'Available resources' list for valid URIs or the 'Available tools' list for actionable tools."),
                                     )
-                                        .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
                                 );
                                 debug!("Voice Assistant: ReAct iteration {iteration}: resource '{resource}' failed: {error}");
                                 continue;
@@ -1009,11 +998,10 @@ impl VoiceAssistantService {
                         };
                         let plan_note = discarded_plan.unwrap_or_default();
                         active_payload.push(
-                            LlamaChatMessage::new(
-                                "user".to_string(),
+                            ChatMessage::new(
+                                "user",
                                 format!("Resource {resource} read successfully. Result: {display_result}\n\n{plan_note}\n\nIf the result does not fully answer the user's question, try these steps in order:\n1. Check the 'Available tools' list for a tool that accepts parameters to get the specific data you need.\n2. Call that tool with {{\"tool\": \"<name>\", \"arguments\": {{...}}}}.\n3. If you already have enough information from the resource or a previous tool result, reason about it and provide a final answer with {{\"final_answer\": \"<text>\"}}.\n4. Only if you cannot proceed with any tool or reasoning, ask a clarifying question with {{\"clarify\": {{\"question\": \"...\"}}}}."),
                             )
-                                .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
                         );
                         debug!("Voice Assistant: ReAct iteration {iteration}: resource '{resource}' read, continuing");
                     }
@@ -1068,11 +1056,10 @@ impl VoiceAssistantService {
                                 }
                             }
                             active_payload.push(
-                                LlamaChatMessage::new(
-                                    "user".to_string(),
+                                ChatMessage::new(
+                                    "user",
                                     "[SYSTEM_ACTION]: CRITICAL: Your final_answer was rejected because the user requested an action (start, open, launch, etc.) but you have NOT called any tool yet. You MUST call the appropriate tool to perform the requested action. Do NOT return a final_answer without first executing the action via a tool call. Respond NOW with a tool call in the format {\"tool\": \"<name>\", \"parameters\": {...}}.".to_string(),
                                 )
-                                    .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
                             );
                             continue;
                         }
@@ -1099,12 +1086,11 @@ impl VoiceAssistantService {
                         // consistency; conversation gets the cleaned version so
                         // future calls don't see a premature text_to_speech_answer.
                         let clean_output = format!("{{\"final_answer\": \"{}\"}}", answer.replace('\\', "\\\\").replace('"', "\\\""));
-                        conversation
-                            .push(LlamaChatMessage::new("assistant".to_string(), clean_output).map_err(|e| AssistantError::LlmInference(e.to_string()))?);
+                        conversation.push(ChatMessage::new("assistant", clean_output));
                         if self.config.tts.conversion_step {
                             active_payload.push(
-                                LlamaChatMessage::new(
-                                    "user".to_string(),
+                                ChatMessage::new(
+                                    "user",
                                     format!("[SYSTEM_ACTION]: Convert your final_answer into a text_to_speech_answer. This text will be read aloud by a TTS engine — the user must understand it purely by listening.\n\
 TTS rules:\n\
 - Write ALL numbers as full words: \"zweiundzwanzig\" instead of \"22\", \"fünf Punkt eins\" instead of \"5.1\".\n\
@@ -1115,7 +1101,6 @@ TTS rules:\n\
 - final_answer may contain digits and symbols. text_to_speech_answer MUST NOT contain any digits or symbols.\n\
 Respond NOW with only {{\"text_to_speech_answer\": \"<spoken text>\"}}."),
                                 )
-                                    .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
                             );
                         } else {
                             debug!("Voice Assistant: TTS conversion step disabled, returning final_answer directly");
@@ -1145,12 +1130,11 @@ Respond NOW with only {{\"text_to_speech_answer\": \"<spoken text>\"}}."),
                         debug!("Voice Assistant: ReAct iteration {iteration}: clarify received, requesting TTS conversion");
                         final_answer_text = Some(question.clone());
                         let clean_output = format!("{{\"clarify\": {{\"question\": \"{}\"}}}}", question.replace('\\', "\\\\").replace('"', "\\\""));
-                        conversation
-                            .push(LlamaChatMessage::new("assistant".to_string(), clean_output).map_err(|e| AssistantError::LlmInference(e.to_string()))?);
+                        conversation.push(ChatMessage::new("assistant", clean_output));
                         if self.config.tts.conversion_step {
                             active_payload.push(
-                                LlamaChatMessage::new(
-                                    "user".to_string(),
+                                ChatMessage::new(
+                                    "user",
                                     format!("[SYSTEM_ACTION]: Convert your clarify question into a text_to_speech_answer. This text will be read aloud by a TTS engine — the user must understand it purely by listening.\n\
 TTS rules:\n\
 - Write ALL numbers as full words: \"zweiundzwanzig\" instead of \"22\", \"fünf Punkt eins\" instead of \"5.1\".\n\
@@ -1160,7 +1144,6 @@ TTS rules:\n\
 - Focus only on what the user asked.\n\
 Respond NOW with only {{\"text_to_speech_answer\": \"<spoken text>\"}}."),
                                 )
-                                    .map_err(|e| AssistantError::LlmInference(e.to_string()))?,
                             );
                         } else {
                             debug!("Voice Assistant: TTS conversion step disabled, returning clarify directly");
@@ -1180,7 +1163,7 @@ Respond NOW with only {{\"text_to_speech_answer\": \"<spoken text>\"}}."),
                 } else {
                     result_text.clone()
                 };
-                conversation.push(LlamaChatMessage::new("assistant".to_string(), history_text).map_err(|e| AssistantError::LlmInference(e.to_string()))?);
+                conversation.push(ChatMessage::new("assistant", history_text));
 
                 let max_messages = self.config.max_history_messages;
                 if conversation.len() > max_messages {
@@ -1439,7 +1422,7 @@ Respond NOW with only {{\"text_to_speech_answer\": \"<spoken text>\"}}."),
         tool_name: &str,
         tool_result: &str,
         user_text: &str,
-        worker: &Arc<LlmWorker>,
+        backend: &Arc<dyn LlmBackend>,
         max_tokens: usize,
     ) -> Result<String, AssistantError> {
         const MAX_SUMMARY_INPUT_CHARS: usize = 12000;
@@ -1460,10 +1443,10 @@ Respond NOW with only {{\"text_to_speech_answer\": \"<spoken text>\"}}."),
              Tool result:\n{truncated_input}"
         );
 
-        let summary_messages = vec![LlamaChatMessage::new("user".to_string(), summary_prompt).map_err(|e| AssistantError::LlmInference(e.to_string()))?];
+        let summary_messages = vec![ChatMessage::new("user", summary_prompt)];
 
         let summary_system_prompt = "You are a concise summarizer. Output only the summary, nothing else.";
-        let (summary_output, _) = worker
+        let (summary_output, _) = backend
             .generate(summary_system_prompt, summary_messages, SUMMARY_MAX_TOKENS.min(max_tokens), false)
             .await
             .map_err(|e| AssistantError::LlmInference(e.to_string()))?;

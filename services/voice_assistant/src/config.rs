@@ -315,10 +315,51 @@ impl Default for LlmConfig {
     }
 }
 
+/// Configuration for the Ollama HTTP backend.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct OllamaConfig {
+    /// Ollama server URL (e.g. "http://localhost:11434").
+    pub url: String,
+    /// Ollama model tag (e.g. "gemma2:9b-instruct-q4_K_M").
+    pub model: String,
+    /// Maximum number of tokens to generate per response.
+    pub max_tokens: usize,
+    /// Sampling temperature (0.0 = greedy, 1.0 = creative).
+    pub temperature: f32,
+    /// Top-K sampling parameter.
+    pub top_k: i32,
+    /// Top-P (nucleus) sampling parameter.
+    pub top_p: f32,
+    /// HTTP connect timeout in seconds.
+    pub connect_timeout_seconds: u64,
+    /// HTTP request timeout in seconds.
+    pub request_timeout_seconds: u64,
+}
+
+impl Default for OllamaConfig {
+    fn default() -> Self {
+        Self {
+            url: "http://localhost:11434".to_string(),
+            model: "gemma2:9b-instruct-q4_K_M".to_string(),
+            max_tokens: 512,
+            temperature: 0.1,
+            top_k: 40,
+            top_p: 0.95,
+            connect_timeout_seconds: 5,
+            request_timeout_seconds: 30,
+        }
+    }
+}
+
 /// Configuration for the voice assistant service.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct VoiceAssistantServiceConfig {
+    /// Which LLM backend to use ("local" or "ollama").
+    pub llm_backend_type: crate::llm_backend::LlmBackendType,
+    /// Ollama backend configuration (used when `llm_backend_type` is "ollama").
+    pub ollama: OllamaConfig,
     /// Path to the Whisper GGML model file (e.g., "$XDG_DATA_HOME/smearor/models/ggml-tiny.bin").
     pub whisper_model_path: String,
     /// HuggingFace repo ID for auto-download of the Whisper model (optional).
@@ -425,6 +466,8 @@ pub struct VoiceAssistantServiceConfig {
 impl Default for VoiceAssistantServiceConfig {
     fn default() -> Self {
         Self {
+            llm_backend_type: crate::llm_backend::LlmBackendType::default(),
+            ollama: OllamaConfig::default(),
             whisper_model_path: format!("{}/ggml-tiny.bin", xdg_models_dir()),
             whisper_model_repo: String::new(),
             llm_model_path: format!("{}/qwen2.5-1.5b-instruct-q4_k_m.gguf", xdg_models_dir()),

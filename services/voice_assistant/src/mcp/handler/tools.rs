@@ -1,3 +1,5 @@
+use crate::config::ContextConfig;
+use crate::llm_backend::LlmBackendConfig;
 use crate::memory::FactCategory;
 use crate::service::VoiceAssistantService;
 use smearor_model_mcp::InvokeToolMessage;
@@ -272,42 +274,86 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 match args.model_path.is_empty() {
                     false => {
                         let path = shellexpand::tilde(&args.model_path).into_owned();
-                        if args.ensure_model.unwrap_or(false) {
-                            crate::model_downloader::ensure_model(&path, &self.config.llm_model_repo);
-                        }
-                        let new_llm_config = self
-                            .config
-                            .to_llm_config_with_model(&path, args.n_ctx.map(|v| v as u32), args.max_tokens.map(|v| v as usize));
-                        match &self.llm_worker {
-                            Some(worker) => {
-                                let worker = worker.clone();
-                                let path_for_log = path.clone();
-                                std::thread::spawn(move || {
-                                    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
-                                    match runtime {
-                                        Ok(runtime) => {
-                                            runtime.block_on(async move {
-                                                match worker.reload_model(new_llm_config).await {
-                                                    Ok(()) => {
-                                                        debug!("Voice Assistant: model switched to {path_for_log}");
-                                                    }
-                                                    Err(error) => {
-                                                        error!("Voice Assistant: failed to switch model: {error}");
-                                                    }
+                        let backend_type = args.backend.as_deref().unwrap_or("local");
+                        match backend_type {
+                            "ollama" => {
+                                let mut ollama_config = self.config.ollama.clone();
+                                ollama_config.model = path.clone();
+                                if let Some(max_tokens) = args.max_tokens.map(|v| v as usize) {
+                                    ollama_config.max_tokens = max_tokens;
+                                }
+                                match self.llm_backend.read().unwrap().clone() {
+                                    Some(backend) => {
+                                        let backend = backend.clone();
+                                        let path_for_log = path.clone();
+                                        std::thread::spawn(move || {
+                                            let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
+                                            match runtime {
+                                                Ok(runtime) => {
+                                                    runtime.block_on(async move {
+                                                        match backend.reload_model(LlmBackendConfig::Ollama(ollama_config)).await {
+                                                            Ok(()) => {
+                                                                debug!("Voice Assistant: model switched to Ollama {path_for_log}");
+                                                            }
+                                                            Err(error) => {
+                                                                error!("Voice Assistant: failed to switch Ollama model: {error}");
+                                                            }
+                                                        }
+                                                    });
                                                 }
-                                            });
-                                        }
-                                        Err(error) => {
-                                            error!("Voice Assistant: failed to create runtime for model switch: {error}");
-                                        }
+                                                Err(error) => {
+                                                    error!("Voice Assistant: failed to create runtime for model switch: {error}");
+                                                }
+                                            }
+                                        });
+                                        let response = InvokeToolResponse::success(&message.0.correlation_id, &format!("Switching Ollama model to: {path}"));
+                                        broadcaster.broadcast_message_to_topic(response);
                                     }
-                                });
-                                let response = InvokeToolResponse::success(&message.0.correlation_id, &format!("Switching LLM model to: {path}"));
-                                broadcaster.broadcast_message_to_topic(response);
+                                    None => {
+                                        let response = InvokeToolResponse::error(&message.0.correlation_id, "LLM backend not initialized");
+                                        broadcaster.broadcast_message_to_topic(response);
+                                    }
+                                }
                             }
-                            None => {
-                                let response = InvokeToolResponse::error(&message.0.correlation_id, "LLM worker not initialized");
-                                broadcaster.broadcast_message_to_topic(response);
+                            _ => {
+                                if args.ensure_model.unwrap_or(false) {
+                                    crate::model_downloader::ensure_model(&path, &self.config.llm_model_repo);
+                                }
+                                let new_llm_config =
+                                    self.config
+                                        .to_llm_config_with_model(&path, args.n_ctx.map(|v| v as u32), args.max_tokens.map(|v| v as usize));
+                                match self.llm_backend.read().unwrap().clone() {
+                                    Some(backend) => {
+                                        let backend = backend.clone();
+                                        let path_for_log = path.clone();
+                                        std::thread::spawn(move || {
+                                            let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
+                                            match runtime {
+                                                Ok(runtime) => {
+                                                    runtime.block_on(async move {
+                                                        match backend.reload_model(LlmBackendConfig::Local(new_llm_config)).await {
+                                                            Ok(()) => {
+                                                                debug!("Voice Assistant: model switched to {path_for_log}");
+                                                            }
+                                                            Err(error) => {
+                                                                error!("Voice Assistant: failed to switch model: {error}");
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                                Err(error) => {
+                                                    error!("Voice Assistant: failed to create runtime for model switch: {error}");
+                                                }
+                                            }
+                                        });
+                                        let response = InvokeToolResponse::success(&message.0.correlation_id, &format!("Switching LLM model to: {path}"));
+                                        broadcaster.broadcast_message_to_topic(response);
+                                    }
+                                    None => {
+                                        let response = InvokeToolResponse::error(&message.0.correlation_id, "LLM backend not initialized");
+                                        broadcaster.broadcast_message_to_topic(response);
+                                    }
+                                }
                             }
                         }
                     }
@@ -351,19 +397,23 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 match keep_last {
                     Some(value) if value >= 2 => {
                         let new_keep_last = value as usize;
-                        match &self.llm_worker {
-                            Some(worker) => {
-                                let worker = worker.clone();
+                        match self.llm_backend.read().unwrap().clone() {
+                            Some(backend) => {
+                                let backend = backend.clone();
                                 let correlation_id = message.0.correlation_id.clone();
-                                let mut context_config = worker.config().context_config.clone();
-                                let old_keep_last = context_config.rolling_window_keep_last;
-                                context_config.rolling_window_keep_last = new_keep_last;
+                                let old_keep_last = self.config.rolling_window_keep_last;
+                                let new_context_config = ContextConfig {
+                                    rolling_window_keep_last: new_keep_last,
+                                    max_context_tokens: self.config.max_context_tokens,
+                                    context_keep_ratio: self.config.context_keep_ratio,
+                                    min_preserve_tokens: self.config.min_preserve_tokens,
+                                };
                                 std::thread::spawn(move || {
                                     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
                                     match runtime {
                                         Ok(runtime) => {
                                             runtime.block_on(async move {
-                                                match worker.update_context_config(context_config).await {
+                                                match backend.update_context_config(new_context_config).await {
                                                     Ok(()) => {
                                                         debug!("Voice Assistant: rolling window keep_last updated: {old_keep_last} -> {new_keep_last}");
                                                     }
@@ -382,7 +432,7 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                                 broadcaster.broadcast_message_to_topic(response);
                             }
                             None => {
-                                let response = InvokeToolResponse::error(&message.0.correlation_id, "LLM worker not initialized");
+                                let response = InvokeToolResponse::error(&message.0.correlation_id, "LLM backend not initialized");
                                 broadcaster.broadcast_message_to_topic(response);
                             }
                         }
@@ -403,16 +453,16 @@ impl MessageHandler<FfiEnvelopePayload<InvokeToolMessage>> for VoiceAssistantSer
                 match max_tokens {
                     Some(value) if value >= 64 && value <= 8192 => {
                         let new_max_tokens = value as usize;
-                        match &self.llm_worker {
-                            Some(worker) => {
-                                let old_max_tokens = worker.config().max_tokens;
-                                worker.set_max_tokens(new_max_tokens);
+                        match self.llm_backend.read().unwrap().clone() {
+                            Some(backend) => {
+                                let old_max_tokens = backend.max_tokens();
+                                backend.set_max_tokens(new_max_tokens);
                                 debug!("Voice Assistant: max_tokens updated: {old_max_tokens} -> {new_max_tokens}");
                                 let response = InvokeToolResponse::success(&message.0.correlation_id, &format!("Max tokens set to {new_max_tokens}"));
                                 broadcaster.broadcast_message_to_topic(response);
                             }
                             None => {
-                                let response = InvokeToolResponse::error(&message.0.correlation_id, "LLM worker not initialized");
+                                let response = InvokeToolResponse::error(&message.0.correlation_id, "LLM backend not initialized");
                                 broadcaster.broadcast_message_to_topic(response);
                             }
                         }

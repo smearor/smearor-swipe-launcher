@@ -7449,6 +7449,7 @@ dependencies = [
 name = "smearor-voice-assistant-service"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "cpal 0.18.1",
  "encoding_rs",
@@ -7463,10 +7464,12 @@ dependencies = [
  "miette",
  "moka",
  "ndarray",
+ "once_cell",
  "ort",
  "oww-rs",
  "paste",
  "regex",
+ "reqwest 0.13.4",
  "ringbuf",
  "rusqlite",
  "schemars",

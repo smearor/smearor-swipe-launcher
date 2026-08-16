@@ -79,6 +79,8 @@ pub struct VoiceAssistantSwitchModelArgs {
     pub max_tokens: Option<i32>,
     /// When true, download the model from HuggingFace if it doesn't exist locally. Uses fallback_models.toml mapping. Default: false.
     pub ensure_model: Option<bool>,
+    /// Backend type to switch to: "local" for llama.cpp, "ollama" for Ollama HTTP API. Omit to keep current backend type.
+    pub backend: Option<String>,
 }
 
 /// Arguments for the `resource_discovery_guide` MCP prompt.

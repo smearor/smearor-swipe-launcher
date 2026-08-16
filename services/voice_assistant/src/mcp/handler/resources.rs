@@ -1,5 +1,8 @@
 use crate::mcp::handler::prompt_catalog_resource::PromptCatalogResourceResponse;
+use crate::memory::EntityState;
 use crate::service::VoiceAssistantService;
+use serde::Deserialize;
+use serde::Serialize;
 use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeResourceResponse;
 use smearor_model_mcp::UnknownResourceError;
@@ -7,7 +10,24 @@ use smearor_model_mcp::resources::handler::McpResourceHandler;
 use smearor_model_mcp::resources::handler::ResourceRequest;
 use smearor_swipe_launcher_plugin_api::FfiEnvelopePayload;
 use smearor_swipe_launcher_plugin_api::MessageHandler;
+use smearor_voice_assistant_model::EmbeddingsResourceResponse;
+use smearor_voice_assistant_model::GgufMetadataResponse;
+use smearor_voice_assistant_model::ModelEntryResponse;
+use smearor_voice_assistant_model::ModelsResourceResponse;
+use smearor_voice_assistant_model::RankingEntry;
+use smearor_voice_assistant_model::StatusResourceResponse;
+use smearor_voice_assistant_model::SttResourceResponse;
+use smearor_voice_assistant_model::ToolCatalogResourceResponse;
+use smearor_voice_assistant_model::ToolCatalogResponseEntry;
+use smearor_voice_assistant_model::TtsResourceResponse;
 use smearor_voice_assistant_model::VoiceAssistantMcpResources;
+
+/// Response for the `memory://entities` resource.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MemoryEntitiesResourceResponse {
+    /// All entity states in the store.
+    pub entities: Vec<EntityState>,
+}
 
 impl McpResourceHandler<VoiceAssistantMcpResources> for VoiceAssistantService {
     fn get_response(&self, request: &ResourceRequest<VoiceAssistantMcpResources>) -> InvokeResourceResponse {
@@ -16,125 +36,118 @@ impl McpResourceHandler<VoiceAssistantMcpResources> for VoiceAssistantService {
             VoiceAssistantMcpResources::Status => {
                 let state = self.state.read().map(|state| format!("{:?}", *state)).unwrap_or_else(|_| "Unknown".to_string());
                 let response_type = self.current_response_type.read().map(|rt| rt.clone()).unwrap_or(None);
-                let tool_ranking = self.last_tool_ranking.read().map(|r| r.clone()).unwrap_or_default();
-                let tool_ranking_json: Vec<serde_json::Value> = tool_ranking
-                    .iter()
-                    .map(|(name, score)| serde_json::json!({"name": name, "score": score}))
-                    .collect();
-                let resource_ranking = self.last_resource_ranking.read().map(|r| r.clone()).unwrap_or_default();
-                let resource_ranking_json: Vec<serde_json::Value> = resource_ranking
-                    .iter()
-                    .map(|(name, score)| serde_json::json!({"name": name, "score": score}))
-                    .collect();
-                let prompt_ranking = self.last_prompt_ranking.read().map(|r| r.clone()).unwrap_or_default();
-                let prompt_ranking_json: Vec<serde_json::Value> = prompt_ranking
-                    .iter()
-                    .map(|(name, score)| serde_json::json!({"name": name, "score": score}))
-                    .collect();
-                let json = serde_json::json!({
-                    "state": state,
-                    "transcript": self.current_transcript.read().map(|t| t.clone()).unwrap_or_default(),
-                    "final_answer": self.current_answer.read().map(|a| a.clone()).unwrap_or_default(),
-                    "response_type": response_type,
-                    "last_tool_ranking": tool_ranking_json,
-                    "last_resource_ranking": resource_ranking_json,
-                    "last_prompt_ranking": prompt_ranking_json,
-                });
-                InvokeResourceResponse::success(correlation_id, &json.to_string())
+                let make_ranking = |ranking: &[(String, f32)]| -> Vec<RankingEntry> {
+                    ranking
+                        .iter()
+                        .map(|(name, score)| RankingEntry {
+                            name: name.clone(),
+                            score: *score,
+                        })
+                        .collect()
+                };
+                let tool_ranking = self.last_tool_ranking.read().map(|r| make_ranking(&r)).unwrap_or_default();
+                let resource_ranking = self.last_resource_ranking.read().map(|r| make_ranking(&r)).unwrap_or_default();
+                let prompt_ranking = self.last_prompt_ranking.read().map(|r| make_ranking(&r)).unwrap_or_default();
+                let response = StatusResourceResponse {
+                    state,
+                    transcript: self.current_transcript.read().map(|t| t.clone()).unwrap_or_default(),
+                    final_answer: self.current_answer.read().map(|a| a.clone()).unwrap_or_default(),
+                    response_type,
+                    last_tool_ranking: tool_ranking,
+                    last_resource_ranking: resource_ranking,
+                    last_prompt_ranking: prompt_ranking,
+                };
+                let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
+                InvokeResourceResponse::success(correlation_id, &json)
             }
             VoiceAssistantMcpResources::ToolCatalog => {
                 let catalog = self.tool_catalog.read().unwrap_or_else(|e| e.into_inner());
-                let json = serde_json::json!({
-                    "tools": catalog.iter().map(|t| {
-                        serde_json::json!({
-                            "name": t.name,
-                            "description": t.description,
-                            "input_schema": t.input_schema,
+                let response = ToolCatalogResourceResponse {
+                    tools: catalog
+                        .iter()
+                        .map(|t| ToolCatalogResponseEntry {
+                            name: t.name.clone(),
+                            description: t.description.clone(),
+                            input_schema: t.input_schema.clone(),
                         })
-                    }).collect::<Vec<_>>(),
-                });
-                InvokeResourceResponse::success(correlation_id, &json.to_string())
+                        .collect(),
+                };
+                let json = serde_json::to_string(&response).unwrap_or_else(|_| "{\"tools\":[]}".to_string());
+                InvokeResourceResponse::success(correlation_id, &json)
             }
             VoiceAssistantMcpResources::Llm => {
-                let json = if let Some(worker) = self.llm_worker.as_ref() {
-                    let cfg = worker.config();
+                let json = if let Some(backend) = self.llm_backend.read().unwrap().clone() {
                     let tool_calls = self.last_tool_calls.read().map(|c| c.clone()).unwrap_or_default();
-                    serde_json::json!({
-                        "model_path": cfg.model_path,
-                        "n_ctx": cfg.n_ctx,
-                        "n_batch": cfg.n_batch,
-                        "max_tokens": cfg.max_tokens,
-                        "temperature": cfg.temperature,
-                        "top_k": cfg.top_k,
-                        "top_p": cfg.top_p,
-                        "n_threads": cfg.n_threads,
-                        "context_overflow_threshold": cfg.context_overflow_threshold,
-                        "n_gpu_layers": cfg.gpu_config.n_gpu_layers,
-                        "rolling_window_keep_last": cfg.context_config.rolling_window_keep_last,
-                        "context_keep_ratio": cfg.context_config.context_keep_ratio,
-                        "min_preserve_tokens": cfg.context_config.min_preserve_tokens,
-                        "last_tool_calls": tool_calls,
-                    })
+                    let report = backend.resource_report(tool_calls);
+                    serde_json::to_value(&report).unwrap_or_else(|_| serde_json::json!({"error": "Failed to serialize LLM resource report"}))
                 } else {
-                    serde_json::json!({"error": "LLM worker not initialized"})
+                    serde_json::json!({"error": "LLM backend not initialized"})
                 };
                 InvokeResourceResponse::success(correlation_id, &json.to_string())
             }
             VoiceAssistantMcpResources::Stt => {
-                let json = serde_json::json!({
-                    "whisper_model_path": self.config.whisper_model_path,
-                    "audio_sample_rate": self.config.audio_sample_rate,
-                    "audio_channels": self.config.audio_channels,
-                    "max_recording_seconds": self.config.max_recording_seconds,
-                    "silence_threshold_seconds": self.config.silence_threshold_seconds,
-                    "language": self.config.language,
-                });
-                InvokeResourceResponse::success(correlation_id, &json.to_string())
+                let response = SttResourceResponse {
+                    whisper_model_path: self.config.whisper_model_path.clone(),
+                    audio_sample_rate: self.config.audio_sample_rate,
+                    audio_channels: self.config.audio_channels,
+                    max_recording_seconds: self.config.max_recording_seconds,
+                    silence_threshold_seconds: self.config.silence_threshold_seconds,
+                    language: self.config.language.clone(),
+                };
+                let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
+                InvokeResourceResponse::success(correlation_id, &json)
             }
             VoiceAssistantMcpResources::Tts => {
                 let tts = &self.config.tts;
-                let json = serde_json::json!({
-                    "enabled": tts.enabled,
-                    "tts_enabled_mcp": tts.tts_enabled_mcp,
-                    "conversion_step": tts.conversion_step,
-                    "phonemize_enabled": tts.phonemize_enabled,
-                    "model_path": tts.model_path,
-                    "config_path": tts.config_path,
-                    "model_type": format!("{:?}", tts.model_type),
-                    "model_sample_rate": tts.model_sample_rate,
-                    "language": tts.phonemizer_config.language,
-                    "voice": tts.voice,
-                });
-                InvokeResourceResponse::success(correlation_id, &json.to_string())
+                let response = TtsResourceResponse {
+                    enabled: tts.enabled,
+                    tts_enabled_mcp: tts.tts_enabled_mcp,
+                    conversion_step: tts.conversion_step,
+                    phonemize_enabled: tts.phonemize_enabled,
+                    model_path: tts.model_path.clone(),
+                    config_path: tts.config_path.clone(),
+                    model_type: format!("{:?}", tts.model_type),
+                    model_sample_rate: tts.model_sample_rate,
+                    language: tts.phonemizer_config.language.clone(),
+                    voice: tts.voice.clone(),
+                };
+                let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
+                InvokeResourceResponse::success(correlation_id, &json)
             }
             VoiceAssistantMcpResources::Embeddings => {
                 let threshold = self.tool_selection_threshold.read().map(|g| *g).unwrap_or(0.0);
-                let json = if let Some(engine) = &self.embedding_engine {
-                    serde_json::json!({
-                        "model_name": engine.model_name(),
-                        "is_fallback": engine.is_fallback(),
-                        "configured_model": self.config.embedding_model,
-                        "cache_entry_count": engine.cache_entry_count(),
-                        "tool_selection_threshold": threshold,
-                    })
+                let response = if let Some(engine) = &self.embedding_engine {
+                    EmbeddingsResourceResponse {
+                        model_name: Some(engine.model_name().to_string()),
+                        is_fallback: Some(engine.is_fallback()),
+                        configured_model: self.config.embedding_model.clone(),
+                        cache_entry_count: Some(engine.cache_entry_count()),
+                        tool_selection_threshold: threshold,
+                        error: None,
+                    }
                 } else {
-                    serde_json::json!({
-                        "error": "Embedding engine not initialized",
-                        "configured_model": self.config.embedding_model,
-                        "tool_selection_threshold": threshold,
-                    })
+                    EmbeddingsResourceResponse {
+                        model_name: None,
+                        is_fallback: None,
+                        configured_model: self.config.embedding_model.clone(),
+                        cache_entry_count: None,
+                        tool_selection_threshold: threshold,
+                        error: Some("Embedding engine not initialized".to_string()),
+                    }
                 };
-                InvokeResourceResponse::success(correlation_id, &json.to_string())
+                let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
+                InvokeResourceResponse::success(correlation_id, &json)
             }
             VoiceAssistantMcpResources::MemoryEntities => {
                 let store = self.entity_store.read().unwrap_or_else(|e| e.into_inner());
-                let json = serde_json::json!({
-                    "entities": store.values().collect::<Vec<_>>(),
-                });
-                InvokeResourceResponse::success(correlation_id, &json.to_string())
+                let response = MemoryEntitiesResourceResponse {
+                    entities: store.values().cloned().collect(),
+                };
+                let json = serde_json::to_string(&response).unwrap_or_else(|_| "{\"entities\":[]}".to_string());
+                InvokeResourceResponse::success(correlation_id, &json)
             }
             VoiceAssistantMcpResources::Models => {
-                let mut models: Vec<serde_json::Value> = Vec::new();
+                let mut models: Vec<ModelEntryResponse> = Vec::new();
                 let models_dir = smearor_voice_assistant_model::xdg_models_dir();
                 if let Ok(entries) = std::fs::read_dir(&models_dir) {
                     for entry in entries.flatten() {
@@ -143,7 +156,7 @@ impl McpResourceHandler<VoiceAssistantMcpResources> for VoiceAssistantService {
                                 let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
                                 let path = format!("{models_dir}/{name}");
 
-                                let mut gguf_meta = serde_json::json!({});
+                                let mut metadata: Option<GgufMetadataResponse> = None;
                                 if let Ok(mut file) = std::fs::File::open(&path) {
                                     use std::io::Read;
                                     let mut buf = Vec::new();
@@ -170,46 +183,48 @@ impl McpResourceHandler<VoiceAssistantMcpResources> for VoiceAssistantService {
                                                 }
                                                 get(&format!("llama.{}", field))
                                             };
-                                            gguf_meta = serde_json::json!({
-                                                "architecture": arch,
-                                                "name": get("general.name"),
-                                                "context_length": get_arch("context_length"),
-                                                "embedding_length": get_arch("embedding_length"),
-                                                "block_count": get_arch("block_count"),
-                                                "head_count": get_arch("attention.head_count"),
-                                                "head_count_kv": get_arch("attention.head_count_kv"),
-                                                "file_type": get("general.file_type"),
-                                                "quantization_version": get("general.quantization_version"),
-                                                "tokenizer_model": get("tokenizer.ggml.model"),
-                                                "tensor_count": gguf_file.header.tensor_count,
-                                                "version": gguf_file.header.version,
+                                            metadata = Some(GgufMetadataResponse {
+                                                architecture: arch.clone(),
+                                                name: get("general.name"),
+                                                context_length: get_arch("context_length"),
+                                                embedding_length: get_arch("embedding_length"),
+                                                block_count: get_arch("block_count"),
+                                                head_count: get_arch("attention.head_count"),
+                                                head_count_kv: get_arch("attention.head_count_kv"),
+                                                file_type: get("general.file_type"),
+                                                quantization_version: get("general.quantization_version"),
+                                                tokenizer_model: get("tokenizer.ggml.model"),
+                                                tensor_count: gguf_file.header.tensor_count,
+                                                version: gguf_file.header.version,
                                             });
                                             break;
                                         }
                                     }
                                 }
 
-                                models.push(serde_json::json!({
-                                    "filename": name,
-                                    "path": path,
-                                    "size_bytes": size,
-                                    "size_mb": (size as f64) / 1_048_576.0,
-                                    "metadata": gguf_meta,
-                                }));
+                                models.push(ModelEntryResponse {
+                                    filename: name.to_string(),
+                                    path,
+                                    size_bytes: size,
+                                    size_mb: (size as f64) / 1_048_576.0,
+                                    metadata,
+                                });
                             }
                         }
                     }
                 }
-                let current_model = if let Some(worker) = self.llm_worker.as_ref() {
-                    worker.config().model_path
+                let current_model = if let Some(backend) = self.llm_backend.read().unwrap().clone() {
+                    let report = backend.resource_report(Vec::new());
+                    report.model_path.unwrap_or_else(|| self.config.llm_model_path.clone())
                 } else {
                     self.config.llm_model_path.clone()
                 };
-                let json = serde_json::json!({
-                    "current_model": current_model,
-                    "available_models": models,
-                });
-                InvokeResourceResponse::success(correlation_id, &json.to_string())
+                let response = ModelsResourceResponse {
+                    current_model,
+                    available_models: models,
+                };
+                let json = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());
+                InvokeResourceResponse::success(correlation_id, &json)
             }
             VoiceAssistantMcpResources::PromptCatalog => {
                 let catalog = self.prompt_catalog.read().unwrap_or_else(|e| e.into_inner());

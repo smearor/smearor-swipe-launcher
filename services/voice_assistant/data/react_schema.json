@@ -1,0 +1,96 @@
+{
+  "type": "object",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "tool"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "final_answer": {
+          "type": "string"
+        },
+        "new_insights": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "fact": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "category",
+              "fact"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "final_answer"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "clarify": {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "question"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "clarify"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "text_to_speech_answer": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text_to_speech_answer"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}
