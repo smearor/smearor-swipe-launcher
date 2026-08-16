@@ -41,6 +41,8 @@ echo "=== Build variant: $VARIANT_LABEL ==="
 echo "=== Voice Assistant features: ${VOICE_ASSISTANT_FEATURES:-none} ==="
 echo ""
 
+rm -f target/debian/smearor-service-voice-assistant*.deb
+
 echo "=== Phase 1: Release build for entire workspace ==="
 if [ -n "$VOICE_ASSISTANT_FEATURES" ]; then
     cargo build --release --workspace --features "smearor-voice-assistant-service/$VOICE_ASSISTANT_FEATURES"

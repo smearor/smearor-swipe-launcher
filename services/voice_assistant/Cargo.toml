@@ -68,6 +68,8 @@ whisper-vulkan = ["whisper-rs/vulkan"]
 [package.metadata.deb]
 name = "smearor-service-voice-assistant"
 depends = "libstdc++6, libssl3t64, libglib2.0-0t64, libasound2t64, libgomp1, smearor-swipe-launcher (>= 0.1.0), smearor-service-personalization (>= 0.1.0)"
+conflicts = "smearor-service-voice-assistant-vulkan, smearor-service-voice-assistant-hipblas"
+replaces = "smearor-service-voice-assistant-vulkan, smearor-service-voice-assistant-hipblas"
 assets = [
     ["target/release/libsmearor_voice_assistant_service.so", "/usr/lib/smearor/", "755"],
     ["target/release/libllama.so.0", "/usr/lib/smearor/", "644"],
@@ -83,6 +85,8 @@ assets = [
 [package.metadata.deb.variants.vulkan]
 name = "smearor-service-voice-assistant-vulkan"
 depends = "libstdc++6, libssl3t64, libglib2.0-0t64, libasound2t64, libgomp1, libvulkan1, smearor-swipe-launcher (>= 0.1.0), smearor-service-personalization (>= 0.1.0)"
+conflicts = "smearor-service-voice-assistant, smearor-service-voice-assistant-hipblas"
+replaces = "smearor-service-voice-assistant, smearor-service-voice-assistant-hipblas"
 assets = [
     ["target/release/libsmearor_voice_assistant_service.so", "/usr/lib/smearor/", "755"],
     ["target/release/libllama.so.0", "/usr/lib/smearor/", "644"],
@@ -100,6 +104,8 @@ assets = [
 [package.metadata.deb.variants.hipblas]
 name = "smearor-service-voice-assistant-hipblas"
 depends = "libstdc++6, libssl3t64, libglib2.0-0t64, libasound2t64, libgomp1, libvulkan1, rocblas, rocm-core, smearor-swipe-launcher (>= 0.1.0), smearor-service-personalization (>= 0.1.0)"
+conflicts = "smearor-service-voice-assistant, smearor-service-voice-assistant-vulkan"
+replaces = "smearor-service-voice-assistant, smearor-service-voice-assistant-vulkan"
 assets = [
     ["target/release/libsmearor_voice_assistant_service.so", "/usr/lib/smearor/", "755"],
     ["target/release/libllama.so.0", "/usr/lib/smearor/", "644"],
