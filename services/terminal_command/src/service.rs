@@ -1,14 +1,5 @@
-pub(crate) mod launch;
-pub(crate) mod reaper;
-pub(crate) mod terminate;
-pub(crate) mod tracked_process;
-
 use crate::config::TerminalCommandServiceConfig;
-use dashmap::DashMap;
 use glib::MainContext;
-use nix::sys::signal::Signal;
-use nix::sys::signal::kill;
-use nix::unistd::Pid;
 use smearor_model_mcp::InvokePromptMessage;
 use smearor_model_mcp::InvokeResourceMessage;
 use smearor_model_mcp::InvokeToolMessage;
@@ -33,20 +24,22 @@ use smearor_terminal_command_model::TerminalCommandAction;
 use smearor_terminal_command_model::TerminalCommandMessage;
 use smearor_terminal_command_model::TerminalCommandStatusMessage;
 use smearor_terminal_command_model::register_json_converters;
-use std::path::Path;
+use smearor_wrot_process::ProcessConfig;
+use smearor_wrot_process::ProcessExitEvent;
+use smearor_wrot_process::ProcessManager;
+use smearor_wrot_process::StdioConfig;
 use std::sync::Arc;
+use std::sync::mpsc;
+use std::time::Duration;
 use tracing::debug;
 use tracing::error;
 use tracing::trace;
-use which::which;
-
-pub use tracked_process::TrackedProcess;
 
 pub struct TerminalCommandService {
     pub meta: PluginMeta,
     pub core_context: Option<FfiCoreContext>,
     pub config: TerminalCommandServiceConfig,
-    pub tracked_processes: Arc<DashMap<String, Vec<TrackedProcess>>>,
+    pub process_manager: Arc<ProcessManager>,
 }
 
 impl TerminalCommandService {
@@ -55,30 +48,62 @@ impl TerminalCommandService {
 
         let service_config: TerminalCommandServiceConfig = serde_json::from_value(config.config.clone())
             .map_err(|e| PluginConstructionErrorWrapper::new(PluginConstructionError::FailedToParseWidgetConfig, e.to_string().into()))?;
+        let (exit_sender, exit_receiver) = mpsc::channel::<ProcessExitEvent>();
+        let process_manager = Arc::new(ProcessManager::with_reaper(Duration::from_secs(2), exit_sender));
+
         let service = TerminalCommandService {
             meta: PluginMeta::try_from(&config)?,
             config: service_config,
             core_context,
-            tracked_processes: Arc::new(DashMap::new()),
+            process_manager,
         };
 
-        let (status_sender, mut status_receiver) = tokio::sync::mpsc::unbounded_channel::<TerminalCommandStatusMessage>();
-        let (restart_sender, mut restart_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
-
-        reaper::spawn_reaper_thread(service.tracked_processes.clone(), Arc::new(service.config.commands.clone()), status_sender, restart_sender);
-
-        let broadcaster = service.get_broadcaster();
-        MainContext::default().spawn_local(async move {
-            while let Some(status) = status_receiver.recv().await {
-                broadcaster.broadcast_message_to_topic(status);
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<ProcessExitEvent>();
+        std::thread::spawn(move || {
+            while let Ok(event) = exit_receiver.recv() {
+                if event_tx.send(event).is_err() {
+                    break;
+                }
             }
         });
 
-        let restart_broadcaster = service.get_broadcaster();
+        let broadcaster = service.get_broadcaster();
+        let commands = Arc::new(service.config.commands.clone());
+        let process_manager_for_restart = service.process_manager.clone();
         MainContext::default().spawn_local(async move {
-            while let Some(command_id) = restart_receiver.recv().await {
-                debug!("TerminalCommand Service: Restarting command via broker: {}", command_id);
-                restart_broadcaster.broadcast_message("service.terminal_command.command", &TerminalCommandMessage::launch(&command_id, false, true));
+            while let Some(event) = event_rx.recv().await {
+                debug!("TerminalCommand Service: Process exited: label={}, pid={}", event.label, event.pid);
+                broadcaster.broadcast_message_to_topic(TerminalCommandStatusMessage::stopped(&event.label));
+                if event.restart_on_exit
+                    && let Some(definition) = commands.get(&event.label)
+                {
+                    debug!("TerminalCommand Service: Restarting command: {}", event.label);
+                    let config = ProcessConfig::builder()
+                        .command(definition.command.clone())
+                        .args(definition.args.clone())
+                        .env(definition.env.clone())
+                        .working_dir(definition.working_dir.clone())
+                        .kill_signal(definition.kill_signal)
+                        .terminate_timeout_ms(definition.terminate_timeout_ms)
+                        .restart_on_exit(definition.restart_on_exit)
+                        .stdin(StdioConfig::Null)
+                        .stdout(StdioConfig::Null)
+                        .stderr(StdioConfig::Null)
+                        .build();
+                    match process_manager_for_restart.start(&event.label, &config) {
+                        Ok(id) => {
+                            debug!("TerminalCommand Service: Restarted command {} with process id {}", event.label, id);
+                            let pids = process_manager_for_restart.pids_by_label(&event.label);
+                            if let Some(pid) = pids.first() {
+                                broadcaster.broadcast_message_to_topic(TerminalCommandStatusMessage::running(&event.label, *pid));
+                            }
+                        }
+                        Err(e) => {
+                            error!("TerminalCommand Service: Failed to restart command {}: {}", event.label, e);
+                            broadcaster.broadcast_message_to_topic(TerminalCommandStatusMessage::failed(&event.label));
+                        }
+                    }
+                }
             }
         });
 
@@ -86,27 +111,82 @@ impl TerminalCommandService {
         Ok(service)
     }
 
+    /// Launches a configured command by `command_id`.
+    pub(crate) fn handle_launch(&self, command_id: &str, forked: bool, terminate_on_exit: bool) {
+        trace!("TerminalCommand Service: Launching command: {command_id} (forked={forked})");
+
+        let Some(definition) = self.config.commands.get(command_id) else {
+            error!("TerminalCommand Service: Unknown command_id: {command_id}");
+            self.broadcast_message_to_topic(TerminalCommandStatusMessage::failed(command_id));
+            return;
+        };
+
+        if let Some(working_dir) = &definition.working_dir {
+            if !working_dir.is_dir() {
+                error!("TerminalCommand Service: working_dir is not a directory: {:?}", working_dir);
+                self.broadcast_message_to_topic(TerminalCommandStatusMessage::failed(command_id));
+                return;
+            }
+        }
+
+        let config = ProcessConfig::builder()
+            .command(definition.command.clone())
+            .args(definition.args.clone())
+            .env(definition.env.clone())
+            .working_dir(definition.working_dir.clone())
+            .forked(forked)
+            .terminate_on_exit(terminate_on_exit)
+            .kill_signal(definition.kill_signal)
+            .terminate_timeout_ms(definition.terminate_timeout_ms)
+            .restart_on_exit(definition.restart_on_exit)
+            .stdin(StdioConfig::Null)
+            .stdout(StdioConfig::Null)
+            .stderr(StdioConfig::Null)
+            .build();
+
+        match self.process_manager.start(command_id, &config) {
+            Ok(id) => {
+                let pid = self.process_manager.get(id).map(|p| p.pid).unwrap_or(0);
+                debug!("TerminalCommand Service: Successfully spawned {} with PID {} (forked={forked})", definition.command, pid);
+                if !forked {
+                    self.broadcast_message_to_topic(TerminalCommandStatusMessage::running(command_id, pid));
+                } else {
+                    debug!("TerminalCommand Service: Process PID {} is forked/detached, not broadcasting running status", pid);
+                }
+            }
+            Err(e) => {
+                error!("TerminalCommand Service: Failed to spawn command {}: {}", definition.command, e);
+                self.broadcast_message_to_topic(TerminalCommandStatusMessage::failed(command_id));
+            }
+        }
+    }
+
+    /// Terminates all tracked processes for the given `command_id`.
+    pub(crate) fn handle_terminate(&self, command_id: &str) {
+        trace!("TerminalCommand Service: Terminating command: {command_id}");
+
+        if self.config.commands.get(command_id).is_none() {
+            debug!("TerminalCommand Service: Unknown command_id for terminate: {command_id}");
+            self.broadcast_message_to_topic(TerminalCommandStatusMessage::stopped(command_id));
+            return;
+        }
+
+        match self.process_manager.stop_label(command_id) {
+            Ok(_) => {
+                debug!("TerminalCommand Service: Successfully terminated command: {command_id}");
+            }
+            Err(e) => {
+                error!("TerminalCommand Service: Failed to terminate command {command_id}: {}", e);
+            }
+        }
+        self.broadcast_message_to_topic(TerminalCommandStatusMessage::stopped(command_id));
+    }
+
     /// Restart a command: terminate then launch.
     pub(crate) fn handle_restart(&self, command_id: &str, forked: bool, terminate_on_exit: bool) {
         trace!("TerminalCommand Service: Restarting command: {command_id}");
         self.handle_terminate(command_id);
         self.handle_launch(command_id, forked, terminate_on_exit);
-    }
-
-    /// Resolve a command name to an absolute path via `$PATH`.
-    pub fn resolve_command(&self, command: &str) -> String {
-        if Path::new(command).is_absolute() {
-            return command.to_string();
-        }
-        which(command)
-            .map(|path| {
-                trace!("Resolved command '{command}' to: {path:?}");
-                path.to_string_lossy().to_string()
-            })
-            .unwrap_or_else(|e| {
-                trace!("Failed to resolve command '{command}': {}", e);
-                String::new()
-            })
     }
 }
 
@@ -159,33 +239,6 @@ impl ServicePlugin for TerminalCommandService {
                     MessageHandler::<FfiEnvelopePayload<InvokePromptMessage>>::handle_envelope_message(self, envelope);
                 }
             }
-        }
-    }
-}
-
-impl Drop for TerminalCommandService {
-    fn drop(&mut self) {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            debug!("TerminalCommand Service: Dropping service, terminating all tracked processes");
-            for entry in self.tracked_processes.iter() {
-                for tp in entry.value().iter() {
-                    if !tp.terminate_on_exit {
-                        continue;
-                    }
-                    let proc_path = format!("/proc/{}", tp.pid);
-                    if Path::new(&proc_path).exists() {
-                        debug!("TerminalCommand Service: Sending SIGTERM to process {} on drop", tp.pid);
-                        let posix_pid = Pid::from_raw(tp.pid as i32);
-                        if let Err(e) = kill(posix_pid, Signal::SIGTERM) {
-                            error!("TerminalCommand Service: Failed to kill process {} on drop: {}", tp.pid, e);
-                        }
-                    }
-                }
-            }
-        }));
-
-        if let Err(_) = result {
-            error!("TerminalCommand Service: panic during drop, processes may not have been terminated");
         }
     }
 }

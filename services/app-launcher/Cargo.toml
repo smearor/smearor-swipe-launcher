@@ -17,8 +17,6 @@ freedesktop_entry_parser = { workspace = true }
 glib = { workspace = true }
 gtk4 = { workspace = true }
 miette = { workspace = true }
-dashmap = { workspace = true }
-nix = { version = "0.29", features = ["signal"] }
 paste = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
@@ -26,12 +24,12 @@ serde_json = { workspace = true }
 smearor-swipe-launcher-plugin-api = { path = "../../plugin-api" }
 smearor-app-launcher-model = { path = "../../model/app-launcher" }
 smearor-model-mcp = { path = "../../model/mcp" }
+smearor-wrot-process = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 typed-builder = { workspace = true }
-which = { workspace = true }
 
 [package.metadata.deb]
 name = "smearor-service-app-launcher"

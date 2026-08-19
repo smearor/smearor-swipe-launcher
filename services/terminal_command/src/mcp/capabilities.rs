@@ -74,13 +74,18 @@ impl McpCapabilitiesRegistrator for TerminalCommandService {
 impl TerminalCommandService {
     /// Returns a snapshot of all running tracked commands.
     pub fn running_commands_snapshot(&self) -> Vec<(String, Vec<u32>, bool)> {
-        self.tracked_processes
-            .iter()
-            .map(|entry| {
-                let command_id = entry.key().clone();
-                let pids = entry.value().iter().map(|tp| tp.pid).collect::<Vec<_>>();
-                let terminate_on_exit = entry.value().first().map(|tp| tp.terminate_on_exit).unwrap_or(false);
-                (command_id, pids, terminate_on_exit)
+        self.process_manager
+            .labels()
+            .into_iter()
+            .map(|label| {
+                let pids = self.process_manager.pids_by_label(&label);
+                let terminate_on_exit = self
+                    .process_manager
+                    .get_by_label(&label)
+                    .first()
+                    .map(|(_, p)| p.terminate_on_exit)
+                    .unwrap_or(false);
+                (label, pids, terminate_on_exit)
             })
             .collect()
     }

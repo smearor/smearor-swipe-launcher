@@ -4181,6 +4181,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.31.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+dependencies = [
+ "bitflags 2.13.1",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
+
+[[package]]
 name = "nnnoiseless"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6384,13 +6396,11 @@ dependencies = [
 name = "smearor-app-launcher-service"
 version = "0.1.0"
 dependencies = [
- "dashmap",
  "dirs",
  "freedesktop_entry_parser",
  "glib",
  "gtk4",
  "miette",
- "nix 0.29.0",
  "paste",
  "schemars",
  "serde",
@@ -6398,13 +6408,13 @@ dependencies = [
  "smearor-app-launcher-model",
  "smearor-model-mcp",
  "smearor-swipe-launcher-plugin-api",
+ "smearor-wrot-process",
  "stabby",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "typed-builder",
- "which",
 ]
 
 [[package]]
@@ -7351,9 +7361,7 @@ dependencies = [
 name = "smearor-terminal-command-service"
 version = "0.1.0"
 dependencies = [
- "dashmap",
  "glib",
- "nix 0.29.0",
  "paste",
  "schemars",
  "serde",
@@ -7361,12 +7369,12 @@ dependencies = [
  "smearor-model-mcp",
  "smearor-swipe-launcher-plugin-api",
  "smearor-terminal-command-model",
+ "smearor-wrot-process",
  "stabby",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "which",
 ]
 
 [[package]]
@@ -7685,6 +7693,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "smearor-wrot-process"
+version = "0.1.0"
+source = "git+https://github.com/smearor/smearor-wrot-process-manager#e678f42779b31d30a62026c2635b284728f86a5c"
+dependencies = [
+ "dashmap",
+ "libc",
+ "nix 0.31.3",
+ "serde",
+ "smearor-wrot-socket",
+ "thiserror 2.0.20",
+ "tracing",
+ "typed-builder",
+ "which",
+]
+
+[[package]]
 name = "smearor-wrot-rotation"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7696,6 +7720,15 @@ dependencies = [
  "miette",
  "serde",
  "tracing",
+]
+
+[[package]]
+name = "smearor-wrot-socket"
+version = "0.1.0"
+source = "git+https://github.com/smearor/smearor-wrot-process-manager#e678f42779b31d30a62026c2635b284728f86a5c"
+dependencies = [
+ "dashmap",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

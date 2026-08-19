@@ -1,29 +1,7 @@
 use serde::Deserialize;
+use smearor_wrot_process::KillSignal;
 use std::collections::HashMap;
 use std::path::PathBuf;
-
-/// Signal used for process termination.
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum KillSignal {
-    Sigterm,
-    Sigkill,
-}
-
-impl Default for KillSignal {
-    fn default() -> Self {
-        Self::Sigterm
-    }
-}
-
-impl KillSignal {
-    pub fn to_nix_signal(&self) -> nix::sys::signal::Signal {
-        match self {
-            Self::Sigterm => nix::sys::signal::Signal::SIGTERM,
-            Self::Sigkill => nix::sys::signal::Signal::SIGKILL,
-        }
-    }
-}
 
 /// A configured command definition.
 #[derive(Debug, Clone, Deserialize)]

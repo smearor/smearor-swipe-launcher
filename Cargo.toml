@@ -191,6 +191,7 @@ gguf = "0.1"
 serde_json = "1.0"
 sysinfo = { version = "0.39", default-features = false, features = ["component"] }
 text-processing-rs = { git = "https://github.com/FluidInference/text-processing-rs.git" }
+smearor-wrot-process = { git = "https://github.com/smearor/smearor-wrot-process-manager" }
 smearor-wrot-rotation = { version = "0.2.0" }
 #smearor-wrot-rotation = { version = "0.1", path = "../smearor-wrot-rotation" }
 thiserror = "2.0"
